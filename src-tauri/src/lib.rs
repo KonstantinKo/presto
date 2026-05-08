@@ -1392,6 +1392,10 @@ fn set_dock_visibility_native(visible: bool) {
     use cocoa::appkit::{NSApp, NSApplication, NSApplicationActivationPolicy};
     use cocoa::base::nil;
 
+    // SAFETY: NSApp() returns a raw pointer that is nil if no shared NSApplication
+    // exists. We null-check against `nil` before invoking setActivationPolicy_, and
+    // this entire function is only invoked from the main thread via run_on_main_thread,
+    // satisfying AppKit's main-thread requirement for NSApplication mutation.
     unsafe {
         let app = NSApp();
         if app != nil {
@@ -1491,6 +1495,10 @@ fn set_system_ui_mode_safe(visible: bool) -> Result<(), String> {
     }
 
     // Try the primary approach with Carbon SetSystemUIMode
+    // SAFETY: SetSystemUIMode is a pure C function from Apple's ApplicationServices
+    // (Carbon) framework with no pointer parameters and no aliasing/lifetime contract.
+    // The arguments (mode and options) are plain UInt32 values constructed above.
+    // The call is dispatched to the main thread via run_on_main_thread upstream.
     let primary_result = unsafe {
         let mode = if visible {
             K_UI_MODE_NORMAL // Show menu bar
@@ -1542,6 +1550,8 @@ fn set_system_ui_mode_safe(visible: bool) -> Result<(), String> {
         println!("🔄 Fallback 1: Retrying after brief delay...");
         thread::sleep(Duration::from_millis(100));
 
+        // SAFETY: Same contract as the primary SetSystemUIMode call above — pure C ABI,
+        // scalar arguments, main-thread dispatched.
         let retry_result = unsafe {
             let mode = if visible {
                 K_UI_MODE_NORMAL
@@ -1567,6 +1577,8 @@ fn set_system_ui_mode_safe(visible: bool) -> Result<(), String> {
     if !visible {
         println!("🔄 Fallback 2: Trying conservative hide approach...");
 
+        // SAFETY: Same contract as above — pure C ABI, scalar arguments, main-thread
+        // dispatched. The intervening thread::sleep is safe regardless.
         let conservative_result = unsafe {
             // Try normal mode first, then content suppressed
             SetSystemUIMode(K_UI_MODE_NORMAL, 0);

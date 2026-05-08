@@ -76,7 +76,7 @@ echo "-------------------------"
 check_file "src-tauri/tauri.conf.json" "Tauri configuration"
 check_file ".github/workflows/release.yml" "GitHub Actions workflow"
 check_file "src-tauri/capabilities/default.json" "Tauri capabilities"
-check_file "src/managers/update-manager.js" "Update manager"
+check_file "src/managers/update-manager-global.js" "Update manager"
 check_file "src/components/update-notification.js" "Update notification component"
 
 echo ""
