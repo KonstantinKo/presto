@@ -21,9 +21,6 @@ class AuthManager {
       await initSupabase();
       this.supabase = getSupabase();
       this.authHelpers = getAuthHelpers();
-      this.initialized = true;
-
-      logger.info("✅ AuthManager initialized with Supabase");
 
       // Check if user is already authenticated
       const {
@@ -45,6 +42,7 @@ class AuthManager {
       }
     } catch (error) {
       logger.error("Error checking authentication status:", error);
+      this.initialized = false;
       this.notifyAuthListeners("unauthenticated", null);
       return;
     }
@@ -63,6 +61,9 @@ class AuthManager {
         this.notifyAuthListeners("unauthenticated", null);
       }
     });
+
+    this.initialized = true;
+    logger.info("✅ AuthManager initialized with Supabase");
   }
 
   // Check if this is the first time the app is being opened

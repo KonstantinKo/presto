@@ -66,7 +66,7 @@ async function initSupabase() {
       try {
         if (!window.__TAURI__) {
           // Fallback to original Supabase OAuth for web
-          logger.info("Not in Tauri, using Supabase OAuth...");
+          logger.debug("Not in Tauri, using Supabase OAuth...");
           const { data, error } = await supabase.auth.signInWithOAuth({
             provider,
             options: {
@@ -78,18 +78,18 @@ async function initSupabase() {
 
         const { invoke } = window.__TAURI__.core;
 
-        logger.info(`Starting Tauri OAuth flow for ${provider}...`);
+        logger.debug(`Starting Tauri OAuth flow for ${provider}...`);
 
         // Get Supabase configuration
         const supabaseUrl = "https://lopgwwppinkqvttozqfx.supabase.co";
 
         // Start OAuth flow using tauri-plugin-oauth
-        logger.info("Invoking OAuth start...");
+        logger.debug("Invoking OAuth start...");
 
         try {
           // Start the OAuth server using our custom command
           const port = await invoke("start_oauth_server");
-          logger.info("OAuth server started on port:", port);
+          logger.debug("OAuth server started on port:", port);
 
           // Generate redirect URI using the port
           const redirectUri = `http://localhost:${port}`;
@@ -97,19 +97,19 @@ async function initSupabase() {
           // Build OAuth URL
           const authUrl = `${supabaseUrl}/auth/v1/authorize?provider=${provider}&redirect_to=${encodeURIComponent(redirectUri)}`;
 
-          logger.info("Opening OAuth URL:", authUrl);
+          logger.debug("Opening OAuth URL:", authUrl);
 
           // Open the OAuth URL in the default browser
           try {
             // Try the correct opener command format
             await invoke("plugin:opener|open_url", { url: authUrl });
           } catch (openerError) {
-            logger.info("opener plugin failed, trying alternative methods...", openerError);
+            logger.debug("opener plugin failed, trying alternative methods...", openerError);
             try {
               // Try without plugin prefix
               await invoke("open_url", { url: authUrl });
             } catch (openerError2) {
-              logger.info("open_url failed, trying shell.open...", openerError2);
+              logger.debug("open_url failed, trying shell.open...", openerError2);
               // Fallback to shell open
               if (window.__TAURI__?.shell) {
                 await window.__TAURI__.shell.open(authUrl);
@@ -138,13 +138,13 @@ async function initSupabase() {
                   reject(new Error("OAuth flow timed out"));
                 }, 120000); // 2 minutes
 
-                logger.info("OAuth URL opened in browser. Please complete authentication...");
-                logger.info("Redirect URI:", redirectUri);
+                logger.debug("OAuth URL opened in browser. Please complete authentication...");
+                logger.debug("Redirect URI:", redirectUri);
 
                 // Set up event listener for OAuth callback
                 const { listen } = window.__TAURI__.event;
 
-                logger.info("Setting up OAuth event listeners...");
+                logger.debug("Setting up OAuth event listeners...");
 
                 // Try multiple possible event names, prioritizing our custom event
                 const possibleEvents = [
@@ -157,9 +157,12 @@ async function initSupabase() {
 
                 for (const eventName of possibleEvents) {
                   try {
-                    logger.info(`Trying to listen for event: ${eventName}`);
+                    logger.debug(`Trying to listen for event: ${eventName}`);
                     const tempUnlisten = await listen(eventName, async (event) => {
-                      logger.info(`Received ${eventName} event:`, event);
+                      logger.debug("Received OAuth callback event", {
+                        eventName,
+                        hasPayload: Boolean(event?.payload),
+                      });
 
                       // Process the callback
                       await processOAuthCallback(
@@ -175,7 +178,7 @@ async function initSupabase() {
                       unlisten = tempUnlisten;
                     }
                   } catch (listenError) {
-                    logger.info(`Failed to listen for ${eventName}:`, listenError);
+                    logger.debug(`Failed to listen for ${eventName}:`, listenError);
                   }
                 }
 
@@ -193,7 +196,7 @@ async function initSupabase() {
                       unlisten();
                     }
 
-                    logger.info("Processing OAuth callback");
+                    logger.debug("Processing OAuth callback");
 
                     // Parse the callback URL to extract tokens
                     const url = new URL(callbackUrl);
@@ -208,7 +211,7 @@ async function initSupabase() {
                       searchParams.get("refresh_token") || hashParams.get("refresh_token");
                     const error = searchParams.get("error") || hashParams.get("error");
 
-                    logger.info("Parsed tokens:", {
+                    logger.debug("Parsed tokens:", {
                       hasAccessToken: !!accessToken,
                       hasRefreshToken: !!refreshToken,
                       error,
@@ -226,7 +229,7 @@ async function initSupabase() {
                     }
 
                     if (accessToken) {
-                      logger.info("Access token found, setting Supabase session...");
+                      logger.debug("Access token found, setting Supabase session...");
 
                       try {
                         const { data, error: sessionError } = await supabase.auth.setSession({
@@ -276,7 +279,7 @@ async function initSupabase() {
                   }
                 }
 
-                logger.info("OAuth event listeners set up. Waiting for callback...");
+                logger.debug("OAuth event listeners set up. Waiting for callback...");
               } catch (setupError) {
                 logger.error("Error setting up OAuth listeners:", setupError);
                 clearTimeout(timeout);
