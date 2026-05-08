@@ -183,6 +183,9 @@ class TagManager {
   }
 
   renderTagList() {
+    if (!this.tagList) {
+      return;
+    }
     this.tagList.innerHTML = "";
 
     this.tags.forEach((tag) => {
@@ -383,6 +386,9 @@ class TagManager {
   }
 
   resetIconSelection() {
+    if (!this.iconSelector) {
+      return;
+    }
     this.iconSelector.querySelectorAll(".selected").forEach((el) => {
       el.classList.remove("selected");
     });
@@ -436,6 +442,9 @@ class TagManager {
   }
 
   updateStatusDisplay() {
+    if (!this.statusText || !this.statusIcon) {
+      return;
+    }
     if (this.currentTags.length === 0) {
       this.statusText.textContent = "Focus";
       this.statusIcon.className = "ri-brain-line";

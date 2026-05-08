@@ -765,6 +765,8 @@ async fn reset_all_data(app: AppHandle) -> Result<(), String> {
         "history.json",
         "settings.json",
         "manual_sessions.json",
+        "tags.json",
+        "session_tags.json",
     ];
 
     for file_name in files_to_delete {

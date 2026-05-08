@@ -433,6 +433,12 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
             detail: { message: "Impossibile verificare la versione corrente dell'applicazione" },
           })
         );
+        if (showDialog) {
+          await this.showMessage("Impossibile verificare la versione corrente dell'applicazione", {
+            title: "Errore",
+            kind: "error",
+          });
+        }
         return false;
       }
 

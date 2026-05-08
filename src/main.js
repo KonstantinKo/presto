@@ -2014,6 +2014,16 @@ function setupUpdateManagement() {
     updateProgressBar(100);
   });
 
+  window.updateManager.on("manualDownloadRequired", () => {
+    hideUpdateProgress();
+    if (downloadUpdateBtn) {
+      downloadUpdateBtn.disabled = false;
+    }
+    if (updateStatus) {
+      updateStatus.innerHTML = '<span class="status-text">Manual download opened</span>';
+    }
+  });
+
   // Helper functions
   function showUpdateProgress(title, description) {
     if (updateProgress) {
