@@ -167,7 +167,7 @@ export class NavigationManager {
     let previousWeeklySessions = 0;
 
     try {
-      const weekStart = this.getWeekStart(this.currentDate);
+      const weekStart = new Date(this.selectedWeek || this.getWeekStart(this.currentDate));
       const previousWeekStart = new Date(weekStart);
       previousWeekStart.setDate(weekStart.getDate() - 7);
 
@@ -292,7 +292,7 @@ export class NavigationManager {
     }
   }
 
-  async updateDailyChart(date = new Date()) {
+  async updateDailyChart(date = this.selectedDate || this.currentDate || new Date()) {
     const dailyChart = document.getElementById("daily-chart");
     if (!dailyChart) {
       return;
@@ -425,7 +425,7 @@ export class NavigationManager {
     const maxHeight = 70;
 
     try {
-      const weekStart = this.getWeekStart(this.currentDate);
+      const weekStart = new Date(this.selectedWeek || this.getWeekStart(this.currentDate));
       const today = new Date();
 
       // First pass: collect all session data for the week to determine max value for scaling
@@ -594,7 +594,7 @@ export class NavigationManager {
 
       // Get sessions for the current week
       const sessions = [];
-      const startOfWeek = this.getWeekStart(this.currentDate);
+      const startOfWeek = new Date(this.selectedWeek || this.getWeekStart(this.currentDate));
 
       for (let i = 0; i < 7; i++) {
         const date = new Date(startOfWeek);
@@ -801,6 +801,7 @@ export class NavigationManager {
     dayEl?.classList.add("selected");
 
     this.selectedDate = date;
+    this.selectedWeek = this.getWeekStart(date);
     await this.updateSelectedDayDetails(date);
     await this.updateFocusSummary();
     await this.updateWeeklySessionsChart();

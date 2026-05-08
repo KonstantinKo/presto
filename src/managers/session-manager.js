@@ -208,7 +208,12 @@ export class SessionManager {
       const duration = parseInt(durationInput.value, 10);
 
       if (startTime && duration && duration > 0) {
-        endTimeInput.value = this.calculateEndTime(startTime, duration);
+        const endTime = this.calculateEndTime(startTime, duration);
+        endTimeInput.value = endTime;
+        durationInput.value = Math.max(
+          1,
+          this.timeToMinutes(endTime) - this.timeToMinutes(startTime)
+        );
       }
     };
 

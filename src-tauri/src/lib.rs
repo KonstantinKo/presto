@@ -424,7 +424,13 @@ async fn load_session_data(app: AppHandle) -> Result<Option<PomodoroSession>, St
             .unwrap_or(false)
     };
 
-    if !is_same_day {
+    if is_same_day && session.date != today_legacy {
+        session.date.clone_from(&today_legacy);
+        let json = serde_json::to_string_pretty(&session)
+            .map_err(|e| format!("Failed to serialize normalized session: {e}"))?;
+        fs::write(&file_path, json)
+            .map_err(|e| format!("Failed to write normalized session file: {e}"))?;
+    } else if !is_same_day {
         session.completed_pomodoros = 0;
         session.total_focus_time = 0;
         session.current_session = 1;
@@ -433,7 +439,7 @@ async fn load_session_data(app: AppHandle) -> Result<Option<PomodoroSession>, St
         // Save the reset session back to file
         let json = serde_json::to_string_pretty(&session)
             .map_err(|e| format!("Failed to serialize reset session: {e}"))?;
-        fs::write(file_path, json)
+        fs::write(&file_path, json)
             .map_err(|e| format!("Failed to write reset session file: {e}"))?;
     }
 
