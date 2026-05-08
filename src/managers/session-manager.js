@@ -211,7 +211,7 @@ export class SessionManager {
         const endTime = this.calculateEndTime(startTime, duration);
         endTimeInput.value = endTime;
         durationInput.value = Math.max(
-          1,
+          0,
           this.timeToMinutes(endTime) - this.timeToMinutes(startTime)
         );
       }
@@ -263,7 +263,7 @@ export class SessionManager {
       return;
     }
 
-    if (!sessionData.duration || sessionData.duration < 1) {
+    if (isNaN(sessionData.duration) || sessionData.duration < 0) {
       alert("Please enter a valid duration");
       return;
     }

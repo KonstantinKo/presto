@@ -183,9 +183,7 @@ export class NavigationManager {
 
         if (window.sessionManager) {
           const sessions = window.sessionManager.getSessionsForDate(date);
-          const focusSessions = sessions.filter(
-            (s) => (s.session_type || s.type) === "focus" || (s.session_type || s.type) === "custom"
-          );
+          const focusSessions = sessions.filter((s) => this.isFocusOrCustomSession(s));
 
           dayTotalTime = focusSessions.reduce(
             (total, session) => total + (session.duration || 0) * 60,
@@ -216,9 +214,7 @@ export class NavigationManager {
 
         if (window.sessionManager) {
           const sessions = window.sessionManager.getSessionsForDate(date);
-          const focusSessions = sessions.filter(
-            (s) => (s.session_type || s.type) === "focus" || (s.session_type || s.type) === "custom"
-          );
+          const focusSessions = sessions.filter((s) => this.isFocusOrCustomSession(s));
 
           dayTotalTime = focusSessions.reduce(
             (total, session) => total + (session.duration || 0) * 60,
@@ -262,6 +258,11 @@ export class NavigationManager {
 
     weeklyFocusTimeEl.textContent = TimeUtils.formatTime(weeklyFocusTime);
     this.updateChangeElement(weeklyFocusChangeEl, weeklyFocusChange);
+  }
+
+  isFocusOrCustomSession(session) {
+    const type = session.session_type || session.type;
+    return type === "focus" || type === "custom";
   }
 
   calculatePercentageChange(current, previous) {
@@ -441,9 +442,7 @@ export class NavigationManager {
 
         if (window.sessionManager) {
           const allSessions = window.sessionManager.getSessionsForDate(date);
-          const focusSessions = allSessions.filter(
-            (s) => (s.session_type || s.type) === "focus" || (s.session_type || s.type) === "custom"
-          );
+          const focusSessions = allSessions.filter((s) => this.isFocusOrCustomSession(s));
 
           sessionsMinutes = focusSessions.reduce(
             (total, session) => total + (session.duration || 0),
@@ -605,10 +604,7 @@ export class NavigationManager {
 
           // Filter to focus sessions only and add date info
           const focusSessions = dailySessions
-            .filter((s) => {
-              const sessionType = s.session_type || s.type;
-              return sessionType === "focus" || sessionType === "custom";
-            })
+            .filter((s) => this.isFocusOrCustomSession(s))
             .map((session) => ({
               ...session,
               date: date.toISOString().split("T")[0], // Add date in YYYY-MM-DD format
@@ -764,9 +760,7 @@ export class NavigationManager {
 
       if (window.sessionManager) {
         const sessions = window.sessionManager.getSessionsForDate(dayDate);
-        const focusSessions = sessions.filter(
-          (s) => (s.session_type || s.type) === "focus" || (s.session_type || s.type) === "custom"
-        );
+        const focusSessions = sessions.filter((s) => this.isFocusOrCustomSession(s));
 
         if (focusSessions.length > 0) {
           dayEl.classList.add("has-sessions");
