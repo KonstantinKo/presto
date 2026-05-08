@@ -1,5 +1,6 @@
 // Auto Theme Loader
 // This utility automatically discovers and loads all theme CSS files from the themes folder
+import { logger } from "./logger.js";
 
 class ThemeLoader {
   constructor() {
@@ -15,17 +16,17 @@ class ThemeLoader {
       // Get all CSS files from the themes directory
       const themeFiles = await this.discoverThemeFiles();
 
-      console.log(`🎨 Discovered ${themeFiles.length} theme files:`, themeFiles);
+      logger.debug(`🎨 Discovered ${themeFiles.length} theme files:`, themeFiles);
 
       // Load each theme file
       for (const themeFile of themeFiles) {
         await this.loadThemeFile(themeFile);
       }
 
-      console.log(`🎨 Auto-loaded ${this.loadedThemes.size} themes successfully`);
+      logger.debug(`🎨 Auto-loaded ${this.loadedThemes.size} themes successfully`);
       return Array.from(this.loadedThemes);
     } catch (error) {
-      console.error("❌ Failed to auto-load themes:", error);
+      logger.error("❌ Failed to auto-load themes:", error);
       return [];
     }
   }
@@ -51,20 +52,20 @@ class ThemeLoader {
     const themeId = filename.replace(".css", "");
 
     if (this.loadedThemes.has(themeId)) {
-      console.log(`🎨 Theme ${themeId} already loaded, skipping`);
+      logger.debug(`🎨 Theme ${themeId} already loaded, skipping`);
       return;
     }
 
     try {
       // Since CSS is already imported statically in main.css,
       // we just need to register the theme in our loaded themes
-      console.log(`✅ Theme registered: ${themeId}`);
+      logger.info(`✅ Theme registered: ${themeId}`);
       this.loadedThemes.add(themeId);
 
       // Extract theme metadata from CSS file
       await this.extractThemeMetadata(themeId);
     } catch (error) {
-      console.error(`❌ Error registering theme ${themeId}:`, error);
+      logger.error(`❌ Error registering theme ${themeId}:`, error);
     }
   }
 
@@ -97,11 +98,11 @@ class ThemeLoader {
             },
           };
 
-          console.log(`📝 Auto-registered theme: ${themeId}`, TIMER_THEMES[themeId]);
+          logger.info(`📝 Auto-registered theme: ${themeId}`, TIMER_THEMES[themeId]);
         }
       }
     } catch (error) {
-      console.warn(`⚠️ Could not extract metadata for theme ${themeId}:`, error);
+      logger.warn(`⚠️ Could not extract metadata for theme ${themeId}:`, error);
     }
   }
 
@@ -138,7 +139,7 @@ class ThemeLoader {
         };
       }
     } catch (error) {
-      console.warn("Could not parse theme metadata:", error);
+      logger.warn("Could not parse theme metadata:", error);
     }
 
     return null;
@@ -170,7 +171,7 @@ class ThemeLoader {
         colors.longBreak = longBreakMatch[1].trim();
       }
     } catch (error) {
-      console.warn("Could not extract preview colors:", error);
+      logger.warn("Could not extract preview colors:", error);
     }
 
     return colors;
@@ -192,7 +193,7 @@ class ThemeLoader {
       document.head.removeChild(linkElement);
       this.loadedThemes.delete(themeId);
       this.themeStyles.delete(themeId);
-      console.log(`🗑️ Unloaded theme: ${themeId}`);
+      logger.info(`🗑️ Unloaded theme: ${themeId}`);
     }
   }
 
@@ -216,7 +217,7 @@ export const themeLoader = new ThemeLoader();
 
 // Auto-load themes when this module is imported
 export async function initializeAutoThemeLoader() {
-  console.log("🎨 Initializing auto theme loader...");
+  logger.debug("🎨 Initializing auto theme loader...");
   const loadedThemes = await themeLoader.loadAllThemes();
   return loadedThemes;
 }

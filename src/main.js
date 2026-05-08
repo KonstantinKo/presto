@@ -7,6 +7,8 @@ import { TeamManager } from "./managers/team-manager.js";
 import { PomodoroTimer } from "./core/pomodoro-timer.js";
 import { NotificationUtils } from "./utils/common-utils.js";
 import { UpdateNotification } from "./components/update-notification.js";
+import { logger } from "./utils/logger.js";
+window.appLog = logger;
 
 // Global application state
 let timer = null;
@@ -36,7 +38,7 @@ window.clearShortcut = function (shortcutType) {
 };
 
 window.confirmTotalReset = async function () {
-  console.log("confirmTotalReset called"); // Debug log
+  logger.debug("confirmTotalReset called"); // Debug log
 
   try {
     // Create custom confirmation dialogs
@@ -52,7 +54,7 @@ window.confirmTotalReset = async function () {
       "warning"
     );
 
-    console.log("First confirmation result:", confirmed);
+    logger.info("First confirmation result:", confirmed);
 
     if (confirmed) {
       const doubleConfirm = await showCustomConfirm(
@@ -62,19 +64,19 @@ window.confirmTotalReset = async function () {
         "error"
       );
 
-      console.log("Second confirmation result:", doubleConfirm);
+      logger.info("Second confirmation result:", doubleConfirm);
 
       if (doubleConfirm) {
-        console.log("Both confirmations received, calling performTotalReset");
+        logger.info("Both confirmations received, calling performTotalReset");
         await window.performTotalReset();
       } else {
-        console.log("Second confirmation cancelled by user");
+        logger.info("Second confirmation cancelled by user");
       }
     } else {
-      console.log("First confirmation cancelled by user");
+      logger.info("First confirmation cancelled by user");
     }
   } catch (error) {
-    console.error("Error in confirmTotalReset:", error);
+    logger.error("Error in confirmTotalReset:", error);
 
     // Fallback to browser confirm
     const manualConfirm = confirm(
@@ -207,7 +209,7 @@ function showCustomConfirm(title, message, type = "warning") {
 }
 
 window.performTotalReset = async function () {
-  console.log("performTotalReset started"); // Debug log
+  logger.debug("performTotalReset started"); // Debug log
 
   try {
     // Check if Tauri is available
@@ -223,16 +225,16 @@ window.performTotalReset = async function () {
       resetButton.disabled = true;
     }
 
-    console.log("Calling reset_all_data..."); // Debug log
+    logger.debug("Calling reset_all_data..."); // Debug log
 
     // Call the backend to delete all data
     const { invoke } = window.__TAURI__.core;
     await invoke("reset_all_data");
 
-    console.log("reset_all_data completed successfully"); // Debug log
+    logger.debug("reset_all_data completed successfully"); // Debug log
 
     // Clear all localStorage data
-    console.log("Clearing localStorage..."); // Debug log
+    logger.debug("Clearing localStorage..."); // Debug log
     localStorage.removeItem("pomodoro-session");
     localStorage.removeItem("pomodoro-tasks");
     localStorage.removeItem("pomodoro-settings");
@@ -242,15 +244,15 @@ window.performTotalReset = async function () {
     localStorage.removeItem("presto-skipped-versions");
     localStorage.removeItem("presto_force_update_test");
     localStorage.removeItem("presto-tags");
-    console.log("localStorage cleared"); // Debug log
+    logger.debug("localStorage cleared"); // Debug log
 
     // Reset the timer in memory
     if (window.pomodoroTimer) {
       if (typeof window.pomodoroTimer.resetToInitialState === "function") {
         window.pomodoroTimer.resetToInitialState();
-        console.log("Timer reset to initial state"); // Debug log
+        logger.debug("Timer reset to initial state"); // Debug log
       } else {
-        console.warn("Timer resetToInitialState method not found");
+        logger.warn("Timer resetToInitialState method not found");
       }
     }
 
@@ -258,9 +260,9 @@ window.performTotalReset = async function () {
     if (window.settingsManager) {
       if (typeof window.settingsManager.resetToDefaultsForce === "function") {
         window.settingsManager.resetToDefaultsForce();
-        console.log("Settings reset to defaults"); // Debug log
+        logger.debug("Settings reset to defaults"); // Debug log
       } else {
-        console.warn("SettingsManager resetToDefaultsForce method not found");
+        logger.warn("SettingsManager resetToDefaultsForce method not found");
       }
     }
 
@@ -268,20 +270,20 @@ window.performTotalReset = async function () {
     if (window.navigationManager) {
       if (typeof window.navigationManager.switchView === "function") {
         window.navigationManager.switchView("timer");
-        console.log("Switched to timer view"); // Debug log
+        logger.debug("Switched to timer view"); // Debug log
       } else {
-        console.warn("NavigationManager switchView method not found");
+        logger.warn("NavigationManager switchView method not found");
       }
     }
 
     // Show success message before reload
-    console.log("Reset completed successfully, reloading..."); // Debug log
+    logger.debug("Reset completed successfully, reloading..."); // Debug log
 
     // Refresh the UI to show reset state
     location.reload();
   } catch (error) {
-    console.error("Failed to reset data:", error);
-    console.error("Error stack:", error.stack);
+    logger.error("Failed to reset data:", error);
+    logger.error("Error stack:", error.stack);
 
     // Show detailed error information
     let errorMessage = "Failed to reset data. ";
@@ -350,7 +352,7 @@ async function initializeEarlyTheme() {
     const tauriReady = await waitForTauri();
 
     if (tauriReady) {
-      console.log("🎨 Tauri is ready, loading theme from settings...");
+      logger.debug("🎨 Tauri is ready, loading theme from settings...");
 
       try {
         const { invoke } = window.__TAURI__.core;
@@ -362,7 +364,7 @@ async function initializeEarlyTheme() {
           const actualTheme = getActualTheme(themeFromSettings);
           document.documentElement.setAttribute("data-theme", actualTheme);
           localStorage.setItem("theme-preference", themeFromSettings); // Store preference (could be "auto")
-          console.log(
+          logger.debug(
             `🎨 Early theme loaded from settings: ${themeFromSettings} -> actual: ${actualTheme}`
           );
         }
@@ -371,49 +373,49 @@ async function initializeEarlyTheme() {
         if (timerThemeFromSettings) {
           document.documentElement.setAttribute("data-timer-theme", timerThemeFromSettings);
           localStorage.setItem("timer-theme-preference", timerThemeFromSettings);
-          console.log(`🎨 Early timer theme loaded from settings: ${timerThemeFromSettings}`);
+          logger.debug(`🎨 Early timer theme loaded from settings: ${timerThemeFromSettings}`);
         } else {
           // Default to espresso theme
           document.documentElement.setAttribute("data-timer-theme", "espresso");
           localStorage.setItem("timer-theme-preference", "espresso");
-          console.log(`🎨 Early timer theme initialized to default: espresso`);
+          logger.debug(`🎨 Early timer theme initialized to default: espresso`);
         }
 
         if (themeFromSettings) {
           return;
         }
       } catch (settingsError) {
-        console.log(
+        logger.debug(
           "🎨 Could not load theme from settings, using localStorage fallback:",
           settingsError.message
         );
       }
     } else {
-      console.log("🎨 Tauri not ready within timeout, using localStorage fallback");
+      logger.debug("🎨 Tauri not ready within timeout, using localStorage fallback");
     }
   } catch (error) {
-    console.log("🎨 Error waiting for Tauri, using localStorage fallback:", error.message);
+    logger.debug("🎨 Error waiting for Tauri, using localStorage fallback:", error.message);
   }
 
   // Fallback to localStorage or default for both themes
   const storedTheme = localStorage.getItem("theme-preference") || "auto";
   const actualTheme = getActualTheme(storedTheme);
   document.documentElement.setAttribute("data-theme", actualTheme);
-  console.log(
+  logger.debug(
     `🎨 Early theme initialized from localStorage: ${storedTheme} -> actual: ${actualTheme}`
   );
 
   // Initialize timer theme with fallback
   const storedTimerTheme = localStorage.getItem("timer-theme-preference") || "espresso";
   document.documentElement.setAttribute("data-timer-theme", storedTimerTheme);
-  console.log(`🎨 Early timer theme initialized from localStorage: ${storedTimerTheme}`);
+  logger.debug(`🎨 Early timer theme initialized from localStorage: ${storedTimerTheme}`);
 }
 
 // Request notification permission using Tauri v2 API
 async function requestNotificationPermission() {
   try {
     if (window.__TAURI__ && window.__TAURI__.notification) {
-      console.log("🔔 Requesting notification permission using Tauri v2...");
+      logger.info("🔔 Requesting notification permission using Tauri v2...");
       const { isPermissionGranted, requestPermission } = window.__TAURI__.notification;
 
       // Check if permission is already granted
@@ -421,28 +423,28 @@ async function requestNotificationPermission() {
 
       // If not granted, request permission
       if (!permissionGranted) {
-        console.log("Requesting notification permission...");
+        logger.info("Requesting notification permission...");
         const permission = await requestPermission();
         permissionGranted = permission === "granted";
 
         if (permissionGranted) {
-          console.log("✅ Notification permission granted");
+          logger.info("✅ Notification permission granted");
         } else {
-          console.log("❌ Notification permission denied");
+          logger.info("❌ Notification permission denied");
         }
       } else {
-        console.log("✅ Notification permission already granted");
+        logger.info("✅ Notification permission already granted");
       }
     } else {
       // Fallback to Web Notification API
-      console.log("🔔 Requesting notification permission using Web API...");
+      logger.info("🔔 Requesting notification permission using Web API...");
       if ("Notification" in window) {
         const permission = await Notification.requestPermission();
-        console.log(`Notification permission: ${permission}`);
+        logger.info(`Notification permission: ${permission}`);
       }
     }
   } catch (error) {
-    console.error("Failed to request notification permission:", error);
+    logger.error("Failed to request notification permission:", error);
     // Fallback to Web API
     if ("Notification" in window) {
       Notification.requestPermission();
@@ -1163,7 +1165,7 @@ async function handleOAuthSignIn(provider, button) {
       alert(`Sign-in failed: ${result.error}`);
     }
   } catch (error) {
-    console.error("OAuth sign-in error:", error);
+    logger.error("OAuth sign-in error:", error);
     alert(`Sign-in failed: ${error.message}`);
   } finally {
     setButtonLoading(button, false);
@@ -1191,7 +1193,7 @@ async function handleEmailAuth(email, password, action, button) {
       alert(`${action === "signin" ? "Sign-in" : "Sign-up"} failed: ${result.error}`);
     }
   } catch (error) {
-    console.error("Email auth error:", error);
+    logger.error("Email auth error:", error);
     alert(`${action === "signin" ? "Sign-in" : "Sign-up"} failed: ${error.message}`);
   } finally {
     setButtonLoading(button, false);
@@ -1407,7 +1409,7 @@ function positionDropdown(avatarBtn, dropdown) {
 function setupUserAvatarEventListeners() {
   // Prevent multiple setups
   if (window.avatarListenersSetup) {
-    console.log("🔄 Avatar listeners already setup, skipping...");
+    logger.debug("🔄 Avatar listeners already setup, skipping...");
     return;
   }
 
@@ -1416,13 +1418,13 @@ function setupUserAvatarEventListeners() {
   const signOutBtn = document.getElementById("user-sign-out");
   const signInBtn = document.getElementById("user-sign-in");
 
-  console.log("🎯 Setting up avatar listeners...", {
+  logger.debug("🎯 Setting up avatar listeners...", {
     avatarBtn: !!avatarBtn,
     dropdown: !!dropdown,
   });
 
   if (!avatarBtn || !dropdown) {
-    console.warn("⚠️ Avatar button or dropdown not found, skipping avatar listener setup");
+    logger.warn("⚠️ Avatar button or dropdown not found, skipping avatar listener setup");
     return;
   }
 
@@ -1430,7 +1432,7 @@ function setupUserAvatarEventListeners() {
   if (avatarBtn && dropdown) {
     avatarBtn.addEventListener("click", (e) => {
       e.stopPropagation();
-      console.log("🖱️ Avatar clicked! Auth state:", {
+      logger.debug("🖱️ Avatar clicked! Auth state:", {
         isAuthenticated: window.authManager?.isAuthenticated(),
         isGuest: window.authManager?.isGuestMode(),
         user: window.authManager?.getCurrentUser()?.email,
@@ -1451,16 +1453,16 @@ function setupUserAvatarEventListeners() {
 
       // Toggle dropdown
       const isVisible = dropdown.style.display === "block";
-      console.log("🔽 Toggling dropdown. Currently visible:", isVisible);
+      logger.debug("🔽 Toggling dropdown. Currently visible:", isVisible);
 
       if (isVisible) {
         dropdown.style.display = "none";
-        console.log("🔼 Dropdown hidden");
+        logger.debug("🔼 Dropdown hidden");
       } else {
         // Show dropdown and position it intelligently
         dropdown.style.display = "block";
         positionDropdown(avatarBtn, dropdown);
-        console.log("🔽 Dropdown shown and positioned");
+        logger.debug("🔽 Dropdown shown and positioned");
       }
     });
   }
@@ -1503,7 +1505,7 @@ function setupUserAvatarEventListeners() {
   // Listen for auth state changes
   if (window.authManager) {
     window.authManager.onAuthChange(async (status, user) => {
-      console.log("🔄 Auth state changed:", status, user?.email || "no user");
+      logger.debug("🔄 Auth state changed:", status, user?.email || "no user");
       await updateUserAvatarUI();
     });
   }
@@ -1517,7 +1519,7 @@ function setupUserAvatarEventListeners() {
 
   // Mark listeners as setup
   window.avatarListenersSetup = true;
-  console.log("✅ Avatar listeners setup complete");
+  logger.info("✅ Avatar listeners setup complete");
 }
 
 // Initialize the application
@@ -1530,13 +1532,13 @@ function setupUserAvatarEventListeners() {
 async function initializeApplication() {
   // Prevent double initialization only if fully completed
   if (window._appFullyInitialized) {
-    console.log("🚀 Application already fully initialized, skipping...");
+    logger.info("🚀 Application already fully initialized, skipping...");
     return;
   }
 
   // Prevent concurrent initialization attempts
   if (window._appInitializing) {
-    console.log("🚀 Application initialization already in progress, skipping...");
+    logger.info("🚀 Application initialization already in progress, skipping...");
     return;
   }
 
@@ -1547,7 +1549,7 @@ async function initializeApplication() {
   let safetyTimeout = null;
 
   try {
-    console.log("🚀 Initializing Presto application...");
+    logger.info("🚀 Initializing Presto application...");
 
     // Show loading state
     const loadingOverlay = document.createElement("div");
@@ -1579,7 +1581,7 @@ async function initializeApplication() {
     safetyTimeout = setTimeout(() => {
       const stuckOverlay = document.getElementById("app-loading");
       if (stuckOverlay) {
-        console.error("⚠️ Initialization timeout - removing loading overlay");
+        logger.error("⚠️ Initialization timeout - removing loading overlay");
         stuckOverlay.remove();
 
         // Show error message
@@ -1612,7 +1614,7 @@ async function initializeApplication() {
     // Import and initialize auth manager
     updateLoadingText("Loading authentication...");
     const { authManager } = await import("./managers/auth-manager.js");
-    console.log("🔐 Initializing Auth Manager...");
+    logger.info("🔐 Initializing Auth Manager...");
     window.authManager = authManager;
 
     // Initialize auth manager (which will wait for Supabase)
@@ -1621,7 +1623,7 @@ async function initializeApplication() {
 
     // Initialize Update Manager early (needed by UpdateNotification)
     updateLoadingText("Initializing update system...");
-    console.log("🔄 Initializing Update Manager...");
+    logger.info("🔄 Initializing Update Manager...");
     window.updateManager = new window.UpdateManagerV2();
     window.updateManagerInstance = window.updateManager; // Alias for compatibility
     if (window.updateManager.loadPreferences) {
@@ -1629,13 +1631,13 @@ async function initializeApplication() {
     }
 
     // Initialize Update Notification component
-    console.log("🔔 Initializing Update Notification...");
+    logger.info("🔔 Initializing Update Notification...");
     const updateNotification = new UpdateNotification();
     window.updateNotification = updateNotification; // Make it globally available
 
     // Skip first run authentication - proceed directly with guest mode
     if (authManager.isFirstRun()) {
-      console.log("👋 First run detected, proceeding as guest...");
+      logger.info("👋 First run detected, proceeding as guest...");
       // Set guest mode automatically
       authManager.continueAsGuest();
     }
@@ -1644,13 +1646,13 @@ async function initializeApplication() {
     await updateUserAvatarUI();
 
     // Initialize settings manager first (other modules depend on it)
-    console.log("📋 Initializing Settings Manager...");
+    logger.info("📋 Initializing Settings Manager...");
     settingsManager = new SettingsManager();
     window.settingsManager = settingsManager;
     await settingsManager.init();
 
     // Initialize the core timer
-    console.log("⏱️ Initializing Pomodoro Timer...");
+    logger.info("⏱️ Initializing Pomodoro Timer...");
     timer = new PomodoroTimer();
     window.pomodoroTimer = timer; // Make it globally accessible
 
@@ -1660,18 +1662,18 @@ async function initializeApplication() {
     }
 
     // Initialize navigation manager
-    console.log("🧭 Initializing Navigation Manager...");
+    logger.info("🧭 Initializing Navigation Manager...");
     navigation = new NavigationManager();
     window.navigationManager = navigation;
     await navigation.init();
 
     // Initialize Session Manager
-    console.log("📊 Initializing Session Manager...");
+    logger.info("📊 Initializing Session Manager...");
     sessionManager = new SessionManager(navigation);
     window.sessionManager = sessionManager;
 
     // Initialize Team Manager
-    console.log("👥 Initializing Team Manager...");
+    logger.info("👥 Initializing Team Manager...");
     teamManager = new TeamManager();
     window.teamManager = teamManager;
 
@@ -1686,7 +1688,7 @@ async function initializeApplication() {
     // Setup update management
     setupUpdateManagement();
 
-    console.log("✅ Application initialized successfully!");
+    logger.info("✅ Application initialized successfully!");
 
     // Clear safety timeout
     clearTimeout(safetyTimeout);
@@ -1704,7 +1706,7 @@ async function initializeApplication() {
     // Show welcome notification
     NotificationUtils.showNotificationPing("Welcome to Presto! 🍅", null, "focus");
   } catch (error) {
-    console.error("❌ Failed to initialize application:", error);
+    logger.error("❌ Failed to initialize application:", error);
 
     // Clear safety timeout and remove loading overlay even on error
     clearTimeout(safetyTimeout);
@@ -1781,19 +1783,19 @@ function setupGlobalEventListeners() {
   const resetButton = document.getElementById("reset-all-data-btn");
   if (resetButton) {
     resetButton.addEventListener("click", () => {
-      console.log("Reset button clicked via event listener"); // Debug log
+      logger.debug("Reset button clicked via event listener"); // Debug log
       window.confirmTotalReset();
     });
-    console.log("Reset button event listener added"); // Debug log
+    logger.debug("Reset button event listener added"); // Debug log
   } else {
-    console.error("Reset button not found in DOM"); // Debug log
+    logger.error("Reset button not found in DOM"); // Debug log
   }
 
   // Setup other settings buttons event listeners
   const resetToDefaultsBtn = document.querySelector(".btn-secondary");
   if (resetToDefaultsBtn && resetToDefaultsBtn.textContent.includes("Reset to Defaults")) {
     resetToDefaultsBtn.addEventListener("click", () => {
-      console.log("Reset to defaults button clicked via event listener");
+      logger.info("Reset to defaults button clicked via event listener");
       window.resetToDefaults();
     });
     // Remove onclick attribute
@@ -1817,7 +1819,7 @@ function setupGlobalEventListeners() {
     if (timer && timer.smartPauseEnabled) {
       if (document.hidden) {
         // Page is hidden, user might be inactive
-        console.log("Page hidden - potential inactivity");
+        logger.debug("Page hidden - potential inactivity");
       } else {
         // Page is visible again, user is active
         timer.handleUserActivity && timer.handleUserActivity();
@@ -1828,7 +1830,7 @@ function setupGlobalEventListeners() {
 
 // Setup update management
 function setupUpdateManagement() {
-  console.log("🔄 Setting up update management...");
+  logger.info("🔄 Setting up update management...");
 
   // Update status elements
   const updateStatus = document.getElementById("update-status");
@@ -1862,9 +1864,9 @@ function setupUpdateManagement() {
       if (currentVersionDisplay) {
         currentVersionDisplay.textContent = currentVersion;
       }
-      console.log("📋 Current version set:", currentVersion);
+      logger.info("📋 Current version set:", currentVersion);
     } catch (error) {
-      console.error("❌ Error retrieving current version:", error);
+      logger.error("❌ Error retrieving current version:", error);
       // Fallback ai valori di default
       if (currentVersionElement) {
         currentVersionElement.textContent = "0.1.0";
@@ -1928,7 +1930,7 @@ function setupUpdateManagement() {
         window.updateManager.off("checkError", onCheckError);
         hideUpdateProgress();
         updateStatus.innerHTML = '<span class="status-text error">Check failed</span>';
-        console.error("Update check failed:", error);
+        logger.error("Update check failed:", error);
       } finally {
         checkUpdatesBtn.disabled = false;
       }
@@ -1956,7 +1958,7 @@ function setupUpdateManagement() {
       try {
         await window.updateManager.downloadAndInstall();
       } catch (error) {
-        console.error("Download/install failed:", error);
+        logger.error("Download/install failed:", error);
         hideUpdateProgress();
         downloadUpdateBtn.disabled = false;
       }
@@ -2071,12 +2073,12 @@ function setupUpdateManagement() {
     updateStatus.innerHTML = '<span class="status-text">Ready to check for updates</span>';
   }
 
-  console.log("✅ Update management setup complete");
+  logger.info("✅ Update management setup complete");
 }
 
 // Application lifecycle management
 window.addEventListener("beforeunload", () => {
-  console.log("🔄 Application shutting down...");
+  logger.info("🔄 Application shutting down...");
 
   // Save any pending data
   if (timer) {
@@ -2090,12 +2092,12 @@ window.addEventListener("beforeunload", () => {
 
 // Handle errors gracefully
 window.addEventListener("error", (event) => {
-  console.error("Global error caught:", event.error);
+  logger.error("Global error caught:", event.error);
   NotificationUtils.showNotificationPing("An error occurred. Check console for details.", "error");
 });
 
 window.addEventListener("unhandledrejection", (event) => {
-  console.error("Unhandled promise rejection:", event.reason);
+  logger.error("Unhandled promise rejection:", event.reason);
   NotificationUtils.showNotificationPing("An error occurred. Check console for details.", "error");
 });
 
@@ -2114,7 +2116,7 @@ function initializeWhenReady() {
 // Also add a backup initialization in case DOMContentLoaded doesn't fire
 window.addEventListener("load", () => {
   if (!window._appFullyInitialized && !window._appInitializing) {
-    console.log("🚀 Backup initialization triggered by window.load");
+    logger.info("🚀 Backup initialization triggered by window.load");
     initializeApplication();
   }
 });

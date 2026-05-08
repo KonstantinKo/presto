@@ -1,6 +1,7 @@
 // Settings Manager for Global Shortcuts and Preferences
 const { invoke } = window.__TAURI__.core;
 import { NotificationUtils } from "../utils/common-utils.js";
+import { logger } from "../utils/logger.js";
 import {
   getThemeById,
   getAllThemes,
@@ -39,9 +40,9 @@ export class SettingsManager {
 
   async initializeAutoThemeLoader() {
     try {
-      console.log("🎨 Starting auto theme discovery...");
+      logger.debug("🎨 Starting auto theme discovery...");
       const loadedThemes = await initializeAutoThemeLoader();
-      console.log(`🎨 Auto-loaded ${loadedThemes.length} themes:`, loadedThemes);
+      logger.debug(`🎨 Auto-loaded ${loadedThemes.length} themes:`, loadedThemes);
 
       // Refresh theme selector if it exists and settings are loaded
       if (document.getElementById("timer-theme-grid") && this.settings) {
@@ -50,7 +51,7 @@ export class SettingsManager {
 
       return loadedThemes;
     } catch (error) {
-      console.error("❌ Failed to initialize auto theme loader:", error);
+      logger.error("❌ Failed to initialize auto theme loader:", error);
       return [];
     }
   }
@@ -66,7 +67,7 @@ export class SettingsManager {
   async loadSettings() {
     try {
       const loadedSettings = await invoke("load_settings");
-      console.log("📋 Raw loaded settings:", loadedSettings);
+      logger.debug("📋 Raw loaded settings:", loadedSettings);
       // Merge loaded settings with defaults to ensure all fields exist
       this.settings = this.mergeWithDefaults(loadedSettings);
 
@@ -79,16 +80,16 @@ export class SettingsManager {
         this.settings.status_bar_display = loadedSettings.hide_status_bar ? "icon-only" : "default";
         // Schedule save to persist the migrated setting
         this.scheduleAutoSave();
-        console.log(
+        logger.debug(
           "🔄 Migrated hide_status_bar setting to status_bar_display:",
           this.settings.status_bar_display
         );
       }
 
-      console.log("📋 Final merged settings:", this.settings);
+      logger.debug("📋 Final merged settings:", this.settings);
       this.populateSettingsUI();
     } catch (error) {
-      console.error("Failed to load settings:", error);
+      logger.error("Failed to load settings:", error);
       this.settings = this.getDefaultSettings();
     }
   }
@@ -161,7 +162,7 @@ export class SettingsManager {
 
   populateSettingsUI() {
     // Populate shortcuts
-    console.log("🔧 Populating shortcuts UI with:", this.settings.shortcuts);
+    logger.debug("🔧 Populating shortcuts UI with:", this.settings.shortcuts);
     document.getElementById("start-stop-shortcut").value = this.settings.shortcuts.start_stop || "";
     document.getElementById("reset-shortcut").value = this.settings.shortcuts.reset || "";
     document.getElementById("skip-shortcut").value = this.settings.shortcuts.skip || "";
@@ -206,12 +207,12 @@ export class SettingsManager {
       this.settings.notifications.auto_start_timer;
 
     // Debug log for continuous sessions
-    console.log(
+    logger.debug(
       "🔧 PopulateUI - Raw continuous sessions value:",
       this.settings.notifications.allow_continuous_sessions
     );
     const continuousValue = this.settings.notifications.allow_continuous_sessions || false;
-    console.log("🔧 PopulateUI - Final continuous sessions value:", continuousValue);
+    logger.debug("🔧 PopulateUI - Final continuous sessions value:", continuousValue);
 
     document.getElementById("allow-continuous-sessions").checked = continuousValue;
     document.getElementById("smart-pause").checked = this.settings.notifications.smart_pause;
@@ -351,12 +352,12 @@ export class SettingsManager {
 
       // Check if this action was triggered too recently
       if (lastShortcutTime[action] && now - lastShortcutTime[action] < debounceDelay) {
-        console.log(`Debounced global shortcut: ${action}`);
+        logger.debug(`Debounced global shortcut: ${action}`);
         return;
       }
 
       lastShortcutTime[action] = now;
-      console.log(`Global shortcut triggered: ${action}`);
+      logger.debug(`Global shortcut triggered: ${action}`);
 
       switch (action) {
         case "start-stop":
@@ -391,7 +392,7 @@ export class SettingsManager {
 
     // Listen for shortcuts update events
     window.__TAURI__.event.listen("shortcuts-updated", (event) => {
-      console.log("Shortcuts updated:", event.payload);
+      logger.info("Shortcuts updated:", event.payload);
       this.settings.shortcuts = event.payload;
 
       // Update the timer's keyboard shortcuts
@@ -569,17 +570,17 @@ export class SettingsManager {
 
       NotificationUtils.showNotificationPing("✓ Settings saved successfully!", "success");
     } catch (error) {
-      console.error("Failed to save settings:", error);
+      logger.error("Failed to save settings:", error);
       NotificationUtils.showNotificationPing("❌ Failed to save settings", "error");
     }
   }
 
   async registerGlobalShortcuts() {
     try {
-      console.log("🔧 Registering global shortcuts:", this.settings.shortcuts);
+      logger.debug("🔧 Registering global shortcuts:", this.settings.shortcuts);
       await invoke("register_global_shortcuts", { shortcuts: this.settings.shortcuts });
     } catch (error) {
-      console.error("Failed to register global shortcuts:", error);
+      logger.error("Failed to register global shortcuts:", error);
     }
   }
 
@@ -664,9 +665,9 @@ export class SettingsManager {
         if (e.target.checked) {
           try {
             // Request notification permission when enabling
-            console.log("🔔 Desktop notifications enabled, requesting permission...");
+            logger.info("🔔 Desktop notifications enabled, requesting permission...");
             const permission = await NotificationUtils.requestNotificationPermission();
-            console.log("🔔 Notification permission result:", permission);
+            logger.info("🔔 Notification permission result:", permission);
 
             if (permission !== "granted") {
               // Show warning but don't prevent saving the setting
@@ -681,7 +682,7 @@ export class SettingsManager {
               NotificationUtils.showNotificationPing("✓ Desktop notifications enabled!", "success");
             }
           } catch (error) {
-            console.warn(
+            logger.warn(
               "Failed to request notification permission, but allowing setting to be saved:",
               error
             );
@@ -693,7 +694,7 @@ export class SettingsManager {
             );
           }
         } else {
-          console.log("🔔 Desktop notifications disabled");
+          logger.info("🔔 Desktop notifications disabled");
           NotificationUtils.showNotificationPing("Desktop notifications disabled", "info");
         }
         // Always save the setting regardless of permission status
@@ -803,19 +804,19 @@ export class SettingsManager {
       }
 
       // Debug logging for continuous sessions
-      console.log("🔧 AutoSave - Reading checkbox values:");
-      console.log(
+      logger.debug("🔧 AutoSave - Reading checkbox values:");
+      logger.debug(
         "auto_start_timer checkbox:",
         document.getElementById("auto-start-timer").checked
       );
-      console.log(
+      logger.debug(
         "allow_continuous_sessions checkbox:",
         document.getElementById("allow-continuous-sessions").checked
       );
-      console.log("smart_pause checkbox:", document.getElementById("smart-pause").checked);
+      logger.debug("smart_pause checkbox:", document.getElementById("smart-pause").checked);
 
       // Debug log the full settings object being saved
-      console.log("🔧 AutoSave - Full settings object being saved:", this.settings);
+      logger.debug("🔧 AutoSave - Full settings object being saved:", this.settings);
 
       // Save to file
       await invoke("save_settings", { settings: this.settings });
@@ -841,7 +842,7 @@ export class SettingsManager {
       // Show a subtle feedback that settings were saved
       this.showAutoSaveFeedback();
     } catch (error) {
-      console.error("Failed to auto-save settings:", error);
+      logger.error("Failed to auto-save settings:", error);
       // Don't show an alert for auto-save failures, just log the error
     }
   }
@@ -891,7 +892,7 @@ export class SettingsManager {
         });
       }
     } catch (error) {
-      console.error("Failed to check autostart status:", error);
+      logger.error("Failed to check autostart status:", error);
       // Default to false if we can't check the status
       const checkbox = document.getElementById("autostart-enabled");
       if (checkbox) {
@@ -907,14 +908,14 @@ export class SettingsManager {
     try {
       if (enabled) {
         await invoke("enable_autostart");
-        console.log("Autostart enabled");
+        logger.info("Autostart enabled");
         NotificationUtils.showNotificationPing(
           "✓ Autostart enabled - Presto will start with your system",
           "success"
         );
       } else {
         await invoke("disable_autostart");
-        console.log("Autostart disabled");
+        logger.info("Autostart disabled");
         NotificationUtils.showNotificationPing("✓ Autostart disabled", "success");
       }
 
@@ -924,7 +925,7 @@ export class SettingsManager {
       // Schedule auto-save to persist the setting
       this.scheduleAutoSave();
     } catch (error) {
-      console.error("Failed to toggle autostart:", error);
+      logger.error("Failed to toggle autostart:", error);
       NotificationUtils.showNotificationPing(`❌ Failed to toggle autostart: ${error}`, "error");
 
       // Revert the checkbox state on error
@@ -950,7 +951,7 @@ export class SettingsManager {
         });
       }
     } catch (error) {
-      console.error("Failed to load analytics setting:", error);
+      logger.error("Failed to load analytics setting:", error);
       // Default to enabled if we can't check the status
       const checkbox = document.getElementById("analytics-enabled");
       if (checkbox) {
@@ -969,13 +970,13 @@ export class SettingsManager {
 
       // Show user feedback
       if (enabled) {
-        console.log("Analytics enabled");
+        logger.info("Analytics enabled");
         NotificationUtils.showNotificationPing(
           "✓ Analytics enabled - Help improve Presto!",
           "success"
         );
       } else {
-        console.log("Analytics disabled");
+        logger.info("Analytics disabled");
         NotificationUtils.showNotificationPing(
           "✓ Analytics disabled - No data will be collected",
           "success"
@@ -985,7 +986,7 @@ export class SettingsManager {
       // Schedule auto-save to persist the setting
       this.scheduleAutoSave();
     } catch (error) {
-      console.error("Failed to toggle analytics:", error);
+      logger.error("Failed to toggle analytics:", error);
       NotificationUtils.showNotificationPing(`❌ Failed to toggle analytics: ${error}`, "error");
 
       // Revert the checkbox state on error
@@ -1011,7 +1012,7 @@ export class SettingsManager {
         });
       }
     } catch (error) {
-      console.error("Failed to load hide icon on close setting:", error);
+      logger.error("Failed to load hide icon on close setting:", error);
       // Default to disabled if we can't check the status
       const checkbox = document.getElementById("hide-icon-on-close");
       if (checkbox) {
@@ -1030,13 +1031,13 @@ export class SettingsManager {
 
       // Show user feedback
       if (enabled) {
-        console.log("Hide icon on close enabled");
+        logger.info("Hide icon on close enabled");
         NotificationUtils.showNotificationPing(
           "✓ Hide icon on close enabled - App will hide from dock when closed",
           "success"
         );
       } else {
-        console.log("Hide icon on close disabled");
+        logger.info("Hide icon on close disabled");
         NotificationUtils.showNotificationPing(
           "✓ Hide icon on close disabled - App will remain visible in dock",
           "success"
@@ -1046,7 +1047,7 @@ export class SettingsManager {
       // Schedule auto-save to persist the setting
       this.scheduleAutoSave();
     } catch (error) {
-      console.error("Failed to toggle hide icon on close:", error);
+      logger.error("Failed to toggle hide icon on close:", error);
       NotificationUtils.showNotificationPing(
         `❌ Failed to toggle hide icon on close: ${error}`,
         "error"
@@ -1075,7 +1076,7 @@ export class SettingsManager {
         });
       }
     } catch (error) {
-      console.error("Failed to load status bar display setting:", error);
+      logger.error("Failed to load status bar display setting:", error);
       // Default to 'default' if we can't check the status
       const select = document.getElementById("status-bar-display");
       if (select) {
@@ -1099,17 +1100,17 @@ export class SettingsManager {
 
       // Show user feedback
       if (displayMode === "icon-only") {
-        console.log("Status bar display set to icon only");
+        logger.info("Status bar display set to icon only");
         NotificationUtils.showNotificationPing("✓ Status bar will show icon only", "success");
       } else {
-        console.log("Status bar display set to default (mm:ss)");
+        logger.info("Status bar display set to default (mm:ss)");
         NotificationUtils.showNotificationPing("✓ Status bar will show timer (mm:ss)", "success");
       }
 
       // Schedule auto-save to persist the setting
       this.scheduleAutoSave();
     } catch (error) {
-      console.error("Failed to update status bar display:", error);
+      logger.error("Failed to update status bar display:", error);
       NotificationUtils.showNotificationPing(
         `❌ Failed to update status bar display: ${error}`,
         "error"
@@ -1130,7 +1131,7 @@ export class SettingsManager {
     const testBtn = document.getElementById("test-notifications-btn");
 
     if (!statusDiv || !statusText || !testBtn) {
-      console.warn("Notification status elements not found in DOM");
+      logger.warn("Notification status elements not found in DOM");
       return;
     }
 
@@ -1147,7 +1148,7 @@ export class SettingsManager {
         // Update status after test
         setTimeout(() => this.updateNotificationStatus(), 1000);
       } else {
-        console.warn("Test notification function not available");
+        logger.warn("Test notification function not available");
         NotificationUtils.showNotificationPing(
           "Test function not available. Try again after the timer is fully loaded.",
           "warning"
@@ -1231,7 +1232,7 @@ export class SettingsManager {
     } catch (error) {
       status = "❌ Status check failed";
       className = "status-error";
-      console.error("Failed to check notification status:", error);
+      logger.error("Failed to check notification status:", error);
     }
 
     statusText.textContent = status;
@@ -1250,7 +1251,7 @@ export class SettingsManager {
     if (theme === "auto") {
       // For auto mode, detect system preference and apply the actual theme
       actualTheme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
-      console.log(`🎨 Auto theme detected system preference: ${actualTheme}`);
+      logger.debug(`🎨 Auto theme detected system preference: ${actualTheme}`);
     }
 
     // Apply the actual theme (never "auto")
@@ -1265,9 +1266,9 @@ export class SettingsManager {
       try {
         // Save immediately to file
         await invoke("save_settings", { settings: this.settings });
-        console.log(`🎨 Theme preference saved: ${theme}, actual theme applied: ${actualTheme}`);
+        logger.debug(`🎨 Theme preference saved: ${theme}, actual theme applied: ${actualTheme}`);
       } catch (error) {
-        console.error("Failed to save theme setting:", error);
+        logger.error("Failed to save theme setting:", error);
       }
     }
 
@@ -1278,7 +1279,7 @@ export class SettingsManager {
       this.removeSystemThemeListener();
     }
 
-    console.log(`🎨 Theme preference: ${theme}, actual theme applied: ${actualTheme}`);
+    logger.debug(`🎨 Theme preference: ${theme}, actual theme applied: ${actualTheme}`);
 
     // Update timer theme compatibility when color mode changes
     this.updateTimerThemeCompatibility();
@@ -1292,14 +1293,14 @@ export class SettingsManager {
     this.systemThemeMediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
     this.systemThemeListener = (e) => {
       const newSystemTheme = e.matches ? "dark" : "light";
-      console.log(`🎨 System theme changed: ${newSystemTheme}`);
+      logger.debug(`🎨 System theme changed: ${newSystemTheme}`);
 
       // Only apply if current preference is "auto"
       const currentPreference = this.settings?.appearance?.theme || "auto";
       if (currentPreference === "auto") {
         const html = document.documentElement;
         html.setAttribute("data-theme", newSystemTheme);
-        console.log(`🎨 Auto theme updated to: ${newSystemTheme}`);
+        logger.debug(`🎨 Auto theme updated to: ${newSystemTheme}`);
 
         // Update timer theme compatibility when system theme changes
         this.updateTimerThemeCompatibility();
@@ -1324,27 +1325,27 @@ export class SettingsManager {
 
     // If early theme was set and matches localStorage, check if we need to process it
     if (currentTheme && storedTheme && currentTheme === storedTheme) {
-      console.log(`🎨 Early initialized theme found: ${currentTheme}`);
+      logger.debug(`🎨 Early initialized theme found: ${currentTheme}`);
 
       // If the stored theme is "auto", we need to apply the correct auto logic
       // because data-theme should never be "auto" - it should be "light" or "dark"
       if (storedTheme === "auto") {
-        console.log(`🎨 Converting auto theme to actual theme`);
+        logger.debug(`🎨 Converting auto theme to actual theme`);
         await this.applyTheme("auto"); // This will set data-theme to light/dark
         return;
       }
 
       // For non-auto themes, keep the early initialization
-      console.log(`🎨 Keeping early initialized theme: ${currentTheme}`);
+      logger.debug(`🎨 Keeping early initialized theme: ${currentTheme}`);
 
       // Update settings to match current theme
       if (this.settings && this.settings.appearance) {
         this.settings.appearance.theme = currentTheme;
         try {
           await invoke("save_settings", { settings: this.settings });
-          console.log(`🎨 Settings updated to match current theme: ${currentTheme}`);
+          logger.debug(`🎨 Settings updated to match current theme: ${currentTheme}`);
         } catch (error) {
-          console.error("Failed to update theme in settings:", error);
+          logger.error("Failed to update theme in settings:", error);
         }
       }
       return;
@@ -1389,9 +1390,9 @@ export class SettingsManager {
         // Save settings
         try {
           await this.saveSettings();
-          console.log(`🎨 Theme changed to: ${selectedTheme}`);
+          logger.debug(`🎨 Theme changed to: ${selectedTheme}`);
         } catch (error) {
-          console.error("Failed to save theme setting:", error);
+          logger.error("Failed to save theme setting:", error);
         }
       });
     });
@@ -1431,16 +1432,16 @@ export class SettingsManager {
 
     // If early timer theme was set and matches localStorage, keep it
     if (currentTimerTheme && storedTimerTheme && currentTimerTheme === storedTimerTheme) {
-      console.log(`🎨 Keeping early initialized timer theme: ${currentTimerTheme}`);
+      logger.debug(`🎨 Keeping early initialized timer theme: ${currentTimerTheme}`);
 
       // Update settings to match current timer theme
       if (this.settings && this.settings.appearance) {
         this.settings.appearance.timer_theme = currentTimerTheme;
         try {
           await invoke("save_settings", { settings: this.settings });
-          console.log(`🎨 Settings updated to match current timer theme: ${currentTimerTheme}`);
+          logger.debug(`🎨 Settings updated to match current timer theme: ${currentTimerTheme}`);
         } catch (error) {
-          console.error("Failed to update timer theme in settings:", error);
+          logger.error("Failed to update timer theme in settings:", error);
         }
       }
       return;
@@ -1468,14 +1469,14 @@ export class SettingsManager {
       this.settings.appearance.timer_theme = themeId;
     }
 
-    console.log(`🎨 Timer theme applied: ${themeId}`);
-    console.log(
+    logger.debug(`🎨 Timer theme applied: ${themeId}`);
+    logger.debug(
       `🎨 DOM attribute check: data-timer-theme="${html.getAttribute("data-timer-theme")}"`
     );
 
     // Debug: Check CSS variable values
     const computedStyle = getComputedStyle(html);
-    console.log(`🎨 CSS Variables check:`, {
+    logger.debug(`🎨 CSS Variables check:`, {
       focusColor: computedStyle.getPropertyValue("--focus-color").trim(),
       focusBg: computedStyle.getPropertyValue("--focus-bg").trim(),
       focusTimerColor: computedStyle.getPropertyValue("--focus-timer-color").trim(),
@@ -1619,7 +1620,7 @@ export class SettingsManager {
 
     try {
       await invoke("save_settings", { settings: this.settings });
-      console.log(`🎨 Timer theme saved: ${themeId}`);
+      logger.debug(`🎨 Timer theme saved: ${themeId}`);
 
       // Show feedback
       NotificationUtils.showNotificationPing(
@@ -1627,7 +1628,7 @@ export class SettingsManager {
         "success"
       );
     } catch (error) {
-      console.error("Failed to save timer theme setting:", error);
+      logger.error("Failed to save timer theme setting:", error);
       NotificationUtils.showNotificationPing("❌ Failed to save timer theme", "error");
     }
   }
@@ -1661,28 +1662,30 @@ export class SettingsManager {
     const currentColorMode = this.getCurrentColorMode();
     const currentTimerTheme = this.settings.appearance?.timer_theme || "espresso";
 
-    console.log(
+    logger.debug(
       `🎨 Checking theme compatibility: ${currentTimerTheme} with mode ${currentColorMode}`
     );
 
     // Check if current timer theme is still compatible
     const isCompatible = isThemeCompatible(currentTimerTheme, currentColorMode);
-    console.log(
+    logger.debug(
       `🎨 Theme ${currentTimerTheme} is compatible with ${currentColorMode}: ${isCompatible}`
     );
 
     if (!isCompatible) {
-      console.log(`🎨 Theme ${currentTimerTheme} not compatible, switching to compatible theme...`);
+      logger.debug(
+        `🎨 Theme ${currentTimerTheme} not compatible, switching to compatible theme...`
+      );
       // Switch to a compatible theme
       const compatibleThemes = getCompatibleThemes(currentColorMode);
       if (compatibleThemes.length > 0) {
         const defaultCompatibleTheme =
           compatibleThemes.find((t) => t.isDefault) || compatibleThemes[0];
-        console.log(`🎨 Switching to compatible theme: ${defaultCompatibleTheme.id}`);
+        logger.debug(`🎨 Switching to compatible theme: ${defaultCompatibleTheme.id}`);
         this.selectTimerTheme(defaultCompatibleTheme.id);
       }
     } else {
-      console.log(`🎨 Theme ${currentTimerTheme} is compatible, keeping it`);
+      logger.debug(`🎨 Theme ${currentTimerTheme} is compatible, keeping it`);
     }
 
     // Re-initialize the theme selector with new compatibility

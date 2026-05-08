@@ -1,6 +1,7 @@
 // Pomodoro Timer Core Module
 const { invoke } = window.__TAURI__.core;
 import { NotificationUtils, _TimeUtils, KeyboardUtils } from "../utils/common-utils.js";
+import { logger } from "../utils/logger.js";
 
 export class PomodoroTimer {
   constructor() {
@@ -99,11 +100,11 @@ export class PomodoroTimer {
   async init() {
     // Verify all DOM elements are found
     if (!this.undoIcon) {
-      console.error("Undo icon element not found, re-searching...");
+      logger.error("Undo icon element not found, re-searching...");
       this.undoIcon = document.getElementById("undo-icon");
     }
     if (!this.stopIcon) {
-      console.error("Stop icon element not found, re-searching...");
+      logger.error("Stop icon element not found, re-searching...");
       this.stopIcon = document.getElementById("stop-icon");
     }
 
@@ -362,14 +363,14 @@ export class PomodoroTimer {
         currentMode: this.currentMode,
       });
     } catch (error) {
-      console.error("Failed to update tray menu:", error);
+      logger.error("Failed to update tray menu:", error);
     }
   }
 
   // Update keyboard shortcuts from settings
   updateKeyboardShortcuts(shortcuts) {
     this.customShortcuts = { ...shortcuts };
-    console.log("Updated keyboard shortcuts:", this.customShortcuts);
+    logger.debug("Updated keyboard shortcuts:", this.customShortcuts);
   }
 
   // Helper method to parse shortcut string into components
@@ -391,7 +392,7 @@ export class PomodoroTimer {
     // Setup event listeners for global activity monitoring
     this.setupGlobalActivityListeners();
 
-    console.log("Smart pause enabled with global monitoring");
+    logger.info("Smart pause enabled with global monitoring");
   }
 
   async setupGlobalActivityListeners() {
@@ -405,29 +406,27 @@ export class PomodoroTimer {
 
       // Listen for user activity
       await listen("user-activity", () => {
-        // console.log('🔄 ACTIVITY: Global activity detected via Tauri backend');
         this.handleUserActivity();
       });
 
       // Listen for user inactivity
       await listen("user-inactivity", () => {
-        // console.log('💤 INACTIVITY: Global inactivity detected via Tauri backend');
         this.autoPauseTimer();
       });
 
       // Start initial timeout for local fallback
       this.handleUserActivity();
 
-      console.log("Global activity listeners setup complete");
+      logger.info("Global activity listeners setup complete");
     } catch (error) {
-      console.error("Failed to setup global activity monitoring:", error);
+      logger.error("Failed to setup global activity monitoring:", error);
       // Fallback to local monitoring
       this.setupLocalActivityListeners();
     }
   }
 
   setupLocalActivityListeners() {
-    console.log("Falling back to local activity monitoring");
+    logger.info("Falling back to local activity monitoring");
     // List of events that indicate user activity
     const activityEvents = ["mousemove", "mousedown", "keydown", "scroll", "click"];
 
@@ -441,16 +440,9 @@ export class PomodoroTimer {
   }
 
   handleUserActivity() {
-    // console.log('🎯 handleUserActivity called - smartPauseEnabled:', this.smartPauseEnabled, 'isRunning:', this.isRunning, 'currentMode:', this.currentMode, 'isAutoPaused:', this.isAutoPaused);
-
-    // if (!this.smartPauseEnabled || !this.isRunning || this.currentMode !== 'focus') {
-    //     console.log('❌ handleUserActivity early return due to conditions');
-    //     return;
-    // }
-
     // If currently auto-paused, resume the timer
     if (this.isAutoPaused) {
-      console.log("🔄 Timer is auto-paused, calling resumeFromAutoPause()");
+      logger.debug("🔄 Timer is auto-paused, calling resumeFromAutoPause()");
       this.resumeFromAutoPause();
       return; // Exit early after resume to avoid setting new timeout immediately
     }
@@ -516,7 +508,7 @@ export class PomodoroTimer {
   }
 
   autoPauseTimer() {
-    console.log(
+    logger.debug(
       "🚨 autoPauseTimer called - isRunning:",
       this.isRunning,
       "isPaused:",
@@ -528,14 +520,14 @@ export class PomodoroTimer {
     );
 
     if (!this.isRunning || this.isPaused || this.isAutoPaused || this.currentMode !== "focus") {
-      console.log("❌ autoPauseTimer early return due to conditions");
+      logger.debug("❌ autoPauseTimer early return due to conditions");
       return;
     }
 
-    console.log("💤 Auto-pausing timer due to inactivity");
+    logger.info("💤 Auto-pausing timer due to inactivity");
     this.isAutoPaused = true;
     this.isPaused = true;
-    console.log("🔧 States set: isAutoPaused =", this.isAutoPaused, "isPaused =", this.isPaused);
+    logger.debug("🔧 States set: isAutoPaused =", this.isAutoPaused, "isPaused =", this.isPaused);
 
     // Stop the timer interval and countdown
     clearInterval(this.timerInterval);
@@ -560,7 +552,7 @@ export class PomodoroTimer {
       return;
     }
 
-    console.log("🔄 Resuming from auto-pause...");
+    logger.info("🔄 Resuming from auto-pause...");
 
     // Clear any existing timer interval first
     if (this.timerInterval) {
@@ -574,7 +566,7 @@ export class PomodoroTimer {
     this.isRunning = true;
     this._justResumedFromAutoPause = true; // Flag to ensure status update happens
 
-    console.log(
+    logger.debug(
       "✅ States set: isAutoPaused =",
       this.isAutoPaused,
       "isPaused =",
@@ -628,7 +620,7 @@ export class PomodoroTimer {
     this.updateDisplay();
     this.updateButtons();
 
-    console.log("🎯 Resume complete, timer should be running normally");
+    logger.debug("🎯 Resume complete, timer should be running normally");
   }
 
   async enableSmartPause(enabled) {
@@ -645,7 +637,7 @@ export class PomodoroTimer {
       try {
         await invoke("stop_activity_monitoring");
       } catch (error) {
-        console.error("Failed to stop activity monitoring:", error);
+        logger.error("Failed to stop activity monitoring:", error);
       }
 
       // Clear local timeout, countdown, and resume if auto-paused
@@ -660,7 +652,7 @@ export class PomodoroTimer {
       }
     }
 
-    console.log("Smart pause", enabled ? "enabled" : "disabled");
+    logger.info("Smart pause", enabled ? "enabled" : "disabled");
 
     // Update the smart indicator
     this.updateSmartIndicator();
@@ -681,7 +673,7 @@ export class PomodoroTimer {
       // Track session start time if not already set
       if (!this.sessionStartTime) {
         this.sessionStartTime = Date.now();
-        console.log("🟢 NEW SESSION STARTED - sessionStartTime set to:", {
+        logger.info("🟢 NEW SESSION STARTED - sessionStartTime set to:", {
           timestamp: this.sessionStartTime,
           dateISO: new Date(this.sessionStartTime).toISOString(),
           dateLocal: new Date(this.sessionStartTime).toString(),
@@ -689,7 +681,7 @@ export class PomodoroTimer {
         this.currentSessionElapsedTime = 0;
         this.sessionCompletedButNotSaved = false; // Reset flag for new session
       } else {
-        console.log("⚠️ Session already started - not updating sessionStartTime:", {
+        logger.debug("⚠️ Session already started - not updating sessionStartTime:", {
           existingTimestamp: this.sessionStartTime,
           existingDateISO: new Date(this.sessionStartTime).toISOString(),
           existingDateLocal: new Date(this.sessionStartTime).toString(),
@@ -944,14 +936,14 @@ export class PomodoroTimer {
       this.checkForMidnightReset();
     }, 60000); // Check every minute
 
-    console.log("🌙 Midnight monitoring started");
+    logger.debug("🌙 Midnight monitoring started");
   }
 
   stopMidnightMonitoring() {
     if (this.midnightMonitorInterval) {
       clearInterval(this.midnightMonitorInterval);
       this.midnightMonitorInterval = null;
-      console.log("🌙 Midnight monitoring stopped");
+      logger.debug("🌙 Midnight monitoring stopped");
     }
   }
 
@@ -959,14 +951,14 @@ export class PomodoroTimer {
     const newDateString = new Date().toDateString();
 
     if (newDateString !== this.currentDateString) {
-      console.log("🌙 Date change detected:", this.currentDateString, "→", newDateString);
+      logger.info("🌙 Date change detected:", this.currentDateString, "→", newDateString);
       this.currentDateString = newDateString;
       this.performMidnightReset();
     }
   }
 
   async performMidnightReset() {
-    console.log("🌅 Performing midnight reset...");
+    logger.info("🌅 Performing midnight reset...");
 
     // Store previous session count for notification
     const previousPomodoros = this.completedPomodoros;
@@ -1003,11 +995,11 @@ export class PomodoroTimer {
         await window.navigationManager.updateFocusSummary();
         await window.navigationManager.updateWeeklySessionsChart();
       } catch (error) {
-        console.error("Failed to update navigation charts after midnight reset:", error);
+        logger.error("Failed to update navigation charts after midnight reset:", error);
       }
     }
 
-    console.log("✅ Midnight reset completed successfully");
+    logger.info("✅ Midnight reset completed successfully");
   }
 
   async skipSession() {
@@ -1082,7 +1074,7 @@ export class PomodoroTimer {
       }
 
       // Reset session start time for next session (after saving)
-      console.log("🔄 Resetting sessionStartTime after overtime skip:", {
+      logger.debug("🔄 Resetting sessionStartTime after overtime skip:", {
         beforeReset: this.sessionStartTime,
         beforeResetISO: this.sessionStartTime
           ? new Date(this.sessionStartTime).toISOString()
@@ -1120,7 +1112,7 @@ export class PomodoroTimer {
         this.lastCompletedSessionTime = actualElapsedTime;
 
         // Preserve session start time for saving
-        console.log("Preserving session start time:", {
+        logger.debug("Preserving session start time:", {
           before: this.lastSessionStartTime,
           sessionStartTime: this.sessionStartTime,
           preservedValue: this.sessionStartTime,
@@ -1170,7 +1162,7 @@ export class PomodoroTimer {
     }
 
     // Reset session start time for next session (after saving)
-    console.log("🔄 Resetting sessionStartTime after normal skip:", {
+    logger.debug("🔄 Resetting sessionStartTime after normal skip:", {
       beforeReset: this.sessionStartTime,
       beforeResetISO: this.sessionStartTime ? new Date(this.sessionStartTime).toISOString() : null,
     });
@@ -1222,7 +1214,7 @@ export class PomodoroTimer {
       this.lastCompletedSessionTime = actualElapsedTime;
 
       // Preserve session start time for saving
-      console.log("Preserving session start time (timer completion):", {
+      logger.debug("Preserving session start time (timer completion):", {
         before: this.lastSessionStartTime,
         sessionStartTime: this.sessionStartTime,
         preservedValue: this.sessionStartTime,
@@ -1285,7 +1277,7 @@ export class PomodoroTimer {
     }
 
     // Reset session tracking for next session
-    console.log("Resetting sessionStartTime for next session (from completeSession)");
+    logger.debug("Resetting sessionStartTime for next session (from completeSession)");
     this.sessionStartTime = null;
     this.currentSessionElapsedTime = 0;
     this.sessionCompletedButNotSaved = false; // Reset flag
@@ -1354,7 +1346,7 @@ export class PomodoroTimer {
 
     // Auto-start new session if enabled and mode changed (traditional mode only)
     if (this.autoStartTimer && !this.allowContinuousSessions && shouldChangeMode) {
-      console.log("Auto-starting new session after completion in 1.5 seconds...");
+      logger.info("Auto-starting new session after completion in 1.5 seconds...");
       // Add a small delay to let the user see the completion message
       setTimeout(() => {
         this.startTimer();
@@ -1385,7 +1377,7 @@ export class PomodoroTimer {
       this.lastCompletedSessionTime = actualElapsedTime;
 
       // Preserve session start time for saving
-      console.log("Preserving session start time (overtime):", {
+      logger.debug("Preserving session start time (overtime):", {
         before: this.lastSessionStartTime,
         sessionStartTime: this.sessionStartTime,
         preservedValue: this.sessionStartTime,
@@ -1504,7 +1496,7 @@ export class PomodoroTimer {
         this._justResumedFromAutoPause ||
         this._justResumedFromPause
       ) {
-        console.log(
+        logger.debug(
           "📊 updateDisplay - isOvertime:",
           isOvertime,
           "isAutoPaused:",
@@ -1524,18 +1516,18 @@ export class PomodoroTimer {
       if (isOvertime) {
         statusText += " (Overtime)";
         if (!this._lastLoggedState || !this._lastLoggedState.startsWith("true-")) {
-          console.log("⏰ Showing Overtime status");
+          logger.debug("⏰ Showing Overtime status");
         }
       } else if (this.isAutoPaused) {
         statusText += " (Auto-paused)";
         if (!this._lastAutoPausedLogged) {
-          console.log("💤 Showing Auto-paused status");
+          logger.debug("💤 Showing Auto-paused status");
           this._lastAutoPausedLogged = true;
         }
       } else if (this.isPaused && !this.isRunning) {
         statusText += " (Paused)";
         if (!this._lastPausedLogged) {
-          console.log("⏸️ Showing Paused status");
+          logger.debug("⏸️ Showing Paused status");
           this._lastPausedLogged = true;
         }
       } else {
@@ -1548,7 +1540,7 @@ export class PomodoroTimer {
             this._justResumedFromAutoPause ||
             this._justResumedFromPause)
         ) {
-          console.log("▶️ No status suffix (timer running normally)");
+          logger.debug("▶️ No status suffix (timer running normally)");
         }
       }
 
@@ -1663,7 +1655,7 @@ export class PomodoroTimer {
   // Update status icon based on current mode
   updateStatusIcon() {
     if (!this.statusIcon) {
-      console.error("Status icon element not found!");
+      logger.error("Status icon element not found!");
       return;
     }
 
@@ -1684,10 +1676,10 @@ export class PomodoroTimer {
 
   // Update all setting indicators
   updateSettingIndicators() {
-    console.log("🔄 Updating setting indicators...");
-    console.log("autoStartTimer:", this.autoStartTimer);
-    console.log("allowContinuousSessions:", this.allowContinuousSessions);
-    console.log("smartPauseEnabled:", this.smartPauseEnabled);
+    logger.debug("🔄 Updating setting indicators...");
+    logger.debug("autoStartTimer:", this.autoStartTimer);
+    logger.debug("allowContinuousSessions:", this.allowContinuousSessions);
+    logger.debug("smartPauseEnabled:", this.smartPauseEnabled);
 
     // Update smart pause indicator
     if (this.smartIndicator) {
@@ -1701,9 +1693,9 @@ export class PomodoroTimer {
         // Use line bulb icon when inactive
         this.smartIndicator.className = "ri-lightbulb-line";
       }
-      console.log("✅ Smart indicator updated:", this.smartIndicator.className);
+      logger.debug("✅ Smart indicator updated:", this.smartIndicator.className);
     } else {
-      console.log("❌ Smart indicator element not found");
+      logger.debug("❌ Smart indicator element not found");
     }
 
     // Update auto-start indicator
@@ -1715,9 +1707,9 @@ export class PomodoroTimer {
         // Use line play icon when inactive
         this.autoStartIndicator.className = "ri-play-circle-line";
       }
-      console.log("✅ Auto-start indicator updated:", this.autoStartIndicator.className);
+      logger.debug("✅ Auto-start indicator updated:", this.autoStartIndicator.className);
     } else {
-      console.log("❌ Auto-start indicator element not found");
+      logger.debug("❌ Auto-start indicator element not found");
     }
 
     // Update continuous session indicator
@@ -1729,12 +1721,12 @@ export class PomodoroTimer {
         // Use line repeat icon when inactive
         this.continuousSessionIndicator.className = "ri-repeat-line";
       }
-      console.log(
+      logger.debug(
         "✅ Continuous sessions indicator updated:",
         this.continuousSessionIndicator.className
       );
     } else {
-      console.log("❌ Continuous sessions indicator element not found");
+      logger.debug("❌ Continuous sessions indicator element not found");
     }
   }
 
@@ -1767,7 +1759,7 @@ export class PomodoroTimer {
   // Enable/disable auto-start timer
   async enableAutoStart(enabled) {
     this.autoStartTimer = enabled;
-    console.log("📍 enableAutoStart called with:", enabled);
+    logger.debug("📍 enableAutoStart called with:", enabled);
 
     // Update the indicator to reflect the new state
     this.updateSettingIndicators();
@@ -1797,7 +1789,7 @@ export class PomodoroTimer {
   // Enable/disable continuous sessions
   async enableContinuousSessions(enabled) {
     this.allowContinuousSessions = enabled;
-    console.log("📍 enableContinuousSessions called with:", enabled);
+    logger.debug("📍 enableContinuousSessions called with:", enabled);
 
     // Update the indicator to reflect the new state
     this.updateSettingIndicators();
@@ -1813,11 +1805,11 @@ export class PomodoroTimer {
       const continuousCheckbox = document.getElementById("allow-continuous-sessions");
       if (continuousCheckbox) {
         continuousCheckbox.checked = newState;
-        console.log("🔄 Toggle - Set checkbox to:", newState);
-        console.log("🔄 Toggle - Checkbox actual value:", continuousCheckbox.checked);
+        logger.debug("🔄 Toggle - Set checkbox to:", newState);
+        logger.debug("🔄 Toggle - Checkbox actual value:", continuousCheckbox.checked);
         window.settingsManager.scheduleAutoSave();
       } else {
-        console.log("❌ Toggle - Checkbox element not found!");
+        logger.debug("❌ Toggle - Checkbox element not found!");
       }
     }
 
@@ -1850,9 +1842,9 @@ export class PomodoroTimer {
   updateStopUndoButton() {
     // Check if DOM elements exist
     if (!this.stopIcon || !this.undoIcon) {
-      console.error("Stop or undo icon elements not found!");
-      console.log("stopIcon:", this.stopIcon);
-      console.log("undoIcon:", this.undoIcon);
+      logger.error("Stop or undo icon elements not found!");
+      logger.debug("stopIcon:", this.stopIcon);
+      logger.debug("undoIcon:", this.undoIcon);
       return;
     }
 
@@ -2074,7 +2066,7 @@ export class PomodoroTimer {
       const history = await invoke("get_stats_history");
       this.renderWeeklyStats(history);
     } catch (error) {
-      console.error("Failed to load history:", error);
+      logger.error("Failed to load history:", error);
       this.renderWeeklyStats([]);
     }
   }
@@ -2130,7 +2122,7 @@ export class PomodoroTimer {
       const history = await invoke("get_stats_history");
       this.createHistoryModal(history);
     } catch (error) {
-      console.error("Failed to load history:", error);
+      logger.error("Failed to load history:", error);
       NotificationUtils.showNotificationPing("Failed to load history 😞");
     }
   }
@@ -2219,7 +2211,7 @@ export class PomodoroTimer {
     try {
       await invoke("save_tasks", { tasks: this.tasks });
     } catch (error) {
-      console.error("Failed to save tasks:", error);
+      logger.error("Failed to save tasks:", error);
       // Fallback to localStorage
       localStorage.setItem("pomodoro-tasks", JSON.stringify(this.tasks));
     }
@@ -2228,9 +2220,9 @@ export class PomodoroTimer {
   async loadTasks() {
     try {
       this.tasks = await invoke("load_tasks");
-      console.log("Loaded tasks from Tauri:", this.tasks.length);
+      logger.info("Loaded tasks from Tauri:", this.tasks.length);
     } catch (error) {
-      console.error("Failed to load tasks from Tauri, using localStorage:", error);
+      logger.error("Failed to load tasks from Tauri, using localStorage:", error);
       const saved = localStorage.getItem("pomodoro-tasks");
       this.tasks = saved ? JSON.parse(saved) : [];
     }
@@ -2249,7 +2241,7 @@ export class PomodoroTimer {
       // Also save daily stats for history
       await invoke("save_daily_stats", { session: data });
     } catch (error) {
-      console.error("Failed to save session data:", error);
+      logger.error("Failed to save session data:", error);
       // Fallback to localStorage
       localStorage.setItem("pomodoro-session", JSON.stringify(data));
     }
@@ -2261,7 +2253,7 @@ export class PomodoroTimer {
         await window.navigationManager.updateFocusSummary();
         await window.navigationManager.updateWeeklySessionsChart();
       } catch (error) {
-        console.error("Failed to update navigation charts:", error);
+        logger.error("Failed to update navigation charts:", error);
       }
     }
   }
@@ -2276,14 +2268,14 @@ export class PomodoroTimer {
       const todaySessions = await window.sessionManager.getSessionsForDate(today);
       return todaySessions ? todaySessions.length : 0;
     } catch (error) {
-      console.error("Failed to get completed sessions from SessionManager:", error);
+      logger.error("Failed to get completed sessions from SessionManager:", error);
       return this.completedPomodoros; // Fallback to internal counter
     }
   }
 
   async saveCompletedFocusSession() {
     if (!window.sessionManager) {
-      console.log("SessionManager not available, skipping individual session save");
+      logger.debug("SessionManager not available, skipping individual session save");
       return;
     }
 
@@ -2294,7 +2286,7 @@ export class PomodoroTimer {
     let startHour, startMinute;
     const actualSessionStartTime = this.lastSessionStartTime;
 
-    console.log("Session saving debug:", {
+    logger.debug("Session saving debug:", {
       lastSessionStartTime: this.lastSessionStartTime,
       sessionStartTime: this.sessionStartTime,
       actualSessionStartTime,
@@ -2307,7 +2299,7 @@ export class PomodoroTimer {
       const sessionStart = new Date(actualSessionStartTime);
       startHour = sessionStart.getHours();
       startMinute = sessionStart.getMinutes();
-      console.log("Using preserved session start time:", {
+      logger.debug("Using preserved session start time:", {
         timestampUTC: sessionStart.toISOString(),
         timestampLocal: sessionStart.toString(),
         extractedHour: startHour,
@@ -2320,7 +2312,7 @@ export class PomodoroTimer {
       const startTotalMinutes = endHour * 60 + endMinute - durationMinutes;
       startHour = Math.max(0, Math.floor(startTotalMinutes / 60));
       startMinute = Math.max(0, startTotalMinutes % 60);
-      console.log(
+      logger.debug(
         "Using fallback calculation for session start time (no preserved time available)"
       );
     }
@@ -2328,7 +2320,7 @@ export class PomodoroTimer {
     const endHour = now.getHours();
     const endMinute = now.getMinutes();
 
-    console.log("Final time values:", {
+    logger.debug("Final time values:", {
       startHour,
       startMinute,
       endHour,
@@ -2353,13 +2345,19 @@ export class PomodoroTimer {
 
     try {
       await window.sessionManager.addSession(sessionData);
-      console.log("Timer session saved to SessionManager:", sessionData);
+      logger.info("Timer session saved to SessionManager:", {
+        id: sessionData.id,
+        duration: sessionData.duration,
+        start_time: sessionData.start_time,
+        end_time: sessionData.end_time,
+        created_at: sessionData.created_at,
+      });
 
       // Clear the preserved session start time after successful save
       this.lastSessionStartTime = null;
-      console.log("Cleared lastSessionStartTime after successful save");
+      logger.debug("Cleared lastSessionStartTime after successful save");
     } catch (error) {
-      console.error("Failed to save timer session to SessionManager:", error);
+      logger.error("Failed to save timer session to SessionManager:", error);
     }
   }
 
@@ -2377,17 +2375,17 @@ export class PomodoroTimer {
         this.totalFocusTime = data.total_focus_time || 0;
         this.currentSession = data.current_session || 1;
         await this.updateProgressDots();
-        console.log("📊 Loaded existing session data for today");
+        logger.info("📊 Loaded existing session data for today");
       } else {
         // Reset to default values for new day, no data, or forced reset
         this.completedPomodoros = 0;
         this.totalFocusTime = 0;
         this.currentSession = 1;
         await this.updateProgressDots();
-        console.log("🌅 Reset session data for new day or forced reset");
+        logger.info("🌅 Reset session data for new day or forced reset");
       }
     } catch (error) {
-      console.error("Failed to load session data from Tauri, using localStorage:", error);
+      logger.error("Failed to load session data from Tauri, using localStorage:", error);
       const saved = localStorage.getItem("pomodoro-session");
 
       if (saved) {
@@ -2398,14 +2396,14 @@ export class PomodoroTimer {
           this.totalFocusTime = data.totalFocusTime || 0;
           this.currentSession = data.currentSession || 1;
           await this.updateProgressDots();
-          console.log("📊 Loaded existing session data from localStorage");
+          logger.info("📊 Loaded existing session data from localStorage");
         } else {
           // Reset to default values for new day, no data, or forced reset
           this.completedPomodoros = 0;
           this.totalFocusTime = 0;
           this.currentSession = 1;
           await this.updateProgressDots();
-          console.log("🌅 Reset session data from localStorage for new day or forced reset");
+          logger.info("🌅 Reset session data from localStorage for new day or forced reset");
         }
       } else {
         // No saved data at all, reset to defaults
@@ -2413,7 +2411,7 @@ export class PomodoroTimer {
         this.totalFocusTime = 0;
         this.currentSession = 1;
         await this.updateProgressDots();
-        console.log("🌅 No saved data found, using defaults");
+        logger.info("🌅 No saved data found, using defaults");
       }
     }
   }
@@ -2422,7 +2420,7 @@ export class PomodoroTimer {
   async showNotification() {
     // Only show desktop notifications if the setting is enabled
     if (!this.enableDesktopNotifications) {
-      console.log("🔔 Desktop notifications are disabled in settings");
+      logger.debug("🔔 Desktop notifications are disabled in settings");
       return;
     }
 
@@ -2435,30 +2433,30 @@ export class PomodoroTimer {
     const notificationTitle = "Presto - Pomodoro Timer";
     const notificationBody = messages[this.currentMode];
 
-    console.log(`🔔 Attempting to show desktop notification: "${notificationBody}"`);
+    logger.debug(`🔔 Attempting to show desktop notification: "${notificationBody}"`);
 
     try {
       // Check if we're in a Tauri context and use Tauri notifications
       if (window.__TAURI__ && window.__TAURI__.notification) {
-        console.log("🔔 Using Tauri notification system");
+        logger.debug("🔔 Using Tauri notification system");
         const { isPermissionGranted, requestPermission, sendNotification } =
           window.__TAURI__.notification;
 
         // Check if permission is granted
         let permissionGranted = await isPermissionGranted();
-        console.log(`🔔 Tauri notification permission status: ${permissionGranted}`);
+        logger.debug(`🔔 Tauri notification permission status: ${permissionGranted}`);
 
         // If not granted, request permission
         if (!permissionGranted) {
-          console.log("🔔 Requesting Tauri notification permission...");
+          logger.debug("🔔 Requesting Tauri notification permission...");
           const permission = await requestPermission();
           permissionGranted = permission === "granted";
-          console.log(
+          logger.debug(
             `🔔 Permission request result: ${permission} (granted: ${permissionGranted})`
           );
 
           if (!permissionGranted) {
-            console.warn("❌ Tauri notification permission was denied");
+            logger.warn("❌ Tauri notification permission was denied");
             NotificationUtils.showNotificationPing(
               "Desktop notifications are disabled. Enable them in system settings to get timer alerts! 🔔",
               "warning",
@@ -2470,24 +2468,24 @@ export class PomodoroTimer {
 
         // Send notification if permission is granted
         if (permissionGranted) {
-          console.log("🔔 Sending Tauri notification...");
+          logger.debug("🔔 Sending Tauri notification...");
           await sendNotification({
             title: notificationTitle,
             body: notificationBody,
             icon: "/assets/tauri.svg",
           });
-          console.log("✅ Tauri notification sent successfully");
+          logger.debug("✅ Tauri notification sent successfully");
         } else {
-          console.warn("❌ Tauri notification permission not available");
+          logger.warn("❌ Tauri notification permission not available");
           this.fallbackToWebNotifications(notificationTitle, notificationBody);
         }
       } else {
-        console.log("🔔 Tauri not available, falling back to Web Notification API");
+        logger.debug("🔔 Tauri not available, falling back to Web Notification API");
         this.fallbackToWebNotifications(notificationTitle, notificationBody);
       }
     } catch (error) {
-      console.error("❌ Failed to show Tauri notification:", error);
-      console.log("🔄 Attempting fallback to Web Notification API...");
+      logger.error("❌ Failed to show Tauri notification:", error);
+      logger.debug("🔄 Attempting fallback to Web Notification API...");
       this.fallbackToWebNotifications(notificationTitle, notificationBody);
     }
   }
@@ -2496,22 +2494,22 @@ export class PomodoroTimer {
   async fallbackToWebNotifications(title, body) {
     try {
       if ("Notification" in window) {
-        console.log(`🔔 Web Notification API available, permission: ${Notification.permission}`);
+        logger.debug(`🔔 Web Notification API available, permission: ${Notification.permission}`);
 
         if (Notification.permission === "granted") {
-          console.log("🔔 Sending Web notification...");
+          logger.debug("🔔 Sending Web notification...");
           NotificationUtils.showDesktopNotification(title, body);
-          console.log("✅ Web notification sent successfully");
+          logger.debug("✅ Web notification sent successfully");
         } else if (Notification.permission === "default") {
-          console.log("🔔 Requesting Web notification permission...");
+          logger.debug("🔔 Requesting Web notification permission...");
           const permission = await Notification.requestPermission();
-          console.log(`🔔 Web permission request result: ${permission}`);
+          logger.debug(`🔔 Web permission request result: ${permission}`);
 
           if (permission === "granted") {
             NotificationUtils.showDesktopNotification(title, body);
-            console.log("✅ Web notification sent after permission granted");
+            logger.debug("✅ Web notification sent after permission granted");
           } else {
-            console.warn("❌ Web notification permission was denied");
+            logger.warn("❌ Web notification permission was denied");
             NotificationUtils.showNotificationPing(
               "Desktop notifications are disabled. Enable them in your browser to get timer alerts! 🔔",
               "warning",
@@ -2519,7 +2517,7 @@ export class PomodoroTimer {
             );
           }
         } else {
-          console.warn("❌ Web notification permission was previously denied");
+          logger.warn("❌ Web notification permission was previously denied");
           NotificationUtils.showNotificationPing(
             "Desktop notifications are disabled. Enable them in your browser settings to get timer alerts! 🔔",
             "warning",
@@ -2527,57 +2525,57 @@ export class PomodoroTimer {
           );
         }
       } else {
-        console.warn("❌ Web Notification API not supported");
+        logger.warn("❌ Web Notification API not supported");
         this.fallbackToInAppNotification(body);
       }
     } catch (error) {
-      console.error("❌ Failed to show Web notification:", error);
+      logger.error("❌ Failed to show Web notification:", error);
       this.fallbackToInAppNotification(body);
     }
   }
 
   // Final fallback to in-app notification
   fallbackToInAppNotification(message) {
-    console.log("🔔 Using in-app notification as final fallback");
+    logger.debug("🔔 Using in-app notification as final fallback");
     NotificationUtils.showNotificationPing(message, "info", this.currentMode);
   }
 
   // Test notification function for debugging
   // Usage: Open browser console and type: window.pomodoroTimer.testNotification()
   async testNotification() {
-    console.log("🧪 Testing notification system...");
-    console.log(
+    logger.debug("🧪 Testing notification system...");
+    logger.debug(
       "📝 Instructions: This will test the notification system and show debug info in the console"
     );
-    console.log(`🔧 Current settings: desktop notifications = ${this.enableDesktopNotifications}`);
+    logger.debug(`🔧 Current settings: desktop notifications = ${this.enableDesktopNotifications}`);
 
     // Detect if we're in development mode
     const isDevMode = window.location.protocol === "tauri:" ? false : true;
     const bundleId = "com.presto.app";
 
-    console.log(
+    logger.debug(
       `🔧 Environment: ${isDevMode ? "Development (tauri dev)" : "Production (built app)"}`
     );
-    console.log(`🔧 Bundle ID: ${bundleId}`);
+    logger.debug(`🔧 Bundle ID: ${bundleId}`);
 
     if (isDevMode) {
-      console.log("⚠️  IMPORTANT: You're running in development mode (tauri dev)");
-      console.log("⚠️  On macOS, Tauri notifications often don't work in dev mode due to:");
-      console.log(
+      logger.debug("⚠️  IMPORTANT: You're running in development mode (tauri dev)");
+      logger.debug("⚠️  On macOS, Tauri notifications often don't work in dev mode due to:");
+      logger.debug(
         "   1. Tauri uses Terminal.app for dev mode, which may not have notification permissions"
       );
-      console.log("   2. Bundle identifier is handled differently in dev vs production");
-      console.log("   3. macOS requires proper app bundle registration for notifications");
-      console.log("");
-      console.log("🔧 To test notifications properly:");
-      console.log("   1. Run: npm run tauri build");
-      console.log("   2. Install the built app from src-tauri/target/release/bundle/");
-      console.log("   3. Test notifications in the installed production app");
-      console.log("");
-      console.log("🔧 For dev mode, check Terminal.app permissions:");
-      console.log("   - System Preferences > Notifications & Focus > Terminal");
-      console.log('   - Make sure "Allow Notifications" is enabled');
-      console.log("");
+      logger.debug("   2. Bundle identifier is handled differently in dev vs production");
+      logger.debug("   3. macOS requires proper app bundle registration for notifications");
+      logger.debug("");
+      logger.debug("🔧 To test notifications properly:");
+      logger.debug("   1. Run: npm run tauri build");
+      logger.debug("   2. Install the built app from src-tauri/target/release/bundle/");
+      logger.debug("   3. Test notifications in the installed production app");
+      logger.debug("");
+      logger.debug("🔧 For dev mode, check Terminal.app permissions:");
+      logger.debug("   - System Preferences > Notifications & Focus > Terminal");
+      logger.debug('   - Make sure "Allow Notifications" is enabled');
+      logger.debug("");
     }
 
     // Show in-app notification first
@@ -2593,35 +2591,35 @@ export class PomodoroTimer {
 
     try {
       await this.showNotification();
-      console.log(
+      logger.debug(
         "✅ Test notification API call completed - check console logs above for detailed debug info"
       );
-      console.log("🔍 Look for messages starting with 🔔 for notification flow details");
+      logger.debug("🔍 Look for messages starting with 🔔 for notification flow details");
 
       if (isDevMode) {
-        console.log("");
-        console.log(
+        logger.debug("");
+        logger.debug(
           '⚠️  If you see "✅ Tauri notification sent successfully" but no notification appeared:'
         );
-        console.log("   - This is NORMAL in development mode on macOS");
-        console.log("   - Test with a production build to verify notifications work");
-        console.log("");
-        console.log("🔄 Trying Web Notification API as fallback...");
+        logger.debug("   - This is NORMAL in development mode on macOS");
+        logger.debug("   - Test with a production build to verify notifications work");
+        logger.debug("");
+        logger.debug("🔄 Trying Web Notification API as fallback...");
         await this.testWebNotificationFallback();
       }
     } catch (error) {
-      console.error("❌ Test notification failed:", error);
-      console.log("💡 Troubleshooting steps:");
+      logger.error("❌ Test notification failed:", error);
+      logger.debug("💡 Troubleshooting steps:");
       if (isDevMode) {
-        console.log("   1. This is likely due to dev mode limitations on macOS");
-        console.log("   2. Check Terminal.app notification permissions in System Preferences");
-        console.log("   3. Test with a production build: npm run tauri build");
+        logger.debug("   1. This is likely due to dev mode limitations on macOS");
+        logger.debug("   2. Check Terminal.app notification permissions in System Preferences");
+        logger.debug("   3. Test with a production build: npm run tauri build");
       } else {
-        console.log(
+        logger.debug(
           "   1. Check if notifications are enabled in System Preferences > Notifications"
         );
-        console.log('   2. Look for "presto" or "com.presto.app" in the notifications list');
-        console.log('   3. Ensure "Allow Notifications" is enabled for the app');
+        logger.debug('   2. Look for "presto" or "com.presto.app" in the notifications list');
+        logger.debug('   3. Ensure "Allow Notifications" is enabled for the app');
       }
     } finally {
       // Restore original setting
@@ -2633,38 +2631,38 @@ export class PomodoroTimer {
   async testWebNotificationFallback() {
     try {
       if ("Notification" in window) {
-        console.log("🌐 Web Notification API available");
-        console.log(`🌐 Current permission: ${Notification.permission}`);
+        logger.debug("🌐 Web Notification API available");
+        logger.debug(`🌐 Current permission: ${Notification.permission}`);
 
         if (Notification.permission === "default") {
-          console.log("🌐 Requesting Web notification permission...");
+          logger.debug("🌐 Requesting Web notification permission...");
           const permission = await Notification.requestPermission();
-          console.log(`🌐 Permission result: ${permission}`);
+          logger.debug(`🌐 Permission result: ${permission}`);
         }
 
         if (Notification.permission === "granted") {
-          console.log("🌐 Sending Web notification...");
+          logger.debug("🌐 Sending Web notification...");
           const notification = new Notification("Presto - Test Web Notification", {
             body: "This is a fallback Web notification test",
             icon: "/assets/tauri.svg",
           });
 
-          notification.onshow = () => console.log("✅ Web notification displayed");
-          notification.onerror = (error) => console.error("❌ Web notification error:", error);
+          notification.onshow = () => logger.debug("✅ Web notification displayed");
+          notification.onerror = (error) => logger.error("❌ Web notification error:", error);
 
           // Auto-close after 5 seconds
           setTimeout(() => {
             notification.close();
-            console.log("🌐 Web notification closed automatically");
+            logger.debug("🌐 Web notification closed automatically");
           }, 5000);
         } else {
-          console.log("❌ Web notification permission denied");
+          logger.debug("❌ Web notification permission denied");
         }
       } else {
-        console.log("❌ Web Notification API not available");
+        logger.debug("❌ Web Notification API not available");
       }
     } catch (error) {
-      console.error("❌ Web notification test failed:", error);
+      logger.error("❌ Web notification test failed:", error);
     }
   }
 
@@ -2753,7 +2751,7 @@ export class PomodoroTimer {
         modeIcon,
       });
     } catch (error) {
-      console.warn("Failed to update tray icon:", error);
+      logger.warn("Failed to update tray icon:", error);
     }
   }
 
@@ -2765,7 +2763,7 @@ export class PomodoroTimer {
 
     // Apply debug mode if enabled (overrides all timer durations)
     if (settings.advanced?.debug_mode) {
-      console.log("Debug mode enabled - all timers set to 3 seconds");
+      logger.info("Debug mode enabled - all timers set to 3 seconds");
       this.durations.focus = 3;
       this.durations.break = 3;
       this.durations.longBreak = 3;
@@ -2799,10 +2797,10 @@ export class PomodoroTimer {
     // Update debug mode state
     this.debugMode = settings.advanced?.debug_mode || false;
 
-    console.log("🔧 Applying settings in PomodoroTimer:");
-    console.log("Auto-start timer setting:", this.autoStartTimer);
-    console.log("Allow continuous sessions setting:", this.allowContinuousSessions);
-    console.log("Debug mode setting:", this.debugMode);
+    logger.info("🔧 Applying settings in PomodoroTimer:");
+    logger.info("Auto-start timer setting:", this.autoStartTimer);
+    logger.info("Allow continuous sessions setting:", this.allowContinuousSessions);
+    logger.info("Debug mode setting:", this.debugMode);
 
     // Update smart pause setting and timeout
     this.inactivityThreshold = (settings.notifications.smart_pause_timeout || 30) * 1000; // convert to milliseconds
@@ -2818,7 +2816,7 @@ export class PomodoroTimer {
         const timeoutSeconds = Math.floor(this.inactivityThreshold / 1000);
         await invoke("update_activity_timeout", { timeoutSeconds });
       } catch (error) {
-        console.log("Activity monitoring not active or failed to update timeout:", error);
+        logger.debug("Activity monitoring not active or failed to update timeout:", error);
       }
     }
 
@@ -2826,7 +2824,7 @@ export class PomodoroTimer {
     await this.enableSmartPause(settings.notifications.smart_pause);
 
     // Update all setting indicators to reflect current state
-    console.log("🔄 Calling updateSettingIndicators from applySettings...");
+    logger.debug("🔄 Calling updateSettingIndicators from applySettings...");
     this.updateSettingIndicators();
   }
 
@@ -2900,6 +2898,6 @@ export class PomodoroTimer {
     // Restart midnight monitoring
     this.startMidnightMonitoring();
 
-    console.log("Timer reset to initial state");
+    logger.info("Timer reset to initial state");
   }
 }

@@ -1,5 +1,6 @@
 // Timer Themes Configuration
 // This file defines all available timer themes and their properties
+import { logger } from "./logger.js";
 
 export const TIMER_THEMES = {
   espresso: {
@@ -41,7 +42,7 @@ export const TIMER_THEMES = {
 // Function to dynamically register a new theme
 export function registerTheme(themeId, themeConfig) {
   if (TIMER_THEMES[themeId]) {
-    console.warn(`🎨 Theme ${themeId} already exists, overriding...`);
+    logger.warn(`🎨 Theme ${themeId} already exists, overriding...`);
   }
 
   TIMER_THEMES[themeId] = {
@@ -56,7 +57,7 @@ export function registerTheme(themeId, themeConfig) {
     },
   };
 
-  console.log(`✅ Registered theme: ${themeId}`, TIMER_THEMES[themeId]);
+  logger.info(`✅ Registered theme: ${themeId}`, TIMER_THEMES[themeId]);
   return TIMER_THEMES[themeId];
 }
 
@@ -64,7 +65,7 @@ export function registerTheme(themeId, themeConfig) {
 export function unregisterTheme(themeId) {
   if (TIMER_THEMES[themeId] && !TIMER_THEMES[themeId].isDefault) {
     delete TIMER_THEMES[themeId];
-    console.log(`🗑️ Unregistered theme: ${themeId}`);
+    logger.info(`🗑️ Unregistered theme: ${themeId}`);
     return true;
   }
   return false;

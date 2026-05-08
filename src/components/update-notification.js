@@ -6,6 +6,7 @@
 
 // Usa l'updateManager globale invece dell'import per essere sincronizzato con main.js
 const getUpdateManager = () => window.updateManager || window.updateManagerInstance;
+import { logger } from "../utils/logger.js";
 
 export class UpdateNotification {
   constructor() {
@@ -37,13 +38,13 @@ export class UpdateNotification {
     }
 
     if (getUpdateManager()) {
-      console.log("✅ [UpdateNotification] UpdateManager found, binding notification events");
+      logger.info("✅ [UpdateNotification] UpdateManager found, binding notification events");
       this.bindEvents();
 
       // RIMOSSO: Il controllo dello stato iniziale può causare problemi
       // L'updateManager dovrebbe emettere gli eventi corretti al momento giusto
     } else {
-      console.warn("⚠️ [UpdateNotification] UpdateManager not found after 10 seconds");
+      logger.warn("⚠️ [UpdateNotification] UpdateManager not found after 10 seconds");
       // Non bloccare l'app, continua senza update notifications
     }
   }
@@ -361,9 +362,9 @@ export class UpdateNotification {
    */
   bindButtonEvents() {
     const buttons = this.container.querySelectorAll("[data-action]");
-    console.log("🔔 [UpdateNotification] Found", buttons.length, "buttons with data-action");
+    logger.debug("🔔 [UpdateNotification] Found", buttons.length, "buttons with data-action");
     buttons.forEach((button) => {
-      console.log("🔔 [UpdateNotification] Binding evento per pulsante:", button.dataset.action);
+      logger.debug("🔔 [UpdateNotification] Binding evento per pulsante:", button.dataset.action);
       button.addEventListener("click", (e) => {
         // Trova il pulsante con data-action, anche se si clicca su un elemento figlio (come l'icona SVG)
         let target = e.target;
@@ -372,11 +373,11 @@ export class UpdateNotification {
         }
 
         const action = target ? target.dataset.action : null;
-        console.log("🔔 [UpdateNotification] Target found:", target, "Action:", action);
+        logger.debug("🔔 [UpdateNotification] Target found:", target, "Action:", action);
         if (action) {
           this.handleAction(action);
         } else {
-          console.warn("🔔 [UpdateNotification] No action found for this click");
+          logger.warn("🔔 [UpdateNotification] No action found for this click");
         }
       });
     });
@@ -386,7 +387,7 @@ export class UpdateNotification {
    * Handles button actions
    */
   handleAction(action) {
-    console.log("🔔 [UpdateNotification] Azione pulsante:", action);
+    logger.debug("🔔 [UpdateNotification] Azione pulsante:", action);
     switch (action) {
       case "download":
         this.startDownload();
@@ -410,10 +411,10 @@ export class UpdateNotification {
         if (!skippedVersions.includes(this.currentVersion)) {
           skippedVersions.push(this.currentVersion);
           localStorage.setItem("presto-skipped-versions", JSON.stringify(skippedVersions));
-          console.log(`Skipped version ${this.currentVersion}`);
+          logger.info(`Skipped version ${this.currentVersion}`);
         }
       } catch (err) {
-        console.error("Could not save skipped version:", err);
+        logger.error("Could not save skipped version:", err);
       }
     }
     this.hide();
@@ -427,7 +428,7 @@ export class UpdateNotification {
       const stored = localStorage.getItem("presto-skipped-versions");
       return stored ? JSON.parse(stored) : [];
     } catch (err) {
-      console.error("Could not load skipped versions:", err);
+      logger.error("Could not load skipped versions:", err);
       return [];
     }
   }
@@ -451,9 +452,9 @@ export class UpdateNotification {
     if (navigator.clipboard && navigator.clipboard.writeText) {
       try {
         await navigator.clipboard.writeText(brewCommand);
-        console.log("Brew command copied to clipboard");
+        logger.info("Brew command copied to clipboard");
       } catch (err) {
-        console.log("Could not copy to clipboard:", err);
+        logger.warn("Could not copy to clipboard:", err);
       }
     }
 
@@ -512,14 +513,14 @@ export class UpdateNotification {
     const updateManager = getUpdateManager();
 
     if (!updateManager) {
-      console.error(
+      logger.error(
         "❌ [UpdateNotification] UpdateManager not available to bind notification events"
       );
       return;
     }
 
-    console.log("🔔 [UpdateNotification] Binding update notification events...");
-    console.log("🔍 [UpdateNotification] UpdateManager state:", {
+    logger.info("🔔 [UpdateNotification] Binding update notification events...");
+    logger.debug("🔍 [UpdateNotification] UpdateManager state:", {
       updateAvailable: updateManager.updateAvailable,
       currentUpdate: updateManager.currentUpdate,
       isDevelopmentMode: updateManager.isDevelopmentMode
@@ -529,17 +530,17 @@ export class UpdateNotification {
     });
 
     this._onUpdateAvailable = (event) => {
-      console.log("🔔 [UpdateNotification] Evento updateAvailable ricevuto:", event.detail);
+      logger.debug("🔔 [UpdateNotification] Evento updateAvailable ricevuto:", event.detail);
       this.showUpdateAvailable(event.detail);
     };
 
     this._onUpdateNotAvailable = () => {
-      console.log("👍 [UpdateNotification] No updates available - nascondo notifica");
+      logger.info("👍 [UpdateNotification] No updates available - nascondo notifica");
       this.hide();
     };
 
     this._onCheckError = () => {
-      console.log("❌ [UpdateNotification] Update check error - nascondo notifica");
+      logger.warn("❌ [UpdateNotification] Update check error - nascondo notifica");
       this.hide();
     };
 
@@ -576,16 +577,16 @@ export class UpdateNotification {
    * Shows update available notification
    */
   showUpdateAvailable(updateInfo) {
-    console.log("🔔 [UpdateNotification] Show update notification requested:", updateInfo);
+    logger.debug("🔔 [UpdateNotification] Show update notification requested:", updateInfo);
 
     if (!updateInfo || !updateInfo.version) {
-      console.log("❌ [UpdateNotification] Invalid update info - not showing notification");
+      logger.warn("❌ [UpdateNotification] Invalid update info - not showing notification");
       return;
     }
 
     // Verifica esplicita che l'aggiornamento sia davvero disponibile
     if (updateInfo.available === false) {
-      console.log(
+      logger.debug(
         "❌ [UpdateNotification] Update explicitly unavailable - not showing notification"
       );
       return;
@@ -597,20 +598,19 @@ export class UpdateNotification {
     // if (updateManager && updateManager.isDevelopmentMode && updateManager.isDevelopmentMode()) {
     //     const hasTestMode = localStorage.getItem('presto_force_update_test') === 'true';
     //     if (!hasTestMode) {
-    //         console.log('🔍 [UpdateNotification] Development mode without test mode - not showing notification');
     //         return;
     //     }
     // }
 
     // Don't show if this version has been skipped
     if (this.isVersionSkipped(updateInfo.version)) {
-      console.log(
+      logger.debug(
         `⏭️ [UpdateNotification] Version ${updateInfo.version} was skipped - not showing notification`
       );
       return;
     }
 
-    console.log(`✅ [UpdateNotification] Showing notification for update ${updateInfo.version}`);
+    logger.info(`✅ [UpdateNotification] Showing notification for update ${updateInfo.version}`);
 
     this.currentVersion = updateInfo.version;
 
@@ -663,11 +663,11 @@ export class UpdateNotification {
     this._errorHideTimeoutId = null;
 
     if (this.isVisible) {
-      console.log("🔔 [UpdateNotification] Notification already visible - skip");
+      logger.debug("🔔 [UpdateNotification] Notification already visible - skip");
       return;
     }
 
-    console.log("🔔 [UpdateNotification] Showing update notification");
+    logger.info("🔔 [UpdateNotification] Showing update notification");
 
     this.container.style.display = "block";
 
@@ -687,11 +687,11 @@ export class UpdateNotification {
    */
   hide() {
     if (!this.isVisible) {
-      console.log("🔔 [UpdateNotification] Notification already hidden - skip");
+      logger.debug("🔔 [UpdateNotification] Notification already hidden - skip");
       return;
     }
 
-    console.log("🔔 [UpdateNotification] Hiding update notification");
+    logger.info("🔔 [UpdateNotification] Hiding update notification");
 
     this.container.classList.remove("visible");
 
