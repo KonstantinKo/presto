@@ -40,7 +40,9 @@ export const TIMER_THEMES = {
 };
 
 export function registerTheme(themeId, themeConfig) {
-  if (TIMER_THEMES[themeId]) {
+  const existingTheme = TIMER_THEMES[themeId];
+
+  if (existingTheme) {
     logger.warn(`🎨 Theme ${themeId} already exists, overriding...`);
   }
 
@@ -48,7 +50,7 @@ export function registerTheme(themeId, themeConfig) {
     name: themeConfig.name || themeId,
     description: themeConfig.description || `Theme: ${themeId}`,
     supports: themeConfig.supports || ["light", "dark"],
-    isDefault: themeConfig.isDefault || false,
+    isDefault: themeConfig.isDefault ?? existingTheme?.isDefault ?? false,
     preview: themeConfig.preview || DEFAULT_PREVIEW,
   };
 

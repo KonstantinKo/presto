@@ -308,7 +308,7 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
         return false;
       }
 
-      const response = await fetch(`https://api.github.com/repos//releases/latest`);
+      const response = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/releases/latest`);
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}`);
       }
@@ -415,7 +415,7 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
         return false;
       }
 
-      const response = await fetch(`https://api.github.com/repos//releases/latest`);
+      const response = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/releases/latest`);
       if (!response.ok) {
         throw new Error(`GitHub API error: ${response.status}`);
       }

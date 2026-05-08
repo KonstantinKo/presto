@@ -1818,6 +1818,21 @@ function setupUpdateManagement() {
     skipUpdateBtn.addEventListener("click", () => {
       hideUpdateInfo();
       updateStatus.innerHTML = '<span class="status-text">Update skipped</span>';
+
+      // Persist the skipped version to localStorage so it's not shown again
+      const currentUpdate = window.updateManager?.currentUpdate;
+      if (currentUpdate?.version) {
+        try {
+          const stored = localStorage.getItem("presto-skipped-versions");
+          const skippedVersions = stored ? JSON.parse(stored) : [];
+          if (!skippedVersions.includes(currentUpdate.version)) {
+            skippedVersions.push(currentUpdate.version);
+            localStorage.setItem("presto-skipped-versions", JSON.stringify(skippedVersions));
+          }
+        } catch (err) {
+          logger.error("Could not save skipped version:", err);
+        }
+      }
     });
   }
 

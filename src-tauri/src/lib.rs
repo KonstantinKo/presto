@@ -416,8 +416,18 @@ async fn load_session_data(app: AppHandle) -> Result<Option<PomodoroSession>, St
     // Get today's date string
     let today = chrono::Local::now().format("%Y-%m-%d").to_string();
 
+    // Check if session date matches today in either new format ("%Y-%m-%d") or
+    // legacy format ("%a %b %e %Y", e.g. "Thu May  8 2026")
+    let is_same_day = if session.date == today {
+        true
+    } else {
+        chrono::NaiveDate::parse_from_str(&session.date, "%a %b %e %Y")
+            .map(|d| d.format("%Y-%m-%d").to_string() == today)
+            .unwrap_or(false)
+    };
+
     // If the saved session is not from today, reset the counters but keep the date updated
-    if session.date != today {
+    if !is_same_day {
         session.completed_pomodoros = 0;
         session.total_focus_time = 0;
         session.current_session = 1;
@@ -428,6 +438,15 @@ async fn load_session_data(app: AppHandle) -> Result<Option<PomodoroSession>, St
             .map_err(|e| format!("Failed to serialize reset session: {e}"))?;
         fs::write(file_path, json)
             .map_err(|e| format!("Failed to write reset session file: {e}"))?;
+    } else if session.date != today {
+        // Same day but stored in legacy format — normalize to new format
+        session.date = today;
+
+        // Save the normalized session back to file
+        let json = serde_json::to_string_pretty(&session)
+            .map_err(|e| format!("Failed to serialize normalized session: {e}"))?;
+        fs::write(file_path, json)
+            .map_err(|e| format!("Failed to write normalized session file: {e}"))?;
     }
 
     Ok(Some(session))
