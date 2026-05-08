@@ -26,6 +26,7 @@ qa:
   test:
     - cd src-tauri && cargo build --all-targets
     - cd src-tauri && cargo test
+    - npm test
 
   lint:
     - cd src-tauri && cargo clippy --all-targets -- -D warnings

@@ -14,6 +14,8 @@ use tauri_plugin_autostart::ManagerExt;
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut};
 use tauri_plugin_oauth::start;
 
+mod helpers;
+
 // Type alias for the app handle to avoid generic complexity
 type AppHandle = tauri::AppHandle<tauri::Wry>;
 
@@ -187,20 +189,9 @@ impl Default for AppSettings {
     }
 }
 
-// Helper function to check if a shortcut should be debounced
 fn should_debounce_shortcut(action: &str) -> bool {
-    let debounce_duration = Duration::from_millis(500); // 500ms debounce
-    let mut debounce_map = SHORTCUT_DEBOUNCE.lock().unwrap();
-
-    let now = Instant::now();
-    if let Some(last_time) = debounce_map.get(action) {
-        if now.duration_since(*last_time) < debounce_duration {
-            return true; // Should debounce
-        }
-    }
-
-    debounce_map.insert(action.to_string(), now);
-    false // Should not debounce
+    let mut map = SHORTCUT_DEBOUNCE.lock().unwrap();
+    helpers::is_debounced(&mut map, action, Instant::now(), Duration::from_millis(500))
 }
 
 impl ActivityMonitor {
@@ -1649,5 +1640,38 @@ fn get_osstatus_description(status: libc::c_int) -> &'static str {
         -5000 => "System policy error - Operation blocked by system policy",
         -1 => "General error - Unspecified error occurred",
         _ => "Unknown error - Undocumented error code",
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{default_analytics_enabled, default_weekly_goal, AppSettings};
+
+    #[test]
+    fn weekly_goal_default_is_125() {
+        assert_eq!(default_weekly_goal(), 125);
+    }
+
+    #[test]
+    fn analytics_enabled_default_is_true() {
+        assert!(default_analytics_enabled());
+    }
+
+    #[test]
+    fn app_settings_default_has_expected_values() {
+        let s = AppSettings::default();
+        assert_eq!(s.timer.focus_duration, 25);
+        assert_eq!(s.timer.break_duration, 5);
+        assert_eq!(s.timer.long_break_duration, 20);
+        assert_eq!(s.timer.total_sessions, 10);
+        assert_eq!(s.timer.weekly_goal_minutes, 125);
+        assert!(s.analytics_enabled);
+        assert!(!s.autostart);
+        assert!(!s.hide_icon_on_close);
+        assert!(!s.hide_status_bar);
+        assert!(s.notifications.desktop_notifications);
+        assert!(s.notifications.sound_notifications);
+        assert!(!s.notifications.smart_pause);
+        assert_eq!(s.notifications.smart_pause_timeout, 30);
     }
 }
