@@ -9,34 +9,40 @@ A modern, cross-platform Pomodoro timer application built with Tauri (Rust + HTM
 ## ✨ Features
 
 ### 🍅 Pomodoro Technique
+
 - **Standard Pomodoro cycles**: 25-minute work sessions
 - **Smart breaks**: 5-minute short breaks, 20-minute long breaks every 4 cycles
 - **Daily goal**: Track progress through 10 daily Pomodoro sessions
 - **Visual progress**: Dot indicators showing session completion
 
 ### ⏱️ Timer Management
+
 - **Flexible controls**: Start, pause, reset, and skip functionality
 - **Visual feedback**: Dynamic UI that changes based on session type (work/break)
 - **Audio notifications**: Sound alerts for session transitions
 - **Desktop notifications**: System notifications to keep you informed
 
 ### 📋 Task Management
+
 - **Task tracking**: Add and manage tasks for each Pomodoro session
 - **Task completion**: Mark tasks as completed with visual feedback
 - **Persistence**: Tasks are automatically saved and restored
 
 ### 📊 Statistics & History
+
 - **Weekly statistics**: Track your productivity patterns
 - **Session history**: View detailed history of completed sessions
 - **Progress tracking**: Monitor your daily and weekly Pomodoro completion
 
 ### ⌨️ Keyboard Shortcuts
+
 - **Space**: Start/Pause timer
 - **Cmd/Ctrl + R**: Reset current session
 - **Cmd/Ctrl + S**: Skip current session
 - **Cmd/Ctrl + H**: Show/hide history modal
 
 ### 🎨 Modern UI
+
 - **Dark mode design**: Easy on the eyes for long work sessions
 - **Responsive layout**: Works on different screen sizes
 - **Smooth animations**: Polished user experience
@@ -67,6 +73,7 @@ Then you can launch Presto normally from your Applications folder or Spotlight.
 If you prefer to build from source, you'll need:
 
 #### Prerequisites
+
 - [Node.js](https://nodejs.org/) (v16 or higher)
 - [Rust](https://rustup.rs/) (latest stable; the project is verified against `1.89.0`)
 - Xcode Command Line Tools (macOS): `xcode-select --install`
@@ -76,17 +83,20 @@ The Tauri CLI is pulled in automatically via `npm install` (`@tauri-apps/cli`); 
 #### Steps
 
 1. **Clone the repository**
+
    ```bash
    git clone https://github.com/murdercode/presto.git
    cd presto
    ```
 
 2. **Install dependencies**
+
    ```bash
    npm install
    ```
 
 3. **Run in development mode**
+
    ```bash
    npm run tauri dev
    ```
@@ -101,19 +111,22 @@ The Tauri CLI is pulled in automatically via `npm install` (`@tauri-apps/cli`); 
 #### Troubleshooting
 
 - **`No version is set for command cargo` / `rustc`** — you are using `asdf` (or another version manager) and no Rust version is selected for this directory. Add a `.tool-versions` file at the **repo root** (not inside `src-tauri/`; the Tauri CLI invokes `rustc` from the repo root):
+
   ```
   rust 1.89.0
   ```
+
   Or set a global default with `asdf set -u rust 1.89.0`.
 
 - **`thread '<unnamed>' panicked at ... rust.rs:... called Option::unwrap() on a None value`** — same root cause as above. The Tauri CLI parses `rustc -vV` output and panics if `rustc` cannot be resolved on `PATH`. Fix the toolchain resolution and re-run.
 
 - **`Found version mismatched Tauri packages`** — the npm packages and the Rust crates have drifted out of sync (e.g. `@tauri-apps/api` vs `tauri`). Pin the npm side to match the Rust crate versions resolved by Cargo (check `src-tauri/Cargo.lock`), e.g.:
+
   ```bash
   npm install --save-exact @tauri-apps/api@2.6.0 @tauri-apps/plugin-updater@2.8.1
   ```
 
-- **Devtools in dev mode** — devtools are enabled via the `devtools` feature on the `tauri` crate in `src-tauri/Cargo.toml`. Open them with right-click → *Inspect Element* (or `Cmd+Opt+I` on macOS) to surface frontend errors that the app's generic "An error occurred" toast hides.
+- **Devtools in dev mode** — devtools are enabled via the `devtools` feature on the `tauri` crate in `src-tauri/Cargo.toml`. Open them with right-click → _Inspect Element_ (or `Cmd+Opt+I` on macOS) to surface frontend errors that the app's generic "An error occurred" toast hides.
 
 ## 🏗️ Project Structure
 
@@ -135,19 +148,23 @@ tempo/
 ## 🔧 Technical Details
 
 ### Frontend (HTML/CSS/JavaScript)
+
 - **Pure vanilla JavaScript**: No frameworks, lightweight and fast
 - **CSS Grid & Flexbox**: Modern responsive layouts
 - **CSS Custom Properties**: Consistent theming and easy customization
 - **Local Storage**: Client-side data persistence
 
 ### Backend (Rust/Tauri)
+
 - **Tauri framework**: Secure, fast native app wrapper
 - **File-based storage**: JSON files for data persistence
 - **Small bundle size**: Efficient Rust backend
-<br /><strike>- **Cross-platform**: Works on Windows, macOS, and Linux</strike>
+  <br /><strike>- **Cross-platform**: Works on Windows, macOS, and Linux</strike>
 
 ### Data Persistence
+
 The application stores data in the following locations:
+
 - **Session data**: Current timer state and progress
 - **Tasks**: User-created task list
 - **Statistics**: Daily and weekly productivity stats
@@ -165,6 +182,7 @@ The Pomodoro Technique is a time management method developed by Francesco Cirill
 6. **After 4 Pomodoros**, take a longer 20-minute break
 
 ### Benefits
+
 - Improved focus and concentration
 - Better time estimation skills
 - Reduced mental fatigue
@@ -174,12 +192,14 @@ The Pomodoro Technique is a time management method developed by Francesco Cirill
 ## 🛠️ Development
 
 ### Available Scripts
+
 - `npm run tauri dev` - Start development server
 - `npm run tauri build` - Build production app
 - `cargo check` - Check Rust code (in src-tauri/)
 - `cargo test` - Run Rust tests (in src-tauri/)
 
 ### Recommended IDE Setup
+
 - [VS Code](https://code.visualstudio.com/)
 - [Tauri Extension](https://marketplace.visualstudio.com/items?itemName=tauri-apps.tauri-vscode)
 - [rust-analyzer](https://marketplace.visualstudio.com/items?itemName=rust-lang.rust-analyzer)
@@ -229,6 +249,7 @@ Presto includes an automatic update system that allows you to receive new versio
 If you want to configure the update system for your fork:
 
 1. **Automatic setup**:
+
    ```bash
    ./setup-updates.sh
    ```

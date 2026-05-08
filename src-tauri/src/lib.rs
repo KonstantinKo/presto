@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
 use std::sync::{Arc, LazyLock, Mutex};
+#[cfg(target_os = "macos")]
 use std::thread;
 use std::time::{Duration, Instant};
 use tauri::menu::{Menu, MenuItem};
@@ -24,8 +25,10 @@ static SHORTCUT_DEBOUNCE: LazyLock<Mutex<HashMap<String, Instant>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
 
 struct ActivityMonitor {
+    #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
     last_activity: Arc<Mutex<Instant>>,
     is_monitoring: Arc<Mutex<bool>>,
+    #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
     app_handle: AppHandle,
     inactivity_threshold: Arc<Mutex<Duration>>,
 }
@@ -77,6 +80,9 @@ struct Task {
     completed_at: Option<String>,
 }
 
+/// User-facing settings; the bool fields are independent toggles, splitting
+/// them into nested structs would hurt config readability.
+#[allow(clippy::struct_excessive_bools)]
 #[derive(Serialize, Deserialize, Clone)]
 struct AppSettings {
     shortcuts: ShortcutSettings,
@@ -110,11 +116,11 @@ struct TimerSettings {
     weekly_goal_minutes: u32,
 }
 
-fn default_weekly_goal() -> u32 {
+const fn default_weekly_goal() -> u32 {
     125
 }
 
-fn default_analytics_enabled() -> bool {
+const fn default_analytics_enabled() -> bool {
     true // Analytics enabled by default
 }
 
@@ -126,6 +132,9 @@ async fn are_analytics_enabled(app: &AppHandle) -> bool {
     }
 }
 
+/// User-facing notification preferences; each bool maps to an independent
+/// UI toggle, restructuring would not match the settings UI.
+#[allow(clippy::struct_excessive_bools)]
 #[derive(Serialize, Deserialize, Clone)]
 struct NotificationSettings {
     desktop_notifications: bool,
@@ -139,16 +148,10 @@ struct NotificationSettings {
     smart_pause_timeout: u32, // timeout in seconds
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Default)]
 struct AdvancedSettings {
     #[serde(default)]
     debug_mode: bool, // Debug mode with 3-second timers
-}
-
-impl Default for AdvancedSettings {
-    fn default() -> Self {
-        Self { debug_mode: false }
-    }
 }
 
 impl Default for AppSettings {
@@ -201,6 +204,7 @@ fn should_debounce_shortcut(action: &str) -> bool {
 }
 
 impl ActivityMonitor {
+    #[cfg(target_os = "macos")]
     fn new(app_handle: AppHandle, timeout_seconds: u64) -> Self {
         Self {
             last_activity: Arc::new(Mutex::new(Instant::now())),
@@ -330,54 +334,52 @@ impl ActivityMonitor {
 
 #[tauri::command]
 async fn start_activity_monitoring(app: AppHandle, timeout_seconds: u64) -> Result<(), String> {
-    let mut monitor = ACTIVITY_MONITOR.lock().unwrap();
-
-    if monitor.is_none() {
-        *monitor = Some(ActivityMonitor::new(app, timeout_seconds));
+    #[cfg(target_os = "macos")]
+    {
+        let mut monitor = ACTIVITY_MONITOR.lock().unwrap();
+        if monitor.is_none() {
+            *monitor = Some(ActivityMonitor::new(app, timeout_seconds));
+        }
+        if let Some(ref m) = *monitor {
+            m.start_monitoring()?;
+        }
+        Ok(())
     }
 
-    if let Some(ref monitor) = *monitor {
-        #[cfg(target_os = "macos")]
-        {
-            monitor.start_monitoring()?;
-        }
-
-        #[cfg(not(target_os = "macos"))]
-        {
-            return Err("Activity monitoring is only supported on macOS".to_string());
-        }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = (app, timeout_seconds);
+        Err("Activity monitoring is only supported on macOS".to_string())
     }
-
-    Ok(())
 }
 
 #[tauri::command]
 async fn stop_activity_monitoring() -> Result<(), String> {
-    let monitor = ACTIVITY_MONITOR.lock().unwrap();
-
-    if let Some(ref monitor) = *monitor {
-        monitor.stop_monitoring();
+    {
+        let monitor = ACTIVITY_MONITOR.lock().unwrap();
+        if let Some(ref m) = *monitor {
+            m.stop_monitoring();
+        }
     }
-
     Ok(())
 }
 
 #[tauri::command]
 async fn update_activity_timeout(timeout_seconds: u64) -> Result<(), String> {
     let monitor = ACTIVITY_MONITOR.lock().unwrap();
-
-    if let Some(ref monitor) = *monitor {
-        monitor.update_threshold(timeout_seconds);
-        Ok(())
-    } else {
-        Err("Activity monitor not initialized".to_string())
-    }
+    monitor.as_ref().map_or_else(
+        || Err("Activity monitor not initialized".to_string()),
+        |m| {
+            m.update_threshold(timeout_seconds);
+            Ok(())
+        },
+    )
 }
 
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 #[tauri::command]
 fn greet(name: &str) -> String {
-    format!("Hello, {}! You've been greeted from Rust!", name)
+    format!("Hello, {name}! You've been greeted from Rust!")
 }
 
 #[tauri::command]
@@ -385,16 +387,16 @@ async fn save_session_data(session: PomodoroSession, app: AppHandle) -> Result<(
     let app_data_dir = app
         .path()
         .app_data_dir()
-        .map_err(|e| format!("Failed to get app data directory: {}", e))?;
+        .map_err(|e| format!("Failed to get app data directory: {e}"))?;
 
     // Create the directory if it doesn't exist
-    fs::create_dir_all(&app_data_dir).map_err(|e| format!("Failed to create directory: {}", e))?;
+    fs::create_dir_all(&app_data_dir).map_err(|e| format!("Failed to create directory: {e}"))?;
 
     let file_path = app_data_dir.join("session.json");
     let json = serde_json::to_string_pretty(&session)
-        .map_err(|e| format!("Failed to serialize session: {}", e))?;
+        .map_err(|e| format!("Failed to serialize session: {e}"))?;
 
-    fs::write(file_path, json).map_err(|e| format!("Failed to write session file: {}", e))?;
+    fs::write(file_path, json).map_err(|e| format!("Failed to write session file: {e}"))?;
 
     // Track session saved analytics (if enabled)
     if are_analytics_enabled(&app).await {
@@ -414,17 +416,17 @@ async fn load_session_data(app: AppHandle) -> Result<Option<PomodoroSession>, St
     let app_data_dir = app
         .path()
         .app_data_dir()
-        .map_err(|e| format!("Failed to get app data directory: {}", e))?;
+        .map_err(|e| format!("Failed to get app data directory: {e}"))?;
     let file_path = app_data_dir.join("session.json");
 
     if !file_path.exists() {
         return Ok(None);
     }
 
-    let content = fs::read_to_string(&file_path)
-        .map_err(|e| format!("Failed to read session file: {}", e))?;
+    let content =
+        fs::read_to_string(&file_path).map_err(|e| format!("Failed to read session file: {e}"))?;
     let mut session: PomodoroSession =
-        serde_json::from_str(&content).map_err(|e| format!("Failed to parse session: {}", e))?;
+        serde_json::from_str(&content).map_err(|e| format!("Failed to parse session: {e}"))?;
 
     // Get today's date string
     let today = chrono::Local::now().format("%a %b %d %Y").to_string();
@@ -438,9 +440,9 @@ async fn load_session_data(app: AppHandle) -> Result<Option<PomodoroSession>, St
 
         // Save the reset session back to file
         let json = serde_json::to_string_pretty(&session)
-            .map_err(|e| format!("Failed to serialize reset session: {}", e))?;
+            .map_err(|e| format!("Failed to serialize reset session: {e}"))?;
         fs::write(file_path, json)
-            .map_err(|e| format!("Failed to write reset session file: {}", e))?;
+            .map_err(|e| format!("Failed to write reset session file: {e}"))?;
     }
 
     Ok(Some(session))
@@ -451,16 +453,16 @@ async fn save_tasks(tasks: Vec<Task>, app: AppHandle) -> Result<(), String> {
     let app_data_dir = app
         .path()
         .app_data_dir()
-        .map_err(|e| format!("Failed to get app data directory: {}", e))?;
+        .map_err(|e| format!("Failed to get app data directory: {e}"))?;
 
     // Create the directory if it doesn't exist
-    fs::create_dir_all(&app_data_dir).map_err(|e| format!("Failed to create directory: {}", e))?;
+    fs::create_dir_all(&app_data_dir).map_err(|e| format!("Failed to create directory: {e}"))?;
 
     let file_path = app_data_dir.join("tasks.json");
     let json = serde_json::to_string_pretty(&tasks)
-        .map_err(|e| format!("Failed to serialize tasks: {}", e))?;
+        .map_err(|e| format!("Failed to serialize tasks: {e}"))?;
 
-    fs::write(file_path, json).map_err(|e| format!("Failed to write tasks file: {}", e))?;
+    fs::write(file_path, json).map_err(|e| format!("Failed to write tasks file: {e}"))?;
 
     // Track tasks saved analytics (if enabled)
     if are_analytics_enabled(&app).await {
@@ -475,7 +477,7 @@ async fn load_tasks(app: AppHandle) -> Result<Vec<Task>, String> {
     let app_data_dir = app
         .path()
         .app_data_dir()
-        .map_err(|e| format!("Failed to get app data directory: {}", e))?;
+        .map_err(|e| format!("Failed to get app data directory: {e}"))?;
     let file_path = app_data_dir.join("tasks.json");
 
     if !file_path.exists() {
@@ -483,9 +485,9 @@ async fn load_tasks(app: AppHandle) -> Result<Vec<Task>, String> {
     }
 
     let content =
-        fs::read_to_string(file_path).map_err(|e| format!("Failed to read tasks file: {}", e))?;
+        fs::read_to_string(file_path).map_err(|e| format!("Failed to read tasks file: {e}"))?;
     let tasks: Vec<Task> =
-        serde_json::from_str(&content).map_err(|e| format!("Failed to parse tasks: {}", e))?;
+        serde_json::from_str(&content).map_err(|e| format!("Failed to parse tasks: {e}"))?;
 
     Ok(tasks)
 }
@@ -495,7 +497,7 @@ async fn get_stats_history(app: AppHandle) -> Result<Vec<PomodoroSession>, Strin
     let app_data_dir = app
         .path()
         .app_data_dir()
-        .map_err(|e| format!("Failed to get app data directory: {}", e))?;
+        .map_err(|e| format!("Failed to get app data directory: {e}"))?;
     let history_path = app_data_dir.join("history.json");
 
     if !history_path.exists() {
@@ -503,9 +505,9 @@ async fn get_stats_history(app: AppHandle) -> Result<Vec<PomodoroSession>, Strin
     }
 
     let content = fs::read_to_string(history_path)
-        .map_err(|e| format!("Failed to read history file: {}", e))?;
+        .map_err(|e| format!("Failed to read history file: {e}"))?;
     let history: Vec<PomodoroSession> =
-        serde_json::from_str(&content).map_err(|e| format!("Failed to parse history: {}", e))?;
+        serde_json::from_str(&content).map_err(|e| format!("Failed to parse history: {e}"))?;
 
     Ok(history)
 }
@@ -515,16 +517,16 @@ async fn save_daily_stats(session: PomodoroSession, app: AppHandle) -> Result<()
     let app_data_dir = app
         .path()
         .app_data_dir()
-        .map_err(|e| format!("Failed to get app data directory: {}", e))?;
+        .map_err(|e| format!("Failed to get app data directory: {e}"))?;
 
     // Create the directory if it doesn't exist
-    fs::create_dir_all(&app_data_dir).map_err(|e| format!("Failed to create directory: {}", e))?;
+    fs::create_dir_all(&app_data_dir).map_err(|e| format!("Failed to create directory: {e}"))?;
 
     let history_path = app_data_dir.join("history.json");
 
     let mut history: Vec<PomodoroSession> = if history_path.exists() {
         let content = fs::read_to_string(&history_path)
-            .map_err(|e| format!("Failed to read history: {}", e))?;
+            .map_err(|e| format!("Failed to read history: {e}"))?;
         serde_json::from_str(&content).unwrap_or_else(|_| Vec::new())
     } else {
         Vec::new()
@@ -542,8 +544,8 @@ async fn save_daily_stats(session: PomodoroSession, app: AppHandle) -> Result<()
     }
 
     let json = serde_json::to_string_pretty(&history)
-        .map_err(|e| format!("Failed to serialize history: {}", e))?;
-    fs::write(history_path, json).map_err(|e| format!("Failed to write history file: {}", e))?;
+        .map_err(|e| format!("Failed to serialize history: {e}"))?;
+    fs::write(history_path, json).map_err(|e| format!("Failed to write history file: {e}"))?;
 
     Ok(())
 }
@@ -582,15 +584,12 @@ async fn update_tray_icon(
                 });
 
                 let status = if is_running { "Running" } else { "Paused" };
-                let title = format!("{} {}", icon, timer_text);
+                let title = format!("{icon} {timer_text}");
                 tray.set_title(Some(title))
-                    .map_err(|e| format!("Failed to set title: {}", e))?;
+                    .map_err(|e| format!("Failed to set title: {e}"))?;
 
                 let tooltip = if session_mode == "focus" {
-                    format!(
-                        "Presto - Session {}/{} ({})",
-                        current_session, total_sessions, status
-                    )
+                    format!("Presto - Session {current_session}/{total_sessions} ({status})")
                 } else {
                     format!(
                         "Presto - {} ({})",
@@ -604,12 +603,12 @@ async fn update_tray_icon(
                 };
 
                 tray.set_tooltip(Some(tooltip))
-                    .map_err(|e| format!("Failed to set tooltip: {}", e))?;
+                    .map_err(|e| format!("Failed to set tooltip: {e}"))?;
             }
             Ok(())
         })();
     })
-    .map_err(|e| format!("Failed to run on main thread: {}", e))?;
+    .map_err(|e| format!("Failed to run on main thread: {e}"))?;
 
     // Extract the result from the mutex
     let final_result = result.lock().unwrap().clone();
@@ -620,27 +619,24 @@ async fn update_tray_icon(
 async fn show_window(app: AppHandle) -> Result<(), String> {
     if let Some(window) = app.get_webview_window("main") {
         // Check if hide_icon_on_close is enabled to restore dock visibility
-        match load_settings(app.clone()).await {
-            Ok(settings) => {
-                if settings.hide_icon_on_close {
-                    // Restore dock visibility when showing window
-                    #[cfg(target_os = "macos")]
-                    {
-                        let _ = set_dock_visibility(app.clone(), true).await;
-                    }
+        if let Ok(settings) = load_settings(app.clone()).await {
+            if settings.hide_icon_on_close {
+                // Restore dock visibility when showing window
+                #[cfg(target_os = "macos")]
+                {
+                    let _ = set_dock_visibility(app.clone(), true).await;
                 }
             }
-            Err(_) => {
-                // Ignore error, just proceed with showing window
-            }
+        } else {
+            // Ignore error, just proceed with showing window
         }
 
         window
             .show()
-            .map_err(|e| format!("Failed to show window: {}", e))?;
+            .map_err(|e| format!("Failed to show window: {e}"))?;
         window
             .set_focus()
-            .map_err(|e| format!("Failed to focus window: {}", e))?;
+            .map_err(|e| format!("Failed to focus window: {e}"))?;
     }
     Ok(())
 }
@@ -650,15 +646,15 @@ async fn save_settings(settings: AppSettings, app: AppHandle) -> Result<(), Stri
     let app_data_dir = app
         .path()
         .app_data_dir()
-        .map_err(|e| format!("Failed to get app data directory: {}", e))?;
+        .map_err(|e| format!("Failed to get app data directory: {e}"))?;
 
-    fs::create_dir_all(&app_data_dir).map_err(|e| format!("Failed to create directory: {}", e))?;
+    fs::create_dir_all(&app_data_dir).map_err(|e| format!("Failed to create directory: {e}"))?;
 
     let file_path = app_data_dir.join("settings.json");
     let json = serde_json::to_string_pretty(&settings)
-        .map_err(|e| format!("Failed to serialize settings: {}", e))?;
+        .map_err(|e| format!("Failed to serialize settings: {e}"))?;
 
-    fs::write(file_path, json).map_err(|e| format!("Failed to write settings file: {}", e))?;
+    fs::write(file_path, json).map_err(|e| format!("Failed to write settings file: {e}"))?;
 
     Ok(())
 }
@@ -668,17 +664,17 @@ async fn load_settings(app: AppHandle) -> Result<AppSettings, String> {
     let app_data_dir = app
         .path()
         .app_data_dir()
-        .map_err(|e| format!("Failed to get app data directory: {}", e))?;
+        .map_err(|e| format!("Failed to get app data directory: {e}"))?;
     let file_path = app_data_dir.join("settings.json");
 
     if !file_path.exists() {
         return Ok(AppSettings::default());
     }
 
-    let contents = fs::read_to_string(file_path)
-        .map_err(|e| format!("Failed to read settings file: {}", e))?;
+    let contents =
+        fs::read_to_string(file_path).map_err(|e| format!("Failed to read settings file: {e}"))?;
     let settings: AppSettings =
-        serde_json::from_str(&contents).map_err(|e| format!("Failed to parse settings: {}", e))?;
+        serde_json::from_str(&contents).map_err(|e| format!("Failed to parse settings: {e}"))?;
 
     Ok(settings)
 }
@@ -691,13 +687,13 @@ async fn register_global_shortcuts(
     // Unregister all existing shortcuts first
     app.global_shortcut()
         .unregister_all()
-        .map_err(|e| format!("Failed to unregister shortcuts: {}", e))?;
+        .map_err(|e| format!("Failed to unregister shortcuts: {e}"))?;
 
     // Register start/stop shortcut
     if let Some(ref shortcut_str) = shortcuts.start_stop {
         let shortcut: Shortcut = shortcut_str
             .parse()
-            .map_err(|e| format!("Invalid start/stop shortcut '{}': {}", shortcut_str, e))?;
+            .map_err(|e| format!("Invalid start/stop shortcut '{shortcut_str}': {e}"))?;
 
         let app_handle = app.clone();
         app.global_shortcut()
@@ -706,14 +702,14 @@ async fn register_global_shortcuts(
                     let _ = app_handle.emit("global-shortcut", "start-stop");
                 }
             })
-            .map_err(|e| format!("Failed to register start/stop shortcut: {}", e))?;
+            .map_err(|e| format!("Failed to register start/stop shortcut: {e}"))?;
     }
 
     // Register reset shortcut
     if let Some(ref shortcut_str) = shortcuts.reset {
         let shortcut: Shortcut = shortcut_str
             .parse()
-            .map_err(|e| format!("Invalid reset shortcut '{}': {}", shortcut_str, e))?;
+            .map_err(|e| format!("Invalid reset shortcut '{shortcut_str}': {e}"))?;
 
         let app_handle = app.clone();
         app.global_shortcut()
@@ -722,14 +718,14 @@ async fn register_global_shortcuts(
                     let _ = app_handle.emit("global-shortcut", "reset");
                 }
             })
-            .map_err(|e| format!("Failed to register reset shortcut: {}", e))?;
+            .map_err(|e| format!("Failed to register reset shortcut: {e}"))?;
     }
 
     // Register skip shortcut
     if let Some(ref shortcut_str) = shortcuts.skip {
         let shortcut: Shortcut = shortcut_str
             .parse()
-            .map_err(|e| format!("Invalid skip shortcut '{}': {}", shortcut_str, e))?;
+            .map_err(|e| format!("Invalid skip shortcut '{shortcut_str}': {e}"))?;
 
         let app_handle = app.clone();
         app.global_shortcut()
@@ -738,12 +734,12 @@ async fn register_global_shortcuts(
                     let _ = app_handle.emit("global-shortcut", "skip");
                 }
             })
-            .map_err(|e| format!("Failed to register skip shortcut: {}", e))?;
+            .map_err(|e| format!("Failed to register skip shortcut: {e}"))?;
     }
 
     // Emit an event to the frontend to update local shortcuts as well
     app.emit("shortcuts-updated", &shortcuts)
-        .map_err(|e| format!("Failed to emit shortcuts update: {}", e))?;
+        .map_err(|e| format!("Failed to emit shortcuts update: {e}"))?;
 
     Ok(())
 }
@@ -752,7 +748,7 @@ async fn register_global_shortcuts(
 async fn unregister_global_shortcuts(app: AppHandle) -> Result<(), String> {
     app.global_shortcut()
         .unregister_all()
-        .map_err(|e| format!("Failed to unregister shortcuts: {}", e))?;
+        .map_err(|e| format!("Failed to unregister shortcuts: {e}"))?;
     Ok(())
 }
 
@@ -761,7 +757,7 @@ async fn reset_all_data(app: AppHandle) -> Result<(), String> {
     let app_data_dir = app
         .path()
         .app_data_dir()
-        .map_err(|e| format!("Failed to get app data directory: {}", e))?;
+        .map_err(|e| format!("Failed to get app data directory: {e}"))?;
 
     let files_to_delete = vec![
         "session.json",
@@ -774,8 +770,7 @@ async fn reset_all_data(app: AppHandle) -> Result<(), String> {
     for file_name in files_to_delete {
         let file_path = app_data_dir.join(file_name);
         if file_path.exists() {
-            fs::remove_file(file_path)
-                .map_err(|e| format!("Failed to delete {}: {}", file_name, e))?;
+            fs::remove_file(file_path).map_err(|e| format!("Failed to delete {file_name}: {e}"))?;
         }
     }
 
@@ -793,7 +788,7 @@ async fn enable_autostart(app: AppHandle) -> Result<(), String> {
     let autostart_manager = app.autolaunch();
     autostart_manager
         .enable()
-        .map_err(|e| format!("Failed to enable autostart: {}", e))?;
+        .map_err(|e| format!("Failed to enable autostart: {e}"))?;
     Ok(())
 }
 
@@ -802,7 +797,7 @@ async fn disable_autostart(app: AppHandle) -> Result<(), String> {
     let autostart_manager = app.autolaunch();
     autostart_manager
         .disable()
-        .map_err(|e| format!("Failed to disable autostart: {}", e))?;
+        .map_err(|e| format!("Failed to disable autostart: {e}"))?;
     Ok(())
 }
 
@@ -811,7 +806,7 @@ async fn is_autostart_enabled(app: AppHandle) -> Result<bool, String> {
     let autostart_manager = app.autolaunch();
     autostart_manager
         .is_enabled()
-        .map_err(|e| format!("Failed to check autostart status: {}", e))
+        .map_err(|e| format!("Failed to check autostart status: {e}"))
 }
 
 #[tauri::command]
@@ -819,17 +814,16 @@ async fn save_manual_sessions(sessions: Vec<ManualSession>, app: AppHandle) -> R
     let app_data_dir = app
         .path()
         .app_data_dir()
-        .map_err(|e| format!("Failed to get app data directory: {}", e))?;
+        .map_err(|e| format!("Failed to get app data directory: {e}"))?;
 
     // Create the directory if it doesn't exist
-    fs::create_dir_all(&app_data_dir).map_err(|e| format!("Failed to create directory: {}", e))?;
+    fs::create_dir_all(&app_data_dir).map_err(|e| format!("Failed to create directory: {e}"))?;
 
     let file_path = app_data_dir.join("manual_sessions.json");
     let json = serde_json::to_string_pretty(&sessions)
-        .map_err(|e| format!("Failed to serialize manual sessions: {}", e))?;
+        .map_err(|e| format!("Failed to serialize manual sessions: {e}"))?;
 
-    fs::write(file_path, json)
-        .map_err(|e| format!("Failed to write manual sessions file: {}", e))?;
+    fs::write(file_path, json).map_err(|e| format!("Failed to write manual sessions file: {e}"))?;
 
     // Track manual sessions saved analytics (if enabled)
     if are_analytics_enabled(&app).await {
@@ -847,7 +841,7 @@ async fn load_manual_sessions(app: AppHandle) -> Result<Vec<ManualSession>, Stri
     let app_data_dir = app
         .path()
         .app_data_dir()
-        .map_err(|e| format!("Failed to get app data directory: {}", e))?;
+        .map_err(|e| format!("Failed to get app data directory: {e}"))?;
     let file_path = app_data_dir.join("manual_sessions.json");
 
     if !file_path.exists() {
@@ -855,9 +849,9 @@ async fn load_manual_sessions(app: AppHandle) -> Result<Vec<ManualSession>, Stri
     }
 
     let content = fs::read_to_string(file_path)
-        .map_err(|e| format!("Failed to read manual sessions file: {}", e))?;
+        .map_err(|e| format!("Failed to read manual sessions file: {e}"))?;
     let sessions: Vec<ManualSession> = serde_json::from_str(&content)
-        .map_err(|e| format!("Failed to parse manual sessions: {}", e))?;
+        .map_err(|e| format!("Failed to parse manual sessions: {e}"))?;
 
     Ok(sessions)
 }
@@ -903,7 +897,22 @@ async fn get_manual_sessions_for_date(
     Ok(filtered_sessions)
 }
 
+/// Builds and runs the Tauri application.
+///
+/// # Panics
+///
+/// Panics if the Tauri runtime fails to initialize or if the GUI cannot be
+/// constructed. The native runtime fails fast in this case because there is
+/// nothing the rest of the app can do without it.
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
+#[allow(
+    clippy::too_many_lines,
+    reason = "Tauri builder uses a method-chain DSL — splitting it loses readability."
+)]
+#[allow(
+    clippy::large_stack_frames,
+    reason = "tauri::generate_context!() expands to a large constant; refactoring is not under our control."
+)]
 pub fn run() {
     tauri::async_runtime::block_on(async {
         tauri::Builder::default()
@@ -967,15 +976,9 @@ pub fn run() {
                     }
                 });
 
-                let show_item =
-                    MenuItem::with_id(app, "show", "Show Presto", true, None::<&str>)?;
-                let start_session_item = MenuItem::with_id(
-                    app,
-                    "start_session",
-                    "Start Session",
-                    false,
-                    None::<&str>,
-                )?;
+                let show_item = MenuItem::with_id(app, "show", "Show Presto", true, None::<&str>)?;
+                let start_session_item =
+                    MenuItem::with_id(app, "start_session", "Start Session", false, None::<&str>)?;
                 let pause_item = MenuItem::with_id(app, "pause", "Pause", false, None::<&str>)?;
                 let skip_item =
                     MenuItem::with_id(app, "skip", "Skip Session", false, None::<&str>)?;
@@ -1111,11 +1114,11 @@ pub fn run() {
                             )
                             .await
                             {
-                                eprintln!("Failed to register global shortcuts on startup: {}", e);
+                                eprintln!("Failed to register global shortcuts on startup: {e}");
                             }
                         }
                         Err(e) => {
-                            eprintln!("Failed to load settings on startup: {}", e);
+                            eprintln!("Failed to load settings on startup: {e}");
                             // Try to register default shortcuts
                             let default_settings = AppSettings::default();
                             if let Err(e) = register_global_shortcuts(
@@ -1124,7 +1127,7 @@ pub fn run() {
                             )
                             .await
                             {
-                                eprintln!("Failed to register default global shortcuts: {}", e);
+                                eprintln!("Failed to register default global shortcuts: {e}");
                             }
                         }
                     }
@@ -1135,30 +1138,28 @@ pub fn run() {
             .build(tauri::generate_context!())
             .expect("error while running tauri application")
             .run(|app_handle, event| match event {
-                tauri::RunEvent::Exit { .. } => {
+                tauri::RunEvent::Exit => {
                     // Always track app exit event regardless of analytics settings
                     // since this is the final event and useful for crash detection
                     let _ = app_handle.track_event("app_exited", None);
                     app_handle.flush_events_blocking();
                 }
+                #[cfg(target_os = "macos")]
                 tauri::RunEvent::Reopen { .. } => {
                     // When the user clicks on the dock icon, show the window
                     if let Some(window) = app_handle.get_webview_window("main") {
                         let _ = window.show();
                         let _ = window.set_focus();
                         // If the app was previously hidden from dock, restore it
-                        #[cfg(target_os = "macos")]
-                        {
-                            let app_handle_clone = app_handle.clone();
-                            tauri::async_runtime::spawn(async move {
-                                let _ = set_dock_visibility(app_handle_clone, true).await;
-                            });
-                        }
+                        let app_handle_clone = app_handle.clone();
+                        tauri::async_runtime::spawn(async move {
+                            let _ = set_dock_visibility(app_handle_clone, true).await;
+                        });
                     }
                 }
                 _ => {}
             });
-    })
+    });
 }
 
 #[tauri::command]
@@ -1166,13 +1167,13 @@ async fn load_tags(app: AppHandle) -> Result<Vec<Tag>, String> {
     let app_data_dir = app
         .path()
         .app_data_dir()
-        .map_err(|e| format!("Failed to get app data directory: {}", e))?;
+        .map_err(|e| format!("Failed to get app data directory: {e}"))?;
 
     let file_path = app_data_dir.join("tags.json");
 
     if file_path.exists() {
         let content =
-            fs::read_to_string(&file_path).map_err(|e| format!("Failed to read tags: {}", e))?;
+            fs::read_to_string(&file_path).map_err(|e| format!("Failed to read tags: {e}"))?;
         Ok(serde_json::from_str(&content).unwrap_or_else(|_| Vec::new()))
     } else {
         // Return default focus tag if no tags exist
@@ -1196,14 +1197,14 @@ async fn save_tags(tags: Vec<Tag>, app: AppHandle) -> Result<(), String> {
     let app_data_dir = app
         .path()
         .app_data_dir()
-        .map_err(|e| format!("Failed to get app data directory: {}", e))?;
+        .map_err(|e| format!("Failed to get app data directory: {e}"))?;
 
-    fs::create_dir_all(&app_data_dir).map_err(|e| format!("Failed to create directory: {}", e))?;
+    fs::create_dir_all(&app_data_dir).map_err(|e| format!("Failed to create directory: {e}"))?;
 
     let file_path = app_data_dir.join("tags.json");
     let json = serde_json::to_string_pretty(&tags)
-        .map_err(|e| format!("Failed to serialize tags: {}", e))?;
-    fs::write(file_path, json).map_err(|e| format!("Failed to write tags file: {}", e))?;
+        .map_err(|e| format!("Failed to serialize tags: {e}"))?;
+    fs::write(file_path, json).map_err(|e| format!("Failed to write tags file: {e}"))?;
 
     Ok(())
 }
@@ -1238,13 +1239,13 @@ async fn load_session_tags(app: AppHandle) -> Result<Vec<SessionTag>, String> {
     let app_data_dir = app
         .path()
         .app_data_dir()
-        .map_err(|e| format!("Failed to get app data directory: {}", e))?;
+        .map_err(|e| format!("Failed to get app data directory: {e}"))?;
 
     let file_path = app_data_dir.join("session_tags.json");
 
     if file_path.exists() {
         let content = fs::read_to_string(&file_path)
-            .map_err(|e| format!("Failed to read session tags: {}", e))?;
+            .map_err(|e| format!("Failed to read session tags: {e}"))?;
         Ok(serde_json::from_str(&content).unwrap_or_else(|_| Vec::new()))
     } else {
         Ok(Vec::new())
@@ -1256,14 +1257,14 @@ async fn save_session_tags(session_tags: Vec<SessionTag>, app: AppHandle) -> Res
     let app_data_dir = app
         .path()
         .app_data_dir()
-        .map_err(|e| format!("Failed to get app data directory: {}", e))?;
+        .map_err(|e| format!("Failed to get app data directory: {e}"))?;
 
-    fs::create_dir_all(&app_data_dir).map_err(|e| format!("Failed to create directory: {}", e))?;
+    fs::create_dir_all(&app_data_dir).map_err(|e| format!("Failed to create directory: {e}"))?;
 
     let file_path = app_data_dir.join("session_tags.json");
     let json = serde_json::to_string_pretty(&session_tags)
-        .map_err(|e| format!("Failed to serialize session tags: {}", e))?;
-    fs::write(file_path, json).map_err(|e| format!("Failed to write session tags file: {}", e))?;
+        .map_err(|e| format!("Failed to serialize session tags: {e}"))?;
+    fs::write(file_path, json).map_err(|e| format!("Failed to write session tags file: {e}"))?;
 
     Ok(())
 }
@@ -1286,7 +1287,7 @@ async fn update_tray_menu(
 
     if let Some(tray) = tray {
         let show_item = MenuItem::with_id(&app, "show", "Show Presto", true, None::<&str>)
-            .map_err(|e| format!("Failed to create show item: {}", e))?;
+            .map_err(|e| format!("Failed to create show item: {e}"))?;
 
         // Start Session: enabled only if not running
         let start_session_item = MenuItem::with_id(
@@ -1296,7 +1297,7 @@ async fn update_tray_menu(
             !is_running,
             None::<&str>,
         )
-        .map_err(|e| format!("Failed to create start session item: {}", e))?;
+        .map_err(|e| format!("Failed to create start session item: {e}"))?;
 
         // Pause: enabled only if running and not paused
         let pause_item = MenuItem::with_id(
@@ -1306,11 +1307,11 @@ async fn update_tray_menu(
             is_running && !is_paused,
             None::<&str>,
         )
-        .map_err(|e| format!("Failed to create pause item: {}", e))?;
+        .map_err(|e| format!("Failed to create pause item: {e}"))?;
 
         // Skip: enabled only if running
         let skip_item = MenuItem::with_id(&app, "skip", "Skip Session", is_running, None::<&str>)
-            .map_err(|e| format!("Failed to create skip item: {}", e))?;
+            .map_err(|e| format!("Failed to create skip item: {e}"))?;
 
         // Cancel: enabled if in focus mode, disabled in break/longBreak (undo)
         let cancel_text = if current_mode == "focus" {
@@ -1319,10 +1320,10 @@ async fn update_tray_menu(
             "Cancel Last"
         };
         let cancel_item = MenuItem::with_id(&app, "cancel", cancel_text, true, None::<&str>)
-            .map_err(|e| format!("Failed to create cancel item: {}", e))?;
+            .map_err(|e| format!("Failed to create cancel item: {e}"))?;
 
         let quit_item = MenuItem::with_id(&app, "quit", "Quit", true, None::<&str>)
-            .map_err(|e| format!("Failed to create quit item: {}", e))?;
+            .map_err(|e| format!("Failed to create quit item: {e}"))?;
 
         let new_menu = Menu::with_items(
             &app,
@@ -1335,10 +1336,10 @@ async fn update_tray_menu(
                 &quit_item,
             ],
         )
-        .map_err(|e| format!("Failed to create menu: {}", e))?;
+        .map_err(|e| format!("Failed to create menu: {e}"))?;
 
         tray.set_menu(Some(new_menu))
-            .map_err(|e| format!("Failed to set tray menu: {}", e))?;
+            .map_err(|e| format!("Failed to set tray menu: {e}"))?;
     }
 
     Ok(())
@@ -1349,11 +1350,11 @@ async fn write_excel_file(path: String, data: String) -> Result<(), String> {
     // Decode base64 data
     let decoded_data = general_purpose::STANDARD
         .decode(data)
-        .map_err(|e| format!("Failed to decode base64 data: {}", e))?;
+        .map_err(|e| format!("Failed to decode base64 data: {e}"))?;
 
     // Write the binary data to file
     fs::write(&path, decoded_data)
-        .map_err(|e| format!("Failed to write Excel file to {}: {}", path, e))?;
+        .map_err(|e| format!("Failed to write Excel file to {path}: {e}"))?;
 
     Ok(())
 }
@@ -1361,7 +1362,7 @@ async fn write_excel_file(path: String, data: String) -> Result<(), String> {
 #[tauri::command]
 async fn start_oauth_server(window: tauri::Window) -> Result<u16, String> {
     start(move |url| {
-        println!("OAuth callback received: {}", url);
+        println!("OAuth callback received: {url}");
         // Emit the URL to the frontend
         let _ = window.emit("oauth-callback", url);
     })
@@ -1369,21 +1370,20 @@ async fn start_oauth_server(window: tauri::Window) -> Result<u16, String> {
 }
 
 #[tauri::command]
-async fn set_dock_visibility(app: AppHandle, visible: bool) -> Result<(), String> {
+async fn set_dock_visibility(_app: AppHandle, _visible: bool) -> Result<(), String> {
     #[cfg(target_os = "macos")]
     {
-        app.run_on_main_thread(move || {
-            set_dock_visibility_native(visible);
+        _app.run_on_main_thread(move || {
+            set_dock_visibility_native(_visible);
         })
         .map_err(|e| format!("Failed to run on main thread: {}", e))?;
+        Ok(())
     }
 
     #[cfg(not(target_os = "macos"))]
     {
-        return Err("Dock visibility is only supported on macOS".to_string());
+        Err("Dock visibility is only supported on macOS".to_string())
     }
-
-    Ok(())
 }
 
 #[cfg(target_os = "macos")]
@@ -1423,27 +1423,27 @@ fn set_dock_visibility_native(visible: bool) {
 // - Fallback 2: Conservative two-step approach for hiding
 // - Detailed error reporting with manual recovery instructions
 #[tauri::command]
-async fn set_status_bar_visibility(_app: AppHandle, visible: bool) -> Result<(), String> {
+async fn set_status_bar_visibility(_app: AppHandle, _visible: bool) -> Result<(), String> {
     #[cfg(target_os = "macos")]
     {
-        match set_system_ui_mode_safe(visible) {
-            Ok(_) => {
+        match set_system_ui_mode_safe(_visible) {
+            Ok(()) => {
                 println!(
                     "✅ Status bar visibility successfully set to: {}",
-                    if visible { "visible" } else { "hidden" }
+                    if _visible { "visible" } else { "hidden" }
                 );
                 Ok(())
             }
             Err(e) => {
-                eprintln!("❌ Failed to set status bar visibility: {}", e);
-                Err(format!("Failed to set status bar visibility: {}", e))
+                eprintln!("❌ Failed to set status bar visibility: {e}");
+                Err(format!("Failed to set status bar visibility: {e}"))
             }
         }
     }
 
     #[cfg(not(target_os = "macos"))]
     {
-        return Err("Status bar visibility is only supported on macOS".to_string());
+        Err("Status bar visibility is only supported on macOS".to_string())
     }
 }
 
