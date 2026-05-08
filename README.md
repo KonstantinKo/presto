@@ -147,9 +147,9 @@ tempo/
 
 ## 🔧 Technical Details
 
-### Frontend (HTML/CSS/JavaScript)
+### Frontend (HTML/CSS/TypeScript-checked JavaScript)
 
-- **Pure vanilla JavaScript**: No frameworks, lightweight and fast
+- **Typed vanilla JavaScript**: No frameworks; JSDoc annotations with `checkJs: true` provide full TypeScript type coverage
 - **CSS Grid & Flexbox**: Modern responsive layouts
 - **CSS Custom Properties**: Consistent theming and easy customization
 - **Local Storage**: Client-side data persistence
@@ -196,6 +196,7 @@ The Pomodoro Technique is a time management method developed by Francesco Cirill
 - `npm run tauri dev` - Start development server
 - `npm run tauri build` - Build production app
 - `npm test` - Run JavaScript unit tests (Vitest)
+- `npm run typecheck` - TypeScript type-check all JS sources (`tsc --noEmit`)
 - `cargo check` - Check Rust code (in src-tauri/)
 - `cargo test` - Run Rust tests (in src-tauri/)
 
