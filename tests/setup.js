@@ -17,7 +17,7 @@ globalThis.__TAURI__ = {
       if (cmd === "load_tasks") {
         return Promise.resolve([]);
       }
-      return Promise.resolve(null);
+      return Promise.reject(new Error(`Unmocked invoke command: ${cmd}`));
     }),
   },
   notification: {
