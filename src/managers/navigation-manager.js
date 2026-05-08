@@ -1443,13 +1443,10 @@ export class NavigationManager {
         this.exportSessionsToExcel();
       };
     }
-<<<<<<< HEAD
     if (exportBtn) {
       exportBtn.removeEventListener("click", this._handleExportSessionsClick);
       exportBtn.addEventListener("click", this._handleExportSessionsClick);
     }
-=======
->>>>>>> 2dca63af77569f649348bfd32f37fc1f4f860dab
   }
 
   getAllSessionsFromManager() {

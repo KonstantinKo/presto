@@ -1983,15 +1983,10 @@ export class PomodoroTimer {
       span.textContent = task.text;
 
       const btn = document.createElement("button");
-<<<<<<< HEAD
       btn.type = "button";
       btn.className = "task-delete";
       btn.textContent = "×";
       btn.setAttribute("aria-label", `Delete task: ${task.text}`);
-=======
-      btn.className = "task-delete";
-      btn.textContent = "×";
->>>>>>> 2dca63af77569f649348bfd32f37fc1f4f860dab
       btn.addEventListener("click", () => this.deleteTask(task.id));
 
       taskEl.append(span, btn);

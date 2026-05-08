@@ -381,15 +381,11 @@ export class SessionManager {
   }
 
   calculateEndTime(startTime, durationMinutes) {
-<<<<<<< HEAD
     const startMinutes = this.timeToMinutes(startTime);
     const endMinutes = startMinutes + durationMinutes;
     if (endMinutes >= 24 * 60) {
       return "23:59";
     }
     return this.minutesToTime(endMinutes);
-=======
-    return this.minutesToTime(this.timeToMinutes(startTime) + durationMinutes);
->>>>>>> 2dca63af77569f649348bfd32f37fc1f4f860dab
   }
 }

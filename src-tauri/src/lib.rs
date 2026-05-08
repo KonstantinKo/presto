@@ -415,7 +415,6 @@ async fn load_session_data(app: AppHandle) -> Result<Option<PomodoroSession>, St
 
     // Get today's date string
     let today = chrono::Local::now().format("%Y-%m-%d").to_string();
-<<<<<<< HEAD
 
     // Check if session date matches today in either new format ("%Y-%m-%d") or
     // legacy format ("%a %b %e %Y", e.g. "Thu May  8 2026")
@@ -426,8 +425,6 @@ async fn load_session_data(app: AppHandle) -> Result<Option<PomodoroSession>, St
             .map(|d| d.format("%Y-%m-%d").to_string() == today)
             .unwrap_or(false)
     };
-=======
->>>>>>> 2dca63af77569f649348bfd32f37fc1f4f860dab
 
     // If the saved session is not from today, reset the counters but keep the date updated
     if !is_same_day {
@@ -1640,7 +1637,6 @@ fn get_osstatus_description(status: libc::c_int) -> &'static str {
 }
 
 #[cfg(test)]
-<<<<<<< HEAD
 mod tests {
     use super::{
         default_analytics_enabled, default_weekly_goal, AppSettings, ManualSession,
@@ -1720,35 +1716,6 @@ mod tests {
         assert!(s.shortcuts.start_stop.is_some());
         assert!(s.shortcuts.reset.is_some());
         assert!(s.shortcuts.skip.is_some());
-=======
-#[allow(clippy::pedantic, clippy::nursery)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn default_settings_have_expected_values() {
-        let settings = AppSettings::default();
-        assert_eq!(settings.timer.focus_duration, 25);
-        assert_eq!(settings.timer.break_duration, 5);
-        assert_eq!(settings.timer.long_break_duration, 20);
-        assert_eq!(settings.timer.total_sessions, 10);
-        assert_eq!(settings.timer.weekly_goal_minutes, 125);
-        assert!(!settings.autostart);
-        assert!(settings.analytics_enabled);
-        assert!(!settings.hide_icon_on_close);
-        assert!(!settings.hide_status_bar);
-        assert!(settings.notifications.desktop_notifications);
-        assert!(settings.notifications.sound_notifications);
-        assert!(settings.notifications.auto_start_timer);
-        assert!(!settings.notifications.auto_start_focus);
-        assert!(!settings.notifications.allow_continuous_sessions);
-        assert!(!settings.notifications.smart_pause);
-        assert_eq!(settings.notifications.smart_pause_timeout, 30);
-        assert!(!settings.advanced.debug_mode);
-        assert!(settings.shortcuts.start_stop.is_some());
-        assert!(settings.shortcuts.reset.is_some());
-        assert!(settings.shortcuts.skip.is_some());
->>>>>>> 2dca63af77569f649348bfd32f37fc1f4f860dab
     }
 
     #[test]
@@ -1813,56 +1780,6 @@ mod tests {
     }
 
     #[test]
-<<<<<<< HEAD
-=======
-    fn app_settings_deserializes_with_missing_optional_fields() {
-        // Verify backward-compat: fields with serde(default) are populated even when absent
-        let json = r#"{
-            "shortcuts": {"start_stop": null, "reset": null, "skip": null},
-            "timer": {"focus_duration": 25, "break_duration": 5, "long_break_duration": 20, "total_sessions": 10},
-            "notifications": {
-                "desktop_notifications": true,
-                "sound_notifications": true,
-                "auto_start_timer": true,
-                "smart_pause": false,
-                "smart_pause_timeout": 30
-            },
-            "autostart": false
-        }"#;
-        let settings: AppSettings = serde_json::from_str(json).unwrap();
-        assert_eq!(settings.timer.weekly_goal_minutes, 125);
-        assert!(settings.analytics_enabled);
-        assert!(!settings.advanced.debug_mode);
-        assert!(!settings.hide_icon_on_close);
-        assert!(!settings.hide_status_bar);
-        assert!(!settings.notifications.auto_start_focus);
-        assert!(!settings.notifications.allow_continuous_sessions);
-    }
-
-    #[test]
-    fn history_trimming_keeps_last_thirty_entries() {
-        let mut history: Vec<PomodoroSession> = (0u32..35u32)
-            .map(|i| PomodoroSession {
-                completed_pomodoros: i,
-                total_focus_time: i * 1500,
-                current_session: 1,
-                date: format!("2024-01-{i:02}"),
-            })
-            .collect();
-
-        history.sort_by(|a, b| a.date.cmp(&b.date));
-        if history.len() > 30 {
-            let start_index = history.len() - 30;
-            history.drain(0..start_index);
-        }
-
-        assert_eq!(history.len(), 30);
-        assert_eq!(history[0].completed_pomodoros, 5);
-        assert_eq!(history[29].completed_pomodoros, 34);
-    }
-
-    #[test]
->>>>>>> 2dca63af77569f649348bfd32f37fc1f4f860dab
     fn manual_session_serializes_with_optional_fields() {
         let session_with_tags = ManualSession {
             id: "session-1".to_string(),
@@ -1913,7 +1830,6 @@ mod tests {
         assert_eq!(parsed.tag_id, session_tag.tag_id);
         assert_eq!(parsed.duration, session_tag.duration);
     }
-<<<<<<< HEAD
 
     #[test]
     fn history_trimming_keeps_last_thirty_entries() {
@@ -1936,6 +1852,4 @@ mod tests {
         assert_eq!(history[0].completed_pomodoros, 5);
         assert_eq!(history[29].completed_pomodoros, 34);
     }
-=======
->>>>>>> 2dca63af77569f649348bfd32f37fc1f4f860dab
 }
