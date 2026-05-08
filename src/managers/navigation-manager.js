@@ -754,6 +754,9 @@ export class NavigationManager {
       if (this.isSameDay(dayDate, this.currentDate)) {
         dayEl.classList.add("today");
       }
+      if (this.selectedDate && this.isSameDay(dayDate, this.selectedDate)) {
+        dayEl.classList.add("selected");
+      }
 
       const dots = document.createElement("div");
       dots.className = "calendar-day-dots";

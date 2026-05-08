@@ -207,7 +207,7 @@ export class SessionManager {
       const startTime = startTimeInput.value;
       const duration = parseInt(durationInput.value, 10);
 
-      if (startTime && duration && duration > 0) {
+      if (startTime && Number.isInteger(duration) && duration >= 0) {
         const endTime = this.calculateEndTime(startTime, duration);
         endTimeInput.value = endTime;
         durationInput.value = Math.max(
@@ -263,7 +263,7 @@ export class SessionManager {
       return;
     }
 
-    if (isNaN(sessionData.duration) || sessionData.duration < 0) {
+    if (isNaN(sessionData.duration) || sessionData.duration <= 0) {
       alert("Please enter a valid duration");
       return;
     }
