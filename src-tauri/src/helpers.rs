@@ -57,12 +57,19 @@ mod tests {
 
     #[test]
     fn call_after_window_expires_is_not_debounced() {
-        let mut map = HashMap::new();
         let now = Instant::now();
         let window = Duration::from_millis(500);
+
+        let mut map = HashMap::new();
         assert!(!is_debounced(&mut map, "action", now, window));
         let later = now + Duration::from_millis(600);
         assert!(!is_debounced(&mut map, "action", later, window));
+
+        // elapsed == window (strict less-than boundary): also not debounced
+        let mut map2 = HashMap::new();
+        assert!(!is_debounced(&mut map2, "action", now, window));
+        let equal_to_window = now + window;
+        assert!(!is_debounced(&mut map2, "action", equal_to_window, window));
     }
 
     #[test]

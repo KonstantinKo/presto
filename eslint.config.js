@@ -5,6 +5,20 @@ export default [
   {
     ignores: ["**/node_modules/**", "src/styles/**", "art/**", "src/docs/**"],
   },
+  {
+    files: ["tests/**/*.js"],
+    languageOptions: {
+      globals: {
+        ...globals.node,
+        vi: "readonly",
+        describe: "readonly",
+        it: "readonly",
+        expect: "readonly",
+        beforeEach: "readonly",
+        afterEach: "readonly",
+      },
+    },
+  },
   js.configs.recommended,
   {
     languageOptions: {

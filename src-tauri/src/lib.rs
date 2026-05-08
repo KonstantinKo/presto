@@ -1658,6 +1658,45 @@ mod tests {
     }
 
     #[test]
+    fn app_settings_missing_serde_default_fields_use_defaults() {
+        // Simulate an older settings JSON that predates newer #[serde(default)] fields.
+        let json = r#"{
+            "shortcuts": {},
+            "timer": {
+                "focus_duration": 25,
+                "break_duration": 5,
+                "long_break_duration": 20,
+                "total_sessions": 10
+            },
+            "notifications": {
+                "desktop_notifications": true,
+                "sound_notifications": true,
+                "auto_start_timer": true,
+                "smart_pause": false,
+                "smart_pause_timeout": 30
+            },
+            "autostart": false
+        }"#;
+        let s: AppSettings = serde_json::from_str(json).expect("should deserialize");
+        let defaults = AppSettings::default();
+        assert_eq!(s.analytics_enabled, defaults.analytics_enabled);
+        assert_eq!(s.hide_icon_on_close, defaults.hide_icon_on_close);
+        assert_eq!(s.hide_status_bar, defaults.hide_status_bar);
+        assert_eq!(
+            s.notifications.auto_start_focus,
+            defaults.notifications.auto_start_focus
+        );
+        assert_eq!(
+            s.notifications.allow_continuous_sessions,
+            defaults.notifications.allow_continuous_sessions
+        );
+        assert_eq!(
+            s.timer.weekly_goal_minutes,
+            defaults.timer.weekly_goal_minutes
+        );
+    }
+
+    #[test]
     fn app_settings_default_has_expected_values() {
         let s = AppSettings::default();
         assert_eq!(s.timer.focus_duration, 25);

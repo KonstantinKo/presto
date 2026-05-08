@@ -14,7 +14,9 @@ vi.mock("@tauri-apps/plugin-log", () => ({
 globalThis.__TAURI__ = {
   core: {
     invoke: vi.fn((cmd) => {
-      if (cmd === "load_tasks") return Promise.resolve([]);
+      if (cmd === "load_tasks") {
+        return Promise.resolve([]);
+      }
       return Promise.resolve(null);
     }),
   },
