@@ -413,40 +413,28 @@ async fn load_session_data(app: AppHandle) -> Result<Option<PomodoroSession>, St
     let mut session: PomodoroSession =
         serde_json::from_str(&content).map_err(|e| format!("Failed to parse session: {e}"))?;
 
-    // Get today's date string
-    let today = chrono::Local::now().format("%Y-%m-%d").to_string();
+    let today_legacy = chrono::Local::now().format("%a %b %e %Y").to_string();
+    let today_iso = chrono::Local::now().format("%Y-%m-%d").to_string();
 
-    // Check if session date matches today in either new format ("%Y-%m-%d") or
-    // legacy format ("%a %b %e %Y", e.g. "Thu May  8 2026")
-    let is_same_day = if session.date == today {
+    let is_same_day = if session.date == today_legacy || session.date == today_iso {
         true
     } else {
         chrono::NaiveDate::parse_from_str(&session.date, "%a %b %e %Y")
-            .map(|d| d.format("%Y-%m-%d").to_string() == today)
+            .map(|d| d.format("%Y-%m-%d").to_string() == today_iso)
             .unwrap_or(false)
     };
 
-    // If the saved session is not from today, reset the counters but keep the date updated
     if !is_same_day {
         session.completed_pomodoros = 0;
         session.total_focus_time = 0;
         session.current_session = 1;
-        session.date = today;
+        session.date.clone_from(&today_legacy);
 
         // Save the reset session back to file
         let json = serde_json::to_string_pretty(&session)
             .map_err(|e| format!("Failed to serialize reset session: {e}"))?;
         fs::write(file_path, json)
             .map_err(|e| format!("Failed to write reset session file: {e}"))?;
-    } else if session.date != today {
-        // Same day but stored in legacy format — normalize to new format
-        session.date = today;
-
-        // Save the normalized session back to file
-        let json = serde_json::to_string_pretty(&session)
-            .map_err(|e| format!("Failed to serialize normalized session: {e}"))?;
-        fs::write(file_path, json)
-            .map_err(|e| format!("Failed to write normalized session file: {e}"))?;
     }
 
     Ok(Some(session))
@@ -1163,7 +1151,10 @@ async fn load_tags(app: AppHandle) -> Result<Vec<Tag>, String> {
     if file_path.exists() {
         let content =
             fs::read_to_string(&file_path).map_err(|e| format!("Failed to read tags: {e}"))?;
-        Ok(serde_json::from_str(&content).unwrap_or_default())
+        Ok(
+            serde_json::from_str(&content)
+                .map_err(|e| format!("Failed to parse tags.json: {e}"))?,
+        )
     } else {
         // Return default focus tag if no tags exist
         let default_tag = Tag {
@@ -1248,7 +1239,8 @@ async fn load_session_tags(app: AppHandle) -> Result<Vec<SessionTag>, String> {
     if file_path.exists() {
         let content = fs::read_to_string(&file_path)
             .map_err(|e| format!("Failed to read session tags: {e}"))?;
-        Ok(serde_json::from_str(&content).unwrap_or_default())
+        Ok(serde_json::from_str(&content)
+            .map_err(|e| format!("Failed to parse session_tags.json: {e}"))?)
     } else {
         Ok(Vec::new())
     }

@@ -16,6 +16,7 @@ export class UpdateNotification {
     this.currentVersion = null;
     this._hideTimeoutId = null;
     this._errorHideTimeoutId = null;
+    this._destroyed = false;
 
     this.createNotificationContainer();
     this.waitForUpdateManager();
@@ -28,14 +29,14 @@ export class UpdateNotification {
     let attempts = 0;
     const maxAttempts = 100;
 
-    while (attempts < maxAttempts && !getUpdateManager()) {
+    while (!this._destroyed && attempts < maxAttempts && !getUpdateManager()) {
       await new Promise((resolve) => {
         setTimeout(resolve, 100);
       });
       attempts++;
     }
 
-    if (getUpdateManager()) {
+    if (!this._destroyed && getUpdateManager()) {
       logger.info("✅ [UpdateNotification] UpdateManager found, binding notification events");
       this.bindEvents();
 
@@ -701,6 +702,7 @@ export class UpdateNotification {
    * Destroys the component
    */
   destroy() {
+    this._destroyed = true;
     clearTimeout(this._hideTimeoutId);
     this._hideTimeoutId = null;
     clearTimeout(this._errorHideTimeoutId);

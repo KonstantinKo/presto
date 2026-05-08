@@ -183,7 +183,9 @@ export class NavigationManager {
 
         if (window.sessionManager) {
           const sessions = window.sessionManager.getSessionsForDate(date);
-          const focusSessions = sessions.filter((s) => s.type === "focus" || s.type === "custom");
+          const focusSessions = sessions.filter(
+            (s) => (s.session_type || s.type) === "focus" || (s.session_type || s.type) === "custom"
+          );
 
           dayTotalTime = focusSessions.reduce(
             (total, session) => total + (session.duration || 0) * 60,
@@ -214,7 +216,9 @@ export class NavigationManager {
 
         if (window.sessionManager) {
           const sessions = window.sessionManager.getSessionsForDate(date);
-          const focusSessions = sessions.filter((s) => s.type === "focus" || s.type === "custom");
+          const focusSessions = sessions.filter(
+            (s) => (s.session_type || s.type) === "focus" || (s.session_type || s.type) === "custom"
+          );
 
           dayTotalTime = focusSessions.reduce(
             (total, session) => total + (session.duration || 0) * 60,
@@ -288,7 +292,7 @@ export class NavigationManager {
     }
   }
 
-  async updateDailyChart() {
+  async updateDailyChart(date = new Date()) {
     const dailyChart = document.getElementById("daily-chart");
     if (!dailyChart) {
       return;
@@ -301,7 +305,7 @@ export class NavigationManager {
 
     try {
       const todaysSessions = window.sessionManager
-        ? window.sessionManager.getSessionsForDate(new Date())
+        ? window.sessionManager.getSessionsForDate(date)
         : [];
 
       const hourlyData = hours.map((hour) => ({
@@ -438,7 +442,7 @@ export class NavigationManager {
         if (window.sessionManager) {
           const allSessions = window.sessionManager.getSessionsForDate(date);
           const focusSessions = allSessions.filter(
-            (s) => s.type === "focus" || s.type === "custom"
+            (s) => (s.session_type || s.type) === "focus" || (s.session_type || s.type) === "custom"
           );
 
           sessionsMinutes = focusSessions.reduce(
@@ -761,7 +765,7 @@ export class NavigationManager {
       if (window.sessionManager) {
         const sessions = window.sessionManager.getSessionsForDate(dayDate);
         const focusSessions = sessions.filter(
-          (s) => s.session_type === "focus" || s.session_type === "custom"
+          (s) => (s.session_type || s.type) === "focus" || (s.session_type || s.type) === "custom"
         );
 
         if (focusSessions.length > 0) {
@@ -800,7 +804,7 @@ export class NavigationManager {
     await this.updateSelectedDayDetails(date);
     await this.updateFocusSummary();
     await this.updateWeeklySessionsChart();
-    this.updateDailyChart();
+    this.updateDailyChart(date);
     await this.updateTagUsageChart();
     await this.populateSessionsTableForDate(date);
   }
@@ -1533,13 +1537,13 @@ export class NavigationManager {
     }
     tagsCell.appendChild(tagsDiv);
 
-    // Build the static columns as innerHTML (no user input)
-    row.innerHTML = `
-            <td>${formattedDate}</td>
-            <td>${timeRange}</td>
-            <td>${session.duration}m</td>
-        `;
-    row.appendChild(tagsCell);
+    const dateTd = document.createElement("td");
+    dateTd.textContent = formattedDate;
+    const timeTd = document.createElement("td");
+    timeTd.textContent = timeRange;
+    const durationTd = document.createElement("td");
+    durationTd.textContent = `${session.duration}m`;
+    row.append(dateTd, timeTd, durationTd, tagsCell);
 
     // Build action buttons with addEventListener instead of inline onclick
     const actionsCell = document.createElement("td");

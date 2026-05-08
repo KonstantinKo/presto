@@ -1268,7 +1268,7 @@ function testImageLoad(url) {
 function positionDropdown(avatarBtn, dropdown) {
   const isMobile = window.innerWidth <= 768;
   const avatarRect = avatarBtn.getBoundingClientRect();
-  const _dropdownRect = dropdown.getBoundingClientRect();
+  const dropdownRect = dropdown.getBoundingClientRect();
 
   dropdown.style.left = "";
   dropdown.style.right = "";
@@ -1282,7 +1282,7 @@ function positionDropdown(avatarBtn, dropdown) {
     dropdown.style.left = "50%";
     dropdown.style.transform = "translateX(-50%)";
 
-    const dropdownWidth = 200;
+    const dropdownWidth = dropdownRect.width || 200;
     const sidebarCenter = avatarRect.left + avatarRect.width / 2;
     const leftEdge = sidebarCenter - dropdownWidth / 2;
     const rightEdge = sidebarCenter + dropdownWidth / 2;
@@ -1824,7 +1824,8 @@ function setupUpdateManagement() {
       if (currentUpdate?.version) {
         try {
           const stored = localStorage.getItem("presto-skipped-versions");
-          const skippedVersions = stored ? JSON.parse(stored) : [];
+          const parsed = stored ? JSON.parse(stored) : [];
+          const skippedVersions = Array.isArray(parsed) ? parsed : [];
           if (!skippedVersions.includes(currentUpdate.version)) {
             skippedVersions.push(currentUpdate.version);
             localStorage.setItem("presto-skipped-versions", JSON.stringify(skippedVersions));

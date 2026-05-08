@@ -135,9 +135,10 @@ export class SessionManager {
     const now = new Date();
     const startTime = this.minutesToTime(now.getHours() * 60 + now.getMinutes());
     const endTime = this.calculateEndTime(startTime, 25);
+    const actualDuration = this.timeToMinutes(endTime) - this.timeToMinutes(startTime);
 
     document.getElementById("session-form").reset();
-    document.getElementById("session-duration").value = 25;
+    document.getElementById("session-duration").value = actualDuration;
     document.getElementById("session-start-time").value = startTime;
     document.getElementById("session-end-time").value = endTime;
 
@@ -206,10 +207,7 @@ export class SessionManager {
       const duration = parseInt(durationInput.value, 10);
 
       if (startTime && duration && duration > 0) {
-        const startMinutes = this.timeToMinutes(startTime);
-        const endMinutes = startMinutes + duration;
-        const endTime = this.minutesToTime(endMinutes);
-        endTimeInput.value = endTime;
+        endTimeInput.value = this.calculateEndTime(startTime, duration);
       }
     };
 

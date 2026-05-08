@@ -16,7 +16,11 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
 
     this.eventTarget = new EventTarget();
 
-    this.startAutoCheck();
+    this.loadPreferences();
+    // If no saved preference exists, autoCheck defaults to true and startAutoCheck wasn't called by loadPreferences
+    if (this.autoCheck && !this.checkInterval) {
+      this.startAutoCheck();
+    }
 
     logger.debug("UpdateManager v2 initialized (global)");
   }
@@ -69,10 +73,9 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
     if (window.__TAURI__.core && window.__TAURI__.core.invoke) {
       logger.debug("✅ Using updater API via invoke");
       return {
-        check: () => window.__TAURI__.core.invoke("plugin:updater|check"),
-        downloadAndInstall: (_onProgress) => {
-          logger.warn("⚠️ downloadAndInstall non supportato via invoke");
-          throw new Error("Download automatico non disponibile");
+        check: async () => {
+          const result = await window.__TAURI__.core.invoke("plugin:updater|check");
+          return result ? { ...result, manualDownloadRequired: true } : result;
         },
       };
     }

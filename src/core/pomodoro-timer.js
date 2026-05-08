@@ -1937,7 +1937,7 @@ export class PomodoroTimer {
     const taskText = this.taskInput.value.trim();
     if (taskText) {
       const task = {
-        id: crypto.randomUUID(),
+        id: Date.now(),
         text: taskText,
         completed: false,
         created_at: new Date().toISOString(),
