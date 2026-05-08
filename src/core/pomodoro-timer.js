@@ -2345,7 +2345,13 @@ export class PomodoroTimer {
 
     try {
       await window.sessionManager.addSession(sessionData);
-      logger.info("Timer session saved to SessionManager:", sessionData);
+      logger.info("Timer session saved to SessionManager:", {
+        id: sessionData.id,
+        duration: sessionData.duration,
+        start_time: sessionData.start_time,
+        end_time: sessionData.end_time,
+        created_at: sessionData.created_at,
+      });
 
       // Clear the preserved session start time after successful save
       this.lastSessionStartTime = null;

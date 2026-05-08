@@ -46,6 +46,7 @@ class AuthManager {
     } catch (error) {
       logger.error("Error checking authentication status:", error);
       this.notifyAuthListeners("unauthenticated", null);
+      return;
     }
 
     // Listen for auth changes

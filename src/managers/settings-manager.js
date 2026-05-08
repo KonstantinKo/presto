@@ -357,7 +357,7 @@ export class SettingsManager {
       }
 
       lastShortcutTime[action] = now;
-      logger.info(`Global shortcut triggered: ${action}`);
+      logger.debug(`Global shortcut triggered: ${action}`);
 
       switch (action) {
         case "start-stop":

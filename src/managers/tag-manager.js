@@ -28,7 +28,7 @@ class TagManager {
     this.createTagBtn = document.getElementById("create-tag-btn");
 
     // Debug: check if all elements are found
-    window.appLog.debug("TagManager elements:", {
+    window.appLog?.debug?.("TagManager elements:", {
       timerStatus: !!this.timerStatus,
       dropdownMenu: !!this.dropdownMenu,
       tagList: !!this.tagList,
@@ -38,10 +38,10 @@ class TagManager {
     });
 
     if (!this.dropdownMenu) {
-      window.appLog.error("Dropdown menu not found!");
+      window.appLog?.error?.("Dropdown menu not found!");
     }
     if (!this.newTagName) {
-      window.appLog.error("New tag input not found!");
+      window.appLog?.error?.("New tag input not found!");
     }
   }
 

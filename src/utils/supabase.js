@@ -193,7 +193,7 @@ async function initSupabase() {
                       unlisten();
                     }
 
-                    logger.info("Processing callback URL:", callbackUrl);
+                    logger.info("Processing OAuth callback");
 
                     // Parse the callback URL to extract tokens
                     const url = new URL(callbackUrl);
@@ -244,7 +244,7 @@ async function initSupabase() {
                           logger.error("Supabase session error:", sessionError);
                           reject(new Error(`Supabase session error: ${sessionError.message}`));
                         } else {
-                          logger.info("OAuth success! Session set:", data);
+                          logger.info("OAuth success! Session established.");
                           resolve({ data, error: null });
                         }
                       } catch (sessionSetupError) {
