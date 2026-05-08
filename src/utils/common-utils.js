@@ -1,4 +1,3 @@
-// Notification Utility Functions
 import { logger } from "./logger.js";
 
 const NOTIFICATION_CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes
@@ -8,7 +7,6 @@ function isSettingsSaved(message, type) {
 }
 
 export class NotificationUtils {
-  // Static properties for notification queue management
   static notificationQueue = [];
   static activeNotifications = new Set();
   static maxSimultaneousNotifications = 3;
@@ -158,7 +156,6 @@ export class NotificationUtils {
     let currentY = 0;
     let isDragging = false;
 
-    // Touch start
     notification.addEventListener(
       "touchstart",
       (e) => {
@@ -169,7 +166,6 @@ export class NotificationUtils {
       { passive: true }
     );
 
-    // Touch move (swipe to dismiss)
     notification.addEventListener(
       "touchmove",
       (e) => {
@@ -193,7 +189,6 @@ export class NotificationUtils {
       { passive: true }
     );
 
-    // Touch end
     notification.addEventListener(
       "touchend",
       (_e) => {
@@ -326,7 +321,6 @@ export class NotificationUtils {
     }
   }
 
-  // Helper method to check notification permission status
   static async getNotificationPermission() {
     try {
       if (window.__TAURI__ && window.__TAURI__.notification) {
@@ -343,7 +337,7 @@ export class NotificationUtils {
     }
   }
 
-  // Helper method to request notification permission (must be called from user gesture)
+  // must be called from user gesture
   static async requestNotificationPermission() {
     try {
       if (window.__TAURI__ && window.__TAURI__.notification) {
@@ -360,7 +354,6 @@ export class NotificationUtils {
   }
 }
 
-// Time Formatting Utilities
 export class TimeUtils {
   static formatTime(seconds) {
     if (!seconds || seconds < 0) {
@@ -413,7 +406,6 @@ export class TimeUtils {
   }
 }
 
-// Storage Utilities
 export class StorageUtils {
   static async saveToTauri(invokeCommand, data, fallbackKey) {
     try {
@@ -461,7 +453,6 @@ export class StorageUtils {
   }
 }
 
-// DOM Utilities
 export class DOMUtils {
   static createModal(title, content, className = "") {
     // Remove existing modal if any
@@ -538,7 +529,6 @@ export class DOMUtils {
   }
 }
 
-// Keyboard Shortcut Utilities
 export class KeyboardUtils {
   static parseShortcut(shortcutString) {
     if (!shortcutString) {

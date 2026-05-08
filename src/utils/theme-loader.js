@@ -1,5 +1,3 @@
-// Auto Theme Loader
-// This utility automatically discovers and loads all theme CSS files from the themes folder
 import { logger } from "./logger.js";
 
 class ThemeLoader {
@@ -8,9 +6,6 @@ class ThemeLoader {
     this.themeStyles = new Map();
   }
 
-  /**
-   * Automatically discover and load all theme CSS files
-   */
   async loadAllThemes() {
     try {
       // Get all CSS files from the themes directory
@@ -31,23 +26,14 @@ class ThemeLoader {
     }
   }
 
-  /**
-   * Discover all CSS files in the themes directory
-   */
   async discoverThemeFiles() {
-    // In a browser environment, we need to use a different approach
     // Since we can't directly read the filesystem, we'll use a predefined list
     // that gets updated by the build process or manually maintained
-
-    // This could be enhanced to use a build-time script that generates this list
     const knownThemes = ["espresso.css", "pipboy.css", "pommodore64.css"];
 
     return knownThemes;
   }
 
-  /**
-   * Load a specific theme CSS file
-   */
   async loadThemeFile(filename) {
     const themeId = filename.replace(".css", "");
 
@@ -69,9 +55,6 @@ class ThemeLoader {
     }
   }
 
-  /**
-   * Extract theme metadata from CSS comments
-   */
   async extractThemeMetadata(themeId) {
     try {
       // Fetch the CSS file to read metadata from comments
@@ -106,9 +89,6 @@ class ThemeLoader {
     }
   }
 
-  /**
-   * Parse theme metadata from CSS comments
-   */
   parseThemeMetadata(cssContent) {
     try {
       // Look for theme metadata in CSS comments
@@ -145,9 +125,6 @@ class ThemeLoader {
     return null;
   }
 
-  /**
-   * Extract preview colors from CSS variables
-   */
   extractPreviewColors(cssContent) {
     const colors = {
       focus: "#e74c3c",
@@ -177,16 +154,10 @@ class ThemeLoader {
     return colors;
   }
 
-  /**
-   * Capitalize first letter of a string
-   */
   capitalizeFirst(str) {
     return str.charAt(0).toUpperCase() + str.slice(1);
   }
 
-  /**
-   * Remove a loaded theme
-   */
   unloadTheme(themeId) {
     const linkElement = this.themeStyles.get(themeId);
     if (linkElement) {
@@ -197,16 +168,10 @@ class ThemeLoader {
     }
   }
 
-  /**
-   * Get list of loaded themes
-   */
   getLoadedThemes() {
     return Array.from(this.loadedThemes);
   }
 
-  /**
-   * Check if a theme is loaded
-   */
   isThemeLoaded(themeId) {
     return this.loadedThemes.has(themeId);
   }

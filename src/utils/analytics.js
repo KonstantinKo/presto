@@ -5,7 +5,6 @@ class Analytics {
   static async isEnabled() {
     try {
       const settings = window.settingsManager?.settings;
-      // Default to enabled when settings aren't available yet
       return settings ? settings.analytics_enabled !== false : true;
     } catch (error) {
       logger.warn("Could not check analytics settings, defaulting to enabled:", error);

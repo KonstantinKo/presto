@@ -3,7 +3,6 @@ import { logger } from "../utils/logger.js";
 const GITHUB_REPO = "murdercode/presto";
 
 // Expose UpdateManagerV2 as a global for backwards compatibility
-// Definisce la classe UpdateManagerV2 globalmente
 window.UpdateManagerV2 = class UpdateManagerV2 {
   constructor() {
     this.updateAvailable = false;
@@ -15,10 +14,8 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
     this.checkInterval = null;
     this.startupTimeout = null;
 
-    // Eventi personalizzati
     this.eventTarget = new EventTarget();
 
-    // Inizializza il controllo automatico sempre (ora funziona anche in dev mode)
     this.startAutoCheck();
 
     logger.debug("UpdateManager v2 initialized (global)");
@@ -28,25 +25,21 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
    * Verifica se siamo in modalità sviluppo
    */
   isDevelopmentMode() {
-    // Permetti override per test degli aggiornamenti
     if (localStorage.getItem("presto_force_update_test") === "true") {
       logger.debug("🧪 Update test mode active");
       return false;
     }
 
-    // Verifica se siamo in un ambiente Tauri
     if (!window.__TAURI__) {
       logger.debug("🔍 Not a Tauri environment - development mode");
       return true;
     }
 
-    // Verifica se stiamo running da tauri dev
     if (window.location.protocol === "tauri:") {
       logger.debug("🔍 Tauri protocol: - compiled app");
       return false;
     }
 
-    // Se stiamo usando localhost, siamo in modalità dev
     if (
       window.location.hostname === "localhost" ||
       window.location.href.includes("localhost") ||
@@ -68,7 +61,6 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
       throw new Error("Ambiente Tauri non disponibile");
     }
 
-    // Prova diverse modalità di accesso all'API updater
     if (window.__TAURI__.updater) {
       logger.debug("✅ Using global updater API");
       return window.__TAURI__.updater;
@@ -85,7 +77,6 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
       };
     }
 
-    // Se non disponibile, usiamo fetch diretto
     logger.debug("Updater API not available, using manual approach");
     return null;
   }
@@ -188,7 +179,6 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
         return;
       }
 
-      // Fallback al browser alert
       alert(`${opts.title}\n\n${content}`);
     } catch (error) {
       logger.error("Error showing message:", error);
@@ -219,7 +209,6 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
         });
       }
 
-      // Fallback al browser confirm
       return confirm(content);
     } catch (error) {
       logger.error("Error asking confirmation:", error);
@@ -245,7 +234,6 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
    */
   startAutoCheck() {
     if (this.autoCheck && !this.checkInterval) {
-      // Controlla ogni ora
       this.checkInterval = setInterval(
         () => {
           logger.debug("Automatic periodic update check...");
@@ -254,7 +242,6 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
         60 * 60 * 1000
       );
 
-      // Controllo iniziale dopo 5 secondi
       this.startupTimeout = setTimeout(() => {
         this.startupTimeout = null;
         logger.debug("Initial automatic update check...");
@@ -308,7 +295,6 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
    */
   async checkVersionFromGitHub(showDialog = true) {
     try {
-      // Ottieni versione corrente
       let currentVersion;
       try {
         currentVersion = await this.getAppVersion();
@@ -322,7 +308,6 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
         return false;
       }
 
-      // Controlla ultima release su GitHub
       const response = await fetch(`https://api.github.com/repos//releases/latest`);
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}`);
@@ -333,7 +318,6 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
 
       logger.debug(`Latest GitHub version: ${latestVersion}`);
 
-      // Confronta versioni
       if (this.compareVersions(latestVersion, currentVersion) <= 0) {
         logger.debug("No updates available");
         this.updateAvailable = false;
@@ -348,7 +332,6 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
         return false;
       }
 
-      // Update available
       logger.info(`🎉 Update available: ${latestVersion}`);
       this.updateAvailable = true;
       this.currentUpdate = {
@@ -396,25 +379,20 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
     try {
       logger.debug("Checking for updates...");
 
-      // Verifica ambiente
       const isDevMode = this.isDevelopmentMode();
       const hasTestMode = localStorage.getItem("presto_force_update_test") === "true";
 
       if (isDevMode && !hasTestMode) {
         logger.debug("Development mode - checking via GitHub API without installation");
-        // In modalità sviluppo facciamo solo il controllo della versione senza installazione
         return await this.checkVersionFromGitHub(showDialog);
       }
 
-      // Se è modalità test, simula un aggiornamento
       if (hasTestMode) {
         logger.debug("Test mode - simulating update");
         const testUpdate = await this.simulateUpdate();
         return testUpdate;
       }
 
-      // Controlla aggiornamenti reali
-      // 1. Prima prova con l'API GitHub per avere info complete
       let currentVersion;
       try {
         currentVersion = await this.getAppVersion();
@@ -437,7 +415,6 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
         return false;
       }
 
-      // Controlla GitHub API
       const response = await fetch(`https://api.github.com/repos//releases/latest`);
       if (!response.ok) {
         throw new Error(`GitHub API error: ${response.status}`);
@@ -448,7 +425,6 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
 
       logger.debug(`Latest GitHub version: ${latestVersion}`);
 
-      // Confronta versioni
       if (this.compareVersions(latestVersion, currentVersion) <= 0) {
         logger.debug("No updates available");
         this.updateAvailable = false;
@@ -459,7 +435,6 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
 
       logger.info("🎉 Update available!");
 
-      // 2. Prova a usare l'API Tauri updater se disponibile
       try {
         const tauriAPI = await this.getTauriUpdaterAPI();
         if (tauriAPI) {
@@ -482,7 +457,6 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
         logger.warn("⚠️ Tauri updater API not available:", error.message);
       }
 
-      // 3. Fallback: informazioni da GitHub con download manuale
       logger.debug("Using GitHub info with manual download");
       const manualUpdate = {
         version: latestVersion,
@@ -548,7 +522,7 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
       .replace(/^v/, "")
       .split(".")
       .map((n) => parseInt(n, 10) || 0);
-    parts[2] = (parts[2] || 0) + 1; // incrementa patch version
+    parts[2] = (parts[2] || 0) + 1;
     return parts.join(".");
   }
 
@@ -567,7 +541,6 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
         return;
       }
 
-      // Fallback
       window.open(url, "_blank");
     } catch (error) {
       logger.error("Error opening URL:", error);
@@ -583,7 +556,6 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
       throw new Error("No updates available");
     }
 
-    // Se è un test, simula il download
     if (this.currentUpdate.source === "test-simulation") {
       logger.info("🧪 Simulating download and install...");
       return await this.simulateDownloadAndInstall();
@@ -594,7 +566,6 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
     this.emit("downloadStarted");
 
     try {
-      // Se supporta download automatico via Tauri
       if (this.currentUpdate.isAutoDownloadable && this.currentUpdate.source === "tauri-api") {
         logger.info("📥 Download automatico via Tauri...");
 
@@ -618,8 +589,6 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
           });
 
           this.emit("downloadFinished");
-
-          // Installa e riavvia
           this.emit("installFinished");
 
           const shouldRestart = await this.askConfirmation(
@@ -632,7 +601,6 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
           }
         }
       } else {
-        // Download manuale
         logger.info("🌐 Reindirizzamento a download manuale...");
         await this.openDownloadUrl(this.currentUpdate.downloadUrl);
 
@@ -653,7 +621,6 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
   async simulateDownloadAndInstall() {
     logger.info("🧪 Simulating download...");
 
-    // Simula progresso download
     for (let i = 0; i <= 100; i += 10) {
       await new Promise((resolve) => {
         setTimeout(resolve, 100);
@@ -669,7 +636,6 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
     this.emit("downloadFinished");
     logger.info("🧪 Simulated download complete");
 
-    // Simula installazione
     await new Promise((resolve) => {
       setTimeout(resolve, 500);
     });
@@ -701,7 +667,6 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
       this.stopAutoCheck();
     }
 
-    // Salva preferenza
     try {
       localStorage.setItem("presto_auto_check_updates", enabled.toString());
     } catch (error) {
