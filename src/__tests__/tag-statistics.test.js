@@ -43,12 +43,8 @@ describe("TagStatistics", () => {
 
   describe("generatePieChartGradient", () => {
     it("returns gray gradient for empty stats", () => {
-      expect(stats.generatePieChartGradient([])).toBe(
-        "conic-gradient(#e5e7eb 0deg 360deg)",
-      );
-      expect(stats.generatePieChartGradient(null)).toBe(
-        "conic-gradient(#e5e7eb 0deg 360deg)",
-      );
+      expect(stats.generatePieChartGradient([])).toBe("conic-gradient(#e5e7eb 0deg 360deg)");
+      expect(stats.generatePieChartGradient(null)).toBe("conic-gradient(#e5e7eb 0deg 360deg)");
     });
 
     it("generates a full-circle gradient for a single 100% tag", () => {
@@ -63,9 +59,7 @@ describe("TagStatistics", () => {
         { color: "#10b981", percentage: 50 },
       ];
       const gradient = stats.generatePieChartGradient(tagStats);
-      expect(gradient).toBe(
-        "conic-gradient(#3b82f6 0deg 180deg, #10b981 180deg 360deg)",
-      );
+      expect(gradient).toBe("conic-gradient(#3b82f6 0deg 180deg, #10b981 180deg 360deg)");
     });
 
     it("generates correct gradient for unequal percentages", () => {
@@ -74,9 +68,7 @@ describe("TagStatistics", () => {
         { color: "#10b981", percentage: 75 },
       ];
       const gradient = stats.generatePieChartGradient(tagStats);
-      expect(gradient).toBe(
-        "conic-gradient(#3b82f6 0deg 90deg, #10b981 90deg 360deg)",
-      );
+      expect(gradient).toBe("conic-gradient(#3b82f6 0deg 90deg, #10b981 90deg 360deg)");
     });
   });
 
@@ -107,9 +99,7 @@ describe("TagStatistics", () => {
     });
 
     it("calculates 100% for a single tag", () => {
-      const sessions = [
-        { date: "2024-01-15T10:00:00Z", duration: 25, tags: ["tag-1"] },
-      ];
+      const sessions = [{ date: "2024-01-15T10:00:00Z", duration: 25, tags: ["tag-1"] }];
       const result = stats.getTagUsageStatistics(sessions, [tag1], startDate, endDate);
       expect(result.stats).toHaveLength(1);
       expect(result.stats[0].tagId).toBe("tag-1");
@@ -117,9 +107,7 @@ describe("TagStatistics", () => {
     });
 
     it("splits duration equally among multiple tags on a session", () => {
-      const sessions = [
-        { date: "2024-01-15T10:00:00Z", duration: 20, tags: ["tag-1", "tag-2"] },
-      ];
+      const sessions = [{ date: "2024-01-15T10:00:00Z", duration: 20, tags: ["tag-1", "tag-2"] }];
       const result = stats.getTagUsageStatistics(sessions, [tag1, tag2], startDate, endDate);
       const t1 = result.stats.find((s) => s.tagId === "tag-1");
       const t2 = result.stats.find((s) => s.tagId === "tag-2");
@@ -171,9 +159,7 @@ describe("TagStatistics", () => {
     });
 
     it("uses created_at when date field is absent", () => {
-      const sessions = [
-        { created_at: "2024-01-15T10:00:00Z", duration: 25, tags: ["tag-1"] },
-      ];
+      const sessions = [{ created_at: "2024-01-15T10:00:00Z", duration: 25, tags: ["tag-1"] }];
       const result = stats.getTagUsageStatistics(sessions, [tag1], startDate, endDate);
       expect(result.totalSessions).toBe(1);
     });
@@ -183,7 +169,7 @@ describe("TagStatistics", () => {
         [{ date: "2024-01-15T10:00:00Z", duration: 25, tags: ["tag-1"] }],
         [tag1],
         startDate,
-        endDate,
+        endDate
       );
       expect(result.stats[0].color).toBe(stats.tagColors[0]);
     });
