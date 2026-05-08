@@ -49,7 +49,7 @@ class AuthManager {
         logger.error("Error checking authentication status:", error);
         this.initialized = false;
         this.notifyAuthListeners("unauthenticated", null);
-        return;
+        throw error;
       } finally {
         this.initPromise = null;
       }
@@ -113,11 +113,10 @@ class AuthManager {
 
   // Sign in with email/password
   async signInWithEmail(email, password) {
-    if (!this.initialized) {
-      await this.init();
-    }
-
     try {
+      if (!this.initialized) {
+        await this.init();
+      }
       const { data, error } = await this.authHelpers.signInWithEmail(email, password);
       if (error) {
         throw error;
@@ -132,11 +131,10 @@ class AuthManager {
 
   // Sign up with email/password
   async signUpWithEmail(email, password) {
-    if (!this.initialized) {
-      await this.init();
-    }
-
     try {
+      if (!this.initialized) {
+        await this.init();
+      }
       const { data, error } = await this.authHelpers.signUpWithEmail(email, password);
       if (error) {
         throw error;
@@ -151,11 +149,10 @@ class AuthManager {
 
   // Sign in with OAuth provider
   async signInWithProvider(provider) {
-    if (!this.initialized) {
-      await this.init();
-    }
-
     try {
+      if (!this.initialized) {
+        await this.init();
+      }
       const { data, error } = await this.authHelpers.signInWithProvider(provider);
       if (error) {
         throw error;
@@ -170,11 +167,10 @@ class AuthManager {
 
   // Sign out
   async signOut() {
-    if (!this.initialized) {
-      await this.init();
-    }
-
     try {
+      if (!this.initialized) {
+        await this.init();
+      }
       const { error } = await this.authHelpers.signOut();
       if (error) {
         throw error;

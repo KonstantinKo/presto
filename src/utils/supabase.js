@@ -266,7 +266,11 @@ async function initSupabase() {
                   } catch (parseError) {
                     logger.error("Error parsing OAuth callback:", parseError);
                     clearTimeout(timeout);
-                    await invoke("plugin:oauth|cancel");
+                    try {
+                      await invoke("plugin:oauth|cancel", { port });
+                    } catch (cancelError) {
+                      logger.info("Cancel command failed (this is usually fine):", cancelError);
+                    }
                     reject(new Error(`Failed to parse OAuth callback: ${parseError.message}`));
                   }
                 }
