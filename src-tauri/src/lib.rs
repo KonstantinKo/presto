@@ -1388,6 +1388,7 @@ async fn set_dock_visibility(_app: AppHandle, _visible: bool) -> Result<(), Stri
 }
 
 #[cfg(target_os = "macos")]
+#[allow(unsafe_code)]
 fn set_dock_visibility_native(visible: bool) {
     use cocoa::appkit::{NSApp, NSApplication, NSApplicationActivationPolicy};
     use cocoa::base::nil;
@@ -1465,6 +1466,7 @@ async fn set_status_bar_visibility(_app: AppHandle, _visible: bool) -> Result<()
 }
 
 #[cfg(target_os = "macos")]
+#[allow(unsafe_code)]
 fn set_system_ui_mode_safe(visible: bool) -> Result<(), String> {
     use libc::{c_int, c_uint};
     use std::thread;
@@ -1490,6 +1492,7 @@ fn set_system_ui_mode_safe(visible: bool) -> Result<(), String> {
 
     // External declaration for Carbon SetSystemUIMode function
     // This is a C function from ApplicationServices framework
+    #[allow(unsafe_code)]
     extern "C" {
         fn SetSystemUIMode(inMode: SystemUIMode, inOptions: SystemUIOptions) -> OSStatus;
     }
