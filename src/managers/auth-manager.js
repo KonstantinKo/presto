@@ -22,12 +22,10 @@ class AuthManager {
 
     this.initPromise = (async () => {
       try {
-        // Initialize Supabase first
         await initSupabase();
         this.supabase = getSupabase();
         this.authHelpers = getAuthHelpers();
 
-        // Check if user is already authenticated
         const {
           data: { session },
         } = await this.supabase.auth.getSession();
@@ -46,7 +44,6 @@ class AuthManager {
           }
         }
 
-        // Listen for auth changes
         this.supabase.auth.onAuthStateChange((event, session) => {
           if (event === "SIGNED_IN" && session) {
             this.currentUser = session.user;
@@ -76,18 +73,15 @@ class AuthManager {
     return this.initPromise;
   }
 
-  // Check if this is the first time the app is being opened
   isFirstRun() {
     const hasSeenAuth = localStorage.getItem("presto-auth-seen");
     return !hasSeenAuth;
   }
 
-  // Mark that the user has seen the auth screen
   markAuthSeen() {
     localStorage.setItem("presto-auth-seen", "true");
   }
 
-  // Continue as guest
   continueAsGuest() {
     this.isGuest = true;
     this.currentUser = null;
@@ -96,22 +90,18 @@ class AuthManager {
     this.notifyAuthListeners("guest", null);
   }
 
-  // Check if user is authenticated
   isAuthenticated() {
     return this.currentUser !== null;
   }
 
-  // Check if user is in guest mode
   isGuestMode() {
     return this.isGuest;
   }
 
-  // Get current user
   getCurrentUser() {
     return this.currentUser;
   }
 
-  // Sign in with email/password
   async signInWithEmail(email, password) {
     try {
       if (!this.initialized) {
@@ -129,7 +119,6 @@ class AuthManager {
     }
   }
 
-  // Sign up with email/password
   async signUpWithEmail(email, password) {
     try {
       if (!this.initialized) {
@@ -147,7 +136,6 @@ class AuthManager {
     }
   }
 
-  // Sign in with OAuth provider
   async signInWithProvider(provider) {
     try {
       if (!this.initialized) {
@@ -165,7 +153,6 @@ class AuthManager {
     }
   }
 
-  // Sign out
   async signOut() {
     try {
       if (!this.initialized) {
@@ -182,13 +169,11 @@ class AuthManager {
     }
   }
 
-  // Get user avatar URL
   getUserAvatarUrl() {
     if (!this.currentUser) {
       return null;
     }
 
-    // Try to get avatar from user metadata
     const avatarUrl = this.currentUser.user_metadata?.avatar_url;
     if (avatarUrl) {
       return avatarUrl;
@@ -200,7 +185,6 @@ class AuthManager {
       return picture;
     }
 
-    // Return Gravatar URL for email (will be tested asynchronously)
     const email = this.currentUser.email;
     if (email) {
       const hash = this.md5(email.toLowerCase().trim());
@@ -210,7 +194,6 @@ class AuthManager {
     return null;
   }
 
-  // Check if Gravatar exists for email
   async checkGravatarExists(email) {
     if (!email) {
       return false;
@@ -227,7 +210,6 @@ class AuthManager {
     }
   }
 
-  // Get user display name
   getUserDisplayName() {
     if (!this.currentUser) {
       return "Guest";
@@ -242,9 +224,7 @@ class AuthManager {
     return name;
   }
 
-  // MD5 hash for Gravatar using a reliable implementation
   md5(string) {
-    // Correct MD5 implementation for Gravatar
     function md5cycle(x, k) {
       let a = x[0],
         b = x[1],
@@ -412,17 +392,14 @@ class AuthManager {
     return hex(md51(string));
   }
 
-  // Add auth listener
   onAuthChange(callback) {
     this.authListeners.push(callback);
   }
 
-  // Remove auth listener
   removeAuthListener(callback) {
     this.authListeners = this.authListeners.filter((listener) => listener !== callback);
   }
 
-  // Notify all auth listeners
   notifyAuthListeners(status, user) {
     this.authListeners.forEach((callback) => {
       callback(status, user);

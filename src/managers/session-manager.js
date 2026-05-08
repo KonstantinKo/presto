@@ -1,8 +1,6 @@
-// Session Management Functions
 import { NotificationUtils } from "../utils/common-utils.js";
 import { logger } from "../utils/logger.js";
 
-// Get Tauri invoke function
 const { invoke } = window.__TAURI__ ? window.__TAURI__.core : { invoke: null };
 
 export class SessionManager {
@@ -20,11 +18,9 @@ export class SessionManager {
     this.setupEventListeners();
   }
 
-  // Load sessions from storage (Tauri backend or localStorage fallback)
   async loadSessionsFromStorage() {
     try {
       if (this.isUsingTauri) {
-        // Use Tauri backend for persistent storage
         const sessions = await invoke("load_manual_sessions");
 
         // Convert array to date-keyed object for backward compatibility
@@ -38,7 +34,6 @@ export class SessionManager {
 
         logger.info("Loaded", sessions.length, "manual sessions from Tauri backend");
       } else {
-        // Fallback to localStorage
         const savedSessions = localStorage.getItem("presto_manual_sessions");
         if (savedSessions) {
           this.sessions = JSON.parse(savedSessions);
@@ -51,7 +46,6 @@ export class SessionManager {
     }
   }
 
-  // Save sessions to storage (Tauri backend or localStorage fallback)
   async saveSessionsToStorage() {
     try {
       if (this.isUsingTauri) {
@@ -69,7 +63,6 @@ export class SessionManager {
         await invoke("save_manual_sessions", { sessions: sessionsArray });
         logger.info("Saved", sessionsArray.length, "manual sessions to Tauri backend");
       } else {
-        // Fallback to localStorage
         localStorage.setItem("presto_manual_sessions", JSON.stringify(this.sessions));
         logger.info("Saved manual sessions to localStorage (fallback)");
       }
@@ -79,13 +72,11 @@ export class SessionManager {
   }
 
   setupEventListeners() {
-    // Add session button
     const addSessionBtn = document.getElementById("add-session-btn");
     if (addSessionBtn) {
       addSessionBtn.addEventListener("click", () => this.openAddSessionModal());
     }
 
-    // Modal controls
     const modalOverlay = document.getElementById("session-modal-overlay");
     const closeModalBtn = document.getElementById("close-session-modal");
     const cancelBtn = document.getElementById("cancel-session-btn");
@@ -119,10 +110,8 @@ export class SessionManager {
       deleteSessionBtn.addEventListener("click", () => this.deleteCurrentSession());
     }
 
-    // Add event listeners for automatic time/duration calculation
     this.setupTimeCalculation();
 
-    // Keyboard shortcuts for modal
     document.addEventListener("keydown", (e) => {
       if (e.key === "Escape" && this.isModalOpen()) {
         this.closeModal();
@@ -143,12 +132,10 @@ export class SessionManager {
     deleteBtn.style.display = "none";
     saveBtn.textContent = "Save Session";
 
-    // Set default times (start = now, end = now + 25 minutes)
     const now = new Date();
     const startTime = this.minutesToTime(now.getHours() * 60 + now.getMinutes());
     const endTime = this.calculateEndTime(startTime, 25);
 
-    // Reset form and set defaults
     document.getElementById("session-form").reset();
     document.getElementById("session-duration").value = 25;
     document.getElementById("session-start-time").value = startTime;
@@ -171,7 +158,6 @@ export class SessionManager {
     deleteBtn.style.display = "block";
     saveBtn.textContent = "Update Session";
 
-    // Populate form with session data
     document.getElementById("session-duration").value = session.duration;
     document.getElementById("session-start-time").value = session.start_time;
     document.getElementById("session-end-time").value = session.end_time;
@@ -263,7 +249,6 @@ export class SessionManager {
       tags: this.currentEditingSession?.tags || [], // Preserve existing tags
     };
 
-    // Validate form
     if (!sessionData.start_time) {
       alert("Please enter a start time");
       return;
@@ -279,7 +264,6 @@ export class SessionManager {
       return;
     }
 
-    // Validate that end time is after start time
     if (sessionData.end_time <= sessionData.start_time) {
       alert("End time must be after start time");
       return;
@@ -287,11 +271,9 @@ export class SessionManager {
 
     try {
       if (this.currentEditingSession) {
-        // Update existing session
         await this.updateSession(sessionData);
         NotificationUtils.showNotificationPing("Session updated successfully", "success");
       } else {
-        // Add new session
         await this.addSession(sessionData);
         NotificationUtils.showNotificationPing("Session added successfully", "success");
       }
@@ -300,7 +282,6 @@ export class SessionManager {
       const dateForRefresh = this.selectedDate;
       this.closeModal();
 
-      // Refresh the session list
       if (this.navManager) {
         await this.navManager.updateSelectedDayDetails(dateForRefresh);
         await this.navManager.updateFocusSummary();
@@ -314,21 +295,17 @@ export class SessionManager {
   }
 
   async addSession(sessionData) {
-    // Use current date if selectedDate is null (e.g., when called from timer)
     const targetDate = this.selectedDate || new Date();
     const dateString = targetDate.toDateString();
 
-    // Add to local storage
     if (!this.sessions[dateString]) {
       this.sessions[dateString] = [];
     }
 
     this.sessions[dateString].push(sessionData);
 
-    // Save to storage (Tauri backend or localStorage)
     await this.saveSessionsToStorage();
 
-    // Dispatch session added event for synchronization with other components
     window.dispatchEvent(
       new CustomEvent("sessionAdded", {
         detail: { sessionData, date: dateString },
@@ -339,7 +316,6 @@ export class SessionManager {
   async updateSession(sessionData) {
     const dateString = this.selectedDate.toDateString();
 
-    // Update local storage
     if (this.sessions[dateString]) {
       const index = this.sessions[dateString].findIndex((s) => s.id === sessionData.id);
       if (index !== -1) {
@@ -347,10 +323,8 @@ export class SessionManager {
       }
     }
 
-    // Save to storage (Tauri backend or localStorage)
     await this.saveSessionsToStorage();
 
-    // Dispatch session updated event for synchronization with other components
     window.dispatchEvent(
       new CustomEvent("sessionUpdated", {
         detail: { sessionData, date: dateString },
@@ -366,17 +340,14 @@ export class SessionManager {
     try {
       const dateString = this.selectedDate.toDateString();
 
-      // Remove from local storage
       if (this.sessions[dateString]) {
         this.sessions[dateString] = this.sessions[dateString].filter(
           (s) => s.id !== this.currentEditingSession.id
         );
       }
 
-      // Save to storage (Tauri backend or localStorage)
       await this.saveSessionsToStorage();
 
-      // Dispatch session deleted event for synchronization with other components
       window.dispatchEvent(
         new CustomEvent("sessionDeleted", {
           detail: { sessionId: this.currentEditingSession.id, date: dateString },
@@ -388,7 +359,6 @@ export class SessionManager {
       this.closeModal();
       NotificationUtils.showNotificationPing("Session deleted successfully", "success");
 
-      // Refresh the session list
       if (this.navManager) {
         await this.navManager.updateSelectedDayDetails(dateForRefresh);
         await this.navManager.updateFocusSummary();

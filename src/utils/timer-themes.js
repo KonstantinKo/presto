@@ -1,5 +1,3 @@
-// Timer Themes Configuration
-// This file defines all available timer themes and their properties
 import { logger } from "./logger.js";
 
 const DEFAULT_PREVIEW = {
@@ -41,7 +39,6 @@ export const TIMER_THEMES = {
   },
 };
 
-// Function to dynamically register a new theme
 export function registerTheme(themeId, themeConfig) {
   if (TIMER_THEMES[themeId]) {
     logger.warn(`🎨 Theme ${themeId} already exists, overriding...`);
@@ -59,7 +56,6 @@ export function registerTheme(themeId, themeConfig) {
   return TIMER_THEMES[themeId];
 }
 
-// Function to unregister a theme
 export function unregisterTheme(themeId) {
   if (TIMER_THEMES[themeId] && !TIMER_THEMES[themeId].isDefault) {
     delete TIMER_THEMES[themeId];
@@ -69,12 +65,10 @@ export function unregisterTheme(themeId) {
   return false;
 }
 
-// Get theme by ID
 export function getThemeById(themeId) {
   return TIMER_THEMES[themeId] || TIMER_THEMES.espresso;
 }
 
-// Get all available themes
 export function getAllThemes() {
   return Object.entries(TIMER_THEMES).map(([id, theme]) => ({
     id,
@@ -82,18 +76,15 @@ export function getAllThemes() {
   }));
 }
 
-// Get compatible themes for current color mode
 export function getCompatibleThemes(colorMode = "light") {
   return getAllThemes().filter((theme) => theme.supports.includes(colorMode));
 }
 
-// Check if theme is compatible with color mode
 export function isThemeCompatible(themeId, colorMode = "light") {
   const theme = getThemeById(themeId);
   return theme.supports.includes(colorMode);
 }
 
-// Get default theme
 export function getDefaultTheme() {
   return getAllThemes().find((theme) => theme.isDefault);
 }

@@ -1,4 +1,3 @@
-// Main Application Entry Point - Presto Pomodoro Timer
 import { NavigationManager } from "./managers/navigation-manager.js";
 import { SettingsManager } from "./managers/settings-manager.js";
 import { SessionManager } from "./managers/session-manager.js";
@@ -10,7 +9,6 @@ import { UpdateNotification } from "./components/update-notification.js";
 import { logger } from "./utils/logger.js";
 window.appLog = logger;
 
-// Global application state
 let timer = null;
 let navigation = null;
 let settingsManager = null;
@@ -39,10 +37,7 @@ document.addEventListener("click", (e) => {
 });
 
 window.confirmTotalReset = async function () {
-  logger.debug("confirmTotalReset called"); // Debug log
-
   try {
-    // Create custom confirmation dialogs
     const confirmed = await showCustomConfirm(
       "⚠️ ATTENZIONE",
       "Questa azione eliminerà PERMANENTEMENTE tutti i tuoi dati!\n\n" +
@@ -79,7 +74,6 @@ window.confirmTotalReset = async function () {
   } catch (error) {
     logger.error("Error in confirmTotalReset:", error);
 
-    // Fallback to browser confirm
     const manualConfirm = confirm(
       "Si è verificato un errore nei dialog. Vuoi resettare tutti i dati comunque?"
     );
@@ -89,10 +83,8 @@ window.confirmTotalReset = async function () {
   }
 };
 
-// Custom confirmation dialog function
 function showCustomConfirm(title, message, type = "warning") {
   return new Promise((resolve) => {
-    // Create modal overlay
     const overlay = document.createElement("div");
     overlay.className = "modal-overlay";
     overlay.style.cssText = `
@@ -164,7 +156,6 @@ function showCustomConfirm(title, message, type = "warning") {
     overlay.appendChild(modal);
     document.body.appendChild(overlay);
 
-    // Add hover effects
     const confirmBtn = modal.querySelector("#confirm-btn");
     const cancelBtn = modal.querySelector("#cancel-btn");
 
@@ -181,7 +172,6 @@ function showCustomConfirm(title, message, type = "warning") {
       cancelBtn.style.background = "#6c757d";
     });
 
-    // Handle button clicks
     confirmBtn.addEventListener("click", () => {
       document.removeEventListener("keydown", handleEscape);
       document.body.removeChild(overlay);
@@ -194,7 +184,6 @@ function showCustomConfirm(title, message, type = "warning") {
       resolve(false);
     });
 
-    // Handle escape key
     const handleEscape = (e) => {
       if (e.key === "Escape") {
         document.body.removeChild(overlay);
@@ -204,21 +193,16 @@ function showCustomConfirm(title, message, type = "warning") {
     };
     document.addEventListener("keydown", handleEscape);
 
-    // Focus on cancel button by default
     setTimeout(() => cancelBtn.focus(), 100);
   });
 }
 
 window.performTotalReset = async function () {
-  logger.debug("performTotalReset started"); // Debug log
-
   try {
-    // Check if Tauri is available
     if (!window.__TAURI__ || !window.__TAURI__.core) {
       throw new Error("Tauri is not available - app might not be running in Tauri context");
     }
 
-    // Show loading state
     const resetButton = document.querySelector(".btn-danger");
     const _originalText = resetButton ? resetButton.textContent : "🗑️ Reset All Data";
     if (resetButton) {
@@ -226,16 +210,9 @@ window.performTotalReset = async function () {
       resetButton.disabled = true;
     }
 
-    logger.debug("Calling reset_all_data..."); // Debug log
-
-    // Call the backend to delete all data
     const { invoke } = window.__TAURI__.core;
     await invoke("reset_all_data");
 
-    logger.debug("reset_all_data completed successfully"); // Debug log
-
-    // Clear all localStorage data
-    logger.debug("Clearing localStorage..."); // Debug log
     localStorage.removeItem("pomodoro-session");
     localStorage.removeItem("pomodoro-tasks");
     localStorage.removeItem("pomodoro-settings");
@@ -245,48 +222,36 @@ window.performTotalReset = async function () {
     localStorage.removeItem("presto-skipped-versions");
     localStorage.removeItem("presto_force_update_test");
     localStorage.removeItem("presto-tags");
-    logger.debug("localStorage cleared"); // Debug log
 
-    // Reset the timer in memory
     if (window.pomodoroTimer) {
       if (typeof window.pomodoroTimer.resetToInitialState === "function") {
         window.pomodoroTimer.resetToInitialState();
-        logger.debug("Timer reset to initial state"); // Debug log
       } else {
         logger.warn("Timer resetToInitialState method not found");
       }
     }
 
-    // Reset settings to defaults
     if (window.settingsManager) {
       if (typeof window.settingsManager.resetToDefaultsForce === "function") {
         window.settingsManager.resetToDefaultsForce();
-        logger.debug("Settings reset to defaults"); // Debug log
       } else {
         logger.warn("SettingsManager resetToDefaultsForce method not found");
       }
     }
 
-    // Reset navigation to timer view
     if (window.navigationManager) {
       if (typeof window.navigationManager.switchView === "function") {
         window.navigationManager.switchView("timer");
-        logger.debug("Switched to timer view"); // Debug log
       } else {
         logger.warn("NavigationManager switchView method not found");
       }
     }
 
-    // Show success message before reload
-    logger.debug("Reset completed successfully, reloading..."); // Debug log
-
-    // Refresh the UI to show reset state
     location.reload();
   } catch (error) {
     logger.error("Failed to reset data:", error);
     logger.error("Error stack:", error.stack);
 
-    // Show detailed error information
     let errorMessage = "Failed to reset data. ";
     if (error.message.includes("Tauri")) {
       errorMessage += "Application context error. Please restart the app and try again.";
@@ -296,7 +261,6 @@ window.performTotalReset = async function () {
 
     alert(`❌ ${errorMessage}`);
 
-    // Restore button state
     const resetButton = document.querySelector(".btn-danger");
     if (resetButton) {
       resetButton.textContent = "🗑️ Reset All Data";
@@ -307,7 +271,6 @@ window.performTotalReset = async function () {
 
 // Initialize theme early to prevent flash
 async function initializeEarlyTheme() {
-  // Helper function to convert theme preference to actual theme
   function getActualTheme(themePreference) {
     if (themePreference === "auto") {
       return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
@@ -315,7 +278,6 @@ async function initializeEarlyTheme() {
     return themePreference;
   }
 
-  // Helper function to check if Tauri is available and ready
   function isTauriReady() {
     return (
       typeof window !== "undefined" &&
@@ -325,7 +287,6 @@ async function initializeEarlyTheme() {
     );
   }
 
-  // Helper function to wait for Tauri to be ready (with timeout)
   function waitForTauri(maxWaitTime = 2000) {
     return new Promise((resolve) => {
       const startTime = Date.now();
@@ -349,7 +310,6 @@ async function initializeEarlyTheme() {
   }
 
   try {
-    // Wait for Tauri to be ready before trying to load settings
     const tauriReady = await waitForTauri();
 
     if (tauriReady) {
@@ -370,13 +330,11 @@ async function initializeEarlyTheme() {
           );
         }
 
-        // Also initialize timer theme early
         if (timerThemeFromSettings) {
           document.documentElement.setAttribute("data-timer-theme", timerThemeFromSettings);
           localStorage.setItem("timer-theme-preference", timerThemeFromSettings);
           logger.debug(`🎨 Early timer theme loaded from settings: ${timerThemeFromSettings}`);
         } else {
-          // Default to espresso theme
           document.documentElement.setAttribute("data-timer-theme", "espresso");
           localStorage.setItem("timer-theme-preference", "espresso");
           logger.debug(`🎨 Early timer theme initialized to default: espresso`);
@@ -398,7 +356,6 @@ async function initializeEarlyTheme() {
     logger.debug("🎨 Error waiting for Tauri, using localStorage fallback:", error.message);
   }
 
-  // Fallback to localStorage or default for both themes
   const storedTheme = localStorage.getItem("theme-preference") || "auto";
   const actualTheme = getActualTheme(storedTheme);
   document.documentElement.setAttribute("data-theme", actualTheme);
@@ -406,23 +363,19 @@ async function initializeEarlyTheme() {
     `🎨 Early theme initialized from localStorage: ${storedTheme} -> actual: ${actualTheme}`
   );
 
-  // Initialize timer theme with fallback
   const storedTimerTheme = localStorage.getItem("timer-theme-preference") || "espresso";
   document.documentElement.setAttribute("data-timer-theme", storedTimerTheme);
   logger.debug(`🎨 Early timer theme initialized from localStorage: ${storedTimerTheme}`);
 }
 
-// Request notification permission using Tauri v2 API
 async function requestNotificationPermission() {
   try {
     if (window.__TAURI__ && window.__TAURI__.notification) {
       logger.info("🔔 Requesting notification permission using Tauri v2...");
       const { isPermissionGranted, requestPermission } = window.__TAURI__.notification;
 
-      // Check if permission is already granted
       let permissionGranted = await isPermissionGranted();
 
-      // If not granted, request permission
       if (!permissionGranted) {
         logger.info("Requesting notification permission...");
         const permission = await requestPermission();
@@ -437,7 +390,6 @@ async function requestNotificationPermission() {
         logger.info("✅ Notification permission already granted");
       }
     } else {
-      // Fallback to Web Notification API
       logger.info("🔔 Requesting notification permission using Web API...");
       if ("Notification" in window) {
         const permission = await Notification.requestPermission();
@@ -446,16 +398,13 @@ async function requestNotificationPermission() {
     }
   } catch (error) {
     logger.error("Failed to request notification permission:", error);
-    // Fallback to Web API
     if ("Notification" in window) {
       Notification.requestPermission();
     }
   }
 }
 
-// Show authentication screen
 function showAuthScreen() {
-  // Hide the main app content
   const appContent = document.querySelector(".app-content") || document.body;
   if (appContent.children.length > 0) {
     for (const child of appContent.children) {
@@ -463,7 +412,6 @@ function showAuthScreen() {
     }
   }
 
-  // Create auth overlay
   const authOverlay = document.createElement("div");
   authOverlay.id = "auth-overlay";
   authOverlay.className = "auth-overlay";
@@ -535,7 +483,6 @@ function showAuthScreen() {
     </div>
   `;
 
-  // Add styles
   const authStyles = document.createElement("style");
   authStyles.textContent = `
     .auth-overlay {
@@ -776,7 +723,6 @@ function showAuthScreen() {
       to { transform: rotate(360deg); }
     }
     
-    /* New responsive layout styles */
     .auth-container {
       width: 100%;
       max-width: 900px;
@@ -965,7 +911,6 @@ function showAuthScreen() {
       box-shadow: 0 8px 25px rgba(226, 232, 240, 0.3);
     }
     
-    /* Mobile responsiveness */
     @media (max-width: 768px) {
       .auth-container {
         margin: 0;
@@ -1079,18 +1024,15 @@ function showAuthScreen() {
   document.head.appendChild(authStyles);
   document.body.appendChild(authOverlay);
 
-  // Setup event listeners
   setupAuthEventListeners();
 }
 
-// Setup authentication event listeners
 function setupAuthEventListeners() {
   const authOverlay = document.getElementById("auth-overlay");
   if (!authOverlay) {
     return;
   }
 
-  // OAuth provider buttons
   const providerButtons = authOverlay.querySelectorAll("[data-provider]");
   providerButtons.forEach((button) => {
     button.addEventListener("click", async (e) => {
@@ -1099,7 +1041,6 @@ function setupAuthEventListeners() {
     });
   });
 
-  // Email form
   const authForm = document.getElementById("auth-form");
   if (authForm) {
     authForm.addEventListener("submit", async (e) => {
@@ -1109,7 +1050,6 @@ function setupAuthEventListeners() {
       await handleEmailAuth(email, password, "signin", e.submitter);
     });
 
-    // Sign up button
     const signUpBtn = authForm.querySelector('[data-action="signup"]');
     if (signUpBtn) {
       signUpBtn.addEventListener("click", async (e) => {
@@ -1127,7 +1067,6 @@ function setupAuthEventListeners() {
     }
   }
 
-  // Guest mode button
   const guestBtn = document.getElementById("continue-guest");
   if (guestBtn) {
     guestBtn.addEventListener("click", async () => {
@@ -1135,7 +1074,6 @@ function setupAuthEventListeners() {
     });
   }
 
-  // Guest mode link
   const guestLink = document.getElementById("continue-guest-link");
   if (guestLink) {
     guestLink.addEventListener("click", async (e) => {
@@ -1156,7 +1094,6 @@ function setupAuthEventListeners() {
   }
 }
 
-// Handle OAuth sign-in
 async function handleOAuthSignIn(provider, button) {
   setButtonLoading(button, true);
 
@@ -1173,7 +1110,6 @@ async function handleOAuthSignIn(provider, button) {
   }
 }
 
-// Handle email authentication
 async function handleEmailAuth(email, password, action, button) {
   if (!email || !password) {
     alert("Please enter both email and password");
@@ -1201,7 +1137,6 @@ async function handleEmailAuth(email, password, action, button) {
   }
 }
 
-// Set button loading state
 function setButtonLoading(button, loading) {
   if (loading) {
     button.classList.add("auth-loading");
@@ -1212,14 +1147,12 @@ function setButtonLoading(button, loading) {
   }
 }
 
-// Hide authentication screen
 async function hideAuthScreen() {
   const authOverlay = document.getElementById("auth-overlay");
   if (authOverlay) {
     authOverlay.remove();
   }
 
-  // Show the main app content
   const appContent = document.querySelector(".app-content") || document.body;
   if (appContent.children.length > 0) {
     for (const child of appContent.children) {
@@ -1227,11 +1160,9 @@ async function hideAuthScreen() {
     }
   }
 
-  // Update avatar UI after auth screen is hidden
   await updateUserAvatarUI();
 }
 
-// Update user avatar UI based on auth state
 async function updateUserAvatarUI() {
   const avatarContainer = document.getElementById("user-avatar-container");
   const avatarImg = document.getElementById("user-avatar-img");
@@ -1248,15 +1179,12 @@ async function updateUserAvatarUI() {
     return;
   }
 
-  // Hide dropdown if it's open
   if (dropdown) {
     dropdown.style.display = "none";
   }
 
-  // Always show avatar container
   avatarContainer.style.display = "flex";
 
-  // Reset all fallback elements
   if (guestIcon) {
     guestIcon.style.display = "none";
   }
@@ -1265,21 +1193,17 @@ async function updateUserAvatarUI() {
   }
 
   if (window.authManager && window.authManager.isAuthenticated()) {
-    // User is authenticated
     const _user = window.authManager.getCurrentUser();
     const avatarUrl = window.authManager.getUserAvatarUrl();
     const displayName = window.authManager.getUserDisplayName();
 
-    // Try to load avatar image
     if (avatarUrl) {
       try {
-        // Test if the image loads successfully
         await testImageLoad(avatarUrl);
         avatarImg.src = avatarUrl;
         avatarImg.style.display = "block";
         avatarFallback.style.display = "none";
       } catch (_error) {
-        // Image failed to load, show initial
         avatarImg.style.display = "none";
         avatarFallback.style.display = "flex";
         if (userInitial) {
@@ -1288,7 +1212,6 @@ async function updateUserAvatarUI() {
         }
       }
     } else {
-      // No avatar URL, show initial
       avatarImg.style.display = "none";
       avatarFallback.style.display = "flex";
       if (userInitial) {
@@ -1297,7 +1220,6 @@ async function updateUserAvatarUI() {
       }
     }
 
-    // Update user info
     if (userName) {
       userName.textContent = displayName;
     }
@@ -1305,7 +1227,6 @@ async function updateUserAvatarUI() {
       userStatus.textContent = "Signed In";
     }
 
-    // Show sign out, hide sign in
     if (signOutBtn) {
       signOutBtn.style.display = "flex";
     }
@@ -1313,7 +1234,6 @@ async function updateUserAvatarUI() {
       signInBtn.style.display = "none";
     }
   } else {
-    // Guest mode or not authenticated - show user icon
     avatarImg.style.display = "none";
     avatarFallback.style.display = "flex";
     if (guestIcon) {
@@ -1327,7 +1247,6 @@ async function updateUserAvatarUI() {
       userStatus.textContent = "Sync your data and access your sessions across devices.";
     }
 
-    // Hide sign out, show sign in
     if (signOutBtn) {
       signOutBtn.style.display = "none";
     }
@@ -1337,7 +1256,6 @@ async function updateUserAvatarUI() {
   }
 }
 
-// Test if an image URL loads successfully
 function testImageLoad(url) {
   return new Promise((resolve, reject) => {
     const img = new Image();
@@ -1347,13 +1265,11 @@ function testImageLoad(url) {
   });
 }
 
-// Position dropdown intelligently based on screen size and available space
 function positionDropdown(avatarBtn, dropdown) {
   const isMobile = window.innerWidth <= 768;
   const avatarRect = avatarBtn.getBoundingClientRect();
   const _dropdownRect = dropdown.getBoundingClientRect();
 
-  // Reset any inline positioning
   dropdown.style.left = "";
   dropdown.style.right = "";
   dropdown.style.bottom = "";
@@ -1366,47 +1282,38 @@ function positionDropdown(avatarBtn, dropdown) {
     dropdown.style.left = "50%";
     dropdown.style.transform = "translateX(-50%)";
 
-    // Check if dropdown would go off-screen horizontally
-    const dropdownWidth = 200; // Our dropdown width
+    const dropdownWidth = 200;
     const sidebarCenter = avatarRect.left + avatarRect.width / 2;
     const leftEdge = sidebarCenter - dropdownWidth / 2;
     const rightEdge = sidebarCenter + dropdownWidth / 2;
 
     if (leftEdge < 10) {
-      // Too far left, adjust
       dropdown.style.left = "10px";
       dropdown.style.transform = "none";
     } else if (rightEdge > window.innerWidth - 10) {
-      // Too far right, adjust
       dropdown.style.right = "10px";
       dropdown.style.left = "auto";
       dropdown.style.transform = "none";
     }
   } else {
-    // Desktop: position to the right of the avatar
     dropdown.style.bottom = "0";
     dropdown.style.left = "70px";
 
-    // Check if dropdown would go off-screen to the right
     const dropdownRight = avatarRect.right + 200; // dropdown width
     if (dropdownRight > window.innerWidth - 20) {
-      // Position to the left instead
       dropdown.style.left = "auto";
       dropdown.style.right = "70px";
     }
 
-    // Check if dropdown would go off-screen vertically
     const dropdownBottom = avatarRect.bottom;
     const dropdownHeight = 120; // Approximate dropdown height
     if (dropdownBottom + dropdownHeight > window.innerHeight - 20) {
-      // Position above instead
       dropdown.style.bottom = "auto";
       dropdown.style.top = `-${dropdownHeight}px`;
     }
   }
 }
 
-// Setup user avatar event listeners
 function setupUserAvatarEventListeners() {
   // Prevent multiple setups
   if (window.avatarListenersSetup) {
@@ -1429,7 +1336,6 @@ function setupUserAvatarEventListeners() {
     return;
   }
 
-  // Toggle dropdown on avatar click
   if (avatarBtn && dropdown) {
     avatarBtn.addEventListener("click", (e) => {
       e.stopPropagation();
@@ -1439,7 +1345,6 @@ function setupUserAvatarEventListeners() {
         user: window.authManager?.getCurrentUser()?.email,
       });
 
-      // If user is not authenticated and not in guest mode, show auth screen
       if (
         !window.authManager ||
         (!window.authManager.isAuthenticated() && !window.authManager.isGuestMode())
@@ -1452,7 +1357,6 @@ function setupUserAvatarEventListeners() {
       // For both authenticated users and guests, show the dropdown
       // Guests will see "Sign In" option, authenticated users will see "Sign Out"
 
-      // Toggle dropdown
       const isVisible = dropdown.style.display === "block";
       logger.debug("🔽 Toggling dropdown. Currently visible:", isVisible);
 
@@ -1460,7 +1364,6 @@ function setupUserAvatarEventListeners() {
         dropdown.style.display = "none";
         logger.debug("🔼 Dropdown hidden");
       } else {
-        // Show dropdown and position it intelligently
         dropdown.style.display = "block";
         positionDropdown(avatarBtn, dropdown);
         logger.debug("🔽 Dropdown shown and positioned");
@@ -1468,14 +1371,12 @@ function setupUserAvatarEventListeners() {
     });
   }
 
-  // Close dropdown when clicking outside
   document.addEventListener("click", (e) => {
     if (dropdown && !dropdown.contains(e.target) && !avatarBtn.contains(e.target)) {
       dropdown.style.display = "none";
     }
   });
 
-  // Sign out handler
   if (signOutBtn) {
     signOutBtn.addEventListener("click", async (e) => {
       e.stopPropagation();
@@ -1491,7 +1392,6 @@ function setupUserAvatarEventListeners() {
     });
   }
 
-  // Sign in handler
   if (signInBtn) {
     signInBtn.addEventListener("click", (e) => {
       e.stopPropagation();
@@ -1503,7 +1403,6 @@ function setupUserAvatarEventListeners() {
     });
   }
 
-  // Listen for auth state changes
   if (window.authManager) {
     window.authManager.onAuthChange(async (status, user) => {
       logger.debug("🔄 Auth state changed:", status, user?.email || "no user");
@@ -1511,14 +1410,12 @@ function setupUserAvatarEventListeners() {
     });
   }
 
-  // Reposition dropdown on window resize
   window.addEventListener("resize", () => {
     if (dropdown && dropdown.style.display === "block") {
       positionDropdown(avatarBtn, dropdown);
     }
   });
 
-  // Mark listeners as setup
   window.avatarListenersSetup = true;
   logger.info("✅ Avatar listeners setup complete");
 }
@@ -1552,7 +1449,6 @@ async function initializeApplication() {
   try {
     logger.info("🚀 Initializing Presto application...");
 
-    // Show loading state
     const loadingOverlay = document.createElement("div");
     loadingOverlay.id = "app-loading";
     loadingOverlay.style.cssText = `
@@ -1593,7 +1489,6 @@ async function initializeApplication() {
       }
     }, 15000); // 15 seconds timeout
 
-    // Helper function to update loading text
     const updateLoadingText = (text) => {
       const overlay = document.getElementById("app-loading");
       if (overlay) {
@@ -1604,21 +1499,17 @@ async function initializeApplication() {
       }
     };
 
-    // Initialize theme as early as possible
     updateLoadingText("Loading theme...");
     await initializeEarlyTheme();
 
-    // Request notification permission using Tauri v2 API
     updateLoadingText("Requesting permissions...");
     await requestNotificationPermission();
 
-    // Import and initialize auth manager
     updateLoadingText("Loading authentication...");
     const { authManager } = await import("./managers/auth-manager.js");
     logger.info("🔐 Initializing Auth Manager...");
     window.authManager = authManager;
 
-    // Initialize auth manager (which will wait for Supabase)
     updateLoadingText("Connecting to services...");
     await authManager.init();
 
@@ -1631,19 +1522,15 @@ async function initializeApplication() {
       window.updateManager.loadPreferences(); // Carica le preferenze salvate se supportato
     }
 
-    // Initialize Update Notification component
     logger.info("🔔 Initializing Update Notification...");
     const updateNotification = new UpdateNotification();
     window.updateNotification = updateNotification; // Make it globally available
 
-    // Skip first run authentication - proceed directly with guest mode
     if (authManager.isFirstRun()) {
       logger.info("👋 First run detected, proceeding as guest...");
-      // Set guest mode automatically
       authManager.continueAsGuest();
     }
 
-    // Update user avatar UI based on current auth state
     await updateUserAvatarUI();
 
     // Initialize settings manager first (other modules depend on it)
@@ -1652,71 +1539,55 @@ async function initializeApplication() {
     window.settingsManager = settingsManager;
     await settingsManager.init();
 
-    // Initialize the core timer
     logger.info("⏱️ Initializing Pomodoro Timer...");
     timer = new PomodoroTimer();
     window.pomodoroTimer = timer; // Make it globally accessible
 
-    // Apply settings to timer
     if (settingsManager.settings) {
       await timer.applySettings(settingsManager.settings);
     }
 
-    // Initialize navigation manager
     logger.info("🧭 Initializing Navigation Manager...");
     navigation = new NavigationManager();
     window.navigationManager = navigation;
     await navigation.init();
 
-    // Initialize Session Manager
     logger.info("📊 Initializing Session Manager...");
     sessionManager = new SessionManager(navigation);
     window.sessionManager = sessionManager;
 
-    // Initialize Team Manager
     logger.info("👥 Initializing Team Manager...");
     teamManager = new TeamManager();
     window.teamManager = teamManager;
 
     // Update Manager already initialized earlier
 
-    // Setup global event listeners
     setupGlobalEventListeners();
-
-    // Setup user avatar event listeners
     setupUserAvatarEventListeners();
-
-    // Setup update management
     setupUpdateManagement();
 
     logger.info("✅ Application initialized successfully!");
 
-    // Clear safety timeout
     clearTimeout(safetyTimeout);
 
-    // Mark as fully initialized
     window._appFullyInitialized = true;
     window._appInitializing = false;
 
-    // Remove loading overlay
     const loadingOverlaySuccess = document.getElementById("app-loading");
     if (loadingOverlaySuccess) {
       loadingOverlaySuccess.remove();
     }
 
-    // Show welcome notification
     NotificationUtils.showNotificationPing("Welcome to Presto! 🍅", null, "focus");
   } catch (error) {
     logger.error("❌ Failed to initialize application:", error);
 
-    // Clear safety timeout and remove loading overlay even on error
     clearTimeout(safetyTimeout);
     const loadingOverlayError = document.getElementById("app-loading");
     if (loadingOverlayError) {
       loadingOverlayError.remove();
     }
 
-    // Show error notification
     NotificationUtils.showNotificationPing("Failed to initialize app. Please refresh! 🔄", "error");
 
     // Reset initialization flags on error so user can retry
@@ -1778,21 +1649,16 @@ async function initializeApplication() {
 }
 /* eslint-enable require-atomic-updates */
 
-// Setup global event listeners
 function setupGlobalEventListeners() {
-  // Setup reset button event listener
   const resetButton = document.getElementById("reset-all-data-btn");
   if (resetButton) {
     resetButton.addEventListener("click", () => {
-      logger.debug("Reset button clicked via event listener"); // Debug log
       window.confirmTotalReset();
     });
-    logger.debug("Reset button event listener added"); // Debug log
   } else {
-    logger.error("Reset button not found in DOM"); // Debug log
+    logger.error("Reset button not found in DOM");
   }
 
-  // Setup other settings buttons event listeners
   const resetToDefaultsBtn = document.querySelector(".btn-secondary");
   if (resetToDefaultsBtn && resetToDefaultsBtn.textContent.includes("Reset to Defaults")) {
     resetToDefaultsBtn.addEventListener("click", () => {
@@ -1803,11 +1669,8 @@ function setupGlobalEventListeners() {
     resetToDefaultsBtn.removeAttribute("onclick");
   }
 
-  // Global keyboard shortcuts
   document.addEventListener("keydown", (e) => {
-    // Escape key to close modals
     if (e.code === "Escape") {
-      // Close any open modals
       const modal = document.querySelector(".modal-overlay");
       if (modal) {
         modal.click(); // Trigger close
@@ -1815,25 +1678,20 @@ function setupGlobalEventListeners() {
     }
   });
 
-  // Handle visibility change for smart pause
   document.addEventListener("visibilitychange", () => {
     if (timer && timer.smartPauseEnabled) {
       if (document.hidden) {
-        // Page is hidden, user might be inactive
         logger.debug("Page hidden - potential inactivity");
       } else {
-        // Page is visible again, user is active
         timer.handleUserActivity && timer.handleUserActivity();
       }
     }
   });
 }
 
-// Setup update management
 function setupUpdateManagement() {
   logger.info("🔄 Setting up update management...");
 
-  // Update status elements
   const updateStatus = document.getElementById("update-status");
   const currentVersionElement = document.getElementById("current-version");
   const currentVersionDisplay = document.getElementById("current-version-display");
@@ -1842,20 +1700,17 @@ function setupUpdateManagement() {
   const viewReleasesLink = document.getElementById("view-releases-link");
   const updateSourceUrl = document.getElementById("update-source-url");
 
-  // Progress elements
   const updateProgress = document.getElementById("update-progress");
   const progressTitle = document.getElementById("progress-title");
   const progressDescription = document.getElementById("progress-description");
   const progressFill = document.getElementById("progress-fill");
   const progressText = document.getElementById("progress-text");
 
-  // Update info elements
   const updateInfo = document.getElementById("update-info");
   const latestVersionDisplay = document.getElementById("latest-version-display");
   const downloadUpdateBtn = document.getElementById("download-update-btn");
   const skipUpdateBtn = document.getElementById("skip-update-btn");
 
-  // Set current version - get it from update manager
   async function setCurrentVersion() {
     try {
       const currentVersion = await window.updateManager.getCurrentVersion();
@@ -1868,7 +1723,6 @@ function setupUpdateManagement() {
       logger.info("📋 Current version set:", currentVersion);
     } catch (error) {
       logger.error("❌ Error retrieving current version:", error);
-      // Fallback ai valori di default
       if (currentVersionElement) {
         currentVersionElement.textContent = "0.1.0";
       }
@@ -1878,10 +1732,8 @@ function setupUpdateManagement() {
     }
   }
 
-  // Imposta la versione corrente
   setCurrentVersion();
 
-  // Setup repository link
   if (viewReleasesLink) {
     viewReleasesLink.href = "https://github.com/murdercode/presto/releases";
     viewReleasesLink.addEventListener("click", (e) => {
@@ -1892,12 +1744,10 @@ function setupUpdateManagement() {
     });
   }
 
-  // Setup source URL
   if (updateSourceUrl) {
     updateSourceUrl.textContent = "GitHub Releases API";
   }
 
-  // Check for updates button
   if (checkUpdatesBtn) {
     checkUpdatesBtn.addEventListener("click", async () => {
       checkUpdatesBtn.disabled = true;
@@ -1938,7 +1788,6 @@ function setupUpdateManagement() {
     });
   }
 
-  // Auto-check updates checkbox
   if (autoCheckUpdates) {
     autoCheckUpdates.checked = window.updateManager.autoCheck;
     autoCheckUpdates.addEventListener("change", (e) => {
@@ -1946,7 +1795,6 @@ function setupUpdateManagement() {
     });
   }
 
-  // Download update button
   if (downloadUpdateBtn) {
     downloadUpdateBtn.addEventListener("click", async () => {
       downloadUpdateBtn.disabled = true;
@@ -1966,7 +1814,6 @@ function setupUpdateManagement() {
     });
   }
 
-  // Skip update button
   if (skipUpdateBtn) {
     skipUpdateBtn.addEventListener("click", () => {
       hideUpdateInfo();
@@ -1974,7 +1821,6 @@ function setupUpdateManagement() {
     });
   }
 
-  // Update manager event handlers
   window.updateManager.on("checkStarted", () => {
     if (updateStatus) {
       updateStatus.innerHTML = '<span class="status-text checking">Checking for updates...</span>';
@@ -2027,7 +1873,6 @@ function setupUpdateManagement() {
     }
   });
 
-  // Helper functions
   function showUpdateProgress(title, description) {
     if (updateProgress) {
       updateProgress.style.display = "block";
@@ -2069,7 +1914,6 @@ function setupUpdateManagement() {
     }
   }
 
-  // Initial status
   if (updateStatus) {
     updateStatus.innerHTML = '<span class="status-text">Ready to check for updates</span>';
   }
@@ -2077,11 +1921,9 @@ function setupUpdateManagement() {
   logger.info("✅ Update management setup complete");
 }
 
-// Application lifecycle management
 window.addEventListener("beforeunload", () => {
   logger.info("🔄 Application shutting down...");
 
-  // Save any pending data
   if (timer) {
     timer.saveSessionData && timer.saveSessionData();
   }
@@ -2091,7 +1933,6 @@ window.addEventListener("beforeunload", () => {
   }
 });
 
-// Handle errors gracefully
 window.addEventListener("error", (event) => {
   logger.error("Global error caught:", event.error);
   NotificationUtils.showNotificationPing("An error occurred. Check console for details.", "error");
@@ -2102,14 +1943,10 @@ window.addEventListener("unhandledrejection", (event) => {
   NotificationUtils.showNotificationPing("An error occurred. Check console for details.", "error");
 });
 
-// Initialize when DOM is ready
 function initializeWhenReady() {
-  // Check if DOM is already loaded
   if (document.readyState === "loading") {
-    // DOM is still loading, wait for DOMContentLoaded
     document.addEventListener("DOMContentLoaded", initializeApplication);
   } else {
-    // DOM is already loaded, initialize immediately
     initializeApplication();
   }
 }
@@ -2122,10 +1959,8 @@ window.addEventListener("load", () => {
   }
 });
 
-// Initialize when ready
 initializeWhenReady();
 
-// Export for debugging
 window.app = {
   timer: () => timer,
   navigation: () => navigation,

@@ -1,4 +1,3 @@
-// Pomodoro Timer Core Module
 const { invoke } = window.__TAURI__.core;
 import { NotificationUtils, _TimeUtils, KeyboardUtils } from "../utils/common-utils.js";
 import { logger } from "../utils/logger.js";
@@ -354,7 +353,6 @@ export class PomodoroTimer {
     });
   }
 
-  // Update tray menu based on current timer state
   async updateTrayMenu() {
     try {
       await invoke("update_tray_menu", {
@@ -367,23 +365,19 @@ export class PomodoroTimer {
     }
   }
 
-  // Update keyboard shortcuts from settings
   updateKeyboardShortcuts(shortcuts) {
     this.customShortcuts = { ...shortcuts };
     logger.debug("Updated keyboard shortcuts:", this.customShortcuts);
   }
 
-  // Helper method to parse shortcut string into components
   parseShortcut(shortcutString) {
     return KeyboardUtils.parseShortcut(shortcutString);
   }
 
-  // Check if a keyboard event matches a shortcut
   matchesShortcut(event, shortcutString) {
     return KeyboardUtils.matchesShortcut(event, shortcutString);
   }
 
-  // Smart Pause Methods
   setupSmartPause() {
     if (!this.smartPauseEnabled) {
       return;
@@ -728,7 +722,6 @@ export class PomodoroTimer {
     }
   }
 
-  // New method for accurate timer updates that works even when app is in background
   updateTimerWithAccuracy() {
     const now = Date.now();
     const elapsedSinceStart = Math.floor((now - this.timerStartTime) / 1000);
@@ -914,7 +907,6 @@ export class PomodoroTimer {
     );
   }
 
-  // Midnight monitoring methods for daily reset
   startMidnightMonitoring() {
     // Clear any existing monitoring
     this.stopMidnightMonitoring();
@@ -1332,7 +1324,6 @@ export class PomodoroTimer {
     }
   }
 
-  // Show completion notification for continuous sessions without stopping the timer
   async showSessionCompletedNotification() {
     // Update completed sessions count for focus sessions
     if (this.currentMode === "focus") {
@@ -1622,7 +1613,6 @@ export class PomodoroTimer {
     }
   }
 
-  // Update status icon based on current mode
   updateStatusIcon() {
     if (!this.statusIcon) {
       logger.error("Status icon element not found!");
@@ -1644,7 +1634,6 @@ export class PomodoroTimer {
     this.statusIcon.textContent = "";
   }
 
-  // Update all setting indicators
   updateSettingIndicators() {
     logger.debug("🔄 Updating setting indicators...");
     logger.debug("autoStartTimer:", this.autoStartTimer);
@@ -1705,7 +1694,6 @@ export class PomodoroTimer {
     this.updateSettingIndicators();
   }
 
-  // Toggle smart pause on/off
   async toggleSmartPause() {
     const newState = !this.smartPauseEnabled;
     await this.enableSmartPause(newState);
@@ -1726,7 +1714,6 @@ export class PomodoroTimer {
     NotificationUtils.showNotificationPing(message, "info");
   }
 
-  // Enable/disable auto-start timer
   async enableAutoStart(enabled) {
     this.autoStartTimer = enabled;
     logger.debug("📍 enableAutoStart called with:", enabled);
@@ -1735,7 +1722,6 @@ export class PomodoroTimer {
     this.updateSettingIndicators();
   }
 
-  // Toggle auto-start on/off
   async toggleAutoStart() {
     const newState = !this.autoStartTimer;
     await this.enableAutoStart(newState);
@@ -1756,7 +1742,6 @@ export class PomodoroTimer {
     NotificationUtils.showNotificationPing(message, "info");
   }
 
-  // Enable/disable continuous sessions
   async enableContinuousSessions(enabled) {
     this.allowContinuousSessions = enabled;
     logger.debug("📍 enableContinuousSessions called with:", enabled);
@@ -1765,7 +1750,6 @@ export class PomodoroTimer {
     this.updateSettingIndicators();
   }
 
-  // Toggle continuous sessions on/off
   async toggleContinuousSessions() {
     const newState = !this.allowContinuousSessions;
     await this.enableContinuousSessions(newState);
@@ -1790,7 +1774,6 @@ export class PomodoroTimer {
     NotificationUtils.showNotificationPing(message, "info");
   }
 
-  // Update stop/undo button icon based on current mode
   updateStopUndoButton() {
     // Check if DOM elements exist
     if (!this.stopIcon || !this.undoIcon) {
@@ -1817,7 +1800,6 @@ export class PomodoroTimer {
     }
   }
 
-  // Update skip button icon based on current mode and next state
   updateSkipIcon() {
     // Hide all skip icons first
     this.skipCoffeeIcon.style.display = "none";
@@ -1842,7 +1824,6 @@ export class PomodoroTimer {
     }
   }
 
-  // Undo the last completed session
   async undoLastSession() {
     if (this.completedPomodoros === 0) {
       NotificationUtils.showNotificationPing("No sessions to undo! 🤷‍♂️", "warning");
@@ -1901,7 +1882,6 @@ export class PomodoroTimer {
     this.updateTrayMenu();
   }
 
-  // Progress dots generation
   generateProgressDots() {
     if (!this.progressDots) {
       return;
@@ -1918,7 +1898,6 @@ export class PomodoroTimer {
     }
   }
 
-  // Progress dots update
   async updateProgressDots() {
     const dots = this.progressDots.querySelectorAll(".dot");
 
@@ -1950,7 +1929,6 @@ export class PomodoroTimer {
     }
   }
 
-  // Task Management
   async addTask() {
     if (!this.taskInput) {
       return;
@@ -2014,7 +1992,6 @@ export class PomodoroTimer {
     });
   }
 
-  // Weekly Statistics
   async updateWeeklyStats() {
     try {
       const history = await invoke("get_stats_history");
@@ -2070,7 +2047,6 @@ export class PomodoroTimer {
     }
   }
 
-  // History Modal
   async showHistoryModal() {
     try {
       const history = await invoke("get_stats_history");
@@ -2160,7 +2136,6 @@ export class PomodoroTimer {
     }
   }
 
-  // Data Persistence
   async saveTasks() {
     try {
       await invoke("save_tasks", { tasks: this.tasks });
@@ -2370,7 +2345,6 @@ export class PomodoroTimer {
     }
   }
 
-  // Enhanced notification system with better error handling and debugging
   async showNotification() {
     // Only show desktop notifications if the setting is enabled
     if (!this.enableDesktopNotifications) {
@@ -2444,7 +2418,6 @@ export class PomodoroTimer {
     }
   }
 
-  // Fallback to Web Notification API with improved error handling
   async fallbackToWebNotifications(title, body) {
     try {
       if ("Notification" in window) {
@@ -2488,13 +2461,11 @@ export class PomodoroTimer {
     }
   }
 
-  // Final fallback to in-app notification
   fallbackToInAppNotification(message) {
     logger.debug("🔔 Using in-app notification as final fallback");
     NotificationUtils.showNotificationPing(message, "info", this.currentMode);
   }
 
-  // Test notification function for debugging
   // Usage: Open browser console and type: window.pomodoroTimer.testNotification()
   async testNotification() {
     logger.debug("🧪 Testing notification system...");
@@ -2581,7 +2552,6 @@ export class PomodoroTimer {
     }
   }
 
-  // Test Web Notification API fallback
   async testWebNotificationFallback() {
     try {
       if ("Notification" in window) {
@@ -2620,7 +2590,6 @@ export class PomodoroTimer {
     }
   }
 
-  // Add warning styling
   addWarningClass() {
     const container = document.querySelector(".timer-container");
     if (!container.classList.contains("warning")) {
@@ -2628,7 +2597,6 @@ export class PomodoroTimer {
     }
   }
 
-  // Update tray icon with timer information
   async updateTrayIcon() {
     try {
       // Check status bar display setting

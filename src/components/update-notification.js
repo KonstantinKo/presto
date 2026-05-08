@@ -18,7 +18,6 @@ export class UpdateNotification {
     this._errorHideTimeoutId = null;
 
     this.createNotificationContainer();
-    // Aspetta che l'updateManager sia disponibile prima di bind degli eventi
     this.waitForUpdateManager();
   }
 
@@ -26,9 +25,8 @@ export class UpdateNotification {
    * Aspetta che l'updateManager sia disponibile e poi bind gli eventi
    */
   async waitForUpdateManager() {
-    // Aspetta che l'updateManager sia disponibile (max 10 secondi)
     let attempts = 0;
-    const maxAttempts = 100; // 10 secondi con 100ms di intervallo
+    const maxAttempts = 100;
 
     while (attempts < maxAttempts && !getUpdateManager()) {
       await new Promise((resolve) => {
@@ -45,7 +43,6 @@ export class UpdateNotification {
       // L'updateManager dovrebbe emettere gli eventi corretti al momento giusto
     } else {
       logger.warn("⚠️ [UpdateNotification] UpdateManager not found after 10 seconds");
-      // Non bloccare l'app, continua senza update notifications
     }
   }
 
@@ -95,14 +92,10 @@ export class UpdateNotification {
             </div>
         `;
 
-    // Inject styles
     this.injectStyles();
 
-    // Add to DOM but hidden
-    // this.container.style.display = 'none';
     document.body.appendChild(this.container);
 
-    // Bind button events
     this.bindButtonEvents();
   }
 
@@ -448,7 +441,6 @@ export class UpdateNotification {
     // Show brew install command instead of Tauri updater
     const brewCommand = "brew install murdercode/presto/presto --cask";
 
-    // Copy command to clipboard if available
     if (navigator.clipboard && navigator.clipboard.writeText) {
       try {
         await navigator.clipboard.writeText(brewCommand);
@@ -458,21 +450,17 @@ export class UpdateNotification {
       }
     }
 
-    // Show alert with the command
     const message = `To update Presto, run this command in your terminal:\n\n${brewCommand}\n\n${navigator.clipboard ? "The command has been copied to your clipboard." : "Please copy this command manually."}`;
 
     if (window.__TAURI__ && window.__TAURI__.dialog) {
-      // Use Tauri dialog if available
       await window.__TAURI__.dialog.message(message, {
         title: "Update Presto via Homebrew",
         type: "info",
       });
     } else {
-      // Fallback to browser alert
       alert(message);
     }
 
-    // Hide the notification after showing the command
     this.hide();
   }
 
@@ -584,7 +572,6 @@ export class UpdateNotification {
       return;
     }
 
-    // Verifica esplicita che l'aggiornamento sia davvero disponibile
     if (updateInfo.available === false) {
       logger.debug(
         "❌ [UpdateNotification] Update explicitly unavailable - not showing notification"
@@ -592,15 +579,7 @@ export class UpdateNotification {
       return;
     }
 
-    // Verifica se siamo in modalità sviluppo senza test mode
     // RIMOSSO: Ora permettiamo la notifica anche in modalità sviluppo per GitHub releases
-    // const updateManager = getUpdateManager();
-    // if (updateManager && updateManager.isDevelopmentMode && updateManager.isDevelopmentMode()) {
-    //     const hasTestMode = localStorage.getItem('presto_force_update_test') === 'true';
-    //     if (!hasTestMode) {
-    //         return;
-    //     }
-    // }
 
     // Don't show if this version has been skipped
     if (this.isVersionSkipped(updateInfo.version)) {
@@ -645,7 +624,6 @@ export class UpdateNotification {
       message.textContent = "Update error";
     }
 
-    // Hide after 5 seconds
     clearTimeout(this._errorHideTimeoutId);
     this._errorHideTimeoutId = setTimeout(() => {
       this._errorHideTimeoutId = null;
@@ -744,4 +722,3 @@ export class UpdateNotification {
 }
 
 // Export the class, not an instance - let main.js handle initialization
-// export const updateNotification = new UpdateNotification();
