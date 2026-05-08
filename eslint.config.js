@@ -3,19 +3,7 @@ import globals from "globals";
 
 export default [
   {
-    ignores: [
-      "**/node_modules/**",
-      "src/styles/**",
-      "art/**",
-      "src/docs/**",
-      // Stale alternates kept around as reference; only update-manager-global.js
-      // is loaded by index.html. Linting them would block on duplicate-class
-      // syntax errors that nothing actually executes.
-      "src/managers/update-manager.js",
-      "src/managers/update-manager-v2.js",
-      "src/managers/update-manager-v2-corrected.js",
-      "src/managers/update-manager-fixed.js",
-    ],
+    ignores: ["**/node_modules/**", "src/styles/**", "art/**", "src/docs/**"],
   },
   js.configs.recommended,
   {

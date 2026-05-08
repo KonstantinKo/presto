@@ -105,7 +105,7 @@ if [ $? -eq 0 ]; then
     fi
     
     # Aggiorna l'update manager
-    update_manager_file="src/managers/update-manager.js"
+    update_manager_file="src/managers/update-manager-global.js"
     if [ -f "$update_manager_file" ]; then
         sed -i.tmp "s/USERNAME\/REPOSITORY/$github_username\/$github_repo/g" "$update_manager_file"
         rm "$update_manager_file.tmp" 2>/dev/null
