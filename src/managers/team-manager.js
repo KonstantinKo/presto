@@ -347,42 +347,6 @@ export class TeamManager {
     return row;
   }
 
-  createMemberCard(member) {
-    const card = document.createElement("div");
-    card.className = `team-member-card status-${member.status}`;
-
-    const statusInfo = this.getStatusInfo(member.status);
-    const onlineStatus = this.getOnlineStatus(member);
-
-    card.innerHTML = `
-            <div class="member-header">
-                <div class="member-avatar">
-                    ${member.avatar}
-                    <div class="online-indicator ${onlineStatus}"></div>
-                </div>
-                <div class="member-info">
-                    <h3>${member.name}</h3>
-                    <p class="member-role">${member.role}</p>
-                </div>
-            </div>
-            
-            <div class="status-badge ${member.status}">
-                <i class="status-icon ${statusInfo.icon}"></i>
-                <span>${statusInfo.label}</span>
-            </div>
-            
-            <div class="member-timer ${member.status}">
-                ${member.timer}
-            </div>
-            
-            <div class="member-activity">
-                ${member.activity}
-            </div>
-        `;
-
-    return card;
-  }
-
   getStatusInfo(status) {
     const statusMap = {
       focus: { icon: "ri-brain-line", label: "Deep Focus" },

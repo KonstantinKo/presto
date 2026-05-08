@@ -1,11 +1,4 @@
-import { describe, it, expect, afterEach, vi } from "vitest";
-
-vi.mock("@tauri-apps/plugin-log", () => ({
-  debug: vi.fn().mockResolvedValue(undefined),
-  info: vi.fn().mockResolvedValue(undefined),
-  warn: vi.fn().mockResolvedValue(undefined),
-  error: vi.fn().mockResolvedValue(undefined),
-}));
+import { describe, it, expect, afterEach } from "vitest";
 
 const {
   getAllThemes,

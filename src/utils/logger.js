@@ -1,6 +1,7 @@
 // Thin variadic wrapper around @tauri-apps/plugin-log.
 // Lets the rest of the codebase keep console.*-style call sites
 // (multi-arg, mixed string/object) while routing through the Rust logger.
+// Falls back to console.* when running outside Tauri (dev server, tests).
 import { debug, info, warn, error } from "@tauri-apps/plugin-log";
 
 function format(args) {
@@ -21,17 +22,25 @@ function format(args) {
     .join(" ");
 }
 
+const isTauri = () => typeof window !== "undefined" && !!window.__TAURI__;
+
 const send =
-  (fn) =>
+  (fn, consoleFn) =>
   (...args) => {
-    fn(format(args)).catch(() => {
-      /* never let the logger throw into the app */
-    });
+    if (isTauri()) {
+      fn(format(args)).catch(() => {
+        /* never let the logger throw into the app */
+      });
+    } else {
+      consoleFn(...args);
+    }
   };
 
+/* eslint-disable no-console */
 export const logger = {
-  debug: send(debug),
-  info: send(info),
-  warn: send(warn),
-  error: send(error),
+  debug: send(debug, console.debug),
+  info: send(info, console.info),
+  warn: send(warn, console.warn),
+  error: send(error, console.error),
 };
+/* eslint-enable no-console */

@@ -1,5 +1,5 @@
 // Settings Manager for Global Shortcuts and Preferences
-const { invoke } = window.__TAURI__.core;
+const invoke = (...args) => window.__TAURI__?.core?.invoke(...args);
 import { NotificationUtils } from "../utils/common-utils.js";
 import { logger } from "../utils/logger.js";
 import {
@@ -613,7 +613,8 @@ export class SettingsManager {
     const slider = document.getElementById("smart-pause-timeout");
     const valueDisplay = document.getElementById("timeout-value");
 
-    if (slider && valueDisplay) {
+    if (slider && valueDisplay && !slider._sliderListenerAttached) {
+      slider._sliderListenerAttached = true;
       slider.addEventListener("input", (e) => {
         valueDisplay.textContent = e.target.value;
         this.scheduleAutoSave();

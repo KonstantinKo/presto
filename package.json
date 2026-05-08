@@ -35,6 +35,7 @@
     "@tauri-apps/plugin-opener": "^2",
     "@tauri-apps/plugin-process": "^2",
     "@tauri-apps/plugin-updater": "2.8.1",
+    "jsdom": "^29.1.1",
     "xlsx": "^0.18.5"
   }
 }
