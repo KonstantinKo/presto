@@ -1,4 +1,6 @@
 // Team Manager for Team Dashboard
+import { logger } from "../utils/logger.js";
+
 export class TeamManager {
   constructor() {
     this.teams = [];
@@ -7,12 +9,12 @@ export class TeamManager {
 
   async init() {
     if (this.initialized) {
-      console.log("TeamManager already initialized, skipping...");
+      logger.debug("TeamManager already initialized, skipping...");
       return;
     }
 
     this.initialized = true;
-    console.log("Initializing TeamManager...");
+    logger.info("Initializing TeamManager...");
 
     // Initialize with demo data
     this.initializeDemoData();

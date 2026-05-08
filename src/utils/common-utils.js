@@ -1,4 +1,6 @@
 // Notification Utility Functions
+import { logger } from "./logger.js";
+
 export class NotificationUtils {
   // Static properties for notification queue management
   static notificationQueue = [];
@@ -306,7 +308,7 @@ export class NotificationUtils {
       oscillator.start(audioContext.currentTime);
       oscillator.stop(audioContext.currentTime + 0.5);
     } catch (error) {
-      console.warn("Failed to play notification sound:", error);
+      logger.warn("Failed to play notification sound:", error);
     }
   }
 
@@ -334,7 +336,7 @@ export class NotificationUtils {
             icon,
           });
         } else {
-          console.warn("Notification permission denied");
+          logger.warn("Notification permission denied");
         }
       } else {
         // Fallback to Web Notification API if not in Tauri context
@@ -348,7 +350,7 @@ export class NotificationUtils {
         }
       }
     } catch (error) {
-      console.error("Failed to show desktop notification:", error);
+      logger.error("Failed to show desktop notification:", error);
       // Fallback to Web Notification API
       if ("Notification" in window && Notification.permission === "granted") {
         new Notification(title, {
@@ -376,7 +378,7 @@ export class NotificationUtils {
         return Notification.permission;
       }
     } catch (error) {
-      console.error("Failed to check notification permission:", error);
+      logger.error("Failed to check notification permission:", error);
       return "denied";
     }
   }
@@ -398,7 +400,7 @@ export class NotificationUtils {
         return permission;
       }
     } catch (error) {
-      console.error("Failed to request notification permission:", error);
+      logger.error("Failed to request notification permission:", error);
       return "denied";
     }
   }
@@ -500,7 +502,7 @@ export class StorageUtils {
       await invoke(invokeCommand, data);
       return true;
     } catch (error) {
-      console.error(`Failed to save to Tauri (${invokeCommand}):`, error);
+      logger.error(`Failed to save to Tauri (${invokeCommand}):`, error);
       // Fallback to localStorage
       localStorage.setItem(fallbackKey, JSON.stringify(data));
       return false;
@@ -512,7 +514,7 @@ export class StorageUtils {
       const { invoke } = window.__TAURI__.core;
       return await invoke(invokeCommand);
     } catch (error) {
-      console.error(`Failed to load from Tauri (${invokeCommand}):`, error);
+      logger.error(`Failed to load from Tauri (${invokeCommand}):`, error);
       // Fallback to localStorage
       const saved = localStorage.getItem(fallbackKey);
       return saved ? JSON.parse(saved) : null;
@@ -524,7 +526,7 @@ export class StorageUtils {
       localStorage.setItem(key, JSON.stringify(data));
       return true;
     } catch (error) {
-      console.error(`Failed to save to localStorage (${key}):`, error);
+      logger.error(`Failed to save to localStorage (${key}):`, error);
       return false;
     }
   }
@@ -534,7 +536,7 @@ export class StorageUtils {
       const saved = localStorage.getItem(key);
       return saved ? JSON.parse(saved) : defaultValue;
     } catch (error) {
-      console.error(`Failed to load from localStorage (${key}):`, error);
+      logger.error(`Failed to load from localStorage (${key}):`, error);
       return defaultValue;
     }
   }

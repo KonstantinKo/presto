@@ -1,4 +1,6 @@
 // Wait for Supabase to be available
+import { logger } from "./logger.js";
+
 function waitForSupabase() {
   return new Promise((resolve, reject) => {
     const check = () => {
@@ -64,7 +66,7 @@ async function initSupabase() {
       try {
         if (!window.__TAURI__) {
           // Fallback to original Supabase OAuth for web
-          console.log("Not in Tauri, using Supabase OAuth...");
+          logger.info("Not in Tauri, using Supabase OAuth...");
           const { data, error } = await supabase.auth.signInWithOAuth({
             provider,
             options: {
@@ -76,18 +78,18 @@ async function initSupabase() {
 
         const { invoke } = window.__TAURI__.core;
 
-        console.log(`Starting Tauri OAuth flow for ${provider}...`);
+        logger.info(`Starting Tauri OAuth flow for ${provider}...`);
 
         // Get Supabase configuration
         const supabaseUrl = "https://lopgwwppinkqvttozqfx.supabase.co";
 
         // Start OAuth flow using tauri-plugin-oauth
-        console.log("Invoking OAuth start...");
+        logger.info("Invoking OAuth start...");
 
         try {
           // Start the OAuth server using our custom command
           const port = await invoke("start_oauth_server");
-          console.log("OAuth server started on port:", port);
+          logger.info("OAuth server started on port:", port);
 
           // Generate redirect URI using the port
           const redirectUri = `http://localhost:${port}`;
@@ -95,19 +97,19 @@ async function initSupabase() {
           // Build OAuth URL
           const authUrl = `${supabaseUrl}/auth/v1/authorize?provider=${provider}&redirect_to=${encodeURIComponent(redirectUri)}`;
 
-          console.log("Opening OAuth URL:", authUrl);
+          logger.info("Opening OAuth URL:", authUrl);
 
           // Open the OAuth URL in the default browser
           try {
             // Try the correct opener command format
             await invoke("plugin:opener|open_url", { url: authUrl });
           } catch (openerError) {
-            console.log("opener plugin failed, trying alternative methods...", openerError);
+            logger.info("opener plugin failed, trying alternative methods...", openerError);
             try {
               // Try without plugin prefix
               await invoke("open_url", { url: authUrl });
             } catch (openerError2) {
-              console.log("open_url failed, trying shell.open...", openerError2);
+              logger.info("open_url failed, trying shell.open...", openerError2);
               // Fallback to shell open
               if (window.__TAURI__?.shell) {
                 await window.__TAURI__.shell.open(authUrl);
@@ -131,18 +133,18 @@ async function initSupabase() {
                   try {
                     invoke("plugin:oauth|cancel", { port });
                   } catch (cancelError) {
-                    console.log("Cancel command failed (this is usually fine):", cancelError);
+                    logger.info("Cancel command failed (this is usually fine):", cancelError);
                   }
                   reject(new Error("OAuth flow timed out"));
                 }, 120000); // 2 minutes
 
-                console.log("OAuth URL opened in browser. Please complete authentication...");
-                console.log("Redirect URI:", redirectUri);
+                logger.info("OAuth URL opened in browser. Please complete authentication...");
+                logger.info("Redirect URI:", redirectUri);
 
                 // Set up event listener for OAuth callback
                 const { listen } = window.__TAURI__.event;
 
-                console.log("Setting up OAuth event listeners...");
+                logger.info("Setting up OAuth event listeners...");
 
                 // Try multiple possible event names, prioritizing our custom event
                 const possibleEvents = [
@@ -155,9 +157,9 @@ async function initSupabase() {
 
                 for (const eventName of possibleEvents) {
                   try {
-                    console.log(`Trying to listen for event: ${eventName}`);
+                    logger.info(`Trying to listen for event: ${eventName}`);
                     const tempUnlisten = await listen(eventName, async (event) => {
-                      console.log(`Received ${eventName} event:`, event);
+                      logger.info(`Received ${eventName} event:`, event);
 
                       // Process the callback
                       await processOAuthCallback(
@@ -173,7 +175,7 @@ async function initSupabase() {
                       unlisten = tempUnlisten;
                     }
                   } catch (listenError) {
-                    console.log(`Failed to listen for ${eventName}:`, listenError);
+                    logger.info(`Failed to listen for ${eventName}:`, listenError);
                   }
                 }
 
@@ -191,7 +193,7 @@ async function initSupabase() {
                       unlisten();
                     }
 
-                    console.log("Processing callback URL:", callbackUrl);
+                    logger.info("Processing callback URL:", callbackUrl);
 
                     // Parse the callback URL to extract tokens
                     const url = new URL(callbackUrl);
@@ -206,25 +208,25 @@ async function initSupabase() {
                       searchParams.get("refresh_token") || hashParams.get("refresh_token");
                     const error = searchParams.get("error") || hashParams.get("error");
 
-                    console.log("Parsed tokens:", {
+                    logger.info("Parsed tokens:", {
                       hasAccessToken: !!accessToken,
                       hasRefreshToken: !!refreshToken,
                       error,
                     });
 
                     if (error) {
-                      console.error("OAuth error in callback:", error);
+                      logger.error("OAuth error in callback:", error);
                       try {
                         await invoke("plugin:oauth|cancel", { port });
                       } catch (cancelError) {
-                        console.log("Cancel command failed (this is usually fine):", cancelError);
+                        logger.info("Cancel command failed (this is usually fine):", cancelError);
                       }
                       reject(new Error(`OAuth error: ${error}`));
                       return;
                     }
 
                     if (accessToken) {
-                      console.log("Access token found, setting Supabase session...");
+                      logger.info("Access token found, setting Supabase session...");
 
                       try {
                         const { data, error: sessionError } = await supabase.auth.setSession({
@@ -235,36 +237,36 @@ async function initSupabase() {
                         try {
                           await invoke("plugin:oauth|cancel", { port });
                         } catch (cancelError) {
-                          console.log("Cancel command failed (this is usually fine):", cancelError);
+                          logger.info("Cancel command failed (this is usually fine):", cancelError);
                         }
 
                         if (sessionError) {
-                          console.error("Supabase session error:", sessionError);
+                          logger.error("Supabase session error:", sessionError);
                           reject(new Error(`Supabase session error: ${sessionError.message}`));
                         } else {
-                          console.log("OAuth success! Session set:", data);
+                          logger.info("OAuth success! Session set:", data);
                           resolve({ data, error: null });
                         }
                       } catch (sessionSetupError) {
-                        console.error("Session setup failed:", sessionSetupError);
+                        logger.error("Session setup failed:", sessionSetupError);
                         try {
                           await invoke("plugin:oauth|cancel", { port });
                         } catch (cancelError) {
-                          console.log("Cancel command failed (this is usually fine):", cancelError);
+                          logger.info("Cancel command failed (this is usually fine):", cancelError);
                         }
                         reject(new Error(`Session setup failed: ${sessionSetupError.message}`));
                       }
                     } else {
-                      console.error("No access token found in callback URL");
+                      logger.error("No access token found in callback URL");
                       try {
                         await invoke("plugin:oauth|cancel", { port });
                       } catch (cancelError) {
-                        console.log("Cancel command failed (this is usually fine):", cancelError);
+                        logger.info("Cancel command failed (this is usually fine):", cancelError);
                       }
                       reject(new Error("No access token found in OAuth callback"));
                     }
                   } catch (parseError) {
-                    console.error("Error parsing OAuth callback:", parseError);
+                    logger.error("Error parsing OAuth callback:", parseError);
                     clearTimeout(timeout);
                     if (unlisten) {
                       unlisten();
@@ -274,9 +276,9 @@ async function initSupabase() {
                   }
                 }
 
-                console.log("OAuth event listeners set up. Waiting for callback...");
+                logger.info("OAuth event listeners set up. Waiting for callback...");
               } catch (setupError) {
-                console.error("Error setting up OAuth listeners:", setupError);
+                logger.error("Error setting up OAuth listeners:", setupError);
                 clearTimeout(timeout);
                 if (unlisten) {
                   unlisten();
@@ -286,11 +288,11 @@ async function initSupabase() {
             })();
           });
         } catch (invokeError) {
-          console.error("Error calling OAuth plugin:", invokeError);
+          logger.error("Error calling OAuth plugin:", invokeError);
           return { data: null, error: invokeError.message };
         }
       } catch (error) {
-        console.error(`OAuth ${provider} error:`, error);
+        logger.error(`OAuth ${provider} error:`, error);
         return { data: null, error: error.message };
       }
     },

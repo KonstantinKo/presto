@@ -1,4 +1,6 @@
 // Tag Statistics Utility for generating pie chart data and visualization
+import { logger } from "./logger.js";
+
 export class TagStatistics {
   constructor() {
     this.tagColors = [
@@ -185,7 +187,7 @@ export class TagStatistics {
     const legendContainer = document.getElementById(legendContainerId);
 
     if (!chartContainer || !legendContainer) {
-      console.error("Tag pie chart containers not found");
+      logger.error("Tag pie chart containers not found");
       return;
     }
 

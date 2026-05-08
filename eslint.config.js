@@ -16,6 +16,7 @@ export default [
     },
     rules: {
       // Correctness — real bugs
+      "no-console": ["error"],
       eqeqeq: ["error", "always", { null: "ignore" }],
       "no-var": "error",
       "prefer-const": ["error", { destructuring: "all" }],

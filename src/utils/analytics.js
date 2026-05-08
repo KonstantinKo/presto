@@ -1,5 +1,6 @@
 // Analytics utility for tracking events with Aptabase
 import { trackEvent } from "@aptabase/tauri";
+import { logger } from "./logger.js";
 
 /**
  * Analytics utility class for tracking user events
@@ -20,7 +21,7 @@ class Analytics {
       // Default to enabled if we can't check settings
       return true;
     } catch (error) {
-      console.warn("Could not check analytics settings, defaulting to enabled:", error);
+      logger.warn("Could not check analytics settings, defaulting to enabled:", error);
       return true;
     }
   }
@@ -35,7 +36,7 @@ class Analytics {
       try {
         trackEvent(eventName, properties);
       } catch (error) {
-        console.warn("Failed to track analytics event:", error);
+        logger.warn("Failed to track analytics event:", error);
       }
     }
   }

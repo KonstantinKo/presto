@@ -1,5 +1,6 @@
 // Session Management Functions
 import { NotificationUtils } from "../utils/common-utils.js";
+import { logger } from "../utils/logger.js";
 
 // Get Tauri invoke function
 const { invoke } = window.__TAURI__ ? window.__TAURI__.core : { invoke: null };
@@ -35,17 +36,17 @@ export class SessionManager {
           this.sessions[session.date].push(session);
         });
 
-        console.log("Loaded", sessions.length, "manual sessions from Tauri backend");
+        logger.info("Loaded", sessions.length, "manual sessions from Tauri backend");
       } else {
         // Fallback to localStorage
         const savedSessions = localStorage.getItem("presto_manual_sessions");
         if (savedSessions) {
           this.sessions = JSON.parse(savedSessions);
-          console.log("Loaded manual sessions from localStorage (fallback)");
+          logger.info("Loaded manual sessions from localStorage (fallback)");
         }
       }
     } catch (error) {
-      console.error("Error loading sessions from storage:", error);
+      logger.error("Error loading sessions from storage:", error);
       this.sessions = {};
     }
   }
@@ -66,14 +67,14 @@ export class SessionManager {
         });
 
         await invoke("save_manual_sessions", { sessions: sessionsArray });
-        console.log("Saved", sessionsArray.length, "manual sessions to Tauri backend");
+        logger.info("Saved", sessionsArray.length, "manual sessions to Tauri backend");
       } else {
         // Fallback to localStorage
         localStorage.setItem("presto_manual_sessions", JSON.stringify(this.sessions));
-        console.log("Saved manual sessions to localStorage (fallback)");
+        logger.info("Saved manual sessions to localStorage (fallback)");
       }
     } catch (error) {
-      console.error("Error saving sessions to storage:", error);
+      logger.error("Error saving sessions to storage:", error);
     }
   }
 
@@ -308,7 +309,7 @@ export class SessionManager {
         await this.navManager.updateDailyChart();
       }
     } catch (error) {
-      console.error("Error saving session:", error);
+      logger.error("Error saving session:", error);
       NotificationUtils.showNotificationPing("Failed to save session", "error");
     }
   }
@@ -396,7 +397,7 @@ export class SessionManager {
         await this.navManager.updateDailyChart();
       }
     } catch (error) {
-      console.error("Error deleting session:", error);
+      logger.error("Error deleting session:", error);
       NotificationUtils.showNotificationPing("Failed to delete session", "error");
     }
   }

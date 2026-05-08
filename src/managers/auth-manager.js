@@ -1,4 +1,5 @@
 import { initSupabase, getSupabase, getAuthHelpers } from "../utils/supabase.js";
+import { logger } from "../utils/logger.js";
 
 class AuthManager {
   constructor() {
@@ -22,7 +23,7 @@ class AuthManager {
       this.authHelpers = getAuthHelpers();
       this.initialized = true;
 
-      console.log("✅ AuthManager initialized with Supabase");
+      logger.info("✅ AuthManager initialized with Supabase");
 
       // Check if user is already authenticated
       const {
@@ -43,7 +44,7 @@ class AuthManager {
         }
       }
     } catch (error) {
-      console.error("Error checking authentication status:", error);
+      logger.error("Error checking authentication status:", error);
       this.notifyAuthListeners("unauthenticated", null);
     }
 

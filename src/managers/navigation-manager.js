@@ -1,6 +1,7 @@
 // Navigation Manager for Sidebar
 import { TimeUtils } from "../utils/common-utils.js";
 import { TagStatistics } from "../utils/tag-statistics.js";
+import { logger } from "../utils/logger.js";
 
 export class NavigationManager {
   constructor() {
@@ -18,12 +19,12 @@ export class NavigationManager {
   async init() {
     // Prevent duplicate initialization
     if (this.initialized) {
-      console.log("NavigationManager already initialized, skipping...");
+      logger.debug("NavigationManager already initialized, skipping...");
       return;
     }
 
     this.initialized = true;
-    console.log("Initializing NavigationManager...");
+    logger.info("Initializing NavigationManager...");
 
     // Navigation buttons
     const navButtons = document.querySelectorAll(".sidebar-icon, .sidebar-icon-large");
@@ -260,7 +261,7 @@ export class NavigationManager {
       previousWeekAvgFocus =
         previousDaysWithData > 0 ? previousWeekTotal / previousDaysWithData : 0;
     } catch (error) {
-      console.error("Failed to load weekly data:", error);
+      logger.error("Failed to load weekly data:", error);
     }
 
     // Calculate percentage changes
@@ -423,7 +424,7 @@ export class NavigationManager {
         this.removeTooltip();
       });
     } catch (error) {
-      console.error("Failed to load daily chart data:", error);
+      logger.error("Failed to load daily chart data:", error);
 
       // Show fallback empty state
       hours.forEach((hour) => {
@@ -598,7 +599,7 @@ export class NavigationManager {
         this.removeTooltip();
       });
     } catch (error) {
-      console.error("Failed to load weekly chart data:", error);
+      logger.error("Failed to load weekly chart data:", error);
       // Show empty chart on error
       days.forEach((day, _index) => {
         const dayBar = document.createElement("div");
@@ -652,7 +653,7 @@ export class NavigationManager {
       // Render the pie chart
       this.tagStatistics.renderTagPieChart("tag-pie-chart", "tag-legend", tagStatsData);
     } catch (error) {
-      console.error("Error updating tag usage chart:", error);
+      logger.error("Error updating tag usage chart:", error);
 
       // Show placeholder on error
       const chartContainer = document.getElementById("tag-pie-chart");
@@ -732,7 +733,7 @@ export class NavigationManager {
       // Initialize timeline interactions
       this.initializeTimelineInteractions();
     } catch (error) {
-      console.error("Failed to load session details:", error);
+      logger.error("Failed to load session details:", error);
       const errorItem = document.createElement("div");
       errorItem.className = "timeline-empty";
       errorItem.textContent = "Error loading session data";
@@ -894,7 +895,7 @@ export class NavigationManager {
       const totalSessionHeights = totalSessions * sessionHeight;
       const totalSpacing = (totalSessions - 1) * rowHeight;
       const requiredHeight = topPadding + totalSessionHeights + totalSpacing + bottomPadding;
-      console.log(
+      logger.debug(
         `Timeline height calculation: ${topPadding} + ${totalSessionHeights} + ${totalSpacing} + ${bottomPadding} = ${requiredHeight}px for ${totalSessions} sessions`
       );
       timelineTrack.style.height = `${requiredHeight}px`;
@@ -1732,7 +1733,7 @@ export class NavigationManager {
           }
         }
       } catch (_error) {
-        console.log("Tags not available for session:", sessionId);
+        logger.debug("Tags not available for session:", sessionId);
       }
     }
     return [];
@@ -1754,13 +1755,13 @@ export class NavigationManager {
           sessions.splice(sessionIndex, 1);
           sessionFound = true;
           deletedFromDate = dateString;
-          console.log("Session deleted successfully:", sessionId);
+          logger.info("Session deleted successfully:", sessionId);
           break;
         }
       }
 
       if (!sessionFound) {
-        console.warn("Session not found for deletion:", sessionId);
+        logger.warn("Session not found for deletion:", sessionId);
         return;
       }
 
@@ -1782,34 +1783,34 @@ export class NavigationManager {
       try {
         await this.updateDailyChart();
       } catch (e) {
-        console.warn("Failed to update daily chart after deletion:", e);
+        logger.warn("Failed to update daily chart after deletion:", e);
       }
 
       try {
         await this.updateFocusSummary();
       } catch (e) {
-        console.warn("Failed to update focus summary after deletion:", e);
+        logger.warn("Failed to update focus summary after deletion:", e);
       }
 
       try {
         await this.updateWeeklySessionsChart();
       } catch (e) {
-        console.warn("Failed to update weekly chart after deletion:", e);
+        logger.warn("Failed to update weekly chart after deletion:", e);
       }
 
       try {
         await this.updateTagUsageChart();
       } catch (e) {
-        console.warn("Failed to update tag usage chart after deletion:", e);
+        logger.warn("Failed to update tag usage chart after deletion:", e);
       }
 
       try {
         await this.updateTimelineForDate(new Date());
       } catch (e) {
-        console.warn("Failed to update timeline after deletion:", e);
+        logger.warn("Failed to update timeline after deletion:", e);
       }
     } catch (error) {
-      console.error("Error deleting session:", error);
+      logger.error("Error deleting session:", error);
       alert("Failed to delete session. Please try again.");
     }
   }
@@ -1834,14 +1835,14 @@ export class NavigationManager {
       }
 
       if (!sessionToEdit) {
-        console.warn("Session not found for editing:", sessionId);
+        logger.warn("Session not found for editing:", sessionId);
         return;
       }
 
       // Open the edit modal using SessionManager
       window.sessionManager.openEditSessionModal(sessionToEdit, sessionDate);
     } catch (error) {
-      console.error("Error opening edit session modal:", error);
+      logger.error("Error opening edit session modal:", error);
       alert("Failed to open edit session. Please try again.");
     }
   }
@@ -1858,7 +1859,7 @@ export class NavigationManager {
 
       const XLSX = window.XLSX;
       if (!XLSX) {
-        console.error("XLSX library not found");
+        logger.error("XLSX library not found");
         alert("Excel export functionality is not available.");
         return;
       }
@@ -1926,25 +1927,25 @@ export class NavigationManager {
               data: wbout,
             });
 
-            console.log(`Exported ${sessions.length} sessions to ${filePath}`);
+            logger.info(`Exported ${sessions.length} sessions to ${filePath}`);
             alert(`Sessions exported successfully to:\n${filePath}`);
           } else {
-            console.log("Export cancelled by user");
+            logger.info("Export cancelled by user");
           }
         } catch (tauriError) {
-          console.error("Tauri save error:", tauriError);
+          logger.error("Tauri save error:", tauriError);
           // Fallback to direct download
           XLSX.writeFile(wb, defaultFilename);
-          console.log(`Tauri save failed, using fallback download: ${defaultFilename}`);
+          logger.warn(`Tauri save failed, using fallback download: ${defaultFilename}`);
           alert(`File saved to Downloads folder as: ${defaultFilename}`);
         }
       } else {
         // Fallback for web environment - direct download
         XLSX.writeFile(wb, defaultFilename);
-        console.log(`Exported ${sessions.length} sessions to ${defaultFilename}`);
+        logger.info(`Exported ${sessions.length} sessions to ${defaultFilename}`);
       }
     } catch (error) {
-      console.error("Error exporting sessions:", error);
+      logger.error("Error exporting sessions:", error);
       alert("Failed to export sessions. Please try again.");
     }
   }

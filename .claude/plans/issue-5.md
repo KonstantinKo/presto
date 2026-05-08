@@ -8,7 +8,7 @@
 
 I have enough context to write the plan. Now I'll output the complete plan.
 
-```md
+````md
 # Chore: Migrate from println!/console.log to a real logger
 
 ## Chore Description
@@ -45,8 +45,8 @@ We adopt the **Tauri-integrated approach (Option 2 from the issue)**: `tauri-plu
 
 - `package.json` — Add `"@tauri-apps/plugin-log": "^2"` to `"dependencies"`. Pin to the major version that matches the Rust crate (Tauri 2.x ecosystem; current `@tauri-apps/api` is `2.6.0`).
 - `eslint.config.js` — Add `"no-console": ["error"]` to the `rules` block (between the existing "Stylistic" and "Security / footguns" sections). The existing `ignores` array already excludes `src/docs/**`, so the 6 console references in `src/docs/TEST_MANUAL.md` are unaffected. There are no JS test files in this project (verified — no `*.test.js`, no `vitest`/`jest` in `package.json`), so no test-mock allowlist is needed.
-- `src/main.js` — Add `import { logger } from "./utils/logger.js"`, expose `window.appLog = logger` near the top of module-init so the non-module scripts can pick it up before their constructors run, and migrate the 79 console.* calls.
-- `src/managers/auth-manager.js` (2 calls), `src/managers/navigation-manager.js` (26), `src/managers/session-manager.js` (8), `src/managers/settings-manager.js` (71), `src/managers/team-manager.js` (2) — Add `import { logger } from "../utils/logger.js"`; migrate console.*.
+- `src/main.js` — Add `import { logger } from "./utils/logger.js"`, expose `window.appLog = logger` near the top of module-init so the non-module scripts can pick it up before their constructors run, and migrate the 79 console.\* calls.
+- `src/managers/auth-manager.js` (2 calls), `src/managers/navigation-manager.js` (26), `src/managers/session-manager.js` (8), `src/managers/settings-manager.js` (71), `src/managers/team-manager.js` (2) — Add `import { logger } from "../utils/logger.js"`; migrate console.\*.
 - `src/managers/update-manager-global.js` (64 calls) — **Non-module script**, loaded via `<script src="…" defer>` in `src/index.html:19`. Cannot `import`. Use `window.appLog` everywhere. Class is only instantiated later, so by the time its constructor runs `main.js` has already populated `window.appLog`.
 - `src/managers/tag-manager.js` (13 calls) — **Non-module script**, loaded via `<script src="…" defer>` in `src/index.html:20`. Same rule: use `window.appLog`. Class definition is synchronous but instantiation happens later, after `main.js` exposes the global.
 - `src/components/update-notification.js` (28 calls) — ES module; `import { logger } from "../utils/logger.js"`.
@@ -83,12 +83,15 @@ IMPORTANT: Execute every step in order, top to bottom.
   log = "0.4"
   tauri-plugin-log = "2"
   ```
+````
+
 - Run `cd src-tauri && cargo fetch` from the repo root to confirm the crates resolve before doing the source edit. (If the resolver complains about a `2.x` mismatch with the Tauri runtime, check `src-tauri/Cargo.lock` for the resolved `tauri` version and pin `tauri-plugin-log` to a compatible minor — the README troubleshooting note about "Found version mismatched Tauri packages" applies here too.)
 
 ### Step 2: Initialize `tauri-plugin-log` in `run()`
 
 - In `src-tauri/src/lib.rs`, find the builder chain at lines 920–932 (starts with `tauri::Builder::default()` and chains `.plugin(...)` calls).
 - Insert a new `.plugin(...)` call **before** the existing `.plugin(tauri_plugin_opener::init())` line so the logger is the very first plugin and is available to every plugin that initializes after it (including our own `setup()` closure):
+
   ```rust
   .plugin(
       tauri_plugin_log::Builder::new()
@@ -105,6 +108,7 @@ IMPORTANT: Execute every step in order, top to bottom.
           .build()
   )
   ```
+
   - **`Stdout`** — keeps `npm run dev` printing to the terminal, so the goal "App still produces visible logs during `tauri dev`" holds.
   - **`LogDir`** — the production target; logs are persisted under the platform log dir (on macOS: `~/Library/Logs/com.presto.app/`).
   - **`Webview`** — bridges Rust-side `log::*!` calls back into the browser DevTools console too, so during `tauri dev` you see Rust logs in the same place as JS logs. The JS plugin already routes JS logs to the Rust logger, so this also gives a single place to read all logs from DevTools.
@@ -113,22 +117,22 @@ IMPORTANT: Execute every step in order, top to bottom.
 
 In `src-tauri/src/lib.rs`, replace each occurrence as follows. Use `Edit` tool, not `sed`. Mapping:
 
-| Line  | Existing                                                            | Replacement              | Rationale                                                                                                       |
-| ----- | ------------------------------------------------------------------- | ------------------------ | --------------------------------------------------------------------------------------------------------------- |
-| 1119  | `eprintln!("Failed to register global shortcuts on startup: {e}");` | `log::error!(...)`       | Failure path.                                                                                                   |
-| 1123  | `eprintln!("Failed to load settings on startup: {e}");`             | `log::error!(...)`       | Failure path.                                                                                                   |
-| 1132  | `eprintln!("Failed to register default global shortcuts: {e}");`    | `log::error!(...)`       | Failure path (defaults fallback also failed).                                                                   |
-| 1444  | `println!("✅ Status bar visibility successfully set to: {}", …);`  | `log::info!(...)`        | Success operational message.                                                                                    |
-| 1451  | `eprintln!("❌ Failed to set status bar visibility: {e}");`         | `log::error!(...)`       | Failure path.                                                                                                   |
-| 1514  | `println!("🔧 Carbon API: Setting SystemUIMode to {} ({})", …);`    | `log::debug!(...)`       | Internal trace; not interesting at info level.                                                                  |
-| 1528  | `println!("✅ Carbon API: SetSystemUIMode succeeded");`             | `log::debug!(...)`       | Internal trace.                                                                                                 |
-| 1536  | `eprintln!("❌ Carbon API: {}", error_msg);`                        | `log::error!(...)`       | Failure path.                                                                                                   |
-| 1549  | `eprintln!("🔄 Primary method failed, attempting fallback…");`      | `log::warn!(...)`        | Recoverable; fallback will run.                                                                                 |
-| 1553  | `println!("🔄 Fallback 1: Retrying after brief delay…");`           | `log::warn!(...)`        | Same — degraded path.                                                                                           |
-| 1567  | `println!("✅ Fallback 1: Retry succeeded");`                       | `log::info!(...)`        | Recovery success worth surfacing.                                                                               |
-| 1581  | `println!("🔄 Fallback 2: Trying conservative hide approach…");`    | `log::warn!(...)`        | Same — degraded path.                                                                                           |
-| 1592  | `println!("✅ Fallback 2: Conservative approach succeeded");`       | `log::info!(...)`        | Recovery success.                                                                                               |
-| 1615  | `eprintln!("❌ {}", detailed_error);`                               | `log::error!(...)`       | Failure path.                                                                                                   |
+| Line | Existing                                                            | Replacement        | Rationale                                      |
+| ---- | ------------------------------------------------------------------- | ------------------ | ---------------------------------------------- |
+| 1119 | `eprintln!("Failed to register global shortcuts on startup: {e}");` | `log::error!(...)` | Failure path.                                  |
+| 1123 | `eprintln!("Failed to load settings on startup: {e}");`             | `log::error!(...)` | Failure path.                                  |
+| 1132 | `eprintln!("Failed to register default global shortcuts: {e}");`    | `log::error!(...)` | Failure path (defaults fallback also failed).  |
+| 1444 | `println!("✅ Status bar visibility successfully set to: {}", …);`  | `log::info!(...)`  | Success operational message.                   |
+| 1451 | `eprintln!("❌ Failed to set status bar visibility: {e}");`         | `log::error!(...)` | Failure path.                                  |
+| 1514 | `println!("🔧 Carbon API: Setting SystemUIMode to {} ({})", …);`    | `log::debug!(...)` | Internal trace; not interesting at info level. |
+| 1528 | `println!("✅ Carbon API: SetSystemUIMode succeeded");`             | `log::debug!(...)` | Internal trace.                                |
+| 1536 | `eprintln!("❌ Carbon API: {}", error_msg);`                        | `log::error!(...)` | Failure path.                                  |
+| 1549 | `eprintln!("🔄 Primary method failed, attempting fallback…");`      | `log::warn!(...)`  | Recoverable; fallback will run.                |
+| 1553 | `println!("🔄 Fallback 1: Retrying after brief delay…");`           | `log::warn!(...)`  | Same — degraded path.                          |
+| 1567 | `println!("✅ Fallback 1: Retry succeeded");`                       | `log::info!(...)`  | Recovery success worth surfacing.              |
+| 1581 | `println!("🔄 Fallback 2: Trying conservative hide approach…");`    | `log::warn!(...)`  | Same — degraded path.                          |
+| 1592 | `println!("✅ Fallback 2: Conservative approach succeeded");`       | `log::info!(...)`  | Recovery success.                              |
+| 1615 | `eprintln!("❌ {}", detailed_error);`                               | `log::error!(...)` | Failure path.                                  |
 
 Add `use log::{debug, error, info, warn};` at the top of `src-tauri/src/lib.rs` (next to the existing `use std::*` block at lines 1–14) so the macros can be invoked unqualified, OR keep them fully qualified (`log::error!`) — pick one and be consistent. The existing codebase uses fully-qualified `tauri::*`, `std::*` paths in many places, so fully qualified `log::error!` matches the surrounding style; that's what the table assumes.
 
@@ -176,11 +180,13 @@ function format(args) {
     .join(" ");
 }
 
-const send = (fn) => (...args) => {
-  fn(format(args)).catch(() => {
-    /* never let the logger throw into the app */
-  });
-};
+const send =
+  (fn) =>
+  (...args) => {
+    fn(format(args)).catch(() => {
+      /* never let the logger throw into the app */
+    });
+  };
 
 export const logger = {
   debug: send(debug),
@@ -199,25 +205,25 @@ Keep this file ≤40 lines. Do **not** add side effects (no `attachConsole()` he
   import { logger } from "./utils/logger.js";
   window.appLog = logger;
   ```
-- This must run **before** `update-manager-global.js` and `tag-manager.js` instantiate. Their classes are *defined* synchronously by their global scripts (which load before `main.js` per `index.html` order) but their *constructors* run later when `main.js` does `new window.UpdateManagerV2()` / instantiates `TagManager`. Setting `window.appLog` at the top of `main.js` therefore happens before any constructor that uses it.
+- This must run **before** `update-manager-global.js` and `tag-manager.js` instantiate. Their classes are _defined_ synchronously by their global scripts (which load before `main.js` per `index.html` order) but their _constructors_ run later when `main.js` does `new window.UpdateManagerV2()` / instantiates `TagManager`. Setting `window.appLog` at the top of `main.js` therefore happens before any constructor that uses it.
 - During Step 9 you will also migrate `main.js`'s own 79 console calls to use `logger.*` directly (the in-module form is preferred over `window.appLog` inside ES modules).
 
-### Step 8: Migrate console.* calls in ES module files
+### Step 8: Migrate console.\* calls in ES module files
 
 For each ES module file in this list — `src/utils/analytics.js`, `src/utils/common-utils.js`, `src/utils/supabase.js`, `src/utils/tag-statistics.js`, `src/utils/theme-loader.js`, `src/utils/timer-themes.js`, `src/managers/auth-manager.js`, `src/managers/navigation-manager.js`, `src/managers/session-manager.js`, `src/managers/settings-manager.js`, `src/managers/team-manager.js`, `src/components/update-notification.js`, `src/core/pomodoro-timer.js`:
 
 - Add the import at the top: `import { logger } from "../utils/logger.js";` (or `./logger.js` if already in `src/utils/`).
 - Replace every call site:
 
-  | Before                       | After                       |
-  | ---------------------------- | --------------------------- |
-  | `console.log(…)`             | `logger.info(…)` _OR_ `logger.debug(…)` |
-  | `console.info(…)`            | `logger.info(…)`            |
-  | `console.warn(…)`            | `logger.warn(…)`            |
-  | `console.error(…)`           | `logger.error(…)`           |
-  | `console.debug(…)`           | `logger.debug(…)`           |
+  | Before             | After                                   |
+  | ------------------ | --------------------------------------- |
+  | `console.log(…)`   | `logger.info(…)` _OR_ `logger.debug(…)` |
+  | `console.info(…)`  | `logger.info(…)`                        |
+  | `console.warn(…)`  | `logger.warn(…)`                        |
+  | `console.error(…)` | `logger.error(…)`                       |
+  | `console.debug(…)` | `logger.debug(…)`                       |
 
-  **`console.log` → `info` vs `debug` decision rule:** if the comment on the line says "Debug log" (e.g. `src/main.js:39`'s `// Debug log` markers) or the message starts with `🎨`/`🔧`/`🔍` and is purely a trace, use `logger.debug`. Otherwise use `logger.info`. When in doubt, prefer `info` — production filter is at `info` so a too-debug call is invisible in prod, which is acceptable; an over-info call is at most one extra line in the log file, also acceptable. The migration does not need to be perfect on this axis; the *correctness criterion* is "no `console.*` remaining", and any `info`-vs-`debug` polish can happen later.
+  **`console.log` → `info` vs `debug` decision rule:** if the comment on the line says "Debug log" (e.g. `src/main.js:39`'s `// Debug log` markers) or the message starts with `🎨`/`🔧`/`🔍` and is purely a trace, use `logger.debug`. Otherwise use `logger.info`. When in doubt, prefer `info` — production filter is at `info` so a too-debug call is invisible in prod, which is acceptable; an over-info call is at most one extra line in the log file, also acceptable. The migration does not need to be perfect on this axis; the _correctness criterion_ is "no `console.*` remaining", and any `info`-vs-`debug` polish can happen later.
 
 - Variadic forms migrate trivially because of the wrapper:
   - `console.log("Found", n, "buttons")` → `logger.info("Found", n, "buttons")`
@@ -225,13 +231,12 @@ For each ES module file in this list — `src/utils/analytics.js`, `src/utils/co
   - `console.log("State:", { foo, bar })` → `logger.info("State:", { foo, bar })`.
 
 - Do **not** convert lines inside string literals or comments. `Grep` for `console\.` first, then `Edit` each match.
-
   - `src/main.js` (79 calls — the largest non-`pomodoro-timer.js` file): the file already imports several utility modules; just add the `logger` import alongside.
   - `src/core/pomodoro-timer.js` (163 calls — by far the largest migration site): expect this file alone to take roughly half the migration effort. Many calls are debug-style timer state logs; default them to `logger.debug` unless they are clearly user-impacting events (state transitions, errors).
 
   Per-file expected count from the existing audit (use it as a checksum): `update-notification.js: 28`, `pomodoro-timer.js: 163`, `main.js: 79`, `auth-manager.js: 2`, `navigation-manager.js: 26`, `session-manager.js: 8`, `settings-manager.js: 71`, `team-manager.js: 2`, `update-manager-global.js: 64` (Step 9), `analytics.js: 2`, `common-utils.js: 9`, `supabase.js: 31`, `tag-statistics.js: 1`, `theme-loader.js: 12`, `timer-themes.js: 3`, `tag-manager.js: 13` (Step 9). After migration, `grep -rcE 'console\.(log|warn|error|info|debug)' src --include='*.js'` should return `0` per file.
 
-### Step 9: Migrate console.* calls in non-module global scripts
+### Step 9: Migrate console.\* calls in non-module global scripts
 
 Two files cannot use `import` because they are loaded as classic scripts:
 
@@ -242,7 +247,7 @@ Two files cannot use `import` because they are loaded as classic scripts:
 
 - `index.html` loads scripts in this defer order: `update-manager-global.js` → `tag-manager.js` → `main.js`. With `defer`, all three execute after the document is parsed, in source order.
 - The two non-module files **define** classes synchronously (no constructor invocation). `update-manager-global.js` does `window.UpdateManagerV2 = class { … }` at module top-level; `tag-manager.js` does `class TagManager { … }`. Neither instantiates anything itself.
-- `main.js` then sets `window.appLog = logger` at the top of its module body — *before* it instantiates either class.
+- `main.js` then sets `window.appLog = logger` at the top of its module body — _before_ it instantiates either class.
 - Therefore every `window.appLog.*` call inside these classes' methods/constructors runs after `window.appLog` is defined.
 
 If `window.appLog` is somehow not yet set (e.g. a future change that instantiates these classes from inline `<script>` in `index.html`), the call will throw `Cannot read properties of undefined`. That's a louder, more debuggable failure mode than a silent dropped log — acceptable.
@@ -346,7 +351,9 @@ npm run dev
   - Adding rotation/retention policy to the log file (`tauri-plugin-log` defaults to ~10MB rotated; revisit only if it becomes a problem).
   - Touching `build-themes.js` / `debug-themes.js` (Node-side scripts not in the linted set).
   - Migrating any TypeScript files (none exist; project is JS with `checkJs: false`).
+
 ```
 
 ---
 *Generated by Agentex*
+```

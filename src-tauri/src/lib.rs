@@ -918,6 +918,22 @@ async fn get_manual_sessions_for_date(
 pub fn run() {
     tauri::async_runtime::block_on(async {
         tauri::Builder::default()
+            .plugin(
+                tauri_plugin_log::Builder::new()
+                    .level(if cfg!(debug_assertions) {
+                        log::LevelFilter::Debug
+                    } else {
+                        log::LevelFilter::Info
+                    })
+                    .targets([
+                        tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Stdout),
+                        tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::LogDir {
+                            file_name: None,
+                        }),
+                        tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Webview),
+                    ])
+                    .build(),
+            )
             .plugin(tauri_plugin_opener::init())
             .plugin(tauri_plugin_global_shortcut::Builder::new().build())
             .plugin(tauri_plugin_dialog::init())
@@ -1116,11 +1132,11 @@ pub fn run() {
                             )
                             .await
                             {
-                                eprintln!("Failed to register global shortcuts on startup: {e}");
+                                log::error!("Failed to register global shortcuts on startup: {e}");
                             }
                         }
                         Err(e) => {
-                            eprintln!("Failed to load settings on startup: {e}");
+                            log::error!("Failed to load settings on startup: {e}");
                             // Try to register default shortcuts
                             let default_settings = AppSettings::default();
                             if let Err(e) = register_global_shortcuts(
@@ -1129,7 +1145,7 @@ pub fn run() {
                             )
                             .await
                             {
-                                eprintln!("Failed to register default global shortcuts: {e}");
+                                log::error!("Failed to register default global shortcuts: {e}");
                             }
                         }
                     }
@@ -1441,14 +1457,14 @@ async fn set_status_bar_visibility(_app: AppHandle, _visible: bool) -> Result<()
             let mut result_guard = result_clone.lock().unwrap();
             *result_guard = match set_system_ui_mode_safe(_visible) {
                 Ok(()) => {
-                    println!(
+                    log::info!(
                         "✅ Status bar visibility successfully set to: {}",
                         if _visible { "visible" } else { "hidden" }
                     );
                     Ok(())
                 }
                 Err(e) => {
-                    eprintln!("❌ Failed to set status bar visibility: {e}");
+                    log::error!("❌ Failed to set status bar visibility: {e}");
                     Err(format!("Failed to set status bar visibility: {e}"))
                 }
             };
@@ -1511,7 +1527,7 @@ fn set_system_ui_mode_safe(visible: bool) -> Result<(), String> {
 
         let options: SystemUIOptions = 0; // No special options
 
-        println!(
+        log::debug!(
             "🔧 Carbon API: Setting SystemUIMode to {} ({})",
             mode,
             if visible {
@@ -1525,7 +1541,7 @@ fn set_system_ui_mode_safe(visible: bool) -> Result<(), String> {
         let result: OSStatus = SetSystemUIMode(mode, options);
 
         if result == NO_ERR {
-            println!("✅ Carbon API: SetSystemUIMode succeeded");
+            log::debug!("✅ Carbon API: SetSystemUIMode succeeded");
             Ok(())
         } else {
             let error_msg = format!(
@@ -1533,7 +1549,7 @@ fn set_system_ui_mode_safe(visible: bool) -> Result<(), String> {
                 result,
                 get_osstatus_description(result)
             );
-            eprintln!("❌ Carbon API: {}", error_msg);
+            log::error!("❌ Carbon API: {}", error_msg);
             Err((result, error_msg))
         }
     };
@@ -1546,11 +1562,11 @@ fn set_system_ui_mode_safe(visible: bool) -> Result<(), String> {
     // If primary approach failed, try fallback methods
     let (status_code, error_msg) = primary_result.unwrap_err();
 
-    eprintln!("🔄 Primary method failed, attempting fallback approaches...");
+    log::warn!("🔄 Primary method failed, attempting fallback approaches...");
 
     // Fallback 1: Try with a small delay and retry
     if status_code == PARAM_ERR || status_code == MEM_FULL_ERR {
-        println!("🔄 Fallback 1: Retrying after brief delay...");
+        log::warn!("🔄 Fallback 1: Retrying after brief delay...");
         thread::sleep(Duration::from_millis(100));
 
         // SAFETY: Same contract as the primary SetSystemUIMode call above — pure C ABI,
@@ -1564,7 +1580,7 @@ fn set_system_ui_mode_safe(visible: bool) -> Result<(), String> {
             let result: OSStatus = SetSystemUIMode(mode, 0);
 
             if result == NO_ERR {
-                println!("✅ Fallback 1: Retry succeeded");
+                log::info!("✅ Fallback 1: Retry succeeded");
                 Ok(())
             } else {
                 Err(format!("Retry failed with OSStatus: {}", result))
@@ -1578,7 +1594,7 @@ fn set_system_ui_mode_safe(visible: bool) -> Result<(), String> {
 
     // Fallback 2: For hiding, try a more conservative approach
     if !visible {
-        println!("🔄 Fallback 2: Trying conservative hide approach...");
+        log::warn!("🔄 Fallback 2: Trying conservative hide approach...");
 
         // SAFETY: Same contract as above — pure C ABI, scalar arguments, main-thread
         // dispatched. The intervening thread::sleep is safe regardless.
@@ -1589,7 +1605,7 @@ fn set_system_ui_mode_safe(visible: bool) -> Result<(), String> {
             let result: OSStatus = SetSystemUIMode(K_UI_MODE_CONTENT_SUPPRESSED, 0);
 
             if result == NO_ERR {
-                println!("✅ Fallback 2: Conservative approach succeeded");
+                log::info!("✅ Fallback 2: Conservative approach succeeded");
                 Ok(())
             } else {
                 Err(format!(
@@ -1612,7 +1628,7 @@ fn set_system_ui_mode_safe(visible: bool) -> Result<(), String> {
         error_msg
     );
 
-    eprintln!("❌ {}", detailed_error);
+    log::error!("❌ {}", detailed_error);
     Err(detailed_error)
 }
 

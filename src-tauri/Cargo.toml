@@ -18,6 +18,8 @@ pedantic = { level = "deny", priority = -1 }
 nursery = { level = "deny", priority = -1 }
 dbg_macro = "deny"
 todo = "deny"
+print_stdout = "deny"
+print_stderr = "deny"
 
 [lib]
 # The `_lib` suffix may seem redundant but it is necessary
@@ -43,7 +45,9 @@ strip = true     # Rimuove simboli debug
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
+log = "0.4"
 tauri = { version = "2", features = ["tray-icon", "devtools"] }
+tauri-plugin-log = "2"
 tauri-plugin-opener = { version = "2", default-features = false }
 tauri-plugin-global-shortcut = { version = "2", default-features = false }
 tauri-plugin-dialog = { version = "2", default-features = false }

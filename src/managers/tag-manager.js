@@ -28,7 +28,7 @@ class TagManager {
     this.createTagBtn = document.getElementById("create-tag-btn");
 
     // Debug: check if all elements are found
-    console.log("TagManager elements:", {
+    window.appLog.debug("TagManager elements:", {
       timerStatus: !!this.timerStatus,
       dropdownMenu: !!this.dropdownMenu,
       tagList: !!this.tagList,
@@ -38,10 +38,10 @@ class TagManager {
     });
 
     if (!this.dropdownMenu) {
-      console.error("Dropdown menu not found!");
+      window.appLog.error("Dropdown menu not found!");
     }
     if (!this.newTagName) {
-      console.error("New tag input not found!");
+      window.appLog.error("New tag input not found!");
     }
   }
 
@@ -101,7 +101,7 @@ class TagManager {
         typeof window.__TAURI__ === "undefined" ||
         typeof window.__TAURI__.invoke !== "function"
       ) {
-        console.warn("Tauri is not available, using localStorage fallback");
+        window.appLog.warn("Tauri is not available, using localStorage fallback");
         // Load from localStorage
         const savedTags = localStorage.getItem("presto-tags");
         if (savedTags) {
@@ -112,7 +112,7 @@ class TagManager {
             }
             this.tags = parsed;
           } catch (_parseError) {
-            console.error("TagManager: corrupted tags in localStorage, resetting");
+            window.appLog.error("TagManager: corrupted tags in localStorage, resetting");
             localStorage.removeItem("presto-tags");
             this.tags = [];
           }
@@ -146,7 +146,7 @@ class TagManager {
         this.updateStatusDisplay();
       }
     } catch (error) {
-      console.error("Failed to load tags:", error);
+      window.appLog.error("Failed to load tags:", error);
       // Fallback to localStorage or default tag
       const savedTags = localStorage.getItem("presto-tags");
       if (savedTags) {
@@ -157,7 +157,7 @@ class TagManager {
           }
           this.tags = parsed;
         } catch (_parseError) {
-          console.error("TagManager: corrupted tags in localStorage, resetting");
+          window.appLog.error("TagManager: corrupted tags in localStorage, resetting");
           localStorage.removeItem("presto-tags");
           this.tags = [];
         }
@@ -295,7 +295,7 @@ class TagManager {
       this.resetIconSelection();
       this.updateCreateButtonState();
     } catch (error) {
-      console.error("Failed to create tag:", error);
+      window.appLog.error("Failed to create tag:", error);
     }
   }
 
@@ -333,7 +333,7 @@ class TagManager {
       this.updateStatusDisplay();
       this.renderTagList();
     } catch (error) {
-      console.error("Failed to delete tag:", error);
+      window.appLog.error("Failed to delete tag:", error);
     }
   }
 
@@ -411,7 +411,7 @@ class TagManager {
     try {
       localStorage.setItem("presto-tags", JSON.stringify(this.tags));
     } catch (error) {
-      console.error("Failed to save tags to localStorage:", error);
+      window.appLog.error("Failed to save tags to localStorage:", error);
     }
   }
 
@@ -424,11 +424,11 @@ class TagManager {
   }
 
   openDropdown() {
-    console.log("Opening dropdown...");
+    window.appLog.debug("Opening dropdown...");
     this.isDropdownOpen = true;
     this.timerStatus.classList.add("active");
     this.dropdownMenu.classList.add("active");
-    console.log(
+    window.appLog.debug(
       "Dropdown classes added, menu visible:",
       this.dropdownMenu.classList.contains("active")
     );
@@ -511,7 +511,7 @@ class TagManager {
         await window.__TAURI__.invoke("add_session_tag", sessionTag);
       }
     } catch (error) {
-      console.error("Failed to save session tag:", error);
+      window.appLog.error("Failed to save session tag:", error);
     }
   }
 
