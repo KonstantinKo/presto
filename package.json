@@ -9,10 +9,20 @@
     "build": "tauri build",
     "build-themes": "node build-themes.js",
     "prebuild": "npm run build-themes",
-    "predev": "npm run build-themes"
+    "predev": "npm run build-themes",
+    "lint": "eslint src",
+    "lint:fix": "eslint src --fix",
+    "format": "prettier --check .",
+    "format:fix": "prettier --write .",
+    "typecheck": "tsc --noEmit -p ."
   },
   "devDependencies": {
-    "@tauri-apps/cli": "^2.11.1"
+    "@eslint/js": "^9.39.4",
+    "@tauri-apps/cli": "^2.11.1",
+    "eslint": "^9.39.4",
+    "globals": "^15.15.0",
+    "prettier": "^3.8.3",
+    "typescript": "^5.9.3"
   },
   "dependencies": {
     "@aptabase/tauri": "^0.4.1",

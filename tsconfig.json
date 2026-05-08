@@ -1,0 +1,23 @@
+{
+  "//": "Strict TS settings ready for incremental migration. checkJs is OFF by default; opt files in via `// @ts-check` at the top of the file. Once enough files are annotated we can flip checkJs to true.",
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ES2022",
+    "moduleResolution": "bundler",
+    "allowJs": true,
+    "checkJs": false,
+    "noEmit": true,
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+    "noImplicitReturns": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "lib": ["ES2024", "DOM", "DOM.Iterable"]
+  },
+  "include": ["src/**/*.js"],
+  "exclude": ["node_modules", "src-tauri", "src/styles"]
+}

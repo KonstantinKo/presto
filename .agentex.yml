@@ -1,5 +1,4 @@
 # Agentex Configuration
-# This file contains project-specific settings for Agentex
 
 version: 1
 
@@ -18,10 +17,27 @@ skip_labels:
 prompts:
   planning_addon: ""
 
-# QA verification commands - run after implement and fix_review_issues steps
+# QA verification commands
+# Each section runs in sequence; format commands declare an autofix.
 qa:
-  test: []
-  lint: []
-  format: []
+  setup:
+    - npm ci
+
+  test:
+    - cd src-tauri && cargo build --all-targets
+    - cd src-tauri && cargo test
+
+  lint:
+    - cd src-tauri && cargo clippy --all-targets -- -D warnings
+    - npx eslint src
+    # tsc currently runs with checkJs disabled. Files opt in via `// @ts-check`;
+    # once enough are annotated, flip checkJs to true in tsconfig.json.
+    - npx tsc --noEmit -p .
+
+  format:
+    - command: cd src-tauri && cargo fmt -- --check
+      autofix: cd src-tauri && cargo fmt
+    - command: npx prettier --check .
+      autofix: npx prettier --write .
 
 # Claude Code slash commands are available in .claude/commands/

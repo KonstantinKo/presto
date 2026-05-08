@@ -1,0 +1,9 @@
+node_modules
+src-tauri/target
+src-tauri/gen
+src/styles
+art
+src/docs
+package-lock.json
+*.lock
+build-themes.js
