@@ -413,13 +413,13 @@ async fn load_session_data(app: AppHandle) -> Result<Option<PomodoroSession>, St
     let mut session: PomodoroSession =
         serde_json::from_str(&content).map_err(|e| format!("Failed to parse session: {e}"))?;
 
-    let today_legacy = chrono::Local::now().format("%a %b %e %Y").to_string();
+    let today_legacy = chrono::Local::now().format("%a %b %d %Y").to_string();
     let today_iso = chrono::Local::now().format("%Y-%m-%d").to_string();
 
     let is_same_day = if session.date == today_legacy || session.date == today_iso {
         true
     } else {
-        chrono::NaiveDate::parse_from_str(&session.date, "%a %b %e %Y")
+        chrono::NaiveDate::parse_from_str(&session.date, "%a %b %d %Y")
             .map(|d| d.format("%Y-%m-%d").to_string() == today_iso)
             .unwrap_or(false)
     };

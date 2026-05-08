@@ -133,9 +133,10 @@ export class SessionManager {
     saveBtn.textContent = "Save Session";
 
     const now = new Date();
-    const startTime = this.minutesToTime(now.getHours() * 60 + now.getMinutes());
+    const startMinutes = Math.min(now.getHours() * 60 + now.getMinutes(), 23 * 60 + 58);
+    const startTime = this.minutesToTime(startMinutes);
     const endTime = this.calculateEndTime(startTime, 25);
-    const actualDuration = this.timeToMinutes(endTime) - this.timeToMinutes(startTime);
+    const actualDuration = Math.max(1, this.timeToMinutes(endTime) - startMinutes);
 
     document.getElementById("session-form").reset();
     document.getElementById("session-duration").value = actualDuration;

@@ -1671,7 +1671,10 @@ function setupGlobalEventListeners() {
 
   document.addEventListener("keydown", (e) => {
     if (e.code === "Escape") {
-      const modal = document.querySelector(".modal-overlay");
+      const modal = [...document.querySelectorAll(".modal-overlay")].reverse().find((overlay) => {
+        const styles = window.getComputedStyle(overlay);
+        return styles.display !== "none" && styles.visibility !== "hidden";
+      });
       if (modal) {
         modal.click(); // Trigger close
       }

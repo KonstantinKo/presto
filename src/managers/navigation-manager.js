@@ -71,10 +71,10 @@ export class NavigationManager {
       this.updateWeekDisplay();
       await this.updateFocusSummary();
       await this.updateWeeklySessionsChart();
-      this.updateDailyChart();
+      this.updateDailyChart(this.selectedDate || this.currentDate);
       await this.updateTagUsageChart();
-      await this.updateSelectedDayDetails();
-      await this.initSessionsTable();
+      await this.updateSelectedDayDetails(this.selectedDate || this.currentDate);
+      await this.initSessionsTable(this.selectedDate || this.currentDate);
     } else if (view === "settings") {
       if (window.settingsManager) {
         window.settingsManager.populateSettingsUI();
@@ -1435,8 +1435,8 @@ export class NavigationManager {
     tooltip.style.opacity = "1";
   }
 
-  async initSessionsTable() {
-    await this.populateSessionsTableForDate(this.currentDate);
+  async initSessionsTable(date = this.currentDate) {
+    await this.populateSessionsTableForDate(date || this.currentDate);
     this.setupSessionsTableEventListeners();
   }
 
@@ -1551,14 +1551,18 @@ export class NavigationManager {
     actionsDiv.className = "session-actions";
 
     const editBtn = document.createElement("button");
+    editBtn.type = "button";
     editBtn.className = "session-action-btn edit";
     editBtn.title = "Edit Session";
+    editBtn.setAttribute("aria-label", "Edit session");
     editBtn.innerHTML = '<i class="ri-edit-line"></i>';
     editBtn.addEventListener("click", () => this.editSessionFromTable(session.id));
 
     const deleteBtn = document.createElement("button");
+    deleteBtn.type = "button";
     deleteBtn.className = "session-action-btn delete";
     deleteBtn.title = "Delete Session";
+    deleteBtn.setAttribute("aria-label", "Delete session");
     deleteBtn.innerHTML = '<i class="ri-delete-bin-line"></i>';
     deleteBtn.addEventListener("click", () => this.deleteSessionFromTable(session.id));
 

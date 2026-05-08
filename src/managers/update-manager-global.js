@@ -446,13 +446,17 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
 
           if (tauriUpdate && tauriUpdate.available) {
             logger.debug("Update confirmed via Tauri API");
+            const canAutoInstall =
+              typeof tauriAPI.downloadAndInstall === "function" &&
+              !tauriUpdate.manualDownloadRequired;
             this.updateAvailable = true;
             this.currentUpdate = {
               ...tauriUpdate,
-              isAutoDownloadable: true,
-              source: "tauri-api",
+              downloadUrl: githubRelease.html_url,
+              isAutoDownloadable: canAutoInstall,
+              source: canAutoInstall ? "tauri-api" : "github-manual",
             };
-            this.emit("updateAvailable", tauriUpdate);
+            this.emit("updateAvailable", this.currentUpdate);
             return true;
           }
         }
