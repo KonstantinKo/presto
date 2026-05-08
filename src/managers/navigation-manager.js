@@ -183,7 +183,7 @@ export class NavigationManager {
 
         if (window.sessionManager) {
           const sessions = window.sessionManager.getSessionsForDate(date);
-          const focusSessions = sessions.filter(s => s.type === "focus" || s.type === "custom");
+          const focusSessions = sessions.filter((s) => s.type === "focus" || s.type === "custom");
 
           dayTotalTime = focusSessions.reduce(
             (total, session) => total + (session.duration || 0) * 60,
@@ -214,7 +214,7 @@ export class NavigationManager {
 
         if (window.sessionManager) {
           const sessions = window.sessionManager.getSessionsForDate(date);
-          const focusSessions = sessions.filter(s => s.type === "focus" || s.type === "custom");
+          const focusSessions = sessions.filter((s) => s.type === "focus" || s.type === "custom");
 
           dayTotalTime = focusSessions.reduce(
             (total, session) => total + (session.duration || 0) * 60,
@@ -437,7 +437,9 @@ export class NavigationManager {
 
         if (window.sessionManager) {
           const allSessions = window.sessionManager.getSessionsForDate(date);
-          const focusSessions = allSessions.filter(s => s.type === "focus" || s.type === "custom");
+          const focusSessions = allSessions.filter(
+            (s) => s.type === "focus" || s.type === "custom"
+          );
 
           sessionsMinutes = focusSessions.reduce(
             (total, session) => total + (session.duration || 0),

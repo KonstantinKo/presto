@@ -173,9 +173,7 @@ describe("TagStatistics.getTagUsageStatistics", () => {
   });
 
   it("falls back to created_at when date is absent", () => {
-    const sessions = [
-      { duration: 30, tags: [TAG1], created_at: "2026-05-06T10:00:00Z" },
-    ];
+    const sessions = [{ duration: 30, tags: [TAG1], created_at: "2026-05-06T10:00:00Z" }];
     const result = ts.getTagUsageStatistics(sessions, TAGS, START, END);
     expect(result.totalSessions).toBe(1);
   });
