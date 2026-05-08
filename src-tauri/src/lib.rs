@@ -1632,7 +1632,10 @@ fn get_osstatus_description(status: libc::c_int) -> &'static str {
 
 #[cfg(test)]
 mod tests {
-    use super::{default_analytics_enabled, default_weekly_goal, AppSettings};
+    use super::{
+        default_analytics_enabled, default_weekly_goal, AppSettings, ManualSession,
+        PomodoroSession, SessionTag, Tag, Task,
+    };
 
     #[test]
     fn weekly_goal_default_is_125() {
@@ -1681,6 +1684,7 @@ mod tests {
             s.timer.weekly_goal_minutes,
             defaults.timer.weekly_goal_minutes
         );
+        assert_eq!(s.advanced.debug_mode, defaults.advanced.debug_mode);
     }
 
     #[test]
@@ -1697,7 +1701,149 @@ mod tests {
         assert!(!s.hide_status_bar);
         assert!(s.notifications.desktop_notifications);
         assert!(s.notifications.sound_notifications);
+        assert!(s.notifications.auto_start_timer);
+        assert!(!s.notifications.auto_start_focus);
+        assert!(!s.notifications.allow_continuous_sessions);
         assert!(!s.notifications.smart_pause);
         assert_eq!(s.notifications.smart_pause_timeout, 30);
+        assert!(!s.advanced.debug_mode);
+        assert!(s.shortcuts.start_stop.is_some());
+        assert!(s.shortcuts.reset.is_some());
+        assert!(s.shortcuts.skip.is_some());
+    }
+
+    #[test]
+    fn pomodoro_session_serializes_and_deserializes() {
+        let session = PomodoroSession {
+            completed_pomodoros: 3,
+            total_focus_time: 4500,
+            current_session: 2,
+            date: "Mon Jan 01 2024".to_string(),
+        };
+        let json = serde_json::to_string(&session).unwrap();
+        let parsed: PomodoroSession = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed.completed_pomodoros, session.completed_pomodoros);
+        assert_eq!(parsed.total_focus_time, session.total_focus_time);
+        assert_eq!(parsed.current_session, session.current_session);
+        assert_eq!(parsed.date, session.date);
+    }
+
+    #[test]
+    fn tag_serializes_and_deserializes() {
+        let tag = Tag {
+            id: "tag-1".to_string(),
+            name: "Work".to_string(),
+            icon: "ri-briefcase-line".to_string(),
+            color: "#3b82f6".to_string(),
+            created_at: "1234567890".to_string(),
+        };
+        let json = serde_json::to_string(&tag).unwrap();
+        let parsed: Tag = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed.id, tag.id);
+        assert_eq!(parsed.name, tag.name);
+        assert_eq!(parsed.icon, tag.icon);
+        assert_eq!(parsed.color, tag.color);
+        assert_eq!(parsed.created_at, tag.created_at);
+    }
+
+    #[test]
+    fn task_serializes_with_optional_completed_at() {
+        let task_incomplete = Task {
+            id: 1,
+            text: "Write tests".to_string(),
+            completed: false,
+            created_at: "2024-01-01T00:00:00Z".to_string(),
+            completed_at: None,
+        };
+        let json = serde_json::to_string(&task_incomplete).unwrap();
+        let parsed: Task = serde_json::from_str(&json).unwrap();
+        assert!(!parsed.completed);
+        assert!(parsed.completed_at.is_none());
+
+        let task_complete = Task {
+            id: 2,
+            text: "Deploy app".to_string(),
+            completed: true,
+            created_at: "2024-01-01T00:00:00Z".to_string(),
+            completed_at: Some("2024-01-01T12:00:00Z".to_string()),
+        };
+        let json = serde_json::to_string(&task_complete).unwrap();
+        let parsed: Task = serde_json::from_str(&json).unwrap();
+        assert!(parsed.completed);
+        assert_eq!(parsed.completed_at.as_deref(), Some("2024-01-01T12:00:00Z"));
+    }
+
+    #[test]
+    fn manual_session_serializes_with_optional_fields() {
+        let session_with_tags = ManualSession {
+            id: "session-1".to_string(),
+            session_type: "focus".to_string(),
+            duration: 25,
+            start_time: "09:00".to_string(),
+            end_time: "09:25".to_string(),
+            notes: Some("Deep work".to_string()),
+            created_at: "2024-01-01T09:00:00Z".to_string(),
+            date: "2024-01-01".to_string(),
+            tags: Some(vec![serde_json::json!({"id": "tag-1", "name": "Work"})]),
+        };
+        let json = serde_json::to_string(&session_with_tags).unwrap();
+        let parsed: ManualSession = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed.id, "session-1");
+        assert_eq!(parsed.duration, 25);
+        assert!(parsed.notes.is_some());
+        assert!(parsed.tags.is_some());
+
+        let session_no_extras = ManualSession {
+            id: "session-2".to_string(),
+            session_type: "break".to_string(),
+            duration: 5,
+            start_time: "09:25".to_string(),
+            end_time: "09:30".to_string(),
+            notes: None,
+            created_at: "2024-01-01T09:25:00Z".to_string(),
+            date: "2024-01-01".to_string(),
+            tags: None,
+        };
+        let json = serde_json::to_string(&session_no_extras).unwrap();
+        let parsed: ManualSession = serde_json::from_str(&json).unwrap();
+        assert!(parsed.notes.is_none());
+        assert!(parsed.tags.is_none());
+    }
+
+    #[test]
+    fn session_tag_serializes_and_deserializes() {
+        let session_tag = SessionTag {
+            session_id: "session-1".to_string(),
+            tag_id: "tag-1".to_string(),
+            duration: 1500,
+            created_at: "2024-01-01T00:00:00Z".to_string(),
+        };
+        let json = serde_json::to_string(&session_tag).unwrap();
+        let parsed: SessionTag = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed.session_id, session_tag.session_id);
+        assert_eq!(parsed.tag_id, session_tag.tag_id);
+        assert_eq!(parsed.duration, session_tag.duration);
+    }
+
+    #[test]
+    fn history_trimming_keeps_last_thirty_entries() {
+        let mut history: Vec<PomodoroSession> = (0u32..35u32)
+            .map(|i| PomodoroSession {
+                completed_pomodoros: i,
+                total_focus_time: i * 1500,
+                current_session: 1,
+                date: format!("2024-01-{i:02}"),
+            })
+            .collect();
+
+        history.sort_by(|a, b| a.date.cmp(&b.date));
+        if history.len() > 30 {
+            let start_index = history.len() - 30;
+            history.drain(0..start_index);
+        }
+
+        assert_eq!(history.len(), 30);
+        assert_eq!(history[0].completed_pomodoros, 5);
+        assert_eq!(history[29].completed_pomodoros, 34);
     }
 }
