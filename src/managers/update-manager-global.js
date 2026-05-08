@@ -317,7 +317,7 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
         console.log(`📋 Current version: ${currentVersion}`);
       } catch (error) {
         console.error("❌ Error retrieving current version:", error);
-        this.emit("checkError", { error: "Impossibile determinare la versione corrente" });
+        this.emit("checkError", { message: "Impossibile determinare la versione corrente" });
         if (showDialog) {
           alert("Impossibile verificare gli aggiornamenti: versione corrente non determinabile");
         }
@@ -376,7 +376,7 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
       return true;
     } catch (error) {
       console.error("❌ Error checking GitHub version:", error);
-      this.emit("checkError", { error: `Errore di rete: ${error.message}` });
+      this.emit("checkError", { message: `Errore di rete: ${error.message}` });
       if (showDialog) {
         alert(`Errore nel controllo degli aggiornamenti:\n${error.message}`);
       }
@@ -502,7 +502,7 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
       console.error("❌ Update check error:", error);
       this.updateAvailable = false;
       this.currentUpdate = null;
-      this.emit("checkError", error);
+      this.emit("checkError", { message: error.message || String(error) });
 
       if (showDialog) {
         await this.showMessage(
@@ -637,7 +637,7 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
         console.log("🌐 Reindirizzamento a download manuale...");
         await this.openDownloadUrl(this.currentUpdate.downloadUrl);
 
-        this.emit("downloadError", new Error("Download manuale richiesto"));
+        this.emit("manualDownloadRequired", { url: this.currentUpdate.downloadUrl });
       }
     } catch (error) {
       console.error("❌ Download error:", error);

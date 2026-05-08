@@ -238,6 +238,10 @@ window.performTotalReset = async function () {
     localStorage.removeItem("pomodoro-settings");
     localStorage.removeItem("pomodoro-history");
     localStorage.removeItem("pomodoro-stats");
+    localStorage.removeItem("presto_auto_check_updates");
+    localStorage.removeItem("presto-skipped-versions");
+    localStorage.removeItem("presto_force_update_test");
+    localStorage.removeItem("presto-tags");
     console.log("localStorage cleared"); // Debug log
 
     // Reset the timer in memory

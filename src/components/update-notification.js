@@ -528,38 +528,48 @@ export class UpdateNotification {
       testMode: localStorage.getItem("presto_force_update_test"),
     });
 
-    updateManager.on("updateAvailable", (event) => {
+    this._onUpdateAvailable = (event) => {
       console.log("🔔 [UpdateNotification] Evento updateAvailable ricevuto:", event.detail);
       this.showUpdateAvailable(event.detail);
-    });
+    };
 
-    // Ascolta anche quando NON ci sono aggiornamenti per nascondere la notifica
-    updateManager.on("updateNotAvailable", () => {
+    this._onUpdateNotAvailable = () => {
       console.log("👍 [UpdateNotification] No updates available - nascondo notifica");
       this.hide();
-    });
+    };
 
-    // Nasconde la notifica anche quando il controllo fallisce
-    updateManager.on("checkError", () => {
+    this._onCheckError = () => {
       console.log("❌ [UpdateNotification] Update check error - nascondo notifica");
       this.hide();
-    });
+    };
 
-    updateManager.on("downloadProgress", (event) => {
+    this._onDownloadProgress = (event) => {
       const { progress } = event.detail;
       this.showProgressContainer();
       this.updateProgress(progress);
-    });
+    };
 
-    updateManager.on("downloadFinished", () => {
+    this._onDownloadFinished = () => {
       this.showProgressContainer();
       this.showInstalling();
-    });
+    };
 
-    updateManager.on("downloadError", (event) => {
+    this._onDownloadError = (event) => {
       this.showProgressContainer();
       this.showError(event.detail);
-    });
+    };
+
+    this._onManualDownloadRequired = () => {
+      this.hide();
+    };
+
+    updateManager.on("updateAvailable", this._onUpdateAvailable);
+    updateManager.on("updateNotAvailable", this._onUpdateNotAvailable);
+    updateManager.on("checkError", this._onCheckError);
+    updateManager.on("downloadProgress", this._onDownloadProgress);
+    updateManager.on("downloadFinished", this._onDownloadFinished);
+    updateManager.on("downloadError", this._onDownloadError);
+    updateManager.on("manualDownloadRequired", this._onManualDownloadRequired);
   }
 
   /**
@@ -715,6 +725,16 @@ export class UpdateNotification {
     this._hideTimeoutId = null;
     clearTimeout(this._errorHideTimeoutId);
     this._errorHideTimeoutId = null;
+    const updateManager = getUpdateManager();
+    if (updateManager) {
+      updateManager.off("updateAvailable", this._onUpdateAvailable);
+      updateManager.off("updateNotAvailable", this._onUpdateNotAvailable);
+      updateManager.off("checkError", this._onCheckError);
+      updateManager.off("downloadProgress", this._onDownloadProgress);
+      updateManager.off("downloadFinished", this._onDownloadFinished);
+      updateManager.off("downloadError", this._onDownloadError);
+      updateManager.off("manualDownloadRequired", this._onManualDownloadRequired);
+    }
     if (this.container && this.container.parentNode) {
       this.container.parentNode.removeChild(this.container);
     }

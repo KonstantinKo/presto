@@ -1425,19 +1425,31 @@ fn set_dock_visibility_native(visible: bool) {
 async fn set_status_bar_visibility(_app: AppHandle, _visible: bool) -> Result<(), String> {
     #[cfg(target_os = "macos")]
     {
-        match set_system_ui_mode_safe(_visible) {
-            Ok(()) => {
-                println!(
-                    "✅ Status bar visibility successfully set to: {}",
-                    if _visible { "visible" } else { "hidden" }
-                );
-                Ok(())
-            }
-            Err(e) => {
-                eprintln!("❌ Failed to set status bar visibility: {e}");
-                Err(format!("Failed to set status bar visibility: {e}"))
-            }
-        }
+        use std::sync::{Arc, Mutex};
+
+        let result = Arc::new(Mutex::new(Ok(())));
+        let result_clone = Arc::clone(&result);
+
+        _app.run_on_main_thread(move || {
+            let mut result_guard = result_clone.lock().unwrap();
+            *result_guard = match set_system_ui_mode_safe(_visible) {
+                Ok(()) => {
+                    println!(
+                        "✅ Status bar visibility successfully set to: {}",
+                        if _visible { "visible" } else { "hidden" }
+                    );
+                    Ok(())
+                }
+                Err(e) => {
+                    eprintln!("❌ Failed to set status bar visibility: {e}");
+                    Err(format!("Failed to set status bar visibility: {e}"))
+                }
+            };
+        })
+        .map_err(|e| format!("Failed to run on main thread: {e}"))?;
+
+        let final_result = result.lock().unwrap().clone();
+        final_result
     }
 
     #[cfg(not(target_os = "macos"))]

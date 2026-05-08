@@ -106,7 +106,11 @@ class TagManager {
         const savedTags = localStorage.getItem("presto-tags");
         if (savedTags) {
           try {
-            this.tags = JSON.parse(savedTags);
+            const parsed = JSON.parse(savedTags);
+            if (!Array.isArray(parsed)) {
+              throw new TypeError("presto-tags must be an array");
+            }
+            this.tags = parsed;
           } catch (_parseError) {
             console.error("TagManager: corrupted tags in localStorage, resetting");
             localStorage.removeItem("presto-tags");
@@ -147,7 +151,11 @@ class TagManager {
       const savedTags = localStorage.getItem("presto-tags");
       if (savedTags) {
         try {
-          this.tags = JSON.parse(savedTags);
+          const parsed = JSON.parse(savedTags);
+          if (!Array.isArray(parsed)) {
+            throw new TypeError("presto-tags must be an array");
+          }
+          this.tags = parsed;
         } catch (_parseError) {
           console.error("TagManager: corrupted tags in localStorage, resetting");
           localStorage.removeItem("presto-tags");
