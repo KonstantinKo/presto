@@ -143,17 +143,16 @@ export class SessionManager {
     deleteBtn.style.display = "none";
     saveBtn.textContent = "Save Session";
 
-    // Set default times
+    // Set default times (start = now, end = now + 25 minutes)
     const now = new Date();
-    const startTime = `${now.getHours().toString().padStart(2, "0")}:${now.getMinutes().toString().padStart(2, "0")}`;
-    const endTime = new Date(now.getTime() + 25 * 60000); // Add 25 minutes
-    const endTimeString = `${endTime.getHours().toString().padStart(2, "0")}:${endTime.getMinutes().toString().padStart(2, "0")}`;
+    const startTime = this.minutesToTime(now.getHours() * 60 + now.getMinutes());
+    const endTime = this.calculateEndTime(startTime, 25);
 
     // Reset form and set defaults
     document.getElementById("session-form").reset();
     document.getElementById("session-duration").value = 25;
     document.getElementById("session-start-time").value = startTime;
-    document.getElementById("session-end-time").value = endTimeString;
+    document.getElementById("session-end-time").value = endTime;
 
     modal.classList.add("show");
     document.getElementById("session-start-time").focus();
@@ -412,12 +411,6 @@ export class SessionManager {
   }
 
   calculateEndTime(startTime, durationMinutes) {
-    const [hours, minutes] = startTime.split(":").map(Number);
-    const startDate = new Date();
-    startDate.setHours(hours, minutes, 0, 0);
-
-    const endDate = new Date(startDate.getTime() + durationMinutes * 60000);
-
-    return `${endDate.getHours().toString().padStart(2, "0")}:${endDate.getMinutes().toString().padStart(2, "0")}`;
+    return this.minutesToTime(this.timeToMinutes(startTime) + durationMinutes);
   }
 }

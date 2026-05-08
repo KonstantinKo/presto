@@ -376,12 +376,6 @@ async fn update_activity_timeout(timeout_seconds: u64) -> Result<(), String> {
     )
 }
 
-// Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-#[tauri::command]
-fn greet(name: &str) -> String {
-    format!("Hello, {name}! You've been greeted from Rust!")
-}
-
 #[tauri::command]
 async fn save_session_data(session: PomodoroSession, app: AppHandle) -> Result<(), String> {
     let app_data_dir = app
@@ -776,12 +770,6 @@ async fn reset_all_data(app: AppHandle) -> Result<(), String> {
         }
     }
 
-    /*
-    if app_data_dir.exists() {
-        let _ = fs::remove_dir(&app_data_dir);
-    }
-    */
-
     Ok(())
 }
 
@@ -947,7 +935,6 @@ pub fn run() {
             .plugin(tauri_plugin_oauth::init())
             .plugin(tauri_plugin_aptabase::Builder::new("A-EU-9457123106").build())
             .invoke_handler(tauri::generate_handler![
-                greet,
                 save_session_data,
                 load_session_data,
                 save_tasks,
@@ -1192,7 +1179,7 @@ async fn load_tags(app: AppHandle) -> Result<Vec<Tag>, String> {
     if file_path.exists() {
         let content =
             fs::read_to_string(&file_path).map_err(|e| format!("Failed to read tags: {e}"))?;
-        Ok(serde_json::from_str(&content).unwrap_or_else(|_| Vec::new()))
+        Ok(serde_json::from_str(&content).unwrap_or_default())
     } else {
         // Return default focus tag if no tags exist
         let default_tag = Tag {
@@ -1264,7 +1251,7 @@ async fn load_session_tags(app: AppHandle) -> Result<Vec<SessionTag>, String> {
     if file_path.exists() {
         let content = fs::read_to_string(&file_path)
             .map_err(|e| format!("Failed to read session tags: {e}"))?;
-        Ok(serde_json::from_str(&content).unwrap_or_else(|_| Vec::new()))
+        Ok(serde_json::from_str(&content).unwrap_or_default())
     } else {
         Ok(Vec::new())
     }

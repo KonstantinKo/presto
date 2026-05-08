@@ -1,6 +1,12 @@
 // Notification Utility Functions
 import { logger } from "./logger.js";
 
+const NOTIFICATION_CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes
+
+function isSettingsSaved(message, type) {
+  return type === "success" && message.includes("Settings saved");
+}
+
 export class NotificationUtils {
   // Static properties for notification queue management
   static notificationQueue = [];
@@ -12,7 +18,7 @@ export class NotificationUtils {
     // Prevent spam notifications - check if the same message was shown recently
     const now = Date.now();
     const lastTime = this.lastNotificationTimes.get(message);
-    const cooldownTime = type === "success" && message.includes("Settings saved") ? 1000 : 500;
+    const cooldownTime = isSettingsSaved(message, type) ? 1000 : 500;
 
     if (lastTime && now - lastTime < cooldownTime) {
       return; // Skip if shown too recently
@@ -20,10 +26,9 @@ export class NotificationUtils {
 
     this.lastNotificationTimes.set(message, now);
 
-    // Clean up old entries from notification times cache (keep only last 10 minutes)
+    // Clean up old entries from notification times cache
     for (const [msg, time] of this.lastNotificationTimes.entries()) {
-      if (now - time > 600000) {
-        // 10 minutes
+      if (now - time > NOTIFICATION_CACHE_TTL_MS) {
         this.lastNotificationTimes.delete(msg);
       }
     }
@@ -39,7 +44,7 @@ export class NotificationUtils {
     // Check if we have too many active notifications
     if (this.activeNotifications.size >= this.maxSimultaneousNotifications) {
       // If it's a low priority notification (like auto-save), queue it
-      if (type === "success" && message.includes("Settings saved")) {
+      if (isSettingsSaved(message, type)) {
         this.queueNotification(message, type, timerState);
         return;
       }
@@ -71,28 +76,15 @@ export class NotificationUtils {
 
     // Create new notification
     const notification = document.createElement("div");
-
-    // Determina la classe CSS da usare
-    let notificationClass = "notification-ping";
-
-    if (timerState) {
-      notificationClass += ` ${timerState}`;
-    } else if (type) {
-      notificationClass += ` ${type}`;
-    } else {
-      notificationClass += " info";
-    }
-
-    notification.className = notificationClass;
+    const variant = timerState || type || "info";
+    notification.className = `notification-ping ${variant}`;
 
     notification.setAttribute("role", "alert");
     notification.setAttribute("aria-live", "polite");
-
-    // Contenuto semplice e pulito
     notification.textContent = message;
 
     // Add unique ID for tracking
-    const notificationId = `notification-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    const notificationId = `notification-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
     notification.setAttribute("data-notification-id", notificationId);
     this.activeNotifications.add(notificationId);
 
@@ -114,7 +106,7 @@ export class NotificationUtils {
 
     this.triggerMobileHaptics(type);
 
-    const baseDuration = type === "success" && message.includes("Settings saved") ? 2000 : 3000;
+    const baseDuration = isSettingsSaved(message, type) ? 2000 : 3000;
     const extraTime = Math.max(0, (message.length - 30) * 50);
     const duration = Math.min(baseDuration + extraTime, 6000);
 
@@ -213,7 +205,7 @@ export class NotificationUtils {
             clearTimeout(dismissTimer);
             this.dismissNotification(notification);
           } else {
-            // Ripristina posizione
+            // Restore original position
             notification.style.transform = "translateY(0)";
             notification.style.opacity = "1";
           }
@@ -241,23 +233,12 @@ export class NotificationUtils {
       "vibrate" in navigator &&
       /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
     ) {
-      let pattern = [100];
-
-      switch (type) {
-        case "success":
-          pattern = [100, 50, 100];
-          break;
-        case "warning":
-          pattern = [200];
-          break;
-        case "error":
-          pattern = [100, 100, 100, 100, 100];
-          break;
-        default:
-          pattern = [50];
-      }
-
-      navigator.vibrate(pattern);
+      const patterns = {
+        success: [100, 50, 100],
+        warning: [200],
+        error: [100, 100, 100, 100, 100],
+      };
+      navigator.vibrate(patterns[type] ?? [50]);
     }
   }
 
@@ -276,17 +257,10 @@ export class NotificationUtils {
     notification.classList.add("dismissing");
 
     // Wait for animation to complete before removing from DOM
-    setTimeout(() => {
-      if (notification.parentNode) {
-        notification.parentNode.removeChild(notification);
-      }
-    }, 300);
+    setTimeout(() => notification.remove(), 300);
 
-    // Process queued notifications immediately after tracking removal
-    // Use a small delay to ensure DOM update
-    setTimeout(() => {
-      this.processNotificationQueue();
-    }, 50);
+    // Process queued notifications shortly after tracking removal
+    setTimeout(() => this.processNotificationQueue(), 50);
   }
 
   static playNotificationSound() {
@@ -312,6 +286,17 @@ export class NotificationUtils {
     }
   }
 
+  static showWebNotification(title, message, icon) {
+    if ("Notification" in window && Notification.permission === "granted") {
+      new Notification(title, {
+        body: message,
+        icon,
+        silent: false,
+        requireInteraction: false,
+      });
+    }
+  }
+
   static async showDesktopNotification(title, message, icon = "/assets/tauri.svg") {
     try {
       // Check if we're in a Tauri context
@@ -319,47 +304,25 @@ export class NotificationUtils {
         const { isPermissionGranted, requestPermission, sendNotification } =
           window.__TAURI__.notification;
 
-        // Check if permission is granted
+        // Check if permission is granted, request if not
         let permissionGranted = await isPermissionGranted();
-
-        // If not granted, request permission
         if (!permissionGranted) {
-          const permission = await requestPermission();
-          permissionGranted = permission === "granted";
+          permissionGranted = (await requestPermission()) === "granted";
         }
 
-        // Send notification if permission is granted
         if (permissionGranted) {
-          await sendNotification({
-            title,
-            body: message,
-            icon,
-          });
+          await sendNotification({ title, body: message, icon });
         } else {
           logger.warn("Notification permission denied");
         }
       } else {
         // Fallback to Web Notification API if not in Tauri context
-        if ("Notification" in window && Notification.permission === "granted") {
-          new Notification(title, {
-            body: message,
-            icon,
-            silent: false,
-            requireInteraction: false,
-          });
-        }
+        this.showWebNotification(title, message, icon);
       }
     } catch (error) {
       logger.error("Failed to show desktop notification:", error);
       // Fallback to Web Notification API
-      if ("Notification" in window && Notification.permission === "granted") {
-        new Notification(title, {
-          body: message,
-          icon,
-          silent: false,
-          requireInteraction: false,
-        });
-      }
+      this.showWebNotification(title, message, icon);
     }
   }
 
@@ -367,16 +330,13 @@ export class NotificationUtils {
   static async getNotificationPermission() {
     try {
       if (window.__TAURI__ && window.__TAURI__.notification) {
-        const { isPermissionGranted } = window.__TAURI__.notification;
-        const granted = await isPermissionGranted();
+        const granted = await window.__TAURI__.notification.isPermissionGranted();
         return granted ? "granted" : "denied";
-      } else {
-        // Fallback to Web API
-        if (!("Notification" in window)) {
-          return "unsupported";
-        }
-        return Notification.permission;
       }
+      if (!("Notification" in window)) {
+        return "unsupported";
+      }
+      return Notification.permission;
     } catch (error) {
       logger.error("Failed to check notification permission:", error);
       return "denied";
@@ -387,56 +347,15 @@ export class NotificationUtils {
   static async requestNotificationPermission() {
     try {
       if (window.__TAURI__ && window.__TAURI__.notification) {
-        const { requestPermission } = window.__TAURI__.notification;
-        const permission = await requestPermission();
-        return permission;
-      } else {
-        // Fallback to Web API
-        if (!("Notification" in window)) {
-          return "unsupported";
-        }
-
-        const permission = await Notification.requestPermission();
-        return permission;
+        return await window.__TAURI__.notification.requestPermission();
       }
+      if (!("Notification" in window)) {
+        return "unsupported";
+      }
+      return await Notification.requestPermission();
     } catch (error) {
       logger.error("Failed to request notification permission:", error);
       return "denied";
-    }
-  }
-
-  static createNotificationContent(message, type) {
-    const icons = {
-      success: "✅",
-      warning: "⚠️",
-      error: "❌",
-      info: "ℹ️",
-      focus: "🍅",
-      break: "☕",
-      longBreak: "🌙",
-    };
-
-    const icon = icons[type] || icons.info;
-
-    const isMobile = /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
-      navigator.userAgent
-    );
-
-    if (isMobile) {
-      return `
-                <div class="notification-content-mobile">
-                    <span class="notification-icon">${icon}</span>
-                    <span class="notification-message">${message}</span>
-                    <span class="notification-dismiss-hint">↑</span>
-                </div>
-            `;
-    } else {
-      return `
-                <div class="notification-content-desktop">
-                    <span class="notification-icon">${icon}</span>
-                    <span class="notification-message">${message}</span>
-                </div>
-            `;
     }
   }
 }
@@ -589,18 +508,12 @@ export class DOMUtils {
   }
 
   static closeModal(modal) {
-    if (!modal) {
-      modal = document.querySelector(".modal-overlay");
+    const target = modal || document.querySelector(".modal-overlay");
+    if (!target) {
+      return;
     }
-
-    if (modal) {
-      modal.classList.remove("show");
-      setTimeout(() => {
-        if (modal.parentNode) {
-          modal.parentNode.removeChild(modal);
-        }
-      }, 300);
-    }
+    target.classList.remove("show");
+    setTimeout(() => target.remove(), 300);
   }
 
   static updateElementText(elementId, text) {

@@ -2,17 +2,19 @@
 // This file defines all available timer themes and their properties
 import { logger } from "./logger.js";
 
+const DEFAULT_PREVIEW = {
+  focus: "#e74c3c",
+  break: "#2ecc71",
+  longBreak: "#3498db",
+};
+
 export const TIMER_THEMES = {
   espresso: {
     name: "Espresso",
     description: "Warm, coffee-inspired colors with rich earth tones",
     supports: ["light", "dark"],
     isDefault: true,
-    preview: {
-      focus: "#e74c3c",
-      break: "#2ecc71",
-      longBreak: "#3498db",
-    },
+    preview: DEFAULT_PREVIEW,
   },
   pommodore64: {
     name: "Pommodore64",
@@ -50,11 +52,7 @@ export function registerTheme(themeId, themeConfig) {
     description: themeConfig.description || `Theme: ${themeId}`,
     supports: themeConfig.supports || ["light", "dark"],
     isDefault: themeConfig.isDefault || false,
-    preview: themeConfig.preview || {
-      focus: "#e74c3c",
-      break: "#2ecc71",
-      longBreak: "#3498db",
-    },
+    preview: themeConfig.preview || DEFAULT_PREVIEW,
   };
 
   logger.info(`✅ Registered theme: ${themeId}`, TIMER_THEMES[themeId]);
@@ -97,6 +95,5 @@ export function isThemeCompatible(themeId, colorMode = "light") {
 
 // Get default theme
 export function getDefaultTheme() {
-  const defaultTheme = getAllThemes().find((theme) => theme.isDefault);
-  return defaultTheme || getAllThemes()[0];
+  return getAllThemes().find((theme) => theme.isDefault);
 }
