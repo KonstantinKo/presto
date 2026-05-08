@@ -46,6 +46,6 @@ declare interface Window {
   // Global functions assigned in main.js
   saveSettings?: () => Promise<void>;
   resetToDefaults?: () => Promise<void>;
-  confirmTotalReset?: () => void;
+  confirmTotalReset?: () => Promise<void>;
   performTotalReset?: () => Promise<void>;
 }

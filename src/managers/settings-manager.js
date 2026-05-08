@@ -249,22 +249,22 @@ export class SettingsManager {
 
     const smartPauseCheckbox = document.getElementById("smart-pause");
     if (smartPauseCheckbox) {
-      smartPauseCheckbox.addEventListener("change", (e) => {
-        this.toggleTimeoutSetting(/** @type {HTMLInputElement} */ (e.target).checked);
+      smartPauseCheckbox.addEventListener("change", async (e) => {
+        const checkbox = /** @type {HTMLInputElement} */ (e.target);
+        const checked = checkbox.checked;
+        this.toggleTimeoutSetting(checked);
 
-        // Call the timer's enableSmartPause method directly to ensure consistency
         if (window.pomodoroTimer) {
-          // Use enableSmartPause instead of toggleSmartPause to avoid toggling twice
-          window.pomodoroTimer
-            .enableSmartPause(/** @type {HTMLInputElement} */ (e.target).checked)
-            .then(() => {
-              // Update the indicator to reflect the new state
-              window.pomodoroTimer.updateSettingIndicators();
-              // Schedule auto-save after the smart pause state is updated
-              this.scheduleAutoSave();
-            });
+          try {
+            await window.pomodoroTimer.enableSmartPause(checked);
+            window.pomodoroTimer.updateSettingIndicators();
+            this.scheduleAutoSave();
+          } catch (error) {
+            logger.error("Failed to apply smart pause setting:", error);
+            checkbox.checked = !checked;
+            this.toggleTimeoutSetting(!checked);
+          }
         } else {
-          // If timer is not available, just save the setting
           this.scheduleAutoSave();
         }
       });
@@ -272,20 +272,20 @@ export class SettingsManager {
 
     const continuousSessionsCheckbox = document.getElementById("allow-continuous-sessions");
     if (continuousSessionsCheckbox) {
-      continuousSessionsCheckbox.addEventListener("change", (e) => {
-        // Call the timer's enableContinuousSessions method directly to ensure consistency
+      continuousSessionsCheckbox.addEventListener("change", async (e) => {
+        const checkbox = /** @type {HTMLInputElement} */ (e.target);
+        const checked = checkbox.checked;
+
         if (window.pomodoroTimer) {
-          // Use enableContinuousSessions instead of toggleContinuousSessions to avoid toggling twice
-          window.pomodoroTimer
-            .enableContinuousSessions(/** @type {HTMLInputElement} */ (e.target).checked)
-            .then(() => {
-              // Update the indicator to reflect the new state
-              window.pomodoroTimer.updateSettingIndicators();
-              // Schedule auto-save after the continuous sessions state is updated
-              this.scheduleAutoSave();
-            });
+          try {
+            await window.pomodoroTimer.enableContinuousSessions(checked);
+            window.pomodoroTimer.updateSettingIndicators();
+            this.scheduleAutoSave();
+          } catch (error) {
+            logger.error("Failed to apply continuous sessions setting:", error);
+            checkbox.checked = !checked;
+          }
         } else {
-          // If timer is not available, just save the setting
           this.scheduleAutoSave();
         }
       });
@@ -293,20 +293,20 @@ export class SettingsManager {
 
     const autoStartCheckbox = document.getElementById("auto-start-timer");
     if (autoStartCheckbox) {
-      autoStartCheckbox.addEventListener("change", (e) => {
-        // Call the timer's enableAutoStart method directly to ensure consistency
+      autoStartCheckbox.addEventListener("change", async (e) => {
+        const checkbox = /** @type {HTMLInputElement} */ (e.target);
+        const checked = checkbox.checked;
+
         if (window.pomodoroTimer) {
-          // Use enableAutoStart instead of toggleAutoStart to avoid toggling twice
-          window.pomodoroTimer
-            .enableAutoStart(/** @type {HTMLInputElement} */ (e.target).checked)
-            .then(() => {
-              // Update the indicator to reflect the new state
-              window.pomodoroTimer.updateSettingIndicators();
-              // Schedule auto-save after the auto-start state is updated
-              this.scheduleAutoSave();
-            });
+          try {
+            await window.pomodoroTimer.enableAutoStart(checked);
+            window.pomodoroTimer.updateSettingIndicators();
+            this.scheduleAutoSave();
+          } catch (error) {
+            logger.error("Failed to apply auto-start setting:", error);
+            checkbox.checked = !checked;
+          }
         } else {
-          // If timer is not available, just save the setting
           this.scheduleAutoSave();
         }
       });

@@ -5,15 +5,24 @@ const SUPABASE_URL = "https://lopgwwppinkqvttozqfx.supabase.co";
 
 function waitForSupabase() {
   return new Promise((/** @type {(val?: any) => void} */ resolve, reject) => {
+    let settled = false;
+    const timeoutId = setTimeout(() => {
+      settled = true;
+      reject(new Error("Supabase timeout"));
+    }, 5000);
     const check = () => {
+      if (settled) {
+        return;
+      }
       if (window.supabase) {
+        settled = true;
+        clearTimeout(timeoutId);
         resolve();
       } else {
         setTimeout(check, 50);
       }
     };
     check();
-    setTimeout(() => reject(new Error("Supabase timeout")), 5000);
   });
 }
 

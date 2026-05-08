@@ -320,6 +320,9 @@ export class NavigationManager {
    * @param {any} change
    */
   updateChangeElement(element, change) {
+    if (!element) {
+      return;
+    }
     element.classList.remove("positive", "negative", "neutral");
 
     const icon = element.querySelector("i");

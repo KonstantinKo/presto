@@ -114,10 +114,7 @@ class TagManager {
 
   async loadTags() {
     try {
-      if (
-        typeof window.__TAURI__ === "undefined" ||
-        typeof window.__TAURI__.invoke !== "function"
-      ) {
+      if (typeof window.__TAURI__?.core?.invoke !== "function") {
         logger.warn("Tauri is not available, using localStorage fallback");
         const savedTags = localStorage.getItem("presto-tags");
         if (savedTags) {
@@ -153,7 +150,7 @@ class TagManager {
         return;
       }
 
-      this.tags = await window.__TAURI__.invoke("load_tags");
+      this.tags = /** @type {any[]} */ (await window.__TAURI__.core.invoke("load_tags"));
       this.renderTagList();
 
       if (this.currentTags.length === 0 && this.tags.length > 0) {
@@ -290,8 +287,8 @@ class TagManager {
     try {
       this.tags.push(newTag);
 
-      if (window.__TAURI__ && typeof window.__TAURI__.invoke === "function") {
-        await window.__TAURI__.invoke("save_tag", newTag);
+      if (typeof window.__TAURI__?.core?.invoke === "function") {
+        await window.__TAURI__.core.invoke("save_tag", newTag);
       } else {
         this.saveTagsToLocalStorage();
       }
@@ -315,17 +312,14 @@ class TagManager {
     }
 
     try {
-      if (window.__TAURI__ && typeof window.__TAURI__.invoke === "function") {
-        await window.__TAURI__.invoke("delete_tag", tagId);
+      if (typeof window.__TAURI__?.core?.invoke === "function") {
+        await window.__TAURI__.core.invoke("delete_tag", tagId);
       }
 
       this.tags = this.tags.filter((t) => t.id !== tagId);
       this.currentTags = this.currentTags.filter((t) => t.id !== tagId);
 
-      if (
-        typeof window.__TAURI__ === "undefined" ||
-        typeof window.__TAURI__.invoke !== "function"
-      ) {
+      if (typeof window.__TAURI__?.core?.invoke !== "function") {
         this.saveTagsToLocalStorage();
       }
 
@@ -525,8 +519,8 @@ class TagManager {
     };
 
     try {
-      if (window.__TAURI__ && typeof window.__TAURI__.invoke === "function") {
-        await window.__TAURI__.invoke("add_session_tag", sessionTag);
+      if (typeof window.__TAURI__?.core?.invoke === "function") {
+        await window.__TAURI__.core.invoke("add_session_tag", sessionTag);
       }
     } catch (error) {
       logger.error("Failed to save session tag:", error);

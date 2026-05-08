@@ -293,13 +293,17 @@ export class SessionManager {
     }
 
     if (isNaN(sessionData.duration) || sessionData.duration <= 0) {
-      alert("Please enter a valid duration");
-      return;
-    }
-
-    if (sessionData.end_time <= sessionData.start_time) {
-      alert("End time must be after start time");
-      return;
+      const startMinutes = this.timeToMinutes(/** @type {string} */ (sessionData.start_time));
+      let endMinutes = this.timeToMinutes(/** @type {string} */ (sessionData.end_time));
+      if (endMinutes < startMinutes) {
+        endMinutes += 24 * 60;
+      }
+      const computedDuration = endMinutes - startMinutes;
+      if (isNaN(computedDuration) || computedDuration <= 0) {
+        alert("Please enter a valid duration");
+        return;
+      }
+      sessionData.duration = computedDuration;
     }
 
     try {

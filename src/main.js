@@ -30,7 +30,7 @@ window.saveSettings = async function () {
 
 window.resetToDefaults = async function () {
   if (window.settingsManager) {
-    window.settingsManager.resetToDefaults();
+    return window.settingsManager.resetToDefaults();
   }
 };
 

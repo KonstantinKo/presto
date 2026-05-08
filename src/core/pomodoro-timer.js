@@ -1012,6 +1012,8 @@ export class PomodoroTimer {
     this.isAutoPaused = false;
     this._stopTimerLoop();
 
+    const skippedMode = this.currentMode;
+
     // Track if we need to save session data
     let shouldSaveSession = false;
 
@@ -1086,7 +1088,7 @@ export class PomodoroTimer {
         longBreak: "Long break skipped. Time to get back to work! 🚀",
       };
       NotificationUtils.showNotificationPing(
-        /** @type {Record<string, string>} */ (messages)[this.currentMode] || "Session skipped 📤",
+        /** @type {Record<string, string>} */ (messages)[skippedMode] || "Session skipped 📤",
         "info",
         this.currentMode
       );
@@ -1171,7 +1173,7 @@ export class PomodoroTimer {
       longBreak: "Long break skipped. Time to get back to work! 🚀",
     };
     NotificationUtils.showNotificationPing(
-      /** @type {Record<string, string>} */ (messages)[this.currentMode] || "Session skipped 📤",
+      /** @type {Record<string, string>} */ (messages)[skippedMode] || "Session skipped 📤",
       "info",
       this.currentMode
     );
