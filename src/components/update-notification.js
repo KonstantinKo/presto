@@ -14,6 +14,7 @@ export class UpdateNotification {
     this.animationDuration = 300;
     this.currentVersion = null;
     this._hideTimeoutId = null;
+    this._errorHideTimeoutId = null;
 
     this.createNotificationContainer();
     // Aspetta che l'updateManager sia disponibile prima di bind degli eventi
@@ -635,7 +636,9 @@ export class UpdateNotification {
     }
 
     // Hide after 5 seconds
-    setTimeout(() => {
+    clearTimeout(this._errorHideTimeoutId);
+    this._errorHideTimeoutId = setTimeout(() => {
+      this._errorHideTimeoutId = null;
       this.hide();
     }, 5000);
   }
@@ -646,6 +649,8 @@ export class UpdateNotification {
   show() {
     clearTimeout(this._hideTimeoutId);
     this._hideTimeoutId = null;
+    clearTimeout(this._errorHideTimeoutId);
+    this._errorHideTimeoutId = null;
 
     if (this.isVisible) {
       console.log("🔔 [UpdateNotification] Notification already visible - skip");
@@ -708,6 +713,8 @@ export class UpdateNotification {
   destroy() {
     clearTimeout(this._hideTimeoutId);
     this._hideTimeoutId = null;
+    clearTimeout(this._errorHideTimeoutId);
+    this._errorHideTimeoutId = null;
     if (this.container && this.container.parentNode) {
       this.container.parentNode.removeChild(this.container);
     }

@@ -1878,8 +1878,8 @@ function setupUpdateManagement() {
   if (viewReleasesLink) {
     viewReleasesLink.href = "https://github.com/murdercode/presto/releases";
     viewReleasesLink.addEventListener("click", (e) => {
-      e.preventDefault();
       if (window.__TAURI__?.shell) {
+        e.preventDefault();
         window.__TAURI__.shell.open("https://github.com/murdercode/presto/releases");
       }
     });
@@ -1899,19 +1899,29 @@ function setupUpdateManagement() {
         "Please wait while we check for the latest version."
       );
 
+      let checkFailed = false;
+      const onCheckError = () => {
+        checkFailed = true;
+      };
+      window.updateManager.on("checkError", onCheckError);
+
       try {
         const hasUpdate = await window.updateManager.checkForUpdates(false);
+        window.updateManager.off("checkError", onCheckError);
         hideUpdateProgress();
 
         if (hasUpdate) {
           showUpdateInfo(window.updateManager.currentUpdate);
           updateStatus.innerHTML =
             '<span class="status-text update-available">Update available!</span>';
+        } else if (checkFailed) {
+          updateStatus.innerHTML = '<span class="status-text error">Check failed</span>';
         } else {
           updateStatus.innerHTML =
             '<span class="status-text up-to-date">You\'re up to date!</span>';
         }
       } catch (error) {
+        window.updateManager.off("checkError", onCheckError);
         hideUpdateProgress();
         updateStatus.innerHTML = '<span class="status-text error">Check failed</span>';
         console.error("Update check failed:", error);

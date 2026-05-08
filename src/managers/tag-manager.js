@@ -46,54 +46,52 @@ class TagManager {
   }
 
   bindEvents() {
-    // Toggle dropdown on status click
-    this.timerStatus.addEventListener("click", () => {
-      this.toggleDropdown();
-    });
+    if (this.timerStatus && this.dropdownMenu) {
+      this.timerStatus.addEventListener("click", () => {
+        this.toggleDropdown();
+      });
 
-    // Close dropdown when clicking outside
-    document.addEventListener("click", (e) => {
-      if (!this.timerStatus.contains(e.target) && !this.dropdownMenu.contains(e.target)) {
-        this.closeDropdown();
-      }
-    });
+      document.addEventListener("click", (e) => {
+        if (!this.timerStatus.contains(e.target) && !this.dropdownMenu.contains(e.target)) {
+          this.closeDropdown();
+        }
+      });
+    }
 
-    // Icon selector button toggle
-    this.selectedIconBtn.addEventListener("click", () => {
-      this.toggleIconSelector();
-    });
+    if (this.selectedIconBtn && this.iconSelector) {
+      this.selectedIconBtn.addEventListener("click", () => {
+        this.toggleIconSelector();
+      });
 
-    // Icon selection
-    this.iconSelector.addEventListener("click", (e) => {
-      const iconOption = e.target.closest(".icon-option, .emoji-option");
-      if (iconOption) {
-        this.selectIcon(iconOption);
-      }
-    });
+      this.iconSelector.addEventListener("click", (e) => {
+        const iconOption = e.target.closest(".icon-option, .emoji-option");
+        if (iconOption) {
+          this.selectIcon(iconOption);
+        }
+      });
 
-    // Close icon selector when clicking outside
-    document.addEventListener("click", (e) => {
-      if (!this.selectedIconBtn.contains(e.target) && !this.iconSelector.contains(e.target)) {
-        this.closeIconSelector();
-      }
-    });
+      document.addEventListener("click", (e) => {
+        if (!this.selectedIconBtn.contains(e.target) && !this.iconSelector.contains(e.target)) {
+          this.closeIconSelector();
+        }
+      });
+    }
 
-    // Create new tag
-    this.createTagBtn.addEventListener("click", () => {
-      this.createNewTag();
-    });
-
-    // Enter key to create tag
-    this.newTagName.addEventListener("keypress", (e) => {
-      if (e.key === "Enter") {
+    if (this.createTagBtn && this.newTagName) {
+      this.createTagBtn.addEventListener("click", () => {
         this.createNewTag();
-      }
-    });
+      });
 
-    // Update create button state
-    this.newTagName.addEventListener("input", () => {
-      this.updateCreateButtonState();
-    });
+      this.newTagName.addEventListener("keypress", (e) => {
+        if (e.key === "Enter") {
+          this.createNewTag();
+        }
+      });
+
+      this.newTagName.addEventListener("input", () => {
+        this.updateCreateButtonState();
+      });
+    }
   }
 
   async loadTags() {
@@ -107,8 +105,15 @@ class TagManager {
         // Load from localStorage
         const savedTags = localStorage.getItem("presto-tags");
         if (savedTags) {
-          this.tags = JSON.parse(savedTags);
-        } else {
+          try {
+            this.tags = JSON.parse(savedTags);
+          } catch (_parseError) {
+            console.error("TagManager: corrupted tags in localStorage, resetting");
+            localStorage.removeItem("presto-tags");
+            this.tags = [];
+          }
+        }
+        if (this.tags.length === 0) {
           this.tags = [
             {
               id: "default-focus",
@@ -141,8 +146,15 @@ class TagManager {
       // Fallback to localStorage or default tag
       const savedTags = localStorage.getItem("presto-tags");
       if (savedTags) {
-        this.tags = JSON.parse(savedTags);
-      } else {
+        try {
+          this.tags = JSON.parse(savedTags);
+        } catch (_parseError) {
+          console.error("TagManager: corrupted tags in localStorage, resetting");
+          localStorage.removeItem("presto-tags");
+          this.tags = [];
+        }
+      }
+      if (this.tags.length === 0) {
         this.tags = [
           {
             id: "default-focus",
@@ -176,14 +188,25 @@ class TagManager {
         tagItem.classList.add("selected");
       }
 
-      tagItem.innerHTML = `
-                <div class="tag-item-icon">
-                    ${tag.icon.startsWith("ri-") ? `<i class="${tag.icon}"></i>` : tag.icon}
-                </div>
-                <div class="tag-item-name"></div>
-                <div class="tag-item-delete ri-delete-bin-line" data-tag-id="${tag.id}"></div>
-            `;
-      tagItem.querySelector(".tag-item-name").textContent = tag.name;
+      const iconWrap = document.createElement("div");
+      iconWrap.className = "tag-item-icon";
+      if (typeof tag.icon === "string" && tag.icon.startsWith("ri-")) {
+        const i = document.createElement("i");
+        i.className = tag.icon;
+        iconWrap.appendChild(i);
+      } else {
+        iconWrap.textContent = String(tag.icon ?? "");
+      }
+
+      const nameEl = document.createElement("div");
+      nameEl.className = "tag-item-name";
+      nameEl.textContent = tag.name;
+
+      const deleteEl = document.createElement("div");
+      deleteEl.className = "tag-item-delete ri-delete-bin-line";
+      deleteEl.dataset.tagId = String(tag.id);
+
+      tagItem.append(iconWrap, nameEl, deleteEl);
 
       // Tag selection event
       tagItem.addEventListener("click", (e) => {

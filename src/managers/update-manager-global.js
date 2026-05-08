@@ -15,6 +15,7 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
     this.downloadProgress = 0;
     this.autoCheck = true;
     this.checkInterval = null;
+    this.startupTimeout = null;
 
     // Eventi personalizzati
     this.eventTarget = new EventTarget();
@@ -256,7 +257,8 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
       );
 
       // Controllo iniziale dopo 5 secondi
-      setTimeout(() => {
+      this.startupTimeout = setTimeout(() => {
+        this.startupTimeout = null;
         console.log("🔄 Initial automatic update check...");
         this.checkForUpdates(false); // silent - mostra il banner se c'è un aggiornamento
       }, 5000);
@@ -269,6 +271,8 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
    * Ferma il controllo automatico degli aggiornamenti
    */
   stopAutoCheck() {
+    clearTimeout(this.startupTimeout);
+    this.startupTimeout = null;
     if (this.checkInterval) {
       clearInterval(this.checkInterval);
       this.checkInterval = null;
@@ -424,13 +428,11 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
         console.error("❌ Could not retrieve current version:", versionError.message);
         this.updateAvailable = false;
         this.currentUpdate = null;
-        if (showDialog) {
-          this.eventTarget.dispatchEvent(
-            new CustomEvent("checkError", {
-              detail: { message: "Impossibile verificare la versione corrente dell'applicazione" },
-            })
-          );
-        }
+        this.eventTarget.dispatchEvent(
+          new CustomEvent("checkError", {
+            detail: { message: "Impossibile verificare la versione corrente dell'applicazione" },
+          })
+        );
         return false;
       }
 
@@ -738,6 +740,8 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
 
   destroy() {
     this.stopAutoCheck();
+    clearTimeout(this.startupTimeout);
+    this.startupTimeout = null;
     this.eventTarget = null;
   }
 };

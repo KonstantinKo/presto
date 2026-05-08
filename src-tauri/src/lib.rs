@@ -1375,7 +1375,7 @@ async fn set_dock_visibility(_app: AppHandle, _visible: bool) -> Result<(), Stri
         _app.run_on_main_thread(move || {
             set_dock_visibility_native(_visible);
         })
-        .map_err(|e| format!("Failed to run on main thread: {}", e))?;
+        .map_err(|e| format!("Failed to run on main thread: {e}"))?;
         Ok(())
     }
 
