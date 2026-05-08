@@ -16,8 +16,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Presto</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.50.0/dist/umd/supabase.js"></script>
-    <script src="/managers/update-manager-global.js" defer></script>
-    <script src="/managers/tag-manager.js" defer></script>
+    <script type="module" src="/managers/update-manager-global.js"></script>
+    <script type="module" src="/managers/tag-manager.js"></script>
     <script type="module" src="/main.js" defer></script>
   </head>
 
@@ -682,7 +682,14 @@
                       placeholder="CommandOrControl+Alt+Space"
                       value=""
                     />
-                    <button class="shortcut-clear" onclick="clearShortcut('start-stop')">×</button>
+                    <button
+                      type="button"
+                      class="shortcut-clear"
+                      data-shortcut="start-stop"
+                      aria-label="Clear start/stop shortcut"
+                    >
+                      ×
+                    </button>
                   </div>
                   <p class="setting-description">Toggle timer between start and pause states</p>
                 </div>
@@ -697,7 +704,14 @@
                       readonly
                       placeholder="CommandOrControl+Alt+R"
                     />
-                    <button class="shortcut-clear" onclick="clearShortcut('reset')">×</button>
+                    <button
+                      type="button"
+                      class="shortcut-clear"
+                      data-shortcut="reset"
+                      aria-label="Clear reset shortcut"
+                    >
+                      ×
+                    </button>
                   </div>
                   <p class="setting-description">Reset current session or undo during breaks</p>
                 </div>
@@ -712,7 +726,14 @@
                       readonly
                       placeholder="CommandOrControl+Alt+S"
                     />
-                    <button class="shortcut-clear" onclick="clearShortcut('skip')">×</button>
+                    <button
+                      type="button"
+                      class="shortcut-clear"
+                      data-shortcut="skip"
+                      aria-label="Clear skip shortcut"
+                    >
+                      ×
+                    </button>
                   </div>
                   <p class="setting-description">Skip to next phase and save current progress</p>
                 </div>

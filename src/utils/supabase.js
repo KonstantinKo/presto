@@ -1,5 +1,6 @@
-// Wait for Supabase to be available
 import { logger } from "./logger.js";
+
+const SUPABASE_URL = "https://lopgwwppinkqvttozqfx.supabase.co";
 
 function waitForSupabase() {
   return new Promise((resolve, reject) => {
@@ -24,13 +25,11 @@ async function initSupabase() {
 
   const { createClient } = window.supabase;
 
-  // Hardcoded Supabase configuration
-  const supabaseUrl = "https://lopgwwppinkqvttozqfx.supabase.co";
   const supabaseAnonKey =
     "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxvcGd3d3BwaW5rcXZ0dG96cWZ4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTA2NzgxMDIsImV4cCI6MjA2NjI1NDEwMn0.DqPcwsBJdPeV5iWsMkZLMn6-xZ_A9l-Xh7R-wi7kc2k";
 
   // Create Supabase client
-  supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  supabase = createClient(SUPABASE_URL, supabaseAnonKey, {
     auth: {
       // Configure redirect URLs for OAuth
       redirectTo: window.location.origin,
@@ -80,9 +79,6 @@ async function initSupabase() {
 
         logger.debug(`Starting Tauri OAuth flow for ${provider}...`);
 
-        // Get Supabase configuration
-        const supabaseUrl = "https://lopgwwppinkqvttozqfx.supabase.co";
-
         // Start OAuth flow using tauri-plugin-oauth
         logger.debug("Invoking OAuth start...");
 
@@ -106,7 +102,7 @@ async function initSupabase() {
           const redirectUri = `http://localhost:${port}`;
 
           // Build OAuth URL
-          const authUrl = `${supabaseUrl}/auth/v1/authorize?provider=${provider}&redirect_to=${encodeURIComponent(redirectUri)}`;
+          const authUrl = `${SUPABASE_URL}/auth/v1/authorize?provider=${provider}&redirect_to=${encodeURIComponent(redirectUri)}`;
 
           // Return a promise that resolves when OAuth completes
           return new Promise((resolve, reject) => {
@@ -230,11 +226,7 @@ async function initSupabase() {
 
                     if (error) {
                       logger.error("OAuth error in callback:", error);
-                      try {
-                        await invoke("plugin:oauth|cancel", { port });
-                      } catch (cancelError) {
-                        logger.info("Cancel command failed (this is usually fine):", cancelError);
-                      }
+                      await cancelOauthServer();
                       reject(new Error(`OAuth error: ${error}`));
                       return;
                     }
@@ -248,11 +240,7 @@ async function initSupabase() {
                           refresh_token: refreshToken,
                         });
 
-                        try {
-                          await invoke("plugin:oauth|cancel", { port });
-                        } catch (cancelError) {
-                          logger.info("Cancel command failed (this is usually fine):", cancelError);
-                        }
+                        await cancelOauthServer();
 
                         if (sessionError) {
                           logger.error("Supabase session error:", sessionError);
@@ -263,30 +251,18 @@ async function initSupabase() {
                         }
                       } catch (sessionSetupError) {
                         logger.error("Session setup failed:", sessionSetupError);
-                        try {
-                          await invoke("plugin:oauth|cancel", { port });
-                        } catch (cancelError) {
-                          logger.info("Cancel command failed (this is usually fine):", cancelError);
-                        }
+                        await cancelOauthServer();
                         reject(new Error(`Session setup failed: ${sessionSetupError.message}`));
                       }
                     } else {
                       logger.error("No access token found in callback URL");
-                      try {
-                        await invoke("plugin:oauth|cancel", { port });
-                      } catch (cancelError) {
-                        logger.info("Cancel command failed (this is usually fine):", cancelError);
-                      }
+                      await cancelOauthServer();
                       reject(new Error("No access token found in OAuth callback"));
                     }
                   } catch (parseError) {
                     logger.error("Error parsing OAuth callback:", parseError);
                     clearTimeout(timeout);
-                    try {
-                      await invoke("plugin:oauth|cancel", { port });
-                    } catch (cancelError) {
-                      logger.info("Cancel command failed (this is usually fine):", cancelError);
-                    }
+                    await cancelOauthServer();
                     reject(new Error(`Failed to parse OAuth callback: ${parseError.message}`));
                   }
                 }

@@ -1,6 +1,10 @@
-// Timer Themes Configuration
-// This file defines all available timer themes and their properties
 import { logger } from "./logger.js";
+
+const DEFAULT_PREVIEW = {
+  focus: "#e74c3c",
+  break: "#2ecc71",
+  longBreak: "#3498db",
+};
 
 export const TIMER_THEMES = {
   espresso: {
@@ -8,11 +12,7 @@ export const TIMER_THEMES = {
     description: "Warm, coffee-inspired colors with rich earth tones",
     supports: ["light", "dark"],
     isDefault: true,
-    preview: {
-      focus: "#e74c3c",
-      break: "#2ecc71",
-      longBreak: "#3498db",
-    },
+    preview: DEFAULT_PREVIEW,
   },
   pommodore64: {
     name: "Pommodore64",
@@ -39,9 +39,10 @@ export const TIMER_THEMES = {
   },
 };
 
-// Function to dynamically register a new theme
 export function registerTheme(themeId, themeConfig) {
-  if (TIMER_THEMES[themeId]) {
+  const existingTheme = TIMER_THEMES[themeId];
+
+  if (existingTheme) {
     logger.warn(`🎨 Theme ${themeId} already exists, overriding...`);
   }
 
@@ -49,19 +50,14 @@ export function registerTheme(themeId, themeConfig) {
     name: themeConfig.name || themeId,
     description: themeConfig.description || `Theme: ${themeId}`,
     supports: themeConfig.supports || ["light", "dark"],
-    isDefault: themeConfig.isDefault || false,
-    preview: themeConfig.preview || {
-      focus: "#e74c3c",
-      break: "#2ecc71",
-      longBreak: "#3498db",
-    },
+    isDefault: themeConfig.isDefault ?? existingTheme?.isDefault ?? false,
+    preview: themeConfig.preview || DEFAULT_PREVIEW,
   };
 
   logger.info(`✅ Registered theme: ${themeId}`, TIMER_THEMES[themeId]);
   return TIMER_THEMES[themeId];
 }
 
-// Function to unregister a theme
 export function unregisterTheme(themeId) {
   if (TIMER_THEMES[themeId] && !TIMER_THEMES[themeId].isDefault) {
     delete TIMER_THEMES[themeId];
@@ -71,12 +67,10 @@ export function unregisterTheme(themeId) {
   return false;
 }
 
-// Get theme by ID
 export function getThemeById(themeId) {
   return TIMER_THEMES[themeId] || TIMER_THEMES.espresso;
 }
 
-// Get all available themes
 export function getAllThemes() {
   return Object.entries(TIMER_THEMES).map(([id, theme]) => ({
     id,
@@ -84,19 +78,15 @@ export function getAllThemes() {
   }));
 }
 
-// Get compatible themes for current color mode
 export function getCompatibleThemes(colorMode = "light") {
   return getAllThemes().filter((theme) => theme.supports.includes(colorMode));
 }
 
-// Check if theme is compatible with color mode
 export function isThemeCompatible(themeId, colorMode = "light") {
   const theme = getThemeById(themeId);
   return theme.supports.includes(colorMode);
 }
 
-// Get default theme
 export function getDefaultTheme() {
-  const defaultTheme = getAllThemes().find((theme) => theme.isDefault);
-  return defaultTheme || getAllThemes()[0];
+  return getAllThemes().find((theme) => theme.isDefault);
 }

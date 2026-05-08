@@ -1,24 +1,23 @@
-// Tag Statistics Utility for generating pie chart data and visualization
 import { logger } from "./logger.js";
 
 export class TagStatistics {
   constructor() {
     this.tagColors = [
-      "#3b82f6", // Blue
-      "#10b981", // Green
-      "#f59e0b", // Yellow
-      "#ef4444", // Red
-      "#8b5cf6", // Purple
-      "#06b6d4", // Cyan
-      "#f97316", // Orange
-      "#84cc16", // Lime
-      "#ec4899", // Pink
-      "#6b7280", // Gray
-      "#14b8a6", // Teal
-      "#a855f7", // Violet
-      "#eab308", // Amber
-      "#22c55e", // Emerald
-      "#3b82f6", // Blue (repeat)
+      "#3b82f6",
+      "#10b981",
+      "#f59e0b",
+      "#ef4444",
+      "#8b5cf6",
+      "#06b6d4",
+      "#f97316",
+      "#84cc16",
+      "#ec4899",
+      "#6b7280",
+      "#14b8a6",
+      "#a855f7",
+      "#eab308",
+      "#22c55e",
+      "#0ea5e9",
     ];
   }
 
@@ -217,28 +216,43 @@ export class TagStatistics {
     const topStats = stats.slice(0, 5);
     const remainingStats = stats.slice(5);
 
-    // Create legend for top tags
+    // Create legend for top tags using safe DOM construction
     topStats.forEach((stat) => {
       const legendItem = document.createElement("div");
       legendItem.className = "tag-legend-item";
 
-      const iconHtml = stat.tag.icon.startsWith("ri-")
-        ? `<i class="${stat.tag.icon}"></i>`
-        : stat.tag.icon;
+      const colorDiv = document.createElement("div");
+      colorDiv.className = "tag-legend-color";
+      colorDiv.style.backgroundColor = stat.color;
 
-      legendItem.innerHTML = `
-                <div class="tag-legend-color" style="background-color: ${stat.color}"></div>
-                <div class="tag-legend-info">
-                    <div class="tag-legend-name">
-                        ${iconHtml} ${stat.tag.name}
-                    </div>
-                    <div class="tag-legend-stats">
-                        <span class="tag-legend-time">${this.formatDuration(stat.duration)}</span>
-                        <span class="tag-legend-percent">${stat.percentage.toFixed(1)}%</span>
-                    </div>
-                </div>
-            `;
+      const infoDiv = document.createElement("div");
+      infoDiv.className = "tag-legend-info";
 
+      const nameDiv = document.createElement("div");
+      nameDiv.className = "tag-legend-name";
+      if (stat.tag.icon.startsWith("ri-")) {
+        const icon = document.createElement("i");
+        icon.className = stat.tag.icon;
+        nameDiv.appendChild(icon);
+        nameDiv.append(` ${stat.tag.name}`);
+      } else {
+        nameDiv.textContent = `${stat.tag.icon} ${stat.tag.name}`;
+      }
+
+      const statsDiv = document.createElement("div");
+      statsDiv.className = "tag-legend-stats";
+
+      const timeSpan = document.createElement("span");
+      timeSpan.className = "tag-legend-time";
+      timeSpan.textContent = this.formatDuration(stat.duration);
+
+      const percentSpan = document.createElement("span");
+      percentSpan.className = "tag-legend-percent";
+      percentSpan.textContent = `${stat.percentage.toFixed(1)}%`;
+
+      statsDiv.append(timeSpan, percentSpan);
+      infoDiv.append(nameDiv, statsDiv);
+      legendItem.append(colorDiv, infoDiv);
       legendContainer.appendChild(legendItem);
     });
 
