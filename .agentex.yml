@@ -1,0 +1,27 @@
+# Agentex Configuration
+# This file contains project-specific settings for Agentex
+
+version: 1
+
+# Workflow settings
+workflow:
+  type: plan_and_build
+  model: sonnet
+
+# Labels to skip (issues with these labels won't be processed)
+skip_labels:
+  - wontfix
+  - discussion
+  - question
+
+# Custom prompts
+prompts:
+  planning_addon: ""
+
+# QA verification commands - run after implement and fix_review_issues steps
+qa:
+  test: []
+  lint: []
+  format: []
+
+# Claude Code slash commands are available in .claude/commands/
