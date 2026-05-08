@@ -1,11 +1,12 @@
 import { logger } from "./logger.js";
+import { toError } from "./to-error.js";
 
 const SUPABASE_URL = "https://lopgwwppinkqvttozqfx.supabase.co";
 
 function waitForSupabase() {
-  return new Promise((resolve, reject) => {
+  return new Promise((/** @type {(val?: any) => void} */ resolve, reject) => {
     const check = () => {
-      if (window.supabase && window.supabase.createClient) {
+      if (window.supabase) {
         resolve();
       } else {
         setTimeout(check, 50);
@@ -17,13 +18,15 @@ function waitForSupabase() {
 }
 
 // Initialize Supabase client
+/** @type {any} */
 let supabase = null;
+/** @type {any} */
 let authHelpers = null;
 
 async function initSupabase() {
   await waitForSupabase();
 
-  const { createClient } = window.supabase;
+  const { createClient } = /** @type {NonNullable<Window['supabase']>} */ (window.supabase);
 
   const supabaseAnonKey =
     "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxvcGd3d3BwaW5rcXZ0dG96cWZ4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTA2NzgxMDIsImV4cCI6MjA2NjI1NDEwMn0.DqPcwsBJdPeV5iWsMkZLMn6-xZ_A9l-Xh7R-wi7kc2k";
@@ -42,7 +45,7 @@ async function initSupabase() {
 
   // Auth helper functions
   authHelpers = {
-    // Sign in with email/password
+    /** @param {string} email @param {string} password */
     async signInWithEmail(email, password) {
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
@@ -51,7 +54,7 @@ async function initSupabase() {
       return { data, error };
     },
 
-    // Sign up with email/password
+    /** @param {string} email @param {string} password */
     async signUpWithEmail(email, password) {
       const { data, error } = await supabase.auth.signUp({
         email,
@@ -60,7 +63,7 @@ async function initSupabase() {
       return { data, error };
     },
 
-    // Sign in with OAuth providers using tauri-plugin-oauth
+    /** @param {string} provider */
     async signInWithProvider(provider) {
       try {
         if (!window.__TAURI__) {
@@ -75,13 +78,16 @@ async function initSupabase() {
           return { data, error };
         }
 
-        const { invoke } = window.__TAURI__.core;
+        const { invoke } = /** @type {{ invoke: (cmd: string, args?: any) => Promise<any> }} */ (
+          window.__TAURI__?.core ?? {}
+        );
 
         logger.debug(`Starting Tauri OAuth flow for ${provider}...`);
 
         // Start OAuth flow using tauri-plugin-oauth
         logger.debug("Invoking OAuth start...");
 
+        /** @type {number | undefined} */
         let port;
         const cancelOauthServer = async () => {
           if (port != null) {
@@ -106,8 +112,9 @@ async function initSupabase() {
 
           // Return a promise that resolves when OAuth completes
           return new Promise((resolve, reject) => {
+            /** @type {ReturnType<typeof setTimeout> | undefined} */
             let timeout;
-            const unlisteners = [];
+            const unlisteners = /** @type {(() => void)[]} */ ([]);
             const cleanupListeners = () => {
               for (const off of unlisteners) {
                 try {
@@ -131,7 +138,10 @@ async function initSupabase() {
                 logger.debug("Redirect URI:", redirectUri);
 
                 // Set up event listener for OAuth callback
-                const { listen } = window.__TAURI__.event;
+                const { listen } =
+                  /** @type {{ listen: (event: string, handler: (e: any) => void) => Promise<() => void> }} */ (
+                    window.__TAURI__?.event ?? {}
+                  );
 
                 logger.debug("Setting up OAuth event listeners...");
 
@@ -147,20 +157,28 @@ async function initSupabase() {
                 for (const eventName of possibleEvents) {
                   try {
                     logger.debug(`Trying to listen for event: ${eventName}`);
-                    const tempUnlisten = await listen(eventName, async (event) => {
-                      if (processed) {
-                        return;
-                      }
-                      processed = true;
-                      cleanupListeners();
-                      logger.debug("Received OAuth callback event", {
-                        eventName,
-                        hasPayload: Boolean(event?.payload),
-                      });
+                    const tempUnlisten = await listen(
+                      eventName,
+                      async (/** @type {any} */ event) => {
+                        if (processed) {
+                          return;
+                        }
+                        processed = true;
+                        cleanupListeners();
+                        logger.debug("Received OAuth callback event", {
+                          eventName,
+                          hasPayload: Boolean(event?.payload),
+                        });
 
-                      // Process the callback
-                      await processOAuthCallback(event.payload, resolve, reject, timeout);
-                    });
+                        // Process the callback
+                        await processOAuthCallback(
+                          event.payload,
+                          resolve,
+                          reject,
+                          /** @type {ReturnType<typeof setTimeout>} */ (timeout)
+                        );
+                      }
+                    );
 
                     unlisteners.push(tempUnlisten);
                   } catch (listenError) {
@@ -199,6 +217,12 @@ async function initSupabase() {
                 logger.debug("OAuth URL opened in browser. Please complete authentication...");
 
                 // Function to process OAuth callback
+                /**
+                 * @param {string} callbackUrl
+                 * @param {(val: any) => void} resolve
+                 * @param {(err: Error) => void} reject
+                 * @param {ReturnType<typeof setTimeout>} timeout
+                 */
                 async function processOAuthCallback(callbackUrl, resolve, reject, timeout) {
                   try {
                     clearTimeout(timeout);
@@ -252,7 +276,9 @@ async function initSupabase() {
                       } catch (sessionSetupError) {
                         logger.error("Session setup failed:", sessionSetupError);
                         await cancelOauthServer();
-                        reject(new Error(`Session setup failed: ${sessionSetupError.message}`));
+                        reject(
+                          new Error(`Session setup failed: ${toError(sessionSetupError).message}`)
+                        );
                       }
                     } else {
                       logger.error("No access token found in callback URL");
@@ -263,7 +289,9 @@ async function initSupabase() {
                     logger.error("Error parsing OAuth callback:", parseError);
                     clearTimeout(timeout);
                     await cancelOauthServer();
-                    reject(new Error(`Failed to parse OAuth callback: ${parseError.message}`));
+                    reject(
+                      new Error(`Failed to parse OAuth callback: ${toError(parseError).message}`)
+                    );
                   }
                 }
 
@@ -273,18 +301,18 @@ async function initSupabase() {
                 clearTimeout(timeout);
                 cleanupListeners();
                 await cancelOauthServer();
-                reject(new Error(`OAuth setup failed: ${setupError.message}`));
+                reject(new Error(`OAuth setup failed: ${toError(setupError).message}`));
               }
             })();
           });
         } catch (invokeError) {
           logger.error("Error calling OAuth plugin:", invokeError);
           await cancelOauthServer();
-          return { data: null, error: invokeError.message };
+          return { data: null, error: toError(invokeError).message };
         }
       } catch (error) {
         logger.error(`OAuth ${provider} error:`, error);
-        return { data: null, error: error.message };
+        return { data: null, error: toError(error).message };
       }
     },
 
@@ -305,6 +333,7 @@ async function initSupabase() {
     },
 
     // Listen for auth state changes
+    /** @param {any} callback */
     onAuthStateChange(callback) {
       return supabase.auth.onAuthStateChange(callback);
     },

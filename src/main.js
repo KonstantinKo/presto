@@ -7,11 +7,16 @@ import { PomodoroTimer } from "./core/pomodoro-timer.js";
 import { NotificationUtils } from "./utils/common-utils.js";
 import { UpdateNotification } from "./components/update-notification.js";
 import { logger } from "./utils/logger.js";
+import { toError } from "./utils/to-error.js";
 window.appLog = logger;
 
+/** @type {any} */
 let timer = null;
+/** @type {any} */
 let navigation = null;
+/** @type {any} */
 let settingsManager = null;
+/** @type {any} */
 let sessionManager = null;
 let teamManager = null;
 let authChangeHandlerRegistered = false;
@@ -23,16 +28,16 @@ window.saveSettings = async function () {
   }
 };
 
-window.resetToDefaults = function () {
+window.resetToDefaults = async function () {
   if (window.settingsManager) {
     window.settingsManager.resetToDefaults();
   }
 };
 
 document.addEventListener("click", (e) => {
-  const btn = e.target.closest(".shortcut-clear[data-shortcut]");
+  const btn = /** @type {Element} */ (e.target)?.closest(".shortcut-clear[data-shortcut]");
   if (btn && window.settingsManager) {
-    window.settingsManager.clearShortcut(btn.dataset.shortcut);
+    window.settingsManager.clearShortcut(/** @type {HTMLElement} */ (btn).dataset.shortcut);
   }
 });
 
@@ -64,7 +69,7 @@ window.confirmTotalReset = async function () {
 
       if (doubleConfirm) {
         logger.info("Both confirmations received, calling performTotalReset");
-        await window.performTotalReset();
+        await window.performTotalReset?.();
       } else {
         logger.info("Second confirmation cancelled by user");
       }
@@ -78,11 +83,16 @@ window.confirmTotalReset = async function () {
       "Si è verificato un errore nei dialog. Vuoi resettare tutti i dati comunque?"
     );
     if (manualConfirm) {
-      await window.performTotalReset();
+      await window.performTotalReset?.();
     }
   }
 };
 
+/**
+ * @param {any} title
+ * @param {any} message
+ * @param {any} [type]
+ */
 function showCustomConfirm(title, message, type = "warning") {
   return new Promise((resolve) => {
     const overlay = document.createElement("div");
@@ -116,10 +126,10 @@ function showCustomConfirm(title, message, type = "warning") {
     `;
 
     // Determine colors based on type
-    const colors = {
+    const colors = /** @type {Record<string, {bg: string, border: string, text: string}>} */ ({
       warning: { bg: "#fff3cd", border: "#ffeaa7", text: "#856404" },
       error: { bg: "#f8d7da", border: "#f5c6cb", text: "#721c24" },
-    };
+    });
     const color = colors[type] || colors.warning;
 
     modal.innerHTML = `
@@ -156,34 +166,43 @@ function showCustomConfirm(title, message, type = "warning") {
     overlay.appendChild(modal);
     document.body.appendChild(overlay);
 
-    const confirmBtn = modal.querySelector("#confirm-btn");
-    const cancelBtn = modal.querySelector("#cancel-btn");
+    const confirmBtn = /** @type {HTMLElement | null} */ (modal.querySelector("#confirm-btn"));
+    const cancelBtn = /** @type {HTMLElement | null} */ (modal.querySelector("#cancel-btn"));
 
-    confirmBtn.addEventListener("mouseover", () => {
-      confirmBtn.style.background = "#bb2d3b";
-    });
-    confirmBtn.addEventListener("mouseout", () => {
-      confirmBtn.style.background = "#dc3545";
-    });
-    cancelBtn.addEventListener("mouseover", () => {
-      cancelBtn.style.background = "#5c636a";
-    });
-    cancelBtn.addEventListener("mouseout", () => {
-      cancelBtn.style.background = "#6c757d";
-    });
+    if (confirmBtn) {
+      confirmBtn.addEventListener("mouseover", () => {
+        confirmBtn.style.background = "#bb2d3b";
+      });
+      confirmBtn.addEventListener("mouseout", () => {
+        confirmBtn.style.background = "#dc3545";
+      });
+    }
+    if (cancelBtn) {
+      cancelBtn.addEventListener("mouseover", () => {
+        cancelBtn.style.background = "#5c636a";
+      });
+      cancelBtn.addEventListener("mouseout", () => {
+        cancelBtn.style.background = "#6c757d";
+      });
+    }
 
-    confirmBtn.addEventListener("click", () => {
-      document.removeEventListener("keydown", handleEscape);
-      document.body.removeChild(overlay);
-      resolve(true);
-    });
+    if (confirmBtn) {
+      confirmBtn.addEventListener("click", () => {
+        document.removeEventListener("keydown", handleEscape);
+        document.body.removeChild(overlay);
+        resolve(true);
+      });
+    }
 
-    cancelBtn.addEventListener("click", () => {
-      document.removeEventListener("keydown", handleEscape);
-      document.body.removeChild(overlay);
-      resolve(false);
-    });
+    if (cancelBtn) {
+      cancelBtn.addEventListener("click", () => {
+        document.removeEventListener("keydown", handleEscape);
+        document.body.removeChild(overlay);
+        resolve(false);
+      });
+    }
 
+    /** @param {any} e */
     const handleEscape = (e) => {
       if (e.key === "Escape") {
         document.body.removeChild(overlay);
@@ -193,7 +212,7 @@ function showCustomConfirm(title, message, type = "warning") {
     };
     document.addEventListener("keydown", handleEscape);
 
-    setTimeout(() => cancelBtn.focus(), 100);
+    setTimeout(() => cancelBtn && cancelBtn.focus(), 100);
   });
 }
 
@@ -203,8 +222,9 @@ window.performTotalReset = async function () {
       throw new Error("Tauri is not available - app might not be running in Tauri context");
     }
 
-    const resetButton = document.querySelector(".btn-danger");
-    const _originalText = resetButton ? resetButton.textContent : "🗑️ Reset All Data";
+    const resetButton = /** @type {HTMLButtonElement | null} */ (
+      document.querySelector(".btn-danger")
+    );
     if (resetButton) {
       resetButton.textContent = "🔄 Resetting...";
       resetButton.disabled = true;
@@ -250,18 +270,20 @@ window.performTotalReset = async function () {
     location.reload();
   } catch (error) {
     logger.error("Failed to reset data:", error);
-    logger.error("Error stack:", error.stack);
+    logger.error("Error stack:", toError(error).stack);
 
     let errorMessage = "Failed to reset data. ";
-    if (error.message.includes("Tauri")) {
+    if (toError(error).message.includes("Tauri")) {
       errorMessage += "Application context error. Please restart the app and try again.";
     } else {
-      errorMessage += `Error: ${error.message}`;
+      errorMessage += `Error: ${toError(error).message}`;
     }
 
     alert(`❌ ${errorMessage}`);
 
-    const resetButton = document.querySelector(".btn-danger");
+    const resetButton = /** @type {HTMLButtonElement | null} */ (
+      document.querySelector(".btn-danger")
+    );
     if (resetButton) {
       resetButton.textContent = "🗑️ Reset All Data";
       resetButton.disabled = false;
@@ -271,6 +293,7 @@ window.performTotalReset = async function () {
 
 // Initialize theme early to prevent flash
 async function initializeEarlyTheme() {
+  /** @param {any} themePreference */
   function getActualTheme(themePreference) {
     if (themePreference === "auto") {
       return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
@@ -316,8 +339,9 @@ async function initializeEarlyTheme() {
       logger.debug("🎨 Tauri is ready, loading theme from settings...");
 
       try {
-        const { invoke } = window.__TAURI__.core;
-        const savedSettings = await invoke("load_settings");
+        const savedSettings = /** @type {any} */ (
+          await window.__TAURI__?.core?.invoke("load_settings")
+        );
         const themeFromSettings = savedSettings?.appearance?.theme;
         const timerThemeFromSettings = savedSettings?.appearance?.timer_theme;
 
@@ -346,14 +370,17 @@ async function initializeEarlyTheme() {
       } catch (settingsError) {
         logger.debug(
           "🎨 Could not load theme from settings, using localStorage fallback:",
-          settingsError.message
+          toError(settingsError).message
         );
       }
     } else {
       logger.debug("🎨 Tauri not ready within timeout, using localStorage fallback");
     }
   } catch (error) {
-    logger.debug("🎨 Error waiting for Tauri, using localStorage fallback:", error.message);
+    logger.debug(
+      "🎨 Error waiting for Tauri, using localStorage fallback:",
+      toError(error).message
+    );
   }
 
   const storedTheme = localStorage.getItem("theme-preference") || "auto";
@@ -408,7 +435,7 @@ function showAuthScreen() {
   const appContent = document.querySelector(".app-content") || document.body;
   if (appContent.children.length > 0) {
     for (const child of appContent.children) {
-      child.style.display = "none";
+      /** @type {HTMLElement} */ (child).style.display = "none";
     }
   }
 
@@ -1036,7 +1063,7 @@ function setupAuthEventListeners() {
   const providerButtons = authOverlay.querySelectorAll("[data-provider]");
   providerButtons.forEach((button) => {
     button.addEventListener("click", async (e) => {
-      const provider = e.currentTarget.dataset.provider;
+      const provider = /** @type {HTMLElement} */ (e.currentTarget).dataset.provider;
       await handleOAuthSignIn(provider, e.currentTarget);
     });
   });
@@ -1045,8 +1072,8 @@ function setupAuthEventListeners() {
   if (authForm) {
     authForm.addEventListener("submit", async (e) => {
       e.preventDefault();
-      const email = document.getElementById("email").value;
-      const password = document.getElementById("password").value;
+      const email = /** @type {HTMLInputElement} */ (document.getElementById("email")).value;
+      const password = /** @type {HTMLInputElement} */ (document.getElementById("password")).value;
       await handleEmailAuth(email, password, "signin", e.submitter);
     });
 
@@ -1054,8 +1081,9 @@ function setupAuthEventListeners() {
     if (signUpBtn) {
       signUpBtn.addEventListener("click", async (e) => {
         e.preventDefault();
-        const email = document.getElementById("email").value;
-        const password = document.getElementById("password").value;
+        const email = /** @type {HTMLInputElement} */ (document.getElementById("email")).value;
+        const password = /** @type {HTMLInputElement} */ (document.getElementById("password"))
+          .value;
 
         if (!email || !password) {
           alert("Please enter both email and password");
@@ -1084,7 +1112,7 @@ function setupAuthEventListeners() {
 
   // Listen for auth state changes (for manual sign-in/out via UI)
   if (window.authManager && !authChangeHandlerRegistered) {
-    window.authManager.onAuthChange(async (status, _user) => {
+    window.authManager.onAuthChange(async (/** @type {any} */ status, /** @type {any} */ _user) => {
       if (status === "authenticated" || status === "guest") {
         await hideAuthScreen();
         // Note: App initialization is now handled directly, not through auth changes
@@ -1094,6 +1122,10 @@ function setupAuthEventListeners() {
   }
 }
 
+/**
+ * @param {any} provider
+ * @param {any} button
+ */
 async function handleOAuthSignIn(provider, button) {
   setButtonLoading(button, true);
 
@@ -1104,12 +1136,18 @@ async function handleOAuthSignIn(provider, button) {
     }
   } catch (error) {
     logger.error("OAuth sign-in error:", error);
-    alert(`Sign-in failed: ${error.message}`);
+    alert(`Sign-in failed: ${toError(error).message}`);
   } finally {
     setButtonLoading(button, false);
   }
 }
 
+/**
+ * @param {any} email
+ * @param {any} password
+ * @param {any} action
+ * @param {any} button
+ */
 async function handleEmailAuth(email, password, action, button) {
   if (!email || !password) {
     alert("Please enter both email and password");
@@ -1131,12 +1169,16 @@ async function handleEmailAuth(email, password, action, button) {
     }
   } catch (error) {
     logger.error("Email auth error:", error);
-    alert(`${action === "signin" ? "Sign-in" : "Sign-up"} failed: ${error.message}`);
+    alert(`${action === "signin" ? "Sign-in" : "Sign-up"} failed: ${toError(error).message}`);
   } finally {
     setButtonLoading(button, false);
   }
 }
 
+/**
+ * @param {any} button
+ * @param {any} loading
+ */
 function setButtonLoading(button, loading) {
   if (loading) {
     button.classList.add("auth-loading");
@@ -1156,7 +1198,7 @@ async function hideAuthScreen() {
   const appContent = document.querySelector(".app-content") || document.body;
   if (appContent.children.length > 0) {
     for (const child of appContent.children) {
-      child.style.display = "";
+      /** @type {HTMLElement} */ (child).style.display = "";
     }
   }
 
@@ -1193,27 +1235,39 @@ async function updateUserAvatarUI() {
   }
 
   if (window.authManager && window.authManager.isAuthenticated()) {
-    const _user = window.authManager.getCurrentUser();
+    window.authManager.getCurrentUser();
     const avatarUrl = window.authManager.getUserAvatarUrl();
     const displayName = window.authManager.getUserDisplayName();
 
     if (avatarUrl) {
       try {
         await testImageLoad(avatarUrl);
-        avatarImg.src = avatarUrl;
-        avatarImg.style.display = "block";
-        avatarFallback.style.display = "none";
+        if (avatarImg) {
+          /** @type {HTMLImageElement} */ (avatarImg).src = avatarUrl;
+          avatarImg.style.display = "block";
+        }
+        if (avatarFallback) {
+          avatarFallback.style.display = "none";
+        }
       } catch (_error) {
-        avatarImg.style.display = "none";
-        avatarFallback.style.display = "flex";
+        if (avatarImg) {
+          avatarImg.style.display = "none";
+        }
+        if (avatarFallback) {
+          avatarFallback.style.display = "flex";
+        }
         if (userInitial) {
           userInitial.textContent = displayName.charAt(0).toUpperCase();
           userInitial.style.display = "block";
         }
       }
     } else {
-      avatarImg.style.display = "none";
-      avatarFallback.style.display = "flex";
+      if (avatarImg) {
+        avatarImg.style.display = "none";
+      }
+      if (avatarFallback) {
+        avatarFallback.style.display = "flex";
+      }
       if (userInitial) {
         userInitial.textContent = displayName.charAt(0).toUpperCase();
         userInitial.style.display = "block";
@@ -1234,8 +1288,12 @@ async function updateUserAvatarUI() {
       signInBtn.style.display = "none";
     }
   } else {
-    avatarImg.style.display = "none";
-    avatarFallback.style.display = "flex";
+    if (avatarImg) {
+      avatarImg.style.display = "none";
+    }
+    if (avatarFallback) {
+      avatarFallback.style.display = "flex";
+    }
     if (guestIcon) {
       guestIcon.style.display = "block";
     }
@@ -1256,15 +1314,25 @@ async function updateUserAvatarUI() {
   }
 }
 
+/**
+ * @param {any} url
+ * @returns {Promise<void>}
+ */
 function testImageLoad(url) {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.onload = () => resolve();
-    img.onerror = () => reject(new Error("Image failed to load"));
-    img.src = url;
-  });
+  return /** @type {Promise<void>} */ (
+    new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(/** @type {any} */ (undefined));
+      img.onerror = () => reject(new Error("Image failed to load"));
+      img.src = url;
+    })
+  );
 }
 
+/**
+ * @param {any} avatarBtn
+ * @param {any} dropdown
+ */
 function positionDropdown(avatarBtn, dropdown) {
   const isMobile = window.innerWidth <= 768;
   const avatarRect = avatarBtn.getBoundingClientRect();
@@ -1372,7 +1440,11 @@ function setupUserAvatarEventListeners() {
   }
 
   document.addEventListener("click", (e) => {
-    if (dropdown && !dropdown.contains(e.target) && !avatarBtn.contains(e.target)) {
+    if (
+      dropdown &&
+      !dropdown.contains(/** @type {Node | null} */ (e.target)) &&
+      !avatarBtn.contains(/** @type {Node | null} */ (e.target))
+    ) {
       dropdown.style.display = "none";
     }
   });
@@ -1404,7 +1476,7 @@ function setupUserAvatarEventListeners() {
   }
 
   if (window.authManager) {
-    window.authManager.onAuthChange(async (status, user) => {
+    window.authManager.onAuthChange(async (/** @type {any} */ status, /** @type {any} */ user) => {
       logger.debug("🔄 Auth state changed:", status, user?.email || "no user");
       await updateUserAvatarUI();
     });
@@ -1444,6 +1516,7 @@ async function initializeApplication() {
   window._appInitializing = true;
 
   // Declared in outer scope so the catch handler can clear it.
+  /** @type {any} */
   let safetyTimeout = null;
 
   try {
@@ -1489,7 +1562,7 @@ async function initializeApplication() {
       }
     }, 15000); // 15 seconds timeout
 
-    const updateLoadingText = (text) => {
+    const updateLoadingText = (/** @type {any} */ text) => {
       const overlay = document.getElementById("app-loading");
       if (overlay) {
         const textElement = overlay.querySelector("div:last-child");
@@ -1653,7 +1726,7 @@ function setupGlobalEventListeners() {
   const resetButton = document.getElementById("reset-all-data-btn");
   if (resetButton) {
     resetButton.addEventListener("click", () => {
-      window.confirmTotalReset();
+      window.confirmTotalReset?.();
     });
   } else {
     logger.error("Reset button not found in DOM");
@@ -1663,7 +1736,7 @@ function setupGlobalEventListeners() {
   if (resetToDefaultsBtn && resetToDefaultsBtn.textContent.includes("Reset to Defaults")) {
     resetToDefaultsBtn.addEventListener("click", () => {
       logger.info("Reset to defaults button clicked via event listener");
-      window.resetToDefaults();
+      window.resetToDefaults?.();
     });
     // Remove onclick attribute
     resetToDefaultsBtn.removeAttribute("onclick");
@@ -1676,7 +1749,7 @@ function setupGlobalEventListeners() {
         return styles.display !== "none" && styles.visibility !== "hidden";
       });
       if (modal) {
-        modal.click(); // Trigger close
+        /** @type {HTMLElement} */ (modal).click(); // Trigger close
       }
     }
   });
@@ -1698,9 +1771,15 @@ function setupUpdateManagement() {
   const updateStatus = document.getElementById("update-status");
   const currentVersionElement = document.getElementById("current-version");
   const currentVersionDisplay = document.getElementById("current-version-display");
-  const checkUpdatesBtn = document.getElementById("check-updates-btn");
-  const autoCheckUpdates = document.getElementById("auto-check-updates");
-  const viewReleasesLink = document.getElementById("view-releases-link");
+  const checkUpdatesBtn = /** @type {HTMLButtonElement | null} */ (
+    document.getElementById("check-updates-btn")
+  );
+  const autoCheckUpdates = /** @type {HTMLInputElement | null} */ (
+    document.getElementById("auto-check-updates")
+  );
+  const viewReleasesLink = /** @type {HTMLAnchorElement | null} */ (
+    document.getElementById("view-releases-link")
+  );
   const updateSourceUrl = document.getElementById("update-source-url");
 
   const updateProgress = document.getElementById("update-progress");
@@ -1711,7 +1790,9 @@ function setupUpdateManagement() {
 
   const updateInfo = document.getElementById("update-info");
   const latestVersionDisplay = document.getElementById("latest-version-display");
-  const downloadUpdateBtn = document.getElementById("download-update-btn");
+  const downloadUpdateBtn = /** @type {HTMLButtonElement | null} */ (
+    document.getElementById("download-update-btn")
+  );
   const skipUpdateBtn = document.getElementById("skip-update-btn");
 
   async function setCurrentVersion() {
@@ -1772,18 +1853,26 @@ function setupUpdateManagement() {
 
         if (hasUpdate) {
           showUpdateInfo(window.updateManager.currentUpdate);
-          updateStatus.innerHTML =
-            '<span class="status-text update-available">Update available!</span>';
+          if (updateStatus) {
+            updateStatus.innerHTML =
+              '<span class="status-text update-available">Update available!</span>';
+          }
         } else if (checkFailed) {
-          updateStatus.innerHTML = '<span class="status-text error">Check failed</span>';
+          if (updateStatus) {
+            updateStatus.innerHTML = '<span class="status-text error">Check failed</span>';
+          }
         } else {
-          updateStatus.innerHTML =
-            '<span class="status-text up-to-date">You\'re up to date!</span>';
+          if (updateStatus) {
+            updateStatus.innerHTML =
+              '<span class="status-text up-to-date">You\'re up to date!</span>';
+          }
         }
       } catch (error) {
         window.updateManager.off("checkError", onCheckError);
         hideUpdateProgress();
-        updateStatus.innerHTML = '<span class="status-text error">Check failed</span>';
+        if (updateStatus) {
+          updateStatus.innerHTML = '<span class="status-text error">Check failed</span>';
+        }
         logger.error("Update check failed:", error);
       } finally {
         checkUpdatesBtn.disabled = false;
@@ -1794,7 +1883,7 @@ function setupUpdateManagement() {
   if (autoCheckUpdates) {
     autoCheckUpdates.checked = window.updateManager.autoCheck;
     autoCheckUpdates.addEventListener("change", (e) => {
-      window.updateManager.setAutoCheck(e.target.checked);
+      window.updateManager.setAutoCheck(/** @type {HTMLInputElement} */ (e.target).checked);
     });
   }
 
@@ -1820,7 +1909,9 @@ function setupUpdateManagement() {
   if (skipUpdateBtn) {
     skipUpdateBtn.addEventListener("click", () => {
       hideUpdateInfo();
-      updateStatus.innerHTML = '<span class="status-text">Update skipped</span>';
+      if (updateStatus) {
+        updateStatus.innerHTML = '<span class="status-text">Update skipped</span>';
+      }
 
       // Persist the skipped version to localStorage so it's not shown again
       const currentUpdate = window.updateManager?.currentUpdate;
@@ -1846,7 +1937,7 @@ function setupUpdateManagement() {
     }
   });
 
-  window.updateManager.on("updateAvailable", (event) => {
+  window.updateManager.on("updateAvailable", (/** @type {any} */ event) => {
     const update = event.detail;
     if (updateStatus) {
       updateStatus.innerHTML =
@@ -1861,7 +1952,7 @@ function setupUpdateManagement() {
     }
   });
 
-  window.updateManager.on("checkError", (event) => {
+  window.updateManager.on("checkError", (/** @type {any} */ event) => {
     if (updateStatus) {
       const errorMessage = event?.detail?.message || "Check failed";
       const span = document.createElement("span");
@@ -1872,7 +1963,7 @@ function setupUpdateManagement() {
     }
   });
 
-  window.updateManager.on("downloadProgress", (event) => {
+  window.updateManager.on("downloadProgress", (/** @type {any} */ event) => {
     const { progress } = event.detail;
     updateProgressBar(progress);
   });
@@ -1892,6 +1983,10 @@ function setupUpdateManagement() {
     }
   });
 
+  /**
+   * @param {any} title
+   * @param {any} description
+   */
   function showUpdateProgress(title, description) {
     if (updateProgress) {
       updateProgress.style.display = "block";
@@ -1911,6 +2006,7 @@ function setupUpdateManagement() {
     }
   }
 
+  /** @param {any} progress */
   function updateProgressBar(progress) {
     if (progressFill) {
       progressFill.style.width = `${progress}%`;
@@ -1920,6 +2016,7 @@ function setupUpdateManagement() {
     }
   }
 
+  /** @param {any} update */
   function showUpdateInfo(update) {
     if (updateInfo && latestVersionDisplay) {
       latestVersionDisplay.textContent = update.version;

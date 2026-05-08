@@ -1,4 +1,5 @@
 import { logger } from "../utils/logger.js";
+import { toError } from "../utils/to-error.js";
 
 const GITHUB_REPO = "murdercode/presto";
 
@@ -14,10 +15,10 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
     this.checkInterval = null;
     this.startupTimeout = null;
 
+    /** @type {EventTarget | null} */
     this.eventTarget = new EventTarget();
 
     this.loadPreferences();
-    // If no saved preference exists, autoCheck defaults to true and startAutoCheck wasn't called by loadPreferences
     if (this.autoCheck && !this.checkInterval) {
       this.startAutoCheck();
     }
@@ -25,9 +26,6 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
     logger.debug("UpdateManager v2 initialized (global)");
   }
 
-  /**
-   * Verifica se siamo in modalità sviluppo
-   */
   isDevelopmentMode() {
     if (localStorage.getItem("presto_force_update_test") === "true") {
       logger.debug("🧪 Update test mode active");
@@ -57,9 +55,6 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
     return false;
   }
 
-  /**
-   * Ottiene l'API updater di Tauri in modo sicuro
-   */
   async getTauriUpdaterAPI() {
     if (!window.__TAURI__) {
       throw new Error("Ambiente Tauri non disponibile");
@@ -70,12 +65,13 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
       return window.__TAURI__.updater;
     }
 
-    if (window.__TAURI__.core && window.__TAURI__.core.invoke) {
+    if (window.__TAURI__.core) {
       logger.debug("✅ Using updater API via invoke");
+      const tauriCore = window.__TAURI__.core;
       return {
         check: async () => {
-          const result = await window.__TAURI__.core.invoke("plugin:updater|check");
-          return result ? { ...result, manualDownloadRequired: true } : result;
+          const result = await tauriCore.invoke("plugin:updater|check");
+          return result ? { .../** @type {any} */ (result), manualDownloadRequired: true } : result;
         },
       };
     }
@@ -84,9 +80,6 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
     return null;
   }
 
-  /**
-   * Ottiene l'API app per la versione
-   */
   async getAppVersion() {
     try {
       if (window.__TAURI__?.app?.getVersion) {
@@ -104,9 +97,6 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
     }
   }
 
-  /**
-   * Riavvia l'applicazione
-   */
   async restartApp() {
     try {
       if (window.__TAURI__?.process?.relaunch) {
@@ -129,9 +119,6 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
     }
   }
 
-  /**
-   * Attiva la modalità test per gli aggiornamenti
-   */
   enableTestMode() {
     localStorage.setItem("presto_force_update_test", "true");
     logger.warn("⚠️ UPDATE TEST MODE ACTIVATED");
@@ -143,9 +130,6 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
     return "Modalità test attivata! Usa checkForUpdates() per testare.";
   }
 
-  /**
-   * Disattiva la modalità test per gli aggiornamenti
-   */
   disableTestMode() {
     localStorage.removeItem("presto_force_update_test");
     logger.debug("Update test mode disabled");
@@ -157,9 +141,7 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
     return "Test mode disabled!";
   }
 
-  /**
-   * Mostra messaggio usando le API Tauri disponibili
-   */
+  /** @param {string} content @param {any} [options] */
   async showMessage(content, options = {}) {
     const defaultOptions = {
       title: "Presto",
@@ -189,9 +171,7 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
     }
   }
 
-  /**
-   * Chiede conferma usando le API Tauri disponibili
-   */
+  /** @param {string} content @param {any} [options] */
   async askConfirmation(content, options = {}) {
     const defaultOptions = {
       title: "Conferma",
@@ -219,9 +199,6 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
     }
   }
 
-  /**
-   * Mostra messaggio per modalità sviluppo
-   */
   async showDevelopmentMessage() {
     await this.showMessage(
       "Update check not available in development mode.\n\nGli aggiornamenti funzioneranno solo nell'applicazione compilata.",
@@ -232,15 +209,12 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
     );
   }
 
-  /**
-   * Avvia il controllo automatico degli aggiornamenti
-   */
   startAutoCheck() {
     if (this.autoCheck && !this.checkInterval) {
       this.checkInterval = setInterval(
         () => {
           logger.debug("Automatic periodic update check...");
-          this.checkForUpdates(false); // silent check
+          this.checkForUpdates(false);
         },
         60 * 60 * 1000
       );
@@ -248,16 +222,13 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
       this.startupTimeout = setTimeout(() => {
         this.startupTimeout = null;
         logger.debug("Initial automatic update check...");
-        this.checkForUpdates(false); // silent - mostra il banner se c'è un aggiornamento
+        this.checkForUpdates(false);
       }, 5000);
 
       logger.debug("Automatic update check started");
     }
   }
 
-  /**
-   * Ferma il controllo automatico degli aggiornamenti
-   */
   stopAutoCheck() {
     clearTimeout(this.startupTimeout);
     this.startupTimeout = null;
@@ -268,15 +239,13 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
     }
   }
 
-  /**
-   * Confronta due versioni
-   */
+  /** @param {string} a @param {string} b @returns {number} */
   compareVersions(a, b) {
     const cleanA = a.replace(/^v/, "");
     const cleanB = b.replace(/^v/, "");
 
-    const aParts = cleanA.split(".").map((n) => parseInt(n, 10) || 0);
-    const bParts = cleanB.split(".").map((n) => parseInt(n, 10) || 0);
+    const aParts = cleanA.split(".").map((/** @type {string} */ n) => parseInt(n, 10) || 0);
+    const bParts = cleanB.split(".").map((/** @type {string} */ n) => parseInt(n, 10) || 0);
 
     for (let i = 0; i < Math.max(aParts.length, bParts.length); i++) {
       const aPart = aParts[i] || 0;
@@ -293,9 +262,7 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
     return 0;
   }
 
-  /**
-   * Controlla solo la versione da GitHub senza tentare l'installazione (per modalità sviluppo)
-   */
+  /** @param {boolean} [showDialog] */
   async checkVersionFromGitHub(showDialog = true) {
     try {
       let currentVersion;
@@ -357,9 +324,9 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
       return true;
     } catch (error) {
       logger.error("❌ Error checking GitHub version:", error);
-      this.emit("checkError", { message: `Errore di rete: ${error.message}` });
+      this.emit("checkError", { message: `Errore di rete: ${toError(error).message}` });
       if (showDialog) {
-        alert(`Errore nel controllo degli aggiornamenti:\n${error.message}`);
+        alert(`Errore nel controllo degli aggiornamenti:\n${toError(error).message}`);
       }
       return false;
     } finally {
@@ -367,9 +334,7 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
     }
   }
 
-  /**
-   * Controlla se sono disponibili aggiornamenti usando approccio ibrido sicuro
-   */
+  /** @param {boolean} [showDialog] */
   async checkForUpdates(showDialog = true) {
     if (this.isChecking) {
       logger.debug("⏳ Check already in progress");
@@ -401,10 +366,10 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
         currentVersion = await this.getAppVersion();
         logger.debug(`Current version: ${currentVersion}`);
       } catch (versionError) {
-        logger.error("❌ Could not retrieve current version:", versionError.message);
+        logger.error("❌ Could not retrieve current version:", toError(versionError).message);
         this.updateAvailable = false;
         this.currentUpdate = null;
-        this.eventTarget.dispatchEvent(
+        this.eventTarget?.dispatchEvent(
           new CustomEvent("checkError", {
             detail: { message: "Impossibile verificare la versione corrente dell'applicazione" },
           })
@@ -461,7 +426,7 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
           }
         }
       } catch (error) {
-        logger.warn("⚠️ Tauri updater API not available:", error.message);
+        logger.warn("⚠️ Tauri updater API not available:", toError(error).message);
       }
 
       logger.debug("Using GitHub info with manual download");
@@ -482,7 +447,7 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
       logger.error("❌ Update check error:", error);
       this.updateAvailable = false;
       this.currentUpdate = null;
-      this.emit("checkError", { message: error.message || String(error) });
+      this.emit("checkError", { message: toError(error).message || String(error) });
 
       if (showDialog) {
         await this.showMessage(
@@ -497,9 +462,6 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
     }
   }
 
-  /**
-   * Simula un aggiornamento per test
-   */
   async simulateUpdate() {
     logger.info("🧪 Simulating update for test...");
 
@@ -511,7 +473,7 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
       date: new Date().toISOString(),
       body: `🧪 **Aggiornamento Simulato per Test**\n\nVersione: ${simulatedNewVersion}\n\n**Novità simulate:**\n- Miglioramenti delle prestazioni\n- Correzioni di bug\n- Nuove funzionalità\n\n*Questo è un aggiornamento di test. Non verranno effettuati download reali.*`,
       downloadUrl: `https://github.com/${GITHUB_REPO}/releases`,
-      isAutoDownloadable: true, // Per testare anche il download automatico
+      isAutoDownloadable: true,
       source: "test-simulation",
     };
 
@@ -521,21 +483,17 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
     return true;
   }
 
-  /**
-   * Incrementa la versione per simulazione
-   */
+  /** @param {string} version @returns {string} */
   incrementVersion(version) {
     const parts = version
       .replace(/^v/, "")
       .split(".")
-      .map((n) => parseInt(n, 10) || 0);
+      .map((/** @type {string} */ n) => parseInt(n, 10) || 0);
     parts[2] = (parts[2] || 0) + 1;
     return parts.join(".");
   }
 
-  /**
-   * Apre l'URL di download usando le API Tauri disponibili
-   */
+  /** @param {string} url */
   async openDownloadUrl(url) {
     try {
       if (window.__TAURI__?.shell?.open) {
@@ -555,9 +513,6 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
     }
   }
 
-  /**
-   * Scarica e installa l'aggiornamento
-   */
   async downloadAndInstall() {
     if (!this.updateAvailable || !this.currentUpdate) {
       throw new Error("No updates available");
@@ -578,7 +533,7 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
 
         const tauriAPI = await this.getTauriUpdaterAPI();
         if (tauriAPI && tauriAPI.downloadAndInstall) {
-          await tauriAPI.downloadAndInstall((progress) => {
+          await tauriAPI.downloadAndInstall((/** @type {any} */ progress) => {
             logger.debug(`📥 Progresso download: ${progress}%`);
             this.downloadProgress = progress;
             this.emit("downloadProgress", {
@@ -622,9 +577,6 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
     }
   }
 
-  /**
-   * Simula download e installazione per test
-   */
   async simulateDownloadAndInstall() {
     logger.info("🧪 Simulating download...");
 
@@ -655,16 +607,11 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
     );
   }
 
-  /**
-   * Ottiene la versione corrente dell'app
-   */
   async getCurrentVersion() {
     return await this.getAppVersion();
   }
 
-  /**
-   * Imposta il controllo automatico
-   */
+  /** @param {boolean} enabled */
   setAutoCheck(enabled) {
     this.autoCheck = enabled;
 
@@ -681,9 +628,6 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
     }
   }
 
-  /**
-   * Carica le preferenze salvate
-   */
   loadPreferences() {
     try {
       const autoCheck = localStorage.getItem("presto_auto_check_updates");
@@ -695,17 +639,19 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
     }
   }
 
-  // Event management
+  /** @param {string} event @param {any} callback */
   on(event, callback) {
-    this.eventTarget.addEventListener(event, callback);
+    this.eventTarget?.addEventListener(event, callback);
   }
 
+  /** @param {string} event @param {any} callback */
   off(event, callback) {
-    this.eventTarget.removeEventListener(event, callback);
+    this.eventTarget?.removeEventListener(event, callback);
   }
 
+  /** @param {string} event @param {any} [data] */
   emit(event, data = null) {
-    this.eventTarget.dispatchEvent(new CustomEvent(event, { detail: data }));
+    this.eventTarget?.dispatchEvent(new CustomEvent(event, { detail: data }));
   }
 
   destroy() {

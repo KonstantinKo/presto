@@ -35,22 +35,30 @@ export class NavigationManager {
     await this.initSessionsTable();
   }
 
+  /** @param {any} e */
   async handleNavClick(e) {
-    const view = e.currentTarget.dataset.view;
+    const view = /** @type {HTMLElement} */ (e.currentTarget).dataset.view;
     await this.switchView(view);
   }
 
+  /** @param {any} view */
   async switchView(view) {
     document.querySelectorAll(".sidebar-icon, .sidebar-icon-large").forEach((btn) => {
       btn.classList.remove("active");
     });
-    document.querySelector(`[data-view="${view}"]`).classList.add("active");
+    const viewEl = document.querySelector(`[data-view="${view}"]`);
+    if (viewEl) {
+      viewEl.classList.add("active");
+    }
 
     document.querySelectorAll(".view-container").forEach((container) => {
       container.classList.add("hidden");
     });
 
-    document.getElementById(`${view}-view`).classList.remove("hidden");
+    const viewContainer = document.getElementById(`${view}-view`);
+    if (viewContainer) {
+      viewContainer.classList.remove("hidden");
+    }
     this.currentView = view;
 
     const body = document.body;
@@ -87,12 +95,8 @@ export class NavigationManager {
   }
 
   async initCalendar() {
-    const _calendarGrid = document.getElementById("calendar-grid");
-    const _currentMonthEl = document.getElementById("current-month");
     const prevBtn = document.getElementById("prev-month");
     const nextBtn = document.getElementById("next-month");
-
-    const _weekRangeEl = document.getElementById("week-range");
     const prevWeekBtn = document.getElementById("prev-week");
     const nextWeekBtn = document.getElementById("next-week");
 
@@ -100,53 +104,73 @@ export class NavigationManager {
     this.displayMonth = new Date(this.currentDate);
     this.selectedWeek = this.getWeekStart(this.currentDate);
 
-    prevBtn.addEventListener("click", async () => {
-      this.displayMonth.setMonth(this.displayMonth.getMonth() - 1);
-      await this.updateCalendar();
-    });
+    if (prevBtn) {
+      prevBtn.addEventListener("click", async () => {
+        if (this.displayMonth) {
+          this.displayMonth.setMonth(this.displayMonth.getMonth() - 1);
+        }
+        await this.updateCalendar();
+      });
+    }
 
-    nextBtn.addEventListener("click", async () => {
-      this.displayMonth.setMonth(this.displayMonth.getMonth() + 1);
-      await this.updateCalendar();
-    });
+    if (nextBtn) {
+      nextBtn.addEventListener("click", async () => {
+        if (this.displayMonth) {
+          this.displayMonth.setMonth(this.displayMonth.getMonth() + 1);
+        }
+        await this.updateCalendar();
+      });
+    }
 
-    prevWeekBtn.addEventListener("click", async () => {
-      this.selectedWeek.setDate(this.selectedWeek.getDate() - 7);
-      this.updateWeekDisplay();
-      await this.updateFocusSummary();
-      await this.updateWeeklySessionsChart();
-      this.updateDailyChart();
-      await this.updateTagUsageChart();
-    });
+    if (prevWeekBtn) {
+      prevWeekBtn.addEventListener("click", async () => {
+        if (this.selectedWeek) {
+          this.selectedWeek.setDate(this.selectedWeek.getDate() - 7);
+        }
+        this.updateWeekDisplay();
+        await this.updateFocusSummary();
+        await this.updateWeeklySessionsChart();
+        this.updateDailyChart();
+        await this.updateTagUsageChart();
+      });
+    }
 
-    nextWeekBtn.addEventListener("click", async () => {
-      this.selectedWeek.setDate(this.selectedWeek.getDate() + 7);
-      this.updateWeekDisplay();
-      await this.updateFocusSummary();
-      await this.updateWeeklySessionsChart();
-      this.updateDailyChart();
-      await this.updateTagUsageChart();
-    });
+    if (nextWeekBtn) {
+      nextWeekBtn.addEventListener("click", async () => {
+        if (this.selectedWeek) {
+          this.selectedWeek.setDate(this.selectedWeek.getDate() + 7);
+        }
+        this.updateWeekDisplay();
+        await this.updateFocusSummary();
+        await this.updateWeeklySessionsChart();
+        this.updateDailyChart();
+        await this.updateTagUsageChart();
+      });
+    }
 
     // Initial updates will be handled by switchView when calendar is shown
   }
 
+  /** @param {any} date */
   getWeekStart(date) {
     return TimeUtils.getWeekStart(date);
   }
 
   updateWeekDisplay() {
     const weekRangeEl = document.getElementById("week-range");
-    const weekStart = new Date(this.selectedWeek);
-    const weekEnd = new Date(this.selectedWeek);
+    const weekStart = new Date(this.selectedWeek || new Date());
+    const weekEnd = new Date(this.selectedWeek || new Date());
     weekEnd.setDate(weekEnd.getDate() + 6);
 
+    /** @type {Intl.DateTimeFormatOptions} */
     const formatOptions = { day: "numeric", month: "short" };
     const startStr = weekStart.toLocaleDateString("en-US", formatOptions);
     const endStr = weekEnd.toLocaleDateString("en-US", formatOptions);
     const year = weekEnd.getFullYear();
 
-    weekRangeEl.textContent = `${startStr} - ${endStr} ${year}`;
+    if (weekRangeEl) {
+      weekRangeEl.textContent = `${startStr} - ${endStr} ${year}`;
+    }
   }
 
   async updateFocusSummary() {
@@ -183,10 +207,13 @@ export class NavigationManager {
 
         if (window.sessionManager) {
           const sessions = window.sessionManager.getSessionsForDate(date);
-          const focusSessions = sessions.filter((s) => this.isFocusOrCustomSession(s));
+          const focusSessions = sessions.filter((/** @type {any} */ s) =>
+            this.isFocusOrCustomSession(s)
+          );
 
           dayTotalTime = focusSessions.reduce(
-            (total, session) => total + (session.duration || 0) * 60,
+            (/** @type {any} */ total, /** @type {any} */ session) =>
+              total + (session.duration || 0) * 60,
             0
           );
           daySessions = focusSessions.length;
@@ -214,10 +241,13 @@ export class NavigationManager {
 
         if (window.sessionManager) {
           const sessions = window.sessionManager.getSessionsForDate(date);
-          const focusSessions = sessions.filter((s) => this.isFocusOrCustomSession(s));
+          const focusSessions = sessions.filter((/** @type {any} */ s) =>
+            this.isFocusOrCustomSession(s)
+          );
 
           dayTotalTime = focusSessions.reduce(
-            (total, session) => total + (session.duration || 0) * 60,
+            (/** @type {any} */ total, /** @type {any} */ session) =>
+              total + (session.duration || 0) * 60,
             0
           );
           daySessions = focusSessions.length;
@@ -247,24 +277,37 @@ export class NavigationManager {
       previousWeeklySessions
     );
 
-    totalFocusWeekEl.textContent = TimeUtils.formatTime(weeklyFocusTime);
+    if (totalFocusWeekEl) {
+      totalFocusWeekEl.textContent = TimeUtils.formatTime(weeklyFocusTime);
+    }
     this.updateChangeElement(totalFocusChangeEl, weeklyFocusChange);
 
-    avgFocusDayEl.textContent = TimeUtils.formatTime(avgFocus);
+    if (avgFocusDayEl) {
+      avgFocusDayEl.textContent = TimeUtils.formatTime(avgFocus);
+    }
     this.updateChangeElement(avgFocusChangeEl, avgFocusChange);
 
-    weeklySessionsEl.textContent = weeklySessions.toString();
+    if (weeklySessionsEl) {
+      weeklySessionsEl.textContent = weeklySessions.toString();
+    }
     this.updateChangeElement(weeklySessionsChangeEl, weeklySessionsChange);
 
-    weeklyFocusTimeEl.textContent = TimeUtils.formatTime(weeklyFocusTime);
+    if (weeklyFocusTimeEl) {
+      weeklyFocusTimeEl.textContent = TimeUtils.formatTime(weeklyFocusTime);
+    }
     this.updateChangeElement(weeklyFocusChangeEl, weeklyFocusChange);
   }
 
+  /** @param {any} session */
   isFocusOrCustomSession(session) {
     const type = session.session_type || session.type;
     return type === "focus" || type === "custom";
   }
 
+  /**
+   * @param {any} current
+   * @param {any} previous
+   */
   calculatePercentageChange(current, previous) {
     if (previous === 0) {
       return current > 0 ? 100 : 0;
@@ -272,6 +315,10 @@ export class NavigationManager {
     return Math.round(((current - previous) / previous) * 100);
   }
 
+  /**
+   * @param {any} element
+   * @param {any} change
+   */
   updateChangeElement(element, change) {
     element.classList.remove("positive", "negative", "neutral");
 
@@ -318,7 +365,7 @@ export class NavigationManager {
       // Process all sessions with unified logic.
       // All stored sessions are focus sessions; break and longBreak
       // sessions are no longer recorded.
-      todaysSessions.forEach((session) => {
+      todaysSessions.forEach((/** @type {any} */ session) => {
         const [startHour, startMinute] = session.start_time.split(":").map(Number);
         const [endHour, endMinute] = session.end_time.split(":").map(Number);
 
@@ -387,8 +434,8 @@ export class NavigationManager {
         this.addTooltipEvents(hourBar);
 
         // Add data attributes for potential future interactions
-        hourBar.dataset.hour = hour;
-        hourBar.dataset.focusMinutes = data.focusMinutes;
+        hourBar.dataset.hour = String(hour);
+        hourBar.dataset.focusMinutes = String(data.focusMinutes);
 
         dailyChart.appendChild(hourBar);
       });
@@ -420,6 +467,9 @@ export class NavigationManager {
 
   async updateWeeklySessionsChart() {
     const weeklyChart = document.getElementById("weekly-chart");
+    if (!weeklyChart) {
+      return;
+    }
     weeklyChart.innerHTML = "";
 
     const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
@@ -430,6 +480,7 @@ export class NavigationManager {
       const today = new Date();
 
       // First pass: collect all session data for the week to determine max value for scaling
+      /** @type {any[]} */
       const weekData = [];
       let maxSessionsMinutes = 0;
 
@@ -442,10 +493,13 @@ export class NavigationManager {
 
         if (window.sessionManager) {
           const allSessions = window.sessionManager.getSessionsForDate(date);
-          const focusSessions = allSessions.filter((s) => this.isFocusOrCustomSession(s));
+          const focusSessions = allSessions.filter((/** @type {any} */ s) =>
+            this.isFocusOrCustomSession(s)
+          );
 
           sessionsMinutes = focusSessions.reduce(
-            (total, session) => total + (session.duration || 0),
+            (/** @type {any} */ total, /** @type {any} */ session) =>
+              total + (session.duration || 0),
             0
           );
           sessions = focusSessions.length;
@@ -604,8 +658,8 @@ export class NavigationManager {
 
           // Filter to focus sessions only and add date info
           const focusSessions = dailySessions
-            .filter((s) => this.isFocusOrCustomSession(s))
-            .map((session) => ({
+            .filter((/** @type {any} */ s) => this.isFocusOrCustomSession(s))
+            .map((/** @type {any} */ session) => ({
               ...session,
               date: date.toISOString().split("T")[0], // Add date in YYYY-MM-DD format
             }));
@@ -640,7 +694,7 @@ export class NavigationManager {
     }
   }
 
-  async updateSelectedDayDetails(date = this.currentDate) {
+  async updateSelectedDayDetails(date = this.currentDate || new Date()) {
     const selectedDayTitle = document.getElementById("selected-day-title");
     const timelineTrack = document.getElementById("timeline-track");
     const timelineHours = document.getElementById("timeline-hours");
@@ -653,10 +707,15 @@ export class NavigationManager {
     });
 
     const isToday = this.isSameDay(date, new Date());
-    selectedDayTitle.textContent = isToday ? "Today's Sessions" : `${dateStr} Sessions`;
+    if (selectedDayTitle) {
+      selectedDayTitle.textContent = isToday ? "Today's Sessions" : `${dateStr} Sessions`;
+    }
 
     this.setupTimelineHours(timelineHours);
 
+    if (!timelineTrack) {
+      return;
+    }
     timelineTrack.innerHTML = "";
     timelineTrack.style.height = "50px";
 
@@ -666,7 +725,9 @@ export class NavigationManager {
         allSessions = window.sessionManager.getSessionsForDate(date);
       }
 
-      allSessions.sort((a, b) => a.start_time.localeCompare(b.start_time));
+      allSessions.sort((/** @type {any} */ a, /** @type {any} */ b) =>
+        a.start_time.localeCompare(b.start_time)
+      );
 
       if (allSessions.length === 0) {
         const noSessions = document.createElement("div");
@@ -678,11 +739,11 @@ export class NavigationManager {
 
       // Filter out break sessions from timeline display
       const visibleSessions = allSessions.filter(
-        (_session) => true // All sessions are focus sessions now
+        (/** @type {any} */ _session) => true // All sessions are focus sessions now
       );
 
       // Create timeline session blocks (excluding break sessions)
-      visibleSessions.forEach((session) => {
+      visibleSessions.forEach((/** @type {any} */ session) => {
         this.createTimelineSession(session, date, timelineTrack, visibleSessions);
       });
 
@@ -703,6 +764,9 @@ export class NavigationManager {
   async updateCalendar() {
     const calendarGrid = document.getElementById("calendar-grid");
     const currentMonthEl = document.getElementById("current-month");
+    if (!calendarGrid || !this.displayMonth) {
+      return;
+    }
 
     const monthNames = [
       "January",
@@ -718,7 +782,9 @@ export class NavigationManager {
       "November",
       "December",
     ];
-    currentMonthEl.textContent = `${monthNames[this.displayMonth.getMonth()]} ${this.displayMonth.getFullYear()}`;
+    if (currentMonthEl) {
+      currentMonthEl.textContent = `${monthNames[this.displayMonth.getMonth()]} ${this.displayMonth.getFullYear()}`;
+    }
 
     calendarGrid.innerHTML = "";
 
@@ -747,7 +813,7 @@ export class NavigationManager {
 
       const dayNumber = document.createElement("div");
       dayNumber.className = "calendar-day-number";
-      dayNumber.textContent = day;
+      dayNumber.textContent = String(day);
       dayEl.appendChild(dayNumber);
 
       const dayDate = new Date(this.displayMonth.getFullYear(), this.displayMonth.getMonth(), day);
@@ -763,7 +829,9 @@ export class NavigationManager {
 
       if (window.sessionManager) {
         const sessions = window.sessionManager.getSessionsForDate(dayDate);
-        const focusSessions = sessions.filter((s) => this.isFocusOrCustomSession(s));
+        const focusSessions = sessions.filter((/** @type {any} */ s) =>
+          this.isFocusOrCustomSession(s)
+        );
 
         if (focusSessions.length > 0) {
           dayEl.classList.add("has-sessions");
@@ -786,10 +854,18 @@ export class NavigationManager {
     }
   }
 
+  /**
+   * @param {any} date1
+   * @param {any} date2
+   */
   isSameDay(date1, date2) {
     return TimeUtils.isSameDay(date1, date2);
   }
 
+  /**
+   * @param {any} date
+   * @param {any} dayEl
+   */
   async selectDay(date, dayEl) {
     document.querySelectorAll(".calendar-day").forEach((day) => {
       day.classList.remove("selected");
@@ -808,10 +884,15 @@ export class NavigationManager {
     await this.populateSessionsTableForDate(date);
   }
 
+  /** @param {any} seconds */
   formatTime(seconds) {
     return TimeUtils.formatTime(seconds);
   }
 
+  /**
+   * @param {any} timelineTrack
+   * @param {any} totalSessions
+   */
   updateTimelineHeight(timelineTrack, totalSessions) {
     const rowHeight = 20; // Spacing between rows
     const sessionHeight = 15; // Height of each session
@@ -836,10 +917,12 @@ export class NavigationManager {
     this.addTimelineGridLines(timelineTrack);
   }
 
+  /** @param {any} timelineTrack */
+  /** @param {any} timelineTrack */
   addTimelineGridLines(timelineTrack) {
     // Remove existing grid lines
     const existingLines = timelineTrack.querySelectorAll(".timeline-grid-line");
-    existingLines.forEach((line) => line.remove());
+    existingLines.forEach((/** @type {any} */ line) => line.remove());
 
     // Add grid lines for major hours: 0, 4, 8, 12, 16, 20
     const majorHours = [0, 4, 8, 12, 16, 20];
@@ -859,7 +942,11 @@ export class NavigationManager {
     });
   }
 
+  /** @param {any} timelineHours */
   setupTimelineHours(timelineHours) {
+    if (!timelineHours) {
+      return;
+    }
     timelineHours.innerHTML = "";
 
     // Show major hours every 4 hours: 0, 4, 8, 12, 16, 20
@@ -881,6 +968,12 @@ export class NavigationManager {
     });
   }
 
+  /**
+   * @param {any} session
+   * @param {any} date
+   * @param {any} timelineTrack
+   * @param {any[]} allSessions
+   */
   createTimelineSession(session, date, timelineTrack, allSessions = []) {
     const sessionElement = document.createElement("div");
     sessionElement.className = `timeline-session focus`; // All sessions are focus sessions
@@ -943,9 +1036,14 @@ export class NavigationManager {
     timelineTrack.appendChild(sessionElement);
   }
 
+  /**
+   * @param {any} sessionElement
+   * @param {any} session
+   * @param {any} date
+   */
   addTimelineSessionEventListeners(sessionElement, session, date) {
     // Double-click to edit
-    sessionElement.addEventListener("dblclick", (e) => {
+    sessionElement.addEventListener("dblclick", (/** @type {any} */ e) => {
       e.preventDefault();
       if (window.sessionManager) {
         window.sessionManager.openEditSessionModal(session, date);
@@ -953,15 +1051,18 @@ export class NavigationManager {
     });
 
     // Right-click context menu
-    sessionElement.addEventListener("contextmenu", (e) => {
+    sessionElement.addEventListener("contextmenu", (/** @type {any} */ e) => {
       e.preventDefault();
       this.showSessionContextMenu(e, session, date);
     });
 
     // Drag to move
-    sessionElement.addEventListener("mousedown", (e) => {
+    sessionElement.addEventListener("mousedown", (/** @type {any} */ e) => {
       // Don't start drag if clicking on resize handles
-      if (e.target.classList.contains("session-handle") || e.target.closest(".session-handle")) {
+      if (
+        /** @type {Element} */ (e.target).classList.contains("session-handle") ||
+        /** @type {Element} */ (e.target).closest(".session-handle")
+      ) {
         return;
       }
       this.startSessionDrag(e, sessionElement, session);
@@ -972,23 +1073,24 @@ export class NavigationManager {
     const rightHandle = sessionElement.querySelector(".session-handle.right");
 
     if (leftHandle) {
-      leftHandle.addEventListener("mousedown", (e) => {
+      leftHandle.addEventListener("mousedown", (/** @type {any} */ e) => {
         e.stopPropagation();
         this.startSessionResize(e, sessionElement, session, "left");
       });
     }
 
     if (rightHandle) {
-      rightHandle.addEventListener("mousedown", (e) => {
+      rightHandle.addEventListener("mousedown", (/** @type {any} */ e) => {
         e.stopPropagation();
         this.startSessionResize(e, sessionElement, session, "right");
       });
     }
 
     // Hover tooltip
+    /** @type {any} */
     let hoverTooltip = null;
 
-    sessionElement.addEventListener("mouseenter", (e) => {
+    sessionElement.addEventListener("mouseenter", (/** @type {any} */ e) => {
       // Don't show hover tooltip if dragging or resizing (they have their own tooltips)
       if (
         sessionElement.classList.contains("dragging") ||
@@ -1002,7 +1104,7 @@ export class NavigationManager {
       this.updateHoverTooltip(hoverTooltip, e);
     });
 
-    sessionElement.addEventListener("mousemove", (e) => {
+    sessionElement.addEventListener("mousemove", (/** @type {any} */ e) => {
       if (
         hoverTooltip &&
         !sessionElement.classList.contains("dragging") &&
@@ -1030,6 +1132,11 @@ export class NavigationManager {
     });
   }
 
+  /**
+   * @param {any} e
+   * @param {any} session
+   * @param {any} date
+   */
   showSessionContextMenu(e, session, date) {
     // Remove existing context menu
     const existingMenu = document.querySelector(".session-context-menu");
@@ -1048,12 +1155,15 @@ export class NavigationManager {
       <div class="context-menu-item danger delete-item">Delete</div>
     `;
 
-    contextMenu.querySelector(".edit-item").addEventListener("click", () => {
-      if (window.sessionManager) {
-        window.sessionManager.openEditSessionModal(session, date);
-      }
-      contextMenu.remove();
-    });
+    const editItem = contextMenu.querySelector(".edit-item");
+    if (editItem) {
+      editItem.addEventListener("click", () => {
+        if (window.sessionManager) {
+          window.sessionManager.openEditSessionModal(session, date);
+        }
+        contextMenu.remove();
+      });
+    }
 
     const deleteItem = contextMenu.querySelector(".delete-item");
     if (deleteItem) {
@@ -1070,6 +1180,11 @@ export class NavigationManager {
     document.body.appendChild(contextMenu);
   }
 
+  /**
+   * @param {any} e
+   * @param {any} sessionElement
+   * @param {any} session
+   */
   startSessionDrag(e, sessionElement, session) {
     e.preventDefault();
     sessionElement.classList.add("dragging");
@@ -1080,6 +1195,9 @@ export class NavigationManager {
     }
 
     const timeline = document.getElementById("timeline-track");
+    if (!timeline) {
+      return;
+    }
     const timelineRect = timeline.getBoundingClientRect();
 
     const initialMouseX = e.clientX - timelineRect.left;
@@ -1090,7 +1208,7 @@ export class NavigationManager {
     const dragTooltip = this.createDragTimeTooltip();
     document.body.appendChild(dragTooltip);
 
-    const handleMouseMove = (e) => {
+    const handleMouseMove = (/** @type {any} */ e) => {
       const x = e.clientX - timelineRect.left - offsetX;
       const sessionWidth = parseFloat(sessionElement.style.width) || 0;
       const maxLeft = 100 - sessionWidth; // Prevent session from going beyond timeline
@@ -1116,6 +1234,12 @@ export class NavigationManager {
     document.addEventListener("mouseup", handleMouseUp);
   }
 
+  /**
+   * @param {any} e
+   * @param {any} sessionElement
+   * @param {any} session
+   * @param {any} side
+   */
   startSessionResize(e, sessionElement, session, side) {
     e.preventDefault();
     sessionElement.classList.add("resizing");
@@ -1126,12 +1250,15 @@ export class NavigationManager {
     }
 
     const timeline = document.getElementById("timeline-track");
+    if (!timeline) {
+      return;
+    }
     const timelineRect = timeline.getBoundingClientRect();
 
     const resizeTooltip = this.createDragTimeTooltip();
     document.body.appendChild(resizeTooltip);
 
-    const handleMouseMove = (e) => {
+    const handleMouseMove = (/** @type {any} */ e) => {
       const x = e.clientX - timelineRect.left;
       const percentage = Math.max(0, Math.min(100, (x / timelineRect.width) * 100));
 
@@ -1168,6 +1295,10 @@ export class NavigationManager {
     document.addEventListener("mouseup", handleMouseUp);
   }
 
+  /**
+   * @param {any} sessionElement
+   * @param {any} session
+   */
   updateSessionTimeFromPosition(sessionElement, session) {
     const leftPercent = parseFloat(sessionElement.style.left);
     const widthPercent = parseFloat(sessionElement.style.width);
@@ -1212,9 +1343,10 @@ export class NavigationManager {
     return Date.now().toString() + Math.random().toString(36).substring(2, 11);
   }
 
+  /** @param {any} element */
   addTooltipEvents(element) {
-    element.addEventListener("mouseenter", (e) => {
-      const tooltipText = e.target.dataset.tooltip;
+    element.addEventListener("mouseenter", (/** @type {any} */ e) => {
+      const tooltipText = /** @type {HTMLElement} */ (e.target).dataset.tooltip;
       if (!tooltipText) {
         return;
       }
@@ -1231,7 +1363,7 @@ export class NavigationManager {
       tooltipElement.className = "custom-tooltip";
       tooltipElement.textContent = tooltipText;
 
-      const rect = e.target.getBoundingClientRect();
+      const rect = /** @type {Element} */ (e.target).getBoundingClientRect();
       const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
       const scrollLeft = window.pageXOffset || document.documentElement.scrollLeft;
 
@@ -1308,7 +1440,7 @@ export class NavigationManager {
     // Fallback: remove any remaining tooltips
     const existingTooltips = document.querySelectorAll(".custom-tooltip");
     existingTooltips.forEach((tooltip) => {
-      tooltip.style.opacity = "0";
+      /** @type {HTMLElement} */ (tooltip).style.opacity = "0";
       setTimeout(() => {
         if (tooltip.parentNode) {
           tooltip.parentNode.removeChild(tooltip);
@@ -1340,6 +1472,12 @@ export class NavigationManager {
     return tooltip;
   }
 
+  /**
+   * @param {any} tooltip
+   * @param {any} mouseEvent
+   * @param {any} percentage
+   * @param {any} session
+   */
   updateDragTooltip(tooltip, mouseEvent, percentage, session) {
     // Calculate time from percentage
     const timelineStartMinutes = 0; // 00:00 (midnight)
@@ -1364,6 +1502,11 @@ export class NavigationManager {
     tooltip.style.opacity = "1";
   }
 
+  /**
+   * @param {any} tooltip
+   * @param {any} mouseEvent
+   * @param {any} sessionElement
+   */
   updateResizeTooltip(tooltip, mouseEvent, sessionElement) {
     const leftPercent = parseFloat(sessionElement.style.left);
     const widthPercent = parseFloat(sessionElement.style.width);
@@ -1394,19 +1537,24 @@ export class NavigationManager {
     tooltip.style.opacity = "1";
   }
 
+  /**
+   * @param {any} session
+   * @param {any} allSessions
+   */
   calculateSessionOffset(session, allSessions) {
     if (!allSessions || allSessions.length <= 1) {
       return 0;
     }
 
     // Find the index of this session in the array
-    const sessionIndex = allSessions.findIndex((s) => s.id === session.id);
+    const sessionIndex = allSessions.findIndex((/** @type {any} */ s) => s.id === session.id);
 
     // Each session gets its own row
     const rowHeight = 20; // 15px session height + 5px spacing
     return sessionIndex * rowHeight;
   }
 
+  /** @param {any} session */
   createSessionHoverTooltip(session) {
     const tooltip = document.createElement("div");
     tooltip.className = "session-hover-tooltip";
@@ -1428,6 +1576,10 @@ export class NavigationManager {
     return tooltip;
   }
 
+  /**
+   * @param {any} tooltip
+   * @param {any} mouseEvent
+   */
   updateHoverTooltip(tooltip, mouseEvent) {
     tooltip.style.left = `${mouseEvent.clientX + 10}px`;
     tooltip.style.top = `${mouseEvent.clientY - 10}px`;
@@ -1462,6 +1614,7 @@ export class NavigationManager {
     return allSessions;
   }
 
+  /** @param {any} date */
   async populateSessionsTableForDate(date) {
     const tableBody = document.getElementById("sessions-table-body");
     if (!tableBody || !window.sessionManager) {
@@ -1483,7 +1636,9 @@ export class NavigationManager {
     }
 
     // Sort sessions by time (newest first)
-    sessions.sort((a, b) => b.start_time.localeCompare(a.start_time));
+    sessions.sort((/** @type {any} */ a, /** @type {any} */ b) =>
+      b.start_time.localeCompare(a.start_time)
+    );
 
     for (const session of sessions) {
       const row = await this.createSessionTableRow(session);
@@ -1491,6 +1646,7 @@ export class NavigationManager {
     }
   }
 
+  /** @param {any} session */
   async createSessionTableRow(session) {
     const row = document.createElement("tr");
 
@@ -1521,7 +1677,7 @@ export class NavigationManager {
     } else {
       const firstTag = tags[0];
       const remainingCount = tags.length - 1;
-      const allTagNames = tags.map((tag) => tag.name).join(", ");
+      const allTagNames = tags.map((/** @type {any} */ tag) => tag.name).join(", ");
       const compact = document.createElement("div");
       compact.className = "session-tags-compact";
       compact.title = allTagNames;
@@ -1572,6 +1728,7 @@ export class NavigationManager {
     return row;
   }
 
+  /** @param {any} sessionId */
   async getSessionTags(sessionId) {
     // Get tags directly from session data
     if (window.sessionManager) {
@@ -1580,7 +1737,7 @@ export class NavigationManager {
         for (const dateString in window.sessionManager.sessions) {
           const dateSessions = window.sessionManager.sessions[dateString];
           if (dateSessions) {
-            const session = dateSessions.find((s) => s.id === sessionId);
+            const session = dateSessions.find((/** @type {any} */ s) => s.id === sessionId);
             if (session && session.tags) {
               return session.tags;
             }
@@ -1593,6 +1750,7 @@ export class NavigationManager {
     return [];
   }
 
+  /** @param {any} sessionId */
   async deleteSessionFromTable(sessionId) {
     if (!window.sessionManager || !sessionId) {
       return;
@@ -1603,7 +1761,7 @@ export class NavigationManager {
 
       let deletedFromDate = null;
       for (const [dateString, sessions] of Object.entries(window.sessionManager.sessions)) {
-        const sessionIndex = sessions.findIndex((s) => s.id === sessionId);
+        const sessionIndex = sessions.findIndex((/** @type {any} */ s) => s.id === sessionId);
         if (sessionIndex !== -1) {
           sessions.splice(sessionIndex, 1);
           sessionFound = true;
@@ -1659,6 +1817,7 @@ export class NavigationManager {
     }
   }
 
+  /** @param {any} sessionId */
   async editSessionFromTable(sessionId) {
     if (!window.sessionManager || !sessionId) {
       return;
@@ -1669,7 +1828,7 @@ export class NavigationManager {
       let sessionDate = null;
 
       for (const [dateString, sessions] of Object.entries(window.sessionManager.sessions)) {
-        const session = sessions.find((s) => s.id === sessionId);
+        const session = sessions.find((/** @type {any} */ s) => s.id === sessionId);
         if (session) {
           sessionToEdit = session;
           sessionDate = dateString;
@@ -1716,7 +1875,7 @@ export class NavigationManager {
         });
 
         const tags = await this.getSessionTags(session.id);
-        const tagNames = tags.map((tag) => tag.name).join(", ");
+        const tagNames = tags.map((/** @type {any} */ tag) => tag.name).join(", ");
 
         exportData.push({
           Date: formattedDate,
@@ -1744,7 +1903,13 @@ export class NavigationManager {
 
       if (window.__TAURI__) {
         try {
-          const filePath = await window.__TAURI__.dialog.save({
+          const tauriDialog = window.__TAURI__.dialog;
+          const tauriCore = window.__TAURI__.core;
+          if (!tauriDialog || !tauriCore) {
+            throw new Error("Tauri APIs not available");
+          }
+
+          const filePath = await tauriDialog.save({
             defaultPath: defaultFilename,
             filters: [
               {
@@ -1757,7 +1922,7 @@ export class NavigationManager {
           if (filePath) {
             const wbout = XLSX.write(wb, { bookType: "xlsx", type: "base64" });
 
-            await window.__TAURI__.core.invoke("write_excel_file", {
+            await tauriCore.invoke("write_excel_file", {
               path: filePath,
               data: wbout,
             });

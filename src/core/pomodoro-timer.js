@@ -1,5 +1,7 @@
-const { invoke } = window.__TAURI__.core;
-import { NotificationUtils, _TimeUtils, KeyboardUtils } from "../utils/common-utils.js";
+const { invoke } = /** @type {{ invoke: (cmd: string, args?: any) => Promise<any> }} */ (
+  window.__TAURI__ ? window.__TAURI__.core : { invoke: null }
+);
+import { NotificationUtils, KeyboardUtils } from "../utils/common-utils.js";
 import { logger } from "../utils/logger.js";
 
 export class PomodoroTimer {
@@ -72,6 +74,7 @@ export class PomodoroTimer {
     this.timerMinusBtn = document.getElementById("timer-minus-btn");
 
     // Task management
+    /** @type {any[]} */
     this.tasks = [];
     this.currentTask = "";
 
@@ -198,7 +201,7 @@ export class PomodoroTimer {
   setupSessionEventListeners() {
     // Listen for session changes from SessionManager to keep dots synchronized
     window.addEventListener("sessionAdded", async (event) => {
-      const { date } = event.detail;
+      const { date } = /** @type {CustomEvent} */ (event).detail;
       const today = new Date().toDateString();
 
       // Only update dots if the session was added for today
@@ -208,7 +211,7 @@ export class PomodoroTimer {
     });
 
     window.addEventListener("sessionDeleted", async (event) => {
-      const { date } = event.detail;
+      const { date } = /** @type {CustomEvent} */ (event).detail;
       const today = new Date().toDateString();
 
       // Only update dots if the session was deleted from today
@@ -218,7 +221,7 @@ export class PomodoroTimer {
     });
 
     window.addEventListener("sessionUpdated", async (event) => {
-      const { date } = event.detail;
+      const { date } = /** @type {CustomEvent} */ (event).detail;
       const today = new Date().toDateString();
 
       // Only update dots if the session was updated for today
@@ -229,7 +232,7 @@ export class PomodoroTimer {
   }
 
   setupEventListeners() {
-    this.playPauseBtn.addEventListener("click", () => {
+    /** @type {HTMLElement} */ (this.playPauseBtn).addEventListener("click", () => {
       if (this.isRunning && !this.isPaused && !this.isAutoPaused) {
         this.pauseTimer();
       } else {
@@ -237,9 +240,12 @@ export class PomodoroTimer {
       }
     });
 
-    this.skipBtn.addEventListener("click", async () => await this.skipSession());
+    /** @type {HTMLElement} */ (this.skipBtn).addEventListener(
+      "click",
+      async () => await this.skipSession()
+    );
 
-    this.stopBtn.addEventListener("click", () => {
+    /** @type {HTMLElement} */ (this.stopBtn).addEventListener("click", () => {
       if (this.currentMode === "focus") {
         // Delete/reset the current session
         this.resetTimer();
@@ -265,7 +271,7 @@ export class PomodoroTimer {
     // Keyboard shortcuts
     document.addEventListener("keydown", async (e) => {
       // Only trigger if not typing in an input
-      if (e.target.tagName !== "INPUT") {
+      if (/** @type {HTMLElement} */ (e.target)?.tagName !== "INPUT") {
         // Check custom shortcuts first
         if (this.matchesShortcut(e, this.customShortcuts.start_stop)) {
           e.preventDefault();
@@ -324,7 +330,10 @@ export class PomodoroTimer {
   }
 
   async setupTrayEventListeners() {
-    const { listen } = window.__TAURI__.event;
+    const { listen } =
+      /** @type {{ listen: (event: string, handler: (...args: any[]) => any) => Promise<() => void> }} */ (
+        window.__TAURI__ ? window.__TAURI__.event : { listen: null }
+      );
 
     // Listen for start session from tray
     await listen("tray-start-session", () => {
@@ -365,16 +374,16 @@ export class PomodoroTimer {
     }
   }
 
-  updateKeyboardShortcuts(shortcuts) {
+  updateKeyboardShortcuts(/** @type {any} */ shortcuts) {
     this.customShortcuts = { ...shortcuts };
     logger.debug("Updated keyboard shortcuts:", this.customShortcuts);
   }
 
-  parseShortcut(shortcutString) {
+  parseShortcut(/** @type {string} */ shortcutString) {
     return KeyboardUtils.parseShortcut(shortcutString);
   }
 
-  matchesShortcut(event, shortcutString) {
+  matchesShortcut(/** @type {any} */ event, /** @type {string} */ shortcutString) {
     return KeyboardUtils.matchesShortcut(event, shortcutString);
   }
 
@@ -396,7 +405,10 @@ export class PomodoroTimer {
       await invoke("start_activity_monitoring", { timeoutSeconds });
 
       // Listen for activity events from backend
-      const { listen } = window.__TAURI__.event;
+      const { listen } =
+        /** @type {{ listen: (event: string, handler: (...args: any[]) => any) => Promise<() => void> }} */ (
+          window.__TAURI__ ? window.__TAURI__.event : { listen: null }
+        );
 
       // Listen for user activity
       await listen("user-activity", () => {
@@ -476,9 +488,13 @@ export class PomodoroTimer {
   }
 
   _stopTimerLoop() {
-    clearInterval(this.timerInterval);
+    if (this.timerInterval) {
+      clearInterval(this.timerInterval);
+    }
     this.timerInterval = null;
-    clearTimeout(this.activityTimeout);
+    if (this.activityTimeout) {
+      clearTimeout(this.activityTimeout);
+    }
     this.activityTimeout = null;
     this.stopSmartPauseCountdown();
   }
@@ -502,7 +518,7 @@ export class PomodoroTimer {
     }
 
     if (this.smartPauseSecondsRemaining > 0 && this.smartPauseSecondsRemaining <= 10) {
-      this.smartPauseCountdown.textContent = this.smartPauseSecondsRemaining;
+      this.smartPauseCountdown.textContent = String(this.smartPauseSecondsRemaining);
       this.smartPauseCountdown.style.display = "flex";
     } else {
       this.smartPauseCountdown.style.display = "none";
@@ -619,7 +635,7 @@ export class PomodoroTimer {
     logger.debug("🎯 Resume complete, timer should be running normally");
   }
 
-  async enableSmartPause(enabled) {
+  async enableSmartPause(/** @type {boolean} */ enabled) {
     this.smartPauseEnabled = enabled;
 
     if (enabled) {
@@ -637,7 +653,9 @@ export class PomodoroTimer {
       }
 
       // Clear local timeout, countdown, and resume if auto-paused
-      clearTimeout(this.activityTimeout);
+      if (this.activityTimeout) {
+        clearTimeout(this.activityTimeout);
+      }
       this.activityTimeout = null;
       this.stopSmartPauseCountdown();
 
@@ -724,8 +742,10 @@ export class PomodoroTimer {
 
   updateTimerWithAccuracy() {
     const now = Date.now();
-    const elapsedSinceStart = Math.floor((now - this.timerStartTime) / 1000);
-    const newTimeRemaining = this.timerDuration - elapsedSinceStart;
+    const elapsedSinceStart = Math.floor(
+      (now - /** @type {number} */ (this.timerStartTime)) / 1000
+    );
+    const newTimeRemaining = /** @type {number} */ (this.timerDuration) - elapsedSinceStart;
 
     // Only update if the time has actually changed (to avoid unnecessary updates)
     if (newTimeRemaining !== this.timeRemaining) {
@@ -817,17 +837,21 @@ export class PomodoroTimer {
       this.isRunning = false;
       this.isPaused = true;
       this.isAutoPaused = false; // Manual pause overrides auto-pause
-      clearInterval(this.timerInterval);
+      if (this.timerInterval) {
+        clearInterval(this.timerInterval);
+      }
       this.timerInterval = null;
 
       // Update timer with current accurate time before pausing
       if (this.timerStartTime) {
         const now = Date.now();
         const elapsedSinceStart = Math.floor((now - this.timerStartTime) / 1000);
-        this.timeRemaining = this.timerDuration - elapsedSinceStart;
+        this.timeRemaining = /** @type {number} */ (this.timerDuration) - elapsedSinceStart;
       }
 
-      clearTimeout(this.activityTimeout);
+      if (this.activityTimeout) {
+        clearTimeout(this.activityTimeout);
+      }
       this.activityTimeout = null;
       this.stopSmartPauseCountdown();
 
@@ -861,7 +885,7 @@ export class PomodoroTimer {
     this.timerDuration = null;
     this.lastUpdateTime = null;
 
-    this.timeRemaining = this.durations[this.currentMode];
+    this.timeRemaining = /** @type {Record<string, number>} */ (this.durations)[this.currentMode];
     this.updateDisplay();
     NotificationUtils.showNotificationPing("Session deleted ❌", "warning");
 
@@ -874,7 +898,7 @@ export class PomodoroTimer {
     }
   }
 
-  adjustTimer(minutes) {
+  adjustTimer(/** @type {number} */ minutes) {
     // Convert minutes to seconds
     const adjustment = minutes * 60;
 
@@ -999,7 +1023,9 @@ export class PomodoroTimer {
       if (this.sessionCompletedButNotSaved && this.currentMode === "focus") {
         // Calculate total time including overtime
         const now = Date.now();
-        const totalElapsedTime = Math.floor((now - this.sessionStartTime) / 1000);
+        const totalElapsedTime = Math.floor(
+          (now - /** @type {number} */ (this.sessionStartTime)) / 1000
+        );
         this.lastCompletedSessionTime = totalElapsedTime;
 
         // Only save if session lasted at least 1 minute
@@ -1019,14 +1045,14 @@ export class PomodoroTimer {
         }
 
         // Reset display state tracking when switching to break modes
-        this._lastLoggedState = null;
+        /** @type {any} */ (this)._lastLoggedState = null;
         this._lastAutoPausedLogged = false;
         this._lastPausedLogged = false;
       } else {
         this.currentMode = "focus";
 
         // Reset display state tracking when switching to focus mode
-        this._lastLoggedState = null;
+        /** @type {any} */ (this)._lastLoggedState = null;
         this._lastAutoPausedLogged = false;
         this._lastPausedLogged = false;
 
@@ -1039,7 +1065,7 @@ export class PomodoroTimer {
           this.currentSession = this.completedPomodoros + 1;
         }
       }
-      this.timeRemaining = this.durations[this.currentMode];
+      this.timeRemaining = /** @type {Record<string, number>} */ (this.durations)[this.currentMode];
       this.updateDisplay();
       if (shouldSaveSession) {
         this.saveSessionData();
@@ -1060,7 +1086,7 @@ export class PomodoroTimer {
         longBreak: "Long break skipped. Time to get back to work! 🚀",
       };
       NotificationUtils.showNotificationPing(
-        messages[this.currentMode] || "Session skipped 📤",
+        /** @type {Record<string, string>} */ (messages)[this.currentMode] || "Session skipped 📤",
         "info",
         this.currentMode
       );
@@ -1106,14 +1132,14 @@ export class PomodoroTimer {
       }
 
       // Reset display state tracking when switching to break modes
-      this._lastLoggedState = null;
+      /** @type {any} */ (this)._lastLoggedState = null;
       this._lastAutoPausedLogged = false;
       this._lastPausedLogged = false;
     } else {
       this.currentMode = "focus";
 
       // Reset display state tracking when switching to focus mode
-      this._lastLoggedState = null;
+      /** @type {any} */ (this)._lastLoggedState = null;
       this._lastAutoPausedLogged = false;
       this._lastPausedLogged = false;
 
@@ -1126,7 +1152,7 @@ export class PomodoroTimer {
         this.currentSession = this.completedPomodoros + 1;
       }
     }
-    this.timeRemaining = this.durations[this.currentMode];
+    this.timeRemaining = /** @type {Record<string, number>} */ (this.durations)[this.currentMode];
     this.updateDisplay();
     if (shouldSaveSession) {
       this.saveSessionData();
@@ -1145,7 +1171,7 @@ export class PomodoroTimer {
       longBreak: "Long break skipped. Time to get back to work! 🚀",
     };
     NotificationUtils.showNotificationPing(
-      messages[this.currentMode] || "Session skipped 📤",
+      /** @type {Record<string, string>} */ (messages)[this.currentMode] || "Session skipped 📤",
       "info",
       this.currentMode
     );
@@ -1189,7 +1215,7 @@ export class PomodoroTimer {
       if (this.currentTask.trim()) {
         await this.markTaskCompleted(this.currentTask.trim());
         if (this.taskInput) {
-          this.taskInput.value = "";
+          /** @type {HTMLInputElement} */ (this.taskInput).value = "";
         }
         this.currentTask = "";
       }
@@ -1207,7 +1233,7 @@ export class PomodoroTimer {
         }
 
         // Reset display state tracking when switching to break modes
-        this._lastLoggedState = null;
+        /** @type {any} */ (this)._lastLoggedState = null;
         this._lastAutoPausedLogged = false;
         this._lastPausedLogged = false;
       }
@@ -1221,7 +1247,7 @@ export class PomodoroTimer {
         this.currentMode = "focus";
 
         // Reset display state tracking when switching to focus mode
-        this._lastLoggedState = null;
+        /** @type {any} */ (this)._lastLoggedState = null;
         this._lastAutoPausedLogged = false;
         this._lastPausedLogged = false;
 
@@ -1252,7 +1278,7 @@ export class PomodoroTimer {
     this.timerDuration = null;
     this.lastUpdateTime = null;
 
-    this.timeRemaining = this.durations[this.currentMode];
+    this.timeRemaining = /** @type {Record<string, number>} */ (this.durations)[this.currentMode];
     this.updateDisplay();
 
     // Only save aggregated session data, individual sessions are handled by saveCompletedFocusSession
@@ -1271,7 +1297,9 @@ export class PomodoroTimer {
         break: "Break time completed! Continue resting or ready to focus? ☕",
         longBreak: "Long break completed! Continue resting or ready to work? 🌙",
       };
-      completionMessage = continuousMessages[this.currentMode];
+      completionMessage = /** @type {Record<string, string>} */ (continuousMessages)[
+        this.currentMode
+      ];
     } else {
       // Messages for traditional mode
       const traditionalMessages = {
@@ -1282,7 +1310,9 @@ export class PomodoroTimer {
         break: "Break over! Ready to focus? 🍅",
         longBreak: "Long break over! Time to get back to work 🚀",
       };
-      completionMessage = traditionalMessages[this.currentMode] || traditionalMessages.focus;
+      completionMessage =
+        /** @type {Record<string, string>} */ (traditionalMessages)[this.currentMode] ||
+        traditionalMessages.focus;
     }
 
     NotificationUtils.showNotificationPing(completionMessage, "success", this.currentMode);
@@ -1349,7 +1379,7 @@ export class PomodoroTimer {
       if (this.currentTask.trim()) {
         await this.markTaskCompleted(this.currentTask.trim());
         if (this.taskInput) {
-          this.taskInput.value = "";
+          /** @type {HTMLInputElement} */ (this.taskInput).value = "";
         }
         this.currentTask = "";
       }
@@ -1381,7 +1411,9 @@ export class PomodoroTimer {
       longBreak: "Long break completed! You can continue resting or start working 🌙⏰",
     };
 
-    const completionMessage = continuousMessages[this.currentMode];
+    const completionMessage = /** @type {Record<string, string>} */ (continuousMessages)[
+      this.currentMode
+    ];
     NotificationUtils.showNotificationPing(completionMessage, "success", this.currentMode);
 
     // Update tray icon to show completion but keep running
@@ -1407,8 +1439,12 @@ export class PomodoroTimer {
     }
 
     // Update the split display
-    this.timerMinutes.textContent = displayMinutes.toString().padStart(2, "0");
-    this.timerSeconds.textContent = displaySeconds.toString().padStart(2, "0");
+    if (this.timerMinutes) {
+      this.timerMinutes.textContent = displayMinutes.toString().padStart(2, "0");
+    }
+    if (this.timerSeconds) {
+      this.timerSeconds.textContent = displaySeconds.toString().padStart(2, "0");
+    }
 
     // Update status - respect TagManager when tags are selected
     const statusTexts = {
@@ -1417,7 +1453,7 @@ export class PomodoroTimer {
       longBreak: "Long Break",
     };
 
-    let statusText = statusTexts[this.currentMode];
+    let statusText = /** @type {Record<string, string>} */ (statusTexts)[this.currentMode];
     let shouldUpdateStatus = true;
 
     // Check if TagManager is active and has selected tags for focus mode
@@ -1451,9 +1487,10 @@ export class PomodoroTimer {
     if (shouldUpdateStatus) {
       // Only log state changes, not every update to reduce spam
       const currentState = `${isOvertime}-${this.isAutoPaused}-${this.isPaused}-${this.isRunning}`;
+      const _self = /** @type {any} */ (this);
       if (
-        !this._lastLoggedState ||
-        this._lastLoggedState !== currentState ||
+        !_self._lastLoggedState ||
+        _self._lastLoggedState !== currentState ||
         this._justResumedFromAutoPause ||
         this._justResumedFromPause
       ) {
@@ -1471,12 +1508,12 @@ export class PomodoroTimer {
           "justResumedFromPause:",
           this._justResumedFromPause
         );
-        this._lastLoggedState = currentState;
+        _self._lastLoggedState = currentState;
       }
 
       if (isOvertime) {
         statusText += " (Overtime)";
-        if (!this._lastLoggedState || !this._lastLoggedState.startsWith("true-")) {
+        if (!_self._lastLoggedState || !_self._lastLoggedState.startsWith("true-")) {
           logger.debug("⏰ Showing Overtime status");
         }
       } else if (this.isAutoPaused) {
@@ -1496,8 +1533,8 @@ export class PomodoroTimer {
         this._lastAutoPausedLogged = false;
         this._lastPausedLogged = false;
         if (
-          this._lastLoggedState &&
-          (this._lastLoggedState.includes("true") ||
+          _self._lastLoggedState &&
+          (_self._lastLoggedState.includes("true") ||
             this._justResumedFromAutoPause ||
             this._justResumedFromPause)
         ) {
@@ -1511,7 +1548,9 @@ export class PomodoroTimer {
         statusTextElement.textContent = statusText;
       } else {
         // Fallback to setting the entire timer status if span doesn't exist
-        this.timerStatus.textContent = statusText;
+        if (this.timerStatus) {
+          this.timerStatus.textContent = statusText;
+        }
       }
     }
 
@@ -1527,11 +1566,19 @@ export class PomodoroTimer {
 
     // Update play/pause button
     if (this.isRunning && !this.isPaused && !this.isAutoPaused) {
-      this.playIcon.style.display = "none";
-      this.pauseIcon.style.display = "block";
+      if (this.playIcon) {
+        this.playIcon.style.display = "none";
+      }
+      if (this.pauseIcon) {
+        this.pauseIcon.style.display = "block";
+      }
     } else {
-      this.playIcon.style.display = "block";
-      this.pauseIcon.style.display = "none";
+      if (this.playIcon) {
+        this.playIcon.style.display = "block";
+      }
+      if (this.pauseIcon) {
+        this.pauseIcon.style.display = "none";
+      }
     }
 
     // Update main container class for background styling
@@ -1540,7 +1587,9 @@ export class PomodoroTimer {
     if (isOvertime) {
       containerClass += " overtime";
     }
-    mainContainer.className = containerClass;
+    if (mainContainer) {
+      mainContainer.className = containerClass;
+    }
 
     // Update body class to match current timer state for background (only in timer view)
     const body = document.body;
@@ -1566,7 +1615,9 @@ export class PomodoroTimer {
 
     // Update timer container class for styling
     const timerContainer = document.querySelector(".timer-container");
-    timerContainer.className = `timer-container ${this.currentMode}`;
+    if (timerContainer) {
+      timerContainer.className = `timer-container ${this.currentMode}`;
+    }
 
     // Update controls class to match current timer state
     const controls = document.querySelector(".controls");
@@ -1576,17 +1627,23 @@ export class PomodoroTimer {
 
     // Add running class when timer is active
     if (this.isRunning) {
-      timerContainer.classList.add("running");
+      if (timerContainer) {
+        timerContainer.classList.add("running");
+      }
     }
 
     // Add auto-paused class when in auto-pause state
     if (this.isAutoPaused) {
-      timerContainer.classList.add("auto-paused");
+      if (timerContainer) {
+        timerContainer.classList.add("auto-paused");
+      }
     }
 
     // Add warning class when time is running low
     if (this.timeRemaining <= 120 && this.timeRemaining > 0 && this.isRunning) {
-      timerContainer.classList.add("warning");
+      if (timerContainer) {
+        timerContainer.classList.add("warning");
+      }
     }
 
     // Update page title
@@ -1627,7 +1684,8 @@ export class PomodoroTimer {
     };
 
     // Apply the appropriate Remix Icon class based on current mode
-    const newClass = iconClasses[this.currentMode] || "ri-brain-line";
+    const newClass =
+      /** @type {Record<string, string>} */ (iconClasses)[this.currentMode] || "ri-brain-line";
     this.statusIcon.className = newClass;
 
     // Clear any fallback text content since we're using icons
@@ -1702,7 +1760,7 @@ export class PomodoroTimer {
     if (window.settingsManager) {
       const smartPauseCheckbox = document.getElementById("smart-pause");
       if (smartPauseCheckbox) {
-        smartPauseCheckbox.checked = newState;
+        /** @type {HTMLInputElement} */ (smartPauseCheckbox).checked = newState;
         window.settingsManager.scheduleAutoSave();
       }
     }
@@ -1714,7 +1772,7 @@ export class PomodoroTimer {
     NotificationUtils.showNotificationPing(message, "info");
   }
 
-  async enableAutoStart(enabled) {
+  async enableAutoStart(/** @type {boolean} */ enabled) {
     this.autoStartTimer = enabled;
     logger.debug("📍 enableAutoStart called with:", enabled);
 
@@ -1730,7 +1788,7 @@ export class PomodoroTimer {
     if (window.settingsManager) {
       const autoStartCheckbox = document.getElementById("auto-start-timer");
       if (autoStartCheckbox) {
-        autoStartCheckbox.checked = newState;
+        /** @type {HTMLInputElement} */ (autoStartCheckbox).checked = newState;
         window.settingsManager.scheduleAutoSave();
       }
     }
@@ -1742,7 +1800,7 @@ export class PomodoroTimer {
     NotificationUtils.showNotificationPing(message, "info");
   }
 
-  async enableContinuousSessions(enabled) {
+  async enableContinuousSessions(/** @type {boolean} */ enabled) {
     this.allowContinuousSessions = enabled;
     logger.debug("📍 enableContinuousSessions called with:", enabled);
 
@@ -1758,9 +1816,12 @@ export class PomodoroTimer {
     if (window.settingsManager) {
       const continuousCheckbox = document.getElementById("allow-continuous-sessions");
       if (continuousCheckbox) {
-        continuousCheckbox.checked = newState;
+        /** @type {HTMLInputElement} */ (continuousCheckbox).checked = newState;
         logger.debug("🔄 Toggle - Set checkbox to:", newState);
-        logger.debug("🔄 Toggle - Checkbox actual value:", continuousCheckbox.checked);
+        logger.debug(
+          "🔄 Toggle - Checkbox actual value:",
+          /** @type {HTMLInputElement} */ (continuousCheckbox).checked
+        );
         window.settingsManager.scheduleAutoSave();
       } else {
         logger.debug("❌ Toggle - Checkbox element not found!");
@@ -1802,25 +1863,39 @@ export class PomodoroTimer {
 
   updateSkipIcon() {
     // Hide all skip icons first
-    this.skipCoffeeIcon.style.display = "none";
-    this.skipSleepIcon.style.display = "none";
-    this.skipBrainIcon.style.display = "none";
-    this.skipDefaultIcon.style.display = "none";
+    if (this.skipCoffeeIcon) {
+      this.skipCoffeeIcon.style.display = "none";
+    }
+    if (this.skipSleepIcon) {
+      this.skipSleepIcon.style.display = "none";
+    }
+    if (this.skipBrainIcon) {
+      this.skipBrainIcon.style.display = "none";
+    }
+    if (this.skipDefaultIcon) {
+      this.skipDefaultIcon.style.display = "none";
+    }
 
     if (this.currentMode === "focus") {
       // During focus: skip will go to break/longBreak
       // Show icon representing the next break type
       if ((this.completedPomodoros + 1) % 4 === 0) {
         // Next will be long break - show sleep icon
-        this.skipSleepIcon.style.display = "block";
+        if (this.skipSleepIcon) {
+          this.skipSleepIcon.style.display = "block";
+        }
       } else {
         // Next will be short break - show coffee icon
-        this.skipCoffeeIcon.style.display = "block";
+        if (this.skipCoffeeIcon) {
+          this.skipCoffeeIcon.style.display = "block";
+        }
       }
     } else {
       // During break/longBreak: skip will go to focus
       // Show brain icon
-      this.skipBrainIcon.style.display = "block";
+      if (this.skipBrainIcon) {
+        this.skipBrainIcon.style.display = "block";
+      }
     }
   }
 
@@ -1899,6 +1974,9 @@ export class PomodoroTimer {
   }
 
   async updateProgressDots() {
+    if (!this.progressDots) {
+      return;
+    }
     const dots = this.progressDots.querySelectorAll(".dot");
 
     // Remove any existing overflow indicators
@@ -1934,7 +2012,7 @@ export class PomodoroTimer {
       return;
     } // Skip if task input element doesn't exist
 
-    const taskText = this.taskInput.value.trim();
+    const taskText = /** @type {HTMLInputElement} */ (this.taskInput).value.trim();
     if (taskText) {
       const task = {
         id: Date.now(),
@@ -1946,11 +2024,11 @@ export class PomodoroTimer {
       this.tasks.unshift(task);
       await this.saveTasks();
       this.renderTasks();
-      this.taskInput.value = "";
+      /** @type {HTMLInputElement} */ (this.taskInput).value = "";
     }
   }
 
-  async markTaskCompleted(taskText) {
+  async markTaskCompleted(/** @type {string} */ taskText) {
     const task = this.tasks.find((t) => t.text === taskText && !t.completed);
     if (task) {
       task.completed = true;
@@ -1960,7 +2038,7 @@ export class PomodoroTimer {
     }
   }
 
-  async deleteTask(taskId) {
+  async deleteTask(/** @type {any} */ taskId) {
     this.tasks = this.tasks.filter((t) => t.id !== taskId);
     await this.saveTasks();
     this.renderTasks();
@@ -1990,7 +2068,7 @@ export class PomodoroTimer {
       btn.addEventListener("click", () => this.deleteTask(task.id));
 
       taskEl.append(span, btn);
-      this.taskList.appendChild(taskEl);
+      /** @type {HTMLElement} */ (this.taskList).appendChild(taskEl);
     });
   }
 
@@ -2004,7 +2082,7 @@ export class PomodoroTimer {
     }
   }
 
-  renderWeeklyStats(history) {
+  renderWeeklyStats(/** @type {any[]} */ history) {
     const weeklyStatsContainer = document.getElementById("weekly-stats");
     if (!weeklyStatsContainer) {
       return;
@@ -2028,7 +2106,7 @@ export class PomodoroTimer {
       }
 
       // Find data for this date
-      const dayData = history.find((h) => h.date === date.toDateString());
+      const dayData = history.find((/** @type {any} */ h) => h.date === date.toDateString());
       const completed = dayData ? dayData.completed_pomodoros : 0;
       const focusTime = dayData ? dayData.total_focus_time : 0;
 
@@ -2059,7 +2137,7 @@ export class PomodoroTimer {
     }
   }
 
-  createHistoryModal(history) {
+  createHistoryModal(/** @type {any[]} */ history) {
     // Remove existing modal
     const existing = document.querySelector(".history-modal");
     if (existing) {
@@ -2082,7 +2160,7 @@ export class PomodoroTimer {
               : history
                   .slice()
                   .reverse()
-                  .map((day) => {
+                  .map((/** @type {any} */ day) => {
                     const date = new Date(day.date);
                     const hours = Math.floor(day.total_focus_time / 3600);
                     const minutes = Math.floor((day.total_focus_time % 3600) / 60);
@@ -2112,7 +2190,9 @@ export class PomodoroTimer {
 
     // Add event listeners
     const closeBtn = modal.querySelector(".close-btn");
-    closeBtn.addEventListener("click", () => this.closeHistoryModal());
+    if (closeBtn) {
+      closeBtn.addEventListener("click", () => this.closeHistoryModal());
+    }
 
     modal.addEventListener("click", (e) => {
       if (e.target === modal) {
@@ -2361,7 +2441,7 @@ export class PomodoroTimer {
     };
 
     const notificationTitle = "Presto - Pomodoro Timer";
-    const notificationBody = messages[this.currentMode];
+    const notificationBody = /** @type {Record<string, string>} */ (messages)[this.currentMode];
 
     logger.debug(`🔔 Attempting to show desktop notification: "${notificationBody}"`);
 
@@ -2420,7 +2500,7 @@ export class PomodoroTimer {
     }
   }
 
-  async fallbackToWebNotifications(title, body) {
+  async fallbackToWebNotifications(/** @type {string} */ title, /** @type {string} */ body) {
     try {
       if ("Notification" in window) {
         logger.debug(`🔔 Web Notification API available, permission: ${Notification.permission}`);
@@ -2463,7 +2543,7 @@ export class PomodoroTimer {
     }
   }
 
-  fallbackToInAppNotification(message) {
+  fallbackToInAppNotification(/** @type {string} */ message) {
     logger.debug("🔔 Using in-app notification as final fallback");
     NotificationUtils.showNotificationPing(message, "info", this.currentMode);
   }
@@ -2513,8 +2593,9 @@ export class PomodoroTimer {
     );
 
     // Test desktop notification
+    /** @type {any} */
     const originalSetting = this.enableDesktopNotifications;
-    this.enableDesktopNotifications = true; // Temporarily enable for testing
+    /** @type {any} */ (this).enableDesktopNotifications = true; // Temporarily enable for testing
 
     try {
       await this.showNotification();
@@ -2550,7 +2631,7 @@ export class PomodoroTimer {
       }
     } finally {
       // Restore original setting
-      this.enableDesktopNotifications = originalSetting;
+      /** @type {any} */ (this).enableDesktopNotifications = originalSetting;
     }
   }
 
@@ -2594,7 +2675,7 @@ export class PomodoroTimer {
 
   addWarningClass() {
     const container = document.querySelector(".timer-container");
-    if (!container.classList.contains("warning")) {
+    if (container && !container.classList.contains("warning")) {
       container.classList.add("warning");
     }
   }
@@ -2624,7 +2705,7 @@ export class PomodoroTimer {
         // Show overtime indicator in tray
         modeIcon = "⏰";
       } else {
-        modeIcon = modeIcons[this.currentMode] || "🧠";
+        modeIcon = /** @type {Record<string, string>} */ (modeIcons)[this.currentMode] || "🧠";
       }
 
       // Set display text based on status bar display mode
@@ -2679,7 +2760,7 @@ export class PomodoroTimer {
     }
   }
 
-  async applySettings(settings) {
+  async applySettings(/** @type {any} */ settings) {
     // Update timer durations
     this.durations.focus = settings.timer.focus_duration * 60;
     this.durations.break = settings.timer.break_duration * 60;
@@ -2700,7 +2781,7 @@ export class PomodoroTimer {
 
     // If timer is not running, update current time remaining
     if (!this.isRunning) {
-      this.timeRemaining = this.durations[this.currentMode];
+      this.timeRemaining = /** @type {Record<string, number>} */ (this.durations)[this.currentMode];
       this.updateDisplay();
     }
 
@@ -2757,7 +2838,9 @@ export class PomodoroTimer {
     this.isRunning = false;
     this.isPaused = false;
     this.isAutoPaused = false;
-    clearInterval(this.timerInterval);
+    if (this.timerInterval) {
+      clearInterval(this.timerInterval);
+    }
 
     // Clear smart pause timeout and disable
     if (this.activityTimeout) {
@@ -2799,12 +2882,12 @@ export class PomodoroTimer {
     this.totalSessions = 10;
 
     // Reset timer display
-    this.timeRemaining = this.durations[this.currentMode];
+    this.timeRemaining = /** @type {Record<string, number>} */ (this.durations)[this.currentMode];
 
     // Clear task input
     this.currentTask = "";
     if (this.taskInput) {
-      this.taskInput.value = "";
+      /** @type {HTMLInputElement} */ (this.taskInput).value = "";
     }
 
     // Reset notification preferences to defaults

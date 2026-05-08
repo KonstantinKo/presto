@@ -4,9 +4,10 @@
 // Falls back to console.* when running outside Tauri (dev server, tests).
 import { debug, info, warn, error } from "@tauri-apps/plugin-log";
 
+/** @param {unknown[]} args @returns {string} */
 function format(args) {
   return args
-    .map((a) => {
+    .map((/** @type {unknown} */ a) => {
       if (typeof a === "string") {
         return a;
       }
@@ -24,9 +25,13 @@ function format(args) {
 
 const isTauri = () => typeof window !== "undefined" && !!window.__TAURI__;
 
+/**
+ * @param {(msg: string) => Promise<void>} fn
+ * @param {(...args: unknown[]) => void} consoleFn
+ */
 const send =
   (fn, consoleFn) =>
-  (...args) => {
+  (/** @type {unknown[]} */ ...args) => {
     if (isTauri()) {
       fn(format(args)).catch(() => {
         /* never let the logger throw into the app */
