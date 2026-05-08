@@ -86,9 +86,20 @@ async function initSupabase() {
         // Start OAuth flow using tauri-plugin-oauth
         logger.debug("Invoking OAuth start...");
 
+        let port;
+        const cancelOauthServer = async () => {
+          if (port != null) {
+            try {
+              await invoke("plugin:oauth|cancel", { port });
+            } catch (cancelError) {
+              logger.info("Cancel command failed (this is usually fine):", cancelError);
+            }
+          }
+        };
+
         try {
           // Start the OAuth server using our custom command
-          const port = await invoke("start_oauth_server");
+          port = await invoke("start_oauth_server");
           logger.debug("OAuth server started on port:", port);
 
           // Generate redirect URI using the port
@@ -96,28 +107,6 @@ async function initSupabase() {
 
           // Build OAuth URL
           const authUrl = `${supabaseUrl}/auth/v1/authorize?provider=${provider}&redirect_to=${encodeURIComponent(redirectUri)}`;
-
-          logger.debug("Opening OAuth URL:", authUrl);
-
-          // Open the OAuth URL in the default browser
-          try {
-            // Try the correct opener command format
-            await invoke("plugin:opener|open_url", { url: authUrl });
-          } catch (openerError) {
-            logger.debug("opener plugin failed, trying alternative methods...", openerError);
-            try {
-              // Try without plugin prefix
-              await invoke("open_url", { url: authUrl });
-            } catch (openerError2) {
-              logger.debug("open_url failed, trying shell.open...", openerError2);
-              // Fallback to shell open
-              if (window.__TAURI__?.shell) {
-                await window.__TAURI__.shell.open(authUrl);
-              } else {
-                throw new Error("Cannot open browser - no opener available");
-              }
-            }
-          }
 
           // Return a promise that resolves when OAuth completes
           return new Promise((resolve, reject) => {
@@ -139,13 +128,10 @@ async function initSupabase() {
                 // Set up a timeout
                 timeout = setTimeout(() => {
                   cleanupListeners();
-                  invoke("plugin:oauth|cancel", { port }).catch((cancelError) => {
-                    logger.info("Cancel command failed (this is usually fine):", cancelError);
-                  });
+                  cancelOauthServer().catch(() => {});
                   reject(new Error("OAuth flow timed out"));
                 }, 120000); // 2 minutes
 
-                logger.debug("OAuth URL opened in browser. Please complete authentication...");
                 logger.debug("Redirect URI:", redirectUri);
 
                 // Set up event listener for OAuth callback
@@ -185,6 +171,36 @@ async function initSupabase() {
                     logger.debug(`Failed to listen for ${eventName}:`, listenError);
                   }
                 }
+
+                if (unlisteners.length === 0) {
+                  clearTimeout(timeout);
+                  await cancelOauthServer();
+                  reject(new Error("OAuth listener registration failed"));
+                  return;
+                }
+
+                // Open the OAuth URL in the default browser (after listeners are registered)
+                logger.debug("Opening OAuth URL:", authUrl);
+                try {
+                  // Try the correct opener command format
+                  await invoke("plugin:opener|open_url", { url: authUrl });
+                } catch (openerError) {
+                  logger.debug("opener plugin failed, trying alternative methods...", openerError);
+                  try {
+                    // Try without plugin prefix
+                    await invoke("open_url", { url: authUrl });
+                  } catch (openerError2) {
+                    logger.debug("open_url failed, trying shell.open...", openerError2);
+                    // Fallback to shell open
+                    if (window.__TAURI__?.shell) {
+                      await window.__TAURI__.shell.open(authUrl);
+                    } else {
+                      throw new Error("Cannot open browser - no opener available");
+                    }
+                  }
+                }
+
+                logger.debug("OAuth URL opened in browser. Please complete authentication...");
 
                 // Function to process OAuth callback
                 async function processOAuthCallback(callbackUrl, resolve, reject, timeout) {
@@ -280,12 +296,14 @@ async function initSupabase() {
                 logger.error("Error setting up OAuth listeners:", setupError);
                 clearTimeout(timeout);
                 cleanupListeners();
+                await cancelOauthServer();
                 reject(new Error(`OAuth setup failed: ${setupError.message}`));
               }
             })();
           });
         } catch (invokeError) {
           logger.error("Error calling OAuth plugin:", invokeError);
+          await cancelOauthServer();
           return { data: null, error: invokeError.message };
         }
       } catch (error) {
