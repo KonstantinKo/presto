@@ -146,8 +146,8 @@ export class PomodoroTimer {
             });
 
             // Add tooltip using NavigationManager
-            if (window.navigation) {
-                window.navigation.addTooltipEvents(this.smartIndicator);
+            if (window.navigationManager) {
+                window.navigationManager.addTooltipEvents(this.smartIndicator);
             }
         }
 
@@ -158,8 +158,8 @@ export class PomodoroTimer {
             });
 
             // Add tooltip using NavigationManager
-            if (window.navigation) {
-                window.navigation.addTooltipEvents(this.autoStartIndicator);
+            if (window.navigationManager) {
+                window.navigationManager.addTooltipEvents(this.autoStartIndicator);
             }
         }
 
@@ -170,8 +170,8 @@ export class PomodoroTimer {
             });
 
             // Add tooltip using NavigationManager
-            if (window.navigation) {
-                window.navigation.addTooltipEvents(this.continuousSessionIndicator);
+            if (window.navigationManager) {
+                window.navigationManager.addTooltipEvents(this.continuousSessionIndicator);
             }
         }
 
