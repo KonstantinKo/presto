@@ -436,7 +436,7 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
 
       // Controlla GitHub API
       const response = await fetch(
-        "https://api.github.com/repos/StefanoNovelli/presto/releases/latest"
+        "https://api.github.com/repos/murdercode/presto/releases/latest"
       );
       if (!response.ok) {
         throw new Error(`GitHub API error: ${response.status}`);

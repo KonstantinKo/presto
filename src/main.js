@@ -14,6 +14,7 @@ let navigation = null;
 let settingsManager = null;
 let sessionManager = null;
 let teamManager = null;
+let authChangeHandlerRegistered = false;
 
 // Global functions for settings (backwards compatibility)
 window.saveSettings = async function () {
@@ -179,11 +180,13 @@ function showCustomConfirm(title, message, type = "warning") {
 
     // Handle button clicks
     confirmBtn.addEventListener("click", () => {
+      document.removeEventListener("keydown", handleEscape);
       document.body.removeChild(overlay);
       resolve(true);
     });
 
     cancelBtn.addEventListener("click", () => {
+      document.removeEventListener("keydown", handleEscape);
       document.body.removeChild(overlay);
       resolve(false);
     });
@@ -1135,13 +1138,14 @@ function setupAuthEventListeners() {
   }
 
   // Listen for auth state changes (for manual sign-in/out via UI)
-  if (window.authManager) {
+  if (window.authManager && !authChangeHandlerRegistered) {
     window.authManager.onAuthChange(async (status, _user) => {
       if (status === "authenticated" || status === "guest") {
         await hideAuthScreen();
         // Note: App initialization is now handled directly, not through auth changes
       }
     });
+    authChangeHandlerRegistered = true;
   }
 }
 
@@ -1412,6 +1416,11 @@ function setupUserAvatarEventListeners() {
     avatarBtn: !!avatarBtn,
     dropdown: !!dropdown,
   });
+
+  if (!avatarBtn || !dropdown) {
+    console.warn("⚠️ Avatar button or dropdown not found, skipping avatar listener setup");
+    return;
+  }
 
   // Toggle dropdown on avatar click
   if (avatarBtn && dropdown) {
@@ -1930,7 +1939,13 @@ function setupUpdateManagement() {
         "Please wait while the update is downloaded and installed."
       );
 
-      await window.updateManager.downloadAndInstall();
+      try {
+        await window.updateManager.downloadAndInstall();
+      } catch (error) {
+        console.error("Download/install failed:", error);
+        hideUpdateProgress();
+        downloadUpdateBtn.disabled = false;
+      }
     });
   }
 
@@ -1967,7 +1982,11 @@ function setupUpdateManagement() {
   window.updateManager.on("checkError", (event) => {
     if (updateStatus) {
       const errorMessage = event?.detail?.message || "Check failed";
-      updateStatus.innerHTML = `<span class="status-text error">${errorMessage}</span>`;
+      const span = document.createElement("span");
+      span.className = "status-text error";
+      span.textContent = errorMessage;
+      updateStatus.textContent = "";
+      updateStatus.appendChild(span);
     }
   });
 

@@ -1362,7 +1362,6 @@ async fn write_excel_file(path: String, data: String) -> Result<(), String> {
 #[tauri::command]
 async fn start_oauth_server(window: tauri::Window) -> Result<u16, String> {
     start(move |url| {
-        println!("OAuth callback received: {url}");
         // Emit the URL to the frontend
         let _ = window.emit("oauth-callback", url);
     })

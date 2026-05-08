@@ -180,9 +180,10 @@ class TagManager {
                 <div class="tag-item-icon">
                     ${tag.icon.startsWith("ri-") ? `<i class="${tag.icon}"></i>` : tag.icon}
                 </div>
-                <div class="tag-item-name">${tag.name}</div>
+                <div class="tag-item-name"></div>
                 <div class="tag-item-delete ri-delete-bin-line" data-tag-id="${tag.id}"></div>
             `;
+      tagItem.querySelector(".tag-item-name").textContent = tag.name;
 
       // Tag selection event
       tagItem.addEventListener("click", (e) => {

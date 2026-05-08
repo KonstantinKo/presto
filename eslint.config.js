@@ -15,7 +15,6 @@ export default [
       "src/managers/update-manager-v2.js",
       "src/managers/update-manager-v2-corrected.js",
       "src/managers/update-manager-fixed.js",
-      "src/managers/update-manager-browser-compatible.js",
     ],
   },
   js.configs.recommended,

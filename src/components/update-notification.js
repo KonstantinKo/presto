@@ -13,6 +13,7 @@ export class UpdateNotification {
     this.isVisible = false;
     this.animationDuration = 300;
     this.currentVersion = null;
+    this._hideTimeoutId = null;
 
     this.createNotificationContainer();
     // Aspetta che l'updateManager sia disponibile prima di bind degli eventi
@@ -474,6 +475,23 @@ export class UpdateNotification {
   }
 
   /**
+   * Shows the progress container, hiding the default content area
+   */
+  showProgressContainer() {
+    const content = this.container.querySelector(".update-content");
+    const progressContainer = this.container.querySelector(".update-progress-container");
+    if (content) {
+      content.style.display = "none";
+    }
+    if (progressContainer) {
+      progressContainer.style.display = "flex";
+    }
+    if (!this.isVisible) {
+      this.show();
+    }
+  }
+
+  /**
    * Updates download progress
    */
   updateProgress(progress) {
@@ -528,14 +546,17 @@ export class UpdateNotification {
 
     updateManager.on("downloadProgress", (event) => {
       const { progress } = event.detail;
+      this.showProgressContainer();
       this.updateProgress(progress);
     });
 
     updateManager.on("downloadFinished", () => {
+      this.showProgressContainer();
       this.showInstalling();
     });
 
     updateManager.on("downloadError", (event) => {
+      this.showProgressContainer();
       this.showError(event.detail);
     });
   }
@@ -623,6 +644,9 @@ export class UpdateNotification {
    * Shows the notification
    */
   show() {
+    clearTimeout(this._hideTimeoutId);
+    this._hideTimeoutId = null;
+
     if (this.isVisible) {
       console.log("🔔 [UpdateNotification] Notification already visible - skip");
       return;
@@ -656,7 +680,8 @@ export class UpdateNotification {
 
     this.container.classList.remove("visible");
 
-    setTimeout(() => {
+    this._hideTimeoutId = setTimeout(() => {
+      this._hideTimeoutId = null;
       this.container.style.display = "none";
       this.resetToInitialState();
     }, this.animationDuration);
@@ -681,6 +706,8 @@ export class UpdateNotification {
    * Destroys the component
    */
   destroy() {
+    clearTimeout(this._hideTimeoutId);
+    this._hideTimeoutId = null;
     if (this.container && this.container.parentNode) {
       this.container.parentNode.removeChild(this.container);
     }

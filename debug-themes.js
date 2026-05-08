@@ -29,7 +29,7 @@ console.log("Stylesheets loaded:");
 Array.from(document.styleSheets).forEach((sheet, i) => {
   try {
     console.log(`${i}: ${sheet.href || "inline"}`);
-  } catch (e) {
+  } catch (_e) {
     console.log(`${i}: (CORS protected)`);
   }
 });

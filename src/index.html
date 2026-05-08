@@ -64,7 +64,7 @@
       <div class="sidebar-bottom">
         <div class="user-avatar-container" id="user-avatar-container">
           <button class="user-avatar-btn" id="user-avatar-btn">
-            <img id="user-avatar-img" src="" alt="User Avatar" style="display: none" />
+            <img id="user-avatar-img" alt="User Avatar" style="display: none" />
             <div id="user-avatar-fallback" class="avatar-fallback">
               <i id="user-guest-icon" class="ri-user-line" style="display: none"></i>
               <span id="user-initial" style="display: none">U</span>
@@ -169,7 +169,12 @@
                       <div class="emoji-option" data-icon="🔥">🔥</div>
                     </div>
                   </div>
-                  <input type="text" placeholder="New tag..." id="new-tag-name" />
+                  <input
+                    type="text"
+                    placeholder="New tag..."
+                    id="new-tag-name"
+                    aria-label="New tag name"
+                  />
                   <button class="create-tag-btn" id="create-tag-btn">+</button>
                 </div>
               </div>
@@ -1003,7 +1008,7 @@
                   <label class="setting-label">Status Bar Display</label>
                   <select id="status-bar-display" class="setting-select">
                     <option value="default">Default (mm:ss)</option>
-                    <option value="icon-only">Nessuno (solo icona)</option>
+                    <option value="icon-only">None (icon only)</option>
                   </select>
                   <p class="setting-description">
                     Choose how the timer information is displayed in the system status bar/tray.
