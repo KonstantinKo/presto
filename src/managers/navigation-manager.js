@@ -829,8 +829,8 @@ export class NavigationManager {
       dayEl.appendChild(dots);
 
       // Add click event
-      dayEl.addEventListener("click", async () => {
-        await this.selectDay(dayDate);
+      dayEl.addEventListener("click", async (e) => {
+        await this.selectDay(dayDate, e.currentTarget);
       });
 
       calendarGrid.appendChild(dayEl);
@@ -841,14 +841,14 @@ export class NavigationManager {
     return TimeUtils.isSameDay(date1, date2);
   }
 
-  async selectDay(date) {
+  async selectDay(date, dayEl) {
     // Remove previous selection
     document.querySelectorAll(".calendar-day").forEach((day) => {
       day.classList.remove("selected");
     });
 
     // Add selection to clicked day
-    event.currentTarget.classList.add("selected");
+    dayEl?.classList.add("selected");
 
     this.selectedDate = date;
     await this.updateSelectedDayDetails(date);
@@ -859,22 +859,6 @@ export class NavigationManager {
 
     // Update session history table for selected date
     await this.populateSessionsTableForDate(date);
-  }
-
-  updateDailyDetails(date = this.currentDate) {
-    // This method is now replaced by updateSelectedDayDetails, updateFocusSummary, and updateDailyChart
-    // Keeping it for compatibility, but it just calls the new methods
-    this.updateSelectedDayDetails(date);
-    this.updateFocusSummary();
-    this.updateWeeklySessionsChart();
-    this.updateDailyChart();
-    this.updateTagUsageChart();
-  }
-
-  updateWeeklyChart() {
-    // This method is now replaced by updateDailyChart
-    // Keeping it for compatibility
-    this.updateDailyChart();
   }
 
   formatTime(seconds) {
@@ -1553,74 +1537,6 @@ export class NavigationManager {
     }
   }
 
-  async populateSessionsTable(period = "today") {
-    const tableBody = document.getElementById("sessions-table-body");
-    if (!tableBody || !window.sessionManager) {
-      return;
-    }
-
-    const sessions = this.getSessionsForPeriod(period);
-    tableBody.innerHTML = "";
-
-    if (sessions.length === 0) {
-      tableBody.innerHTML = `
-                <tr>
-                    <td colspan="5" class="sessions-table-empty">
-                        No sessions found for the selected period
-                    </td>
-                </tr>
-            `;
-      return;
-    }
-
-    // Sort sessions by date and time (newest first)
-    sessions.sort((a, b) => {
-      const dateComparison = b.created_at.localeCompare(a.created_at);
-      if (dateComparison !== 0) {
-        return dateComparison;
-      }
-      return b.start_time.localeCompare(a.start_time);
-    });
-
-    for (const session of sessions) {
-      const row = await this.createSessionTableRow(session);
-      tableBody.appendChild(row);
-    }
-  }
-
-  getSessionsForPeriod(period) {
-    if (!window.sessionManager) {
-      return [];
-    }
-
-    const now = new Date();
-    let startDate;
-
-    switch (period) {
-      case "today":
-        startDate = new Date(now.setHours(0, 0, 0, 0));
-        break;
-      case "week":
-        startDate = new Date(now);
-        startDate.setDate(now.getDate() - 7);
-        break;
-      case "month":
-        startDate = new Date(now);
-        startDate.setMonth(now.getMonth() - 1);
-        break;
-      case "all":
-        return this.getAllSessionsFromManager();
-      default:
-        startDate = new Date(now);
-        startDate.setDate(now.getDate() - 7);
-    }
-
-    return this.getAllSessionsFromManager().filter((session) => {
-      const sessionDate = new Date(session.created_at);
-      return sessionDate >= startDate;
-    });
-  }
-
   getAllSessionsFromManager() {
     const allSessions = [];
 
@@ -1677,43 +1593,67 @@ export class NavigationManager {
 
     // Get session tags (if tag system is available)
     const tags = await this.getSessionTags(session.id);
-    let tagsHtml;
 
+    // Build tags cell using DOM to avoid XSS from tag names
+    const tagsCell = document.createElement("td");
+    const tagsDiv = document.createElement("div");
+    tagsDiv.className = "session-tags";
     if (tags.length === 0) {
-      tagsHtml = '<span class="text-muted">-</span>';
+      const muted = document.createElement("span");
+      muted.className = "text-muted";
+      muted.textContent = "-";
+      tagsDiv.appendChild(muted);
     } else if (tags.length === 1) {
-      // Single tag - show normally
-      tagsHtml = `<span class="session-tag">${tags[0].name}</span>`;
+      const tagSpan = document.createElement("span");
+      tagSpan.className = "session-tag";
+      tagSpan.textContent = tags[0].name;
+      tagsDiv.appendChild(tagSpan);
     } else {
-      // Multiple tags - show first + count indicator with tooltip
       const firstTag = tags[0];
       const remainingCount = tags.length - 1;
       const allTagNames = tags.map((tag) => tag.name).join(", ");
-
-      tagsHtml = `
-                <div class="session-tags-compact" title="${allTagNames}">
-                    <span class="session-tag">${firstTag.name}</span>
-                    <span class="session-tag-count">+${remainingCount}</span>
-                </div>
-            `;
+      const compact = document.createElement("div");
+      compact.className = "session-tags-compact";
+      compact.title = allTagNames;
+      const firstSpan = document.createElement("span");
+      firstSpan.className = "session-tag";
+      firstSpan.textContent = firstTag.name;
+      const countSpan = document.createElement("span");
+      countSpan.className = "session-tag-count";
+      countSpan.textContent = `+${remainingCount}`;
+      compact.append(firstSpan, countSpan);
+      tagsDiv.appendChild(compact);
     }
+    tagsCell.appendChild(tagsDiv);
 
+    // Build the static columns as innerHTML (no user input)
     row.innerHTML = `
             <td>${formattedDate}</td>
             <td>${timeRange}</td>
             <td>${session.duration}m</td>
-            <td><div class="session-tags">${tagsHtml}</div></td>
-            <td>
-                <div class="session-actions">
-                    <button class="session-action-btn edit" onclick="navigationManager.editSessionFromTable('${session.id}')" title="Edit Session">
-                        <i class="ri-edit-line"></i>
-                    </button>
-                    <button class="session-action-btn delete" onclick="navigationManager.deleteSessionFromTable('${session.id}')" title="Delete Session">
-                        <i class="ri-delete-bin-line"></i>
-                    </button>
-                </div>
-            </td>
         `;
+    row.appendChild(tagsCell);
+
+    // Build action buttons with addEventListener instead of inline onclick
+    const actionsCell = document.createElement("td");
+    const actionsDiv = document.createElement("div");
+    actionsDiv.className = "session-actions";
+
+    const editBtn = document.createElement("button");
+    editBtn.className = "session-action-btn edit";
+    editBtn.title = "Edit Session";
+    editBtn.innerHTML = '<i class="ri-edit-line"></i>';
+    editBtn.addEventListener("click", () => this.editSessionFromTable(session.id));
+
+    const deleteBtn = document.createElement("button");
+    deleteBtn.className = "session-action-btn delete";
+    deleteBtn.title = "Delete Session";
+    deleteBtn.innerHTML = '<i class="ri-delete-bin-line"></i>';
+    deleteBtn.addEventListener("click", () => this.deleteSessionFromTable(session.id));
+
+    actionsDiv.append(editBtn, deleteBtn);
+    actionsCell.appendChild(actionsDiv);
+    row.appendChild(actionsCell);
 
     return row;
   }
@@ -1802,12 +1742,6 @@ export class NavigationManager {
         await this.updateTagUsageChart();
       } catch (e) {
         logger.warn("Failed to update tag usage chart after deletion:", e);
-      }
-
-      try {
-        await this.updateTimelineForDate(new Date());
-      } catch (e) {
-        logger.warn("Failed to update timeline after deletion:", e);
       }
     } catch (error) {
       logger.error("Error deleting session:", error);

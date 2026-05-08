@@ -414,7 +414,7 @@ async fn load_session_data(app: AppHandle) -> Result<Option<PomodoroSession>, St
         serde_json::from_str(&content).map_err(|e| format!("Failed to parse session: {e}"))?;
 
     // Get today's date string
-    let today = chrono::Local::now().format("%a %b %d %Y").to_string();
+    let today = chrono::Local::now().format("%Y-%m-%d").to_string();
 
     // If the saved session is not from today, reset the counters but keep the date updated
     if session.date != today {
@@ -674,52 +674,26 @@ async fn register_global_shortcuts(
         .unregister_all()
         .map_err(|e| format!("Failed to unregister shortcuts: {e}"))?;
 
-    // Register start/stop shortcut
-    if let Some(ref shortcut_str) = shortcuts.start_stop {
-        let shortcut: Shortcut = shortcut_str
-            .parse()
-            .map_err(|e| format!("Invalid start/stop shortcut '{shortcut_str}': {e}"))?;
+    for (action, shortcut_str) in [
+        ("start-stop", &shortcuts.start_stop),
+        ("reset", &shortcuts.reset),
+        ("skip", &shortcuts.skip),
+    ] {
+        if let Some(ref shortcut_str) = shortcut_str {
+            let shortcut: Shortcut = shortcut_str
+                .parse()
+                .map_err(|e| format!("Invalid {action} shortcut '{shortcut_str}': {e}"))?;
 
-        let app_handle = app.clone();
-        app.global_shortcut()
-            .on_shortcut(shortcut, move |_app, _shortcut, _event| {
-                if !should_debounce_shortcut("start-stop") {
-                    let _ = app_handle.emit("global-shortcut", "start-stop");
-                }
-            })
-            .map_err(|e| format!("Failed to register start/stop shortcut: {e}"))?;
-    }
-
-    // Register reset shortcut
-    if let Some(ref shortcut_str) = shortcuts.reset {
-        let shortcut: Shortcut = shortcut_str
-            .parse()
-            .map_err(|e| format!("Invalid reset shortcut '{shortcut_str}': {e}"))?;
-
-        let app_handle = app.clone();
-        app.global_shortcut()
-            .on_shortcut(shortcut, move |_app, _shortcut, _event| {
-                if !should_debounce_shortcut("reset") {
-                    let _ = app_handle.emit("global-shortcut", "reset");
-                }
-            })
-            .map_err(|e| format!("Failed to register reset shortcut: {e}"))?;
-    }
-
-    // Register skip shortcut
-    if let Some(ref shortcut_str) = shortcuts.skip {
-        let shortcut: Shortcut = shortcut_str
-            .parse()
-            .map_err(|e| format!("Invalid skip shortcut '{shortcut_str}': {e}"))?;
-
-        let app_handle = app.clone();
-        app.global_shortcut()
-            .on_shortcut(shortcut, move |_app, _shortcut, _event| {
-                if !should_debounce_shortcut("skip") {
-                    let _ = app_handle.emit("global-shortcut", "skip");
-                }
-            })
-            .map_err(|e| format!("Failed to register skip shortcut: {e}"))?;
+            let app_handle = app.clone();
+            let action_owned = action.to_string();
+            app.global_shortcut()
+                .on_shortcut(shortcut, move |_app, _shortcut, _event| {
+                    if !should_debounce_shortcut(&action_owned) {
+                        let _ = app_handle.emit("global-shortcut", action_owned.as_str());
+                    }
+                })
+                .map_err(|e| format!("Failed to register {action} shortcut: {e}"))?;
+        }
     }
 
     // Emit an event to the frontend to update local shortcuts as well
@@ -1180,11 +1154,24 @@ async fn load_tags(app: AppHandle) -> Result<Vec<Tag>, String> {
             color: "#4CAF50".to_string(),
             created_at: std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
+                .unwrap_or_default()
                 .as_secs()
                 .to_string(),
         };
-        Ok(vec![default_tag])
+        // Persist default tag so subsequent loads are consistent
+        let tags = vec![default_tag];
+        let app_data_dir = app
+            .path()
+            .app_data_dir()
+            .map_err(|e| format!("Failed to get app data directory: {e}"))?;
+        fs::create_dir_all(&app_data_dir)
+            .map_err(|e| format!("Failed to create directory: {e}"))?;
+        let file_path = app_data_dir.join("tags.json");
+        let json = serde_json::to_string_pretty(&tags)
+            .map_err(|e| format!("Failed to serialize default tags: {e}"))?;
+        fs::write(file_path, json)
+            .map_err(|e| format!("Failed to write default tags file: {e}"))?;
+        Ok(tags)
     }
 }
 

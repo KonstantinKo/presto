@@ -1,7 +1,7 @@
 [package]
 name = "presto"
 version = "0.4.4"
-description = "A Tauri App"
+description = "A Pomodoro timer app built with Tauri"
 authors = ["Stefano Novelli"]
 edition = "2021"
 
@@ -55,17 +55,14 @@ tauri-plugin-notification = { version = "2", default-features = false }
 tauri-plugin-autostart = { version = "2", default-features = false }
 tauri-plugin-updater = { version = "2", default-features = false }
 tauri-plugin-process = { version = "2", default-features = false }
-tauri-plugin-oauth = { git = "https://github.com/FabianLars/tauri-plugin-oauth", branch = "v2" }
+tauri-plugin-oauth = { git = "https://github.com/FabianLars/tauri-plugin-oauth", rev = "f941c99c3ed528a55db7fe05c931480a8255041d" }
 tauri-plugin-aptabase = "1.0.0"
 serde = { version = "1", features = ["derive"], default-features = false }
 serde_json = { version = "1", default-features = false }
 chrono = { version = "0.4", features = ["serde", "clock"], default-features = false }
-dotenv = "0.15"
 base64 = "0.21"
 
 [target.'cfg(target_os = "macos")'.dependencies]
-core-graphics = "0.23"
-core-foundation = "0.9"
 libc = "0.2"
 cocoa = "0.25"
 objc = "0.2"

@@ -31,11 +31,12 @@ window.resetToDefaults = function () {
   }
 };
 
-window.clearShortcut = function (shortcutType) {
-  if (window.settingsManager) {
-    window.settingsManager.clearShortcut(shortcutType);
+document.addEventListener("click", (e) => {
+  const btn = e.target.closest(".shortcut-clear[data-shortcut]");
+  if (btn && window.settingsManager) {
+    window.settingsManager.clearShortcut(btn.dataset.shortcut);
   }
-};
+});
 
 window.confirmTotalReset = async function () {
   logger.debug("confirmTotalReset called"); // Debug log
