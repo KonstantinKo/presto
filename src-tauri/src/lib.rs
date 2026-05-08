@@ -1176,13 +1176,8 @@ async fn load_tags(app: AppHandle) -> Result<Vec<Tag>, String> {
         };
         // Persist default tag so subsequent loads are consistent
         let tags = vec![default_tag];
-        let app_data_dir = app
-            .path()
-            .app_data_dir()
-            .map_err(|e| format!("Failed to get app data directory: {e}"))?;
         fs::create_dir_all(&app_data_dir)
             .map_err(|e| format!("Failed to create directory: {e}"))?;
-        let file_path = app_data_dir.join("tags.json");
         let json = serde_json::to_string_pretty(&tags)
             .map_err(|e| format!("Failed to serialize default tags: {e}"))?;
         fs::write(file_path, json)

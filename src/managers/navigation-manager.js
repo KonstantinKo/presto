@@ -796,6 +796,7 @@ export class NavigationManager {
 
     this.selectedDate = date;
     this.selectedWeek = this.getWeekStart(date);
+    this.updateWeekDisplay();
     await this.updateSelectedDayDetails(date);
     await this.updateFocusSummary();
     await this.updateWeeklySessionsChart();
