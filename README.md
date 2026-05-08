@@ -68,8 +68,10 @@ If you prefer to build from source, you'll need:
 
 #### Prerequisites
 - [Node.js](https://nodejs.org/) (v16 or higher)
-- [Rust](https://rustup.rs/) (latest stable)
-- [Tauri CLI](https://tauri.app/v1/guides/getting-started/prerequisites)
+- [Rust](https://rustup.rs/) (latest stable; the project is verified against `1.89.0`)
+- Xcode Command Line Tools (macOS): `xcode-select --install`
+
+The Tauri CLI is pulled in automatically via `npm install` (`@tauri-apps/cli`); no separate install is needed.
 
 #### Steps
 
@@ -89,10 +91,29 @@ If you prefer to build from source, you'll need:
    npm run tauri dev
    ```
 
+   The first run downloads ~200 crates and compiles the Rust backend, which takes several minutes. Subsequent runs are incremental.
+
 4. **Build for production**
    ```bash
    npm run tauri build
    ```
+
+#### Troubleshooting
+
+- **`No version is set for command cargo` / `rustc`** — you are using `asdf` (or another version manager) and no Rust version is selected for this directory. Add a `.tool-versions` file at the **repo root** (not inside `src-tauri/`; the Tauri CLI invokes `rustc` from the repo root):
+  ```
+  rust 1.89.0
+  ```
+  Or set a global default with `asdf set -u rust 1.89.0`.
+
+- **`thread '<unnamed>' panicked at ... rust.rs:... called Option::unwrap() on a None value`** — same root cause as above. The Tauri CLI parses `rustc -vV` output and panics if `rustc` cannot be resolved on `PATH`. Fix the toolchain resolution and re-run.
+
+- **`Found version mismatched Tauri packages`** — the npm packages and the Rust crates have drifted out of sync (e.g. `@tauri-apps/api` vs `tauri`). Pin the npm side to match the Rust crate versions resolved by Cargo (check `src-tauri/Cargo.lock`), e.g.:
+  ```bash
+  npm install --save-exact @tauri-apps/api@2.6.0 @tauri-apps/plugin-updater@2.8.1
+  ```
+
+- **Devtools in dev mode** — devtools are enabled via the `devtools` feature on the `tauri` crate in `src-tauri/Cargo.toml`. Open them with right-click → *Inspect Element* (or `Cmd+Opt+I` on macOS) to surface frontend errors that the app's generic "An error occurred" toast hides.
 
 ## 🏗️ Project Structure
 

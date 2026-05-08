@@ -31,7 +31,7 @@ strip = true     # Rimuove simboli debug
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = ["tray-icon"] }
+tauri = { version = "2", features = ["tray-icon", "devtools"] }
 tauri-plugin-opener = { version = "2", default-features = false }
 tauri-plugin-global-shortcut = { version = "2", default-features = false }
 tauri-plugin-dialog = { version = "2", default-features = false }
