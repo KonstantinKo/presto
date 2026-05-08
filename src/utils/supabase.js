@@ -122,19 +122,26 @@ async function initSupabase() {
           // Return a promise that resolves when OAuth completes
           return new Promise((resolve, reject) => {
             let timeout;
-            let unlisten;
+            const unlisteners = [];
+            const cleanupListeners = () => {
+              for (const off of unlisteners) {
+                try {
+                  off();
+                } catch (_) {
+                  // ignore individual unlisten errors
+                }
+              }
+              unlisteners.length = 0;
+            };
+            let processed = false;
             (async () => {
               try {
                 // Set up a timeout
                 timeout = setTimeout(() => {
-                  if (unlisten) {
-                    unlisten();
-                  }
-                  try {
-                    invoke("plugin:oauth|cancel", { port });
-                  } catch (cancelError) {
+                  cleanupListeners();
+                  invoke("plugin:oauth|cancel", { port }).catch((cancelError) => {
                     logger.info("Cancel command failed (this is usually fine):", cancelError);
-                  }
+                  });
                   reject(new Error("OAuth flow timed out"));
                 }, 120000); // 2 minutes
 
@@ -159,42 +166,30 @@ async function initSupabase() {
                   try {
                     logger.debug(`Trying to listen for event: ${eventName}`);
                     const tempUnlisten = await listen(eventName, async (event) => {
+                      if (processed) {
+                        return;
+                      }
+                      processed = true;
+                      cleanupListeners();
                       logger.debug("Received OAuth callback event", {
                         eventName,
                         hasPayload: Boolean(event?.payload),
                       });
 
                       // Process the callback
-                      await processOAuthCallback(
-                        event.payload,
-                        resolve,
-                        reject,
-                        timeout,
-                        tempUnlisten
-                      );
+                      await processOAuthCallback(event.payload, resolve, reject, timeout);
                     });
 
-                    if (!unlisten) {
-                      unlisten = tempUnlisten;
-                    }
+                    unlisteners.push(tempUnlisten);
                   } catch (listenError) {
                     logger.debug(`Failed to listen for ${eventName}:`, listenError);
                   }
                 }
 
                 // Function to process OAuth callback
-                async function processOAuthCallback(
-                  callbackUrl,
-                  resolve,
-                  reject,
-                  timeout,
-                  unlisten
-                ) {
+                async function processOAuthCallback(callbackUrl, resolve, reject, timeout) {
                   try {
                     clearTimeout(timeout);
-                    if (unlisten) {
-                      unlisten();
-                    }
 
                     logger.debug("Processing OAuth callback");
 
@@ -271,9 +266,6 @@ async function initSupabase() {
                   } catch (parseError) {
                     logger.error("Error parsing OAuth callback:", parseError);
                     clearTimeout(timeout);
-                    if (unlisten) {
-                      unlisten();
-                    }
                     await invoke("plugin:oauth|cancel");
                     reject(new Error(`Failed to parse OAuth callback: ${parseError.message}`));
                   }
@@ -283,9 +275,7 @@ async function initSupabase() {
               } catch (setupError) {
                 logger.error("Error setting up OAuth listeners:", setupError);
                 clearTimeout(timeout);
-                if (unlisten) {
-                  unlisten();
-                }
+                cleanupListeners();
                 reject(new Error(`OAuth setup failed: ${setupError.message}`));
               }
             })();

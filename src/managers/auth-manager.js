@@ -9,61 +9,71 @@ class AuthManager {
     this.supabase = null;
     this.authHelpers = null;
     this.initialized = false;
+    this.initPromise = null;
   }
 
   async init() {
     if (this.initialized) {
       return;
     }
-
-    try {
-      // Initialize Supabase first
-      await initSupabase();
-      this.supabase = getSupabase();
-      this.authHelpers = getAuthHelpers();
-
-      // Check if user is already authenticated
-      const {
-        data: { session },
-      } = await this.supabase.auth.getSession();
-      if (session) {
-        this.currentUser = session.user;
-        this.isGuest = false;
-        this.notifyAuthListeners("authenticated", this.currentUser);
-      } else {
-        // Check if user chose to continue as guest
-        const guestMode = localStorage.getItem("presto-guest-mode");
-        if (guestMode === "true") {
-          this.isGuest = true;
-          this.notifyAuthListeners("guest", null);
-        } else {
-          this.notifyAuthListeners("unauthenticated", null);
-        }
-      }
-    } catch (error) {
-      logger.error("Error checking authentication status:", error);
-      this.initialized = false;
-      this.notifyAuthListeners("unauthenticated", null);
-      return;
+    if (this.initPromise) {
+      return this.initPromise;
     }
 
-    // Listen for auth changes
-    this.supabase.auth.onAuthStateChange((event, session) => {
-      if (event === "SIGNED_IN" && session) {
-        this.currentUser = session.user;
-        this.isGuest = false;
-        localStorage.removeItem("presto-guest-mode");
-        this.notifyAuthListeners("authenticated", this.currentUser);
-      } else if (event === "SIGNED_OUT") {
-        this.currentUser = null;
-        this.isGuest = false;
-        localStorage.removeItem("presto-guest-mode");
-        this.notifyAuthListeners("unauthenticated", null);
-      }
-    });
+    this.initPromise = (async () => {
+      try {
+        // Initialize Supabase first
+        await initSupabase();
+        this.supabase = getSupabase();
+        this.authHelpers = getAuthHelpers();
 
-    this.initialized = true;
-    logger.info("✅ AuthManager initialized with Supabase");
+        // Check if user is already authenticated
+        const {
+          data: { session },
+        } = await this.supabase.auth.getSession();
+        if (session) {
+          this.currentUser = session.user;
+          this.isGuest = false;
+          this.notifyAuthListeners("authenticated", this.currentUser);
+        } else {
+          // Check if user chose to continue as guest
+          const guestMode = localStorage.getItem("presto-guest-mode");
+          if (guestMode === "true") {
+            this.isGuest = true;
+            this.notifyAuthListeners("guest", null);
+          } else {
+            this.notifyAuthListeners("unauthenticated", null);
+          }
+        }
+      } catch (error) {
+        logger.error("Error checking authentication status:", error);
+        this.initialized = false;
+        this.notifyAuthListeners("unauthenticated", null);
+        return;
+      } finally {
+        this.initPromise = null;
+      }
+
+      // Listen for auth changes
+      this.supabase.auth.onAuthStateChange((event, session) => {
+        if (event === "SIGNED_IN" && session) {
+          this.currentUser = session.user;
+          this.isGuest = false;
+          localStorage.removeItem("presto-guest-mode");
+          this.notifyAuthListeners("authenticated", this.currentUser);
+        } else if (event === "SIGNED_OUT") {
+          this.currentUser = null;
+          this.isGuest = false;
+          localStorage.removeItem("presto-guest-mode");
+          this.notifyAuthListeners("unauthenticated", null);
+        }
+      });
+
+      this.initialized = true;
+      logger.info("✅ AuthManager initialized with Supabase");
+    })();
+
+    return this.initPromise;
   }
 
   // Check if this is the first time the app is being opened
