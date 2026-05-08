@@ -441,7 +441,10 @@ export class UpdateNotification {
     // Show brew install command instead of Tauri updater
     const brewCommand = "brew install murdercode/presto/presto --cask";
 
+<<<<<<< HEAD
     let copySucceeded = false;
+=======
+>>>>>>> 2dca63af77569f649348bfd32f37fc1f4f860dab
     if (navigator.clipboard && navigator.clipboard.writeText) {
       try {
         await navigator.clipboard.writeText(brewCommand);
@@ -452,7 +455,11 @@ export class UpdateNotification {
       }
     }
 
+<<<<<<< HEAD
     const message = `To update Presto, run this command in your terminal:\n\n${brewCommand}\n\n${copySucceeded ? "The command has been copied to your clipboard." : "Please copy this command manually."}`;
+=======
+    const message = `To update Presto, run this command in your terminal:\n\n${brewCommand}\n\n${navigator.clipboard ? "The command has been copied to your clipboard." : "Please copy this command manually."}`;
+>>>>>>> 2dca63af77569f649348bfd32f37fc1f4f860dab
 
     if (window.__TAURI__ && window.__TAURI__.dialog) {
       await window.__TAURI__.dialog.message(message, {

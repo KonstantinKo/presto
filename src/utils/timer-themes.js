@@ -50,7 +50,11 @@ export function registerTheme(themeId, themeConfig) {
     name: themeConfig.name || themeId,
     description: themeConfig.description || `Theme: ${themeId}`,
     supports: themeConfig.supports || ["light", "dark"],
+<<<<<<< HEAD
     isDefault: themeConfig.isDefault ?? existingTheme?.isDefault ?? false,
+=======
+    isDefault: themeConfig.isDefault || false,
+>>>>>>> 2dca63af77569f649348bfd32f37fc1f4f860dab
     preview: themeConfig.preview || DEFAULT_PREVIEW,
   };
 

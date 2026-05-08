@@ -20,7 +20,11 @@
       }
     ],
     "security": {
+<<<<<<< HEAD
       "csp": "default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net; font-src 'self' https://fonts.gstatic.com https://cdn.jsdelivr.net data:; connect-src 'self' https://lopgwwppinkqvttozqfx.supabase.co tauri: ipc: http://ipc.localhost"
+=======
+      "csp": "default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net; font-src 'self' https://fonts.gstatic.com https://cdn.jsdelivr.net data:; connect-src 'self' https://*.supabase.co tauri: ipc: http://ipc.localhost"
+>>>>>>> 2dca63af77569f649348bfd32f37fc1f4f860dab
     }
   },
   "bundle": {
