@@ -22,7 +22,7 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
         // Inizializza il controllo automatico sempre (ora funziona anche in dev mode)
         this.startAutoCheck();
 
-        console.log('✅ UpdateManager v2 inizializzato (global)');
+        console.log('✅ UpdateManager v2 initialized (global)');
     }
 
     /**
@@ -31,19 +31,19 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
     isDevelopmentMode() {
         // Permetti override per test degli aggiornamenti
         if (localStorage.getItem('presto_force_update_test') === 'true') {
-            console.log('🧪 Modalità test aggiornamenti attiva');
+            console.log('🧪 Update test mode active');
             return false;
         }
 
         // Verifica se siamo in un ambiente Tauri
         if (!window.__TAURI__) {
-            console.log('🔍 Non è un ambiente Tauri - modalità sviluppo');
+            console.log('🔍 Not a Tauri environment - development mode');
             return true;
         }
 
         // Verifica se stiamo running da tauri dev
         if (window.location.protocol === 'tauri:') {
-            console.log('🔍 Protocollo tauri: - app compilata');
+            console.log('🔍 Tauri protocol: - compiled app');
             return false;
         }
 
@@ -51,11 +51,11 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
         if (window.location.hostname === 'localhost' ||
             window.location.href.includes('localhost') ||
             window.location.href.includes('127.0.0.1')) {
-            console.log('🔍 Localhost rilevato - modalità sviluppo');
+            console.log('🔍 Localhost detected - development mode');
             return true;
         }
 
-        console.log('🔍 Ambiente produzione rilevato');
+        console.log('🔍 Production environment detected');
         return false;
     }
 
@@ -69,12 +69,12 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
 
         // Prova diverse modalità di accesso all'API updater
         if (window.__TAURI__.updater) {
-            console.log('✅ Usando API updater globale');
+            console.log('✅ Using global updater API');
             return window.__TAURI__.updater;
         }
 
         if (window.__TAURI__.core && window.__TAURI__.core.invoke) {
-            console.log('✅ Usando API updater via invoke');
+            console.log('✅ Using updater API via invoke');
             return {
                 check: () => window.__TAURI__.core.invoke('plugin:updater|check'),
                 downloadAndInstall: (onProgress) => {
@@ -85,7 +85,7 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
         }
 
         // Se non disponibile, usiamo fetch diretto
-        console.log('ℹ️ API updater non disponibile, usando approccio manuale');
+        console.log('ℹ️ Updater API not available, using manual approach');
         return null;
     }
 
@@ -104,7 +104,7 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
 
             throw new Error('API versione non disponibile');
         } catch (error) {
-            console.error('❌ Impossibile ottenere la versione dell\'app:', error);
+            console.error('❌ Could not retrieve app version:', error);
             throw new Error('Impossibile determinare la versione corrente dell\'applicazione');
         }
     }
@@ -126,7 +126,7 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
 
             throw new Error('API riavvio non disponibile');
         } catch (error) {
-            console.error('❌ Errore riavvio:', error);
+            console.error('❌ Restart error:', error);
             await this.showMessage(
                 'L\'aggiornamento è stato installato ma il riavvio automatico non è disponibile.\n\nRiavvia manualmente l\'applicazione.',
                 { title: 'Riavvio Manuale', kind: 'warning' }
@@ -139,7 +139,7 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
      */
     enableTestMode() {
         localStorage.setItem('presto_force_update_test', 'true');
-        console.warn('⚠️ MODALITÀ TEST AGGIORNAMENTI ATTIVATA');
+        console.warn('⚠️ UPDATE TEST MODE ACTIVATED');
 
         if (!this.isDevelopmentMode() && this.autoCheck && !this.checkInterval) {
             this.startAutoCheck();
@@ -153,13 +153,13 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
      */
     disableTestMode() {
         localStorage.removeItem('presto_force_update_test');
-        console.log('ℹ️ Modalità test aggiornamenti disattivata');
+        console.log('ℹ️ Update test mode disabled');
 
         if (this.isDevelopmentMode()) {
             this.stopAutoCheck();
         }
 
-        return 'Modalità test disattivata!';
+        return 'Test mode disabled!';
     }
 
     /**
@@ -190,7 +190,7 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
             // Fallback al browser alert
             alert(`${opts.title}\n\n${content}`);
         } catch (error) {
-            console.error('Errore mostrando messaggio:', error);
+            console.error('Error showing message:', error);
             alert(`${opts.title}\n\n${content}`);
         }
     }
@@ -221,7 +221,7 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
             // Fallback al browser confirm
             return confirm(content);
         } catch (error) {
-            console.error('Errore chiedendo conferma:', error);
+            console.error('Error asking confirmation:', error);
             return confirm(content);
         }
     }
@@ -231,7 +231,7 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
      */
     async showDevelopmentMessage() {
         await this.showMessage(
-            'Controllo aggiornamenti non disponibile in modalità sviluppo.\n\nGli aggiornamenti funzioneranno solo nell\'applicazione compilata.',
+            'Update check not available in development mode.\n\nGli aggiornamenti funzioneranno solo nell\'applicazione compilata.',
             {
                 title: 'Modalità Sviluppo',
                 kind: 'info'
@@ -246,17 +246,17 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
         if (this.autoCheck && !this.checkInterval) {
             // Controlla ogni ora
             this.checkInterval = setInterval(() => {
-                console.log('🔄 Controllo automatico periodico degli aggiornamenti...');
+                console.log('🔄 Automatic periodic update check...');
                 this.checkForUpdates(false); // silent check
             }, 60 * 60 * 1000);
 
             // Controllo iniziale dopo 5 secondi
             setTimeout(() => {
-                console.log('🔄 Controllo automatico iniziale degli aggiornamenti...');
+                console.log('🔄 Initial automatic update check...');
                 this.checkForUpdates(false); // silent - mostra il banner se c'è un aggiornamento
             }, 5000);
 
-            console.log('🔄 Controllo automatico aggiornamenti avviato');
+            console.log('🔄 Automatic update check started');
         }
     }
 
@@ -267,7 +267,7 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
         if (this.checkInterval) {
             clearInterval(this.checkInterval);
             this.checkInterval = null;
-            console.log('⏹️ Controllo automatico fermato');
+            console.log('⏹️ Automatic check stopped');
         }
     }
 
@@ -301,9 +301,9 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
             let currentVersion;
             try {
                 currentVersion = await this.getAppVersion();
-                console.log(`📋 Versione corrente: ${currentVersion}`);
+                console.log(`📋 Current version: ${currentVersion}`);
             } catch (error) {
-                console.error('❌ Errore nel recupero della versione corrente:', error);
+                console.error('❌ Error retrieving current version:', error);
                 this.emit('checkError', { error: 'Impossibile determinare la versione corrente' });
                 if (showDialog) {
                     alert('Impossibile verificare gli aggiornamenti: versione corrente non determinabile');
@@ -320,23 +320,23 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
             const githubRelease = await response.json();
             const latestVersion = githubRelease.tag_name.replace(/^v/, '');
 
-            console.log(`📋 Ultima versione GitHub: ${latestVersion}`);
+            console.log(`📋 Latest GitHub version: ${latestVersion}`);
 
             // Confronta versioni
             if (this.compareVersions(latestVersion, currentVersion) <= 0) {
-                console.log('✅ Nessun aggiornamento disponibile');
+                console.log('✅ No updates available');
                 this.updateAvailable = false;
                 this.currentUpdate = null;
                 this.emit('updateNotAvailable');
 
                 if (showDialog) {
-                    alert(`Nessun aggiornamento disponibile.\n\nVersione corrente: ${currentVersion}\nUltima versione: ${latestVersion}`);
+                    alert(`No updates available.\n\nCurrent version: ${currentVersion}\nUltima versione: ${latestVersion}`);
                 }
                 return false;
             }
 
-            // Aggiornamento disponibile
-            console.log(`🎉 Aggiornamento disponibile: ${latestVersion}`);
+            // Update available
+            console.log(`🎉 Update available: ${latestVersion}`);
             this.updateAvailable = true;
             this.currentUpdate = {
                 version: latestVersion,
@@ -348,8 +348,8 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
             this.emit('updateAvailable', this.currentUpdate);
 
             if (showDialog) {
-                const message = `🎉 Aggiornamento disponibile!\n\n` +
-                    `Versione corrente: ${currentVersion}\n` +
+                const message = `🎉 Update available!\n\n` +
+                    `Current version: ${currentVersion}\n` +
                     `Nuova versione: ${latestVersion}\n\n` +
                     `Nota: In modalità sviluppo, scarica manualmente da GitHub.`;
                 alert(message);
@@ -358,7 +358,7 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
             return true;
 
         } catch (error) {
-            console.error('❌ Errore controllo versione GitHub:', error);
+            console.error('❌ Error checking GitHub version:', error);
             this.emit('checkError', { error: `Errore di rete: ${error.message}` });
             if (showDialog) {
                 alert(`Errore nel controllo degli aggiornamenti:\n${error.message}`);
@@ -374,7 +374,7 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
      */
     async checkForUpdates(showDialog = true) {
         if (this.isChecking) {
-            console.log('⏳ Controllo già in corso');
+            console.log('⏳ Check already in progress');
             return false;
         }
 
@@ -382,21 +382,21 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
         this.emit('checkStarted');
 
         try {
-            console.log('🔄 Controllo aggiornamenti...');
+            console.log('🔄 Checking for updates...');
 
             // Verifica ambiente
             const isDevMode = this.isDevelopmentMode();
             const hasTestMode = localStorage.getItem('presto_force_update_test') === 'true';
 
             if (isDevMode && !hasTestMode) {
-                console.log('🔍 Modalità sviluppo - controllo tramite GitHub API senza installazione');
+                console.log('🔍 Development mode - checking via GitHub API without installation');
                 // In modalità sviluppo facciamo solo il controllo della versione senza installazione
                 return await this.checkVersionFromGitHub(showDialog);
             }
 
             // Se è modalità test, simula un aggiornamento
             if (hasTestMode) {
-                console.log('🧪 Modalità test - simulazione aggiornamento');
+                console.log('🧪 Test mode - simulating update');
                 const testUpdate = await this.simulateUpdate();
                 return testUpdate;
             }
@@ -406,9 +406,9 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
             let currentVersion;
             try {
                 currentVersion = await this.getAppVersion();
-                console.log(`📋 Versione corrente: ${currentVersion}`);
+                console.log(`📋 Current version: ${currentVersion}`);
             } catch (versionError) {
-                console.error('❌ Impossibile ottenere la versione corrente:', versionError.message);
+                console.error('❌ Could not retrieve current version:', versionError.message);
                 this.updateAvailable = false;
                 this.currentUpdate = null;
                 if (!silent) {
@@ -428,28 +428,28 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
             const githubRelease = await response.json();
             const latestVersion = githubRelease.tag_name.replace(/^v/, '');
 
-            console.log(`📋 Ultima versione GitHub: ${latestVersion}`);
+            console.log(`📋 Latest GitHub version: ${latestVersion}`);
 
             // Confronta versioni
             if (this.compareVersions(latestVersion, currentVersion) <= 0) {
-                console.log('✅ Nessun aggiornamento disponibile');
+                console.log('✅ No updates available');
                 this.updateAvailable = false;
                 this.currentUpdate = null;
                 this.emit('updateNotAvailable');
                 return false;
             }
 
-            console.log('🎉 Aggiornamento disponibile!');
+            console.log('🎉 Update available!');
 
             // 2. Prova a usare l'API Tauri updater se disponibile
             try {
                 const tauriAPI = await this.getTauriUpdaterAPI();
                 if (tauriAPI) {
-                    console.log('🔄 Usando API Tauri updater...');
+                    console.log('🔄 Using Tauri updater API...');
                     const tauriUpdate = await tauriAPI.check();
 
                     if (tauriUpdate && tauriUpdate.available) {
-                        console.log('✅ Aggiornamento confermato via Tauri API');
+                        console.log('✅ Update confirmed via Tauri API');
                         this.updateAvailable = true;
                         this.currentUpdate = {
                             ...tauriUpdate,
@@ -461,11 +461,11 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
                     }
                 }
             } catch (error) {
-                console.warn('⚠️ API Tauri updater non disponibile:', error.message);
+                console.warn('⚠️ Tauri updater API not available:', error.message);
             }
 
             // 3. Fallback: informazioni da GitHub con download manuale
-            console.log('📦 Usando informazioni GitHub con download manuale');
+            console.log('📦 Using GitHub info with manual download');
             const manualUpdate = {
                 version: latestVersion,
                 date: githubRelease.published_at,
@@ -481,7 +481,7 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
             return true;
 
         } catch (error) {
-            console.error('❌ Errore controllo aggiornamenti:', error);
+            console.error('❌ Update check error:', error);
             this.updateAvailable = false;
             this.currentUpdate = null;
             this.emit('checkError', error);
@@ -503,7 +503,7 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
      * Simula un aggiornamento per test
      */
     async simulateUpdate() {
-        console.log('🧪 Simulazione aggiornamento per test...');
+        console.log('🧪 Simulating update for test...');
 
         const currentVersion = await this.getAppVersion();
         const simulatedNewVersion = this.incrementVersion(currentVersion);
@@ -550,7 +550,7 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
             // Fallback
             window.open(url, '_blank');
         } catch (error) {
-            console.error('Errore apertura URL:', error);
+            console.error('Error opening URL:', error);
             window.open(url, '_blank');
         }
     }
@@ -560,12 +560,12 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
      */
     async downloadAndInstall() {
         if (!this.updateAvailable || !this.currentUpdate) {
-            throw new Error('Nessun aggiornamento disponibile');
+            throw new Error('No updates available');
         }
 
         // Se è un test, simula il download
         if (this.currentUpdate.source === 'test-simulation') {
-            console.log('🧪 Simulazione download e installazione...');
+            console.log('🧪 Simulating download and install...');
             return await this.simulateDownloadAndInstall();
         }
 
@@ -620,7 +620,7 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
             }
 
         } catch (error) {
-            console.error('❌ Errore download:', error);
+            console.error('❌ Download error:', error);
             this.emit('downloadError', error);
             throw error;
         } finally {
@@ -632,7 +632,7 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
      * Simula download e installazione per test
      */
     async simulateDownloadAndInstall() {
-        console.log('🧪 Simulazione download...');
+        console.log('🧪 Simulating download...');
 
         // Simula progresso download
         for (let i = 0; i <= 100; i += 10) {
@@ -646,12 +646,12 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
         }
 
         this.emit('downloadFinished');
-        console.log('🧪 Download simulato completato');
+        console.log('🧪 Simulated download complete');
 
         // Simula installazione
         await new Promise(resolve => setTimeout(resolve, 500));
         this.emit('installFinished');
-        console.log('🧪 Installazione simulata completata');
+        console.log('🧪 Simulated install complete');
 
         await this.showMessage(
             '🧪 **Test Completato**\n\nL\'aggiornamento è stato simulato con successo!\n\nIn un ambiente reale, l\'applicazione si riavvierebbe ora.',
@@ -682,7 +682,7 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
         try {
             localStorage.setItem('presto_auto_check_updates', enabled.toString());
         } catch (error) {
-            console.warn('Errore salvando preferenza auto-check:', error);
+            console.warn('Error saving auto-check preference:', error);
         }
     }
 
@@ -696,7 +696,7 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
                 this.setAutoCheck(autoCheck === 'true');
             }
         } catch (error) {
-            console.warn('Errore caricamento preferenze:', error);
+            console.warn('Error loading preferences:', error);
         }
     }
 
@@ -725,19 +725,19 @@ if (typeof window !== 'undefined') {
     window.updateManagerV2Debug = {
         enableTestMode: () => {
             localStorage.setItem('presto_force_update_test', 'true');
-            console.warn('⚠️ MODALITÀ TEST AGGIORNAMENTI ATTIVATA');
+            console.warn('⚠️ UPDATE TEST MODE ACTIVATED');
             return 'Modalità test attivata! Usa window.updateManager.checkForUpdates() per testare.';
         },
         disableTestMode: () => {
             localStorage.removeItem('presto_force_update_test');
-            console.log('ℹ️ Modalità test aggiornamenti disattivata');
-            return 'Modalità test disattivata!';
+            console.log('ℹ️ Update test mode disabled');
+            return 'Test mode disabled!';
         },
         testUpdate: () => {
             if (window.updateManager) {
                 return window.updateManager.simulateUpdate();
             } else {
-                console.error('UpdateManager non inizializzato');
+                console.error('UpdateManager not initialized');
                 return Promise.reject('UpdateManager non trovato');
             }
         },
@@ -745,7 +745,7 @@ if (typeof window !== 'undefined') {
             if (window.updateManager) {
                 return window.updateManager.checkForUpdates();
             } else {
-                console.error('UpdateManager non inizializzato');
+                console.error('UpdateManager not initialized');
                 return Promise.reject('UpdateManager non trovato');
             }
         },
@@ -760,7 +760,7 @@ if (typeof window !== 'undefined') {
                     isDevelopmentMode: window.updateManager.isDevelopmentMode()
                 };
             } else {
-                return { error: 'UpdateManager non inizializzato' };
+                return { error: 'UpdateManager not initialized' };
             }
         },
         checkEnvironment: () => {
@@ -779,9 +779,9 @@ if (typeof window !== 'undefined') {
         }
     };
 
-    console.log('🔧 UpdateManager V2 GLOBAL Debug disponibile: window.updateManagerV2Debug');
+    console.log('🔧 UpdateManager V2 GLOBAL Debug available: window.updateManagerV2Debug');
     console.log('📋 Comandi disponibili:');
-    console.log('  - window.updateManagerV2Debug.testUpdate() // test simulato');
+    console.log('  - window.updateManagerV2Debug.testUpdate() // simulated test');
     console.log('  - window.updateManagerV2Debug.checkRealUpdate() // test reale');
     console.log('  - window.updateManagerV2Debug.getStatus()');
     console.log('  - window.updateManagerV2Debug.checkEnvironment() // verifica API Tauri');

@@ -44,7 +44,7 @@ export class UpdateManager {
             const { check, relaunch } = await import('@tauri-apps/plugin-updater');
             return { check, relaunch };
         } catch (error) {
-            console.error('Errore caricamento API updater:', error);
+            console.error('Error loading updater API:', error);
 
             // Fallback all'API globale se disponibile
             if (window.__TAURI__.updater) {
@@ -69,7 +69,7 @@ export class UpdateManager {
             const { message } = await import('@tauri-apps/plugin-dialog');
             return await message(content, options);
         } catch (error) {
-            console.error('Errore mostrando messaggio:', error);
+            console.error('Error showing message:', error);
             // Fallback al browser alert
             alert(content);
         }
@@ -89,7 +89,7 @@ export class UpdateManager {
             const { ask } = await import('@tauri-apps/plugin-dialog');
             return await ask(content, options);
         } catch (error) {
-            console.error('Errore chiedendo conferma:', error);
+            console.error('Error asking confirmation:', error);
             // Fallback al browser confirm
             return confirm(content);
         }
@@ -100,7 +100,7 @@ export class UpdateManager {
      */
     async showDevelopmentMessage() {
         await this.showMessage(
-            'Controllo aggiornamenti non disponibile in modalità sviluppo.\n\nGli aggiornamenti funzioneranno solo nell\'applicazione compilata.',
+            'Update check not available in development mode.\n\nGli aggiornamenti funzioneranno solo nell\'applicazione compilata.',
             {
                 title: 'Modalità Sviluppo',
                 kind: 'info'
@@ -149,11 +149,11 @@ export class UpdateManager {
         this.emit('checkStarted');
 
         try {
-            console.log('🔄 Controllo aggiornamenti...');
+            console.log('🔄 Checking for updates...');
 
             // Verifica se siamo in un ambiente Tauri
             if (this.isDevelopmentMode()) {
-                console.warn('⚠️  Controllo aggiornamenti non disponibile in modalità sviluppo');
+                console.warn('⚠️  Update check not available in development mode');
                 this.emit('updateNotAvailable');
                 if (showDialog) {
                     await this.showDevelopmentMessage();
@@ -164,12 +164,12 @@ export class UpdateManager {
             // Usa l'API updater di Tauri
             const { check } = await this.getTauriUpdater();
 
-            console.log('🔍 Effettuando richiesta controllo aggiornamenti...');
+            console.log('🔍 Sending update check request...');
             const update = await check();
-            console.log('📦 Risposta controllo aggiornamenti:', update);
+            console.log('📦 Update check response:', update);
 
             if (update?.available) {
-                console.log('✅ Aggiornamento disponibile:', update.version);
+                console.log('✅ Update available:', update.version);
                 this.updateAvailable = true;
                 this.currentUpdate = update;
                 this.emit('updateAvailable', update);
@@ -180,7 +180,7 @@ export class UpdateManager {
 
                 return true;
             } else {
-                console.log('✅ Nessun aggiornamento disponibile');
+                console.log('✅ No updates available');
                 this.updateAvailable = false;
                 this.currentUpdate = null;
                 this.emit('updateNotAvailable');
@@ -195,7 +195,7 @@ export class UpdateManager {
                 return false;
             }
         } catch (error) {
-            console.error('❌ Errore durante il controllo aggiornamenti:', error);
+            console.error('❌ Error during update check:', error);
             console.error('❌ Stack trace:', error.stack);
             this.emit('checkError', error);
 
@@ -232,7 +232,7 @@ export class UpdateManager {
         const shouldUpdate = await this.askUser(
             `È disponibile una nuova versione (${update.version}).\n\nVuoi scaricare e installare l'aggiornamento ora?`,
             {
-                title: 'Aggiornamento disponibile',
+                title: 'Update available',
                 kind: 'info'
             }
         );
@@ -255,7 +255,7 @@ export class UpdateManager {
         this.emit('downloadStarted');
 
         try {
-            console.log('📥 Inizio download aggiornamento...');
+            console.log('📥 Starting update download...');
 
             // Monitora il progresso del download
             await this.currentUpdate.downloadAndInstall((event) => {
@@ -274,14 +274,14 @@ export class UpdateManager {
                         });
                         break;
                     case 'Finished':
-                        console.log('✅ Download completato');
+                        console.log('✅ Download complete');
                         this.downloadProgress = 100;
                         this.emit('downloadFinished');
                         break;
                 }
             });
 
-            console.log('🔄 Aggiornamento installato, riavvio...');
+            console.log('🔄 Update installed, restarting...');
             this.emit('installFinished');
 
             // Mostra messaggio di successo prima del riavvio
@@ -294,7 +294,7 @@ export class UpdateManager {
             await this.relaunchApplication();
 
         } catch (error) {
-            console.error('❌ Errore durante l\'installazione:', error);
+            console.error('❌ Error during installation:', error);
             this.emit('downloadError', error);
 
             await this.showMessage(`Errore durante l'installazione dell'aggiornamento: ${error.message}`, {
@@ -315,7 +315,7 @@ export class UpdateManager {
             const { relaunch } = await this.getTauriUpdater();
             await relaunch();
         } catch (error) {
-            console.error('Errore durante il riavvio:', error);
+            console.error('Error during restart:', error);
             await this.showMessage('L\'aggiornamento è stato installato ma c\'è stato un problema con il riavvio automatico.\n\nRiavvia manualmente l\'applicazione.', {
                 title: 'Riavvio manuale richiesto',
                 kind: 'warning'
@@ -333,7 +333,7 @@ export class UpdateManager {
             }
             return '0.1.0'; // fallback
         } catch (error) {
-            console.warn('Non riesco a ottenere la versione corrente:', error);
+            console.warn('Could not retrieve current version:', error);
             return '0.1.0';
         }
     }
@@ -350,7 +350,7 @@ export class UpdateManager {
                 window.open(url, '_blank');
             }
         } catch (error) {
-            console.error('Errore aprendo pagina release:', error);
+            console.error('Error opening release page:', error);
         }
     }
 
@@ -385,7 +385,7 @@ export class UpdateManager {
         try {
             localStorage.setItem('presto_auto_check_updates', enabled.toString());
         } catch (error) {
-            console.warn('Non riesco a salvare la preferenza auto-check:', error);
+            console.warn('Could not save auto-check preference:', error);
         }
     }
 
@@ -399,7 +399,7 @@ export class UpdateManager {
                 this.setAutoCheck(autoCheck === 'true');
             }
         } catch (error) {
-            console.warn('Non riesco a caricare le preferenze:', error);
+            console.warn('Could not load preferences:', error);
         }
     }
 

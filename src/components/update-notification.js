@@ -33,13 +33,13 @@ export class UpdateNotification {
         }
 
         if (getUpdateManager()) {
-            console.log('✅ [UpdateNotification] UpdateManager trovato, bind eventi notifica');
+            console.log('✅ [UpdateNotification] UpdateManager found, binding notification events');
             this.bindEvents();
 
             // RIMOSSO: Il controllo dello stato iniziale può causare problemi
             // L'updateManager dovrebbe emettere gli eventi corretti al momento giusto
         } else {
-            console.warn('⚠️ [UpdateNotification] UpdateManager non trovato dopo 10 secondi');
+            console.warn('⚠️ [UpdateNotification] UpdateManager not found after 10 seconds');
             // Non bloccare l'app, continua senza update notifications
         }
     }
@@ -357,7 +357,7 @@ export class UpdateNotification {
      */
     bindButtonEvents() {
         const buttons = this.container.querySelectorAll('[data-action]');
-        console.log('🔔 [UpdateNotification] Trovati', buttons.length, 'pulsanti con data-action');
+        console.log('🔔 [UpdateNotification] Found', buttons.length, 'buttons with data-action');
         buttons.forEach(button => {
             console.log('🔔 [UpdateNotification] Binding evento per pulsante:', button.dataset.action);
             button.addEventListener('click', (e) => {
@@ -368,11 +368,11 @@ export class UpdateNotification {
                 }
 
                 const action = target ? target.dataset.action : null;
-                console.log('🔔 [UpdateNotification] Target trovato:', target, 'Action:', action);
+                console.log('🔔 [UpdateNotification] Target found:', target, 'Action:', action);
                 if (action) {
                     this.handleAction(action);
                 } else {
-                    console.warn('🔔 [UpdateNotification] Nessuna azione trovata per questo click');
+                    console.warn('🔔 [UpdateNotification] No action found for this click');
                 }
             });
         });
@@ -491,11 +491,11 @@ export class UpdateNotification {
         const updateManager = getUpdateManager();
 
         if (!updateManager) {
-            console.error('❌ [UpdateNotification] UpdateManager non disponibile per bind eventi notifica');
+            console.error('❌ [UpdateNotification] UpdateManager not available to bind notification events');
             return;
         }
 
-        console.log('🔔 [UpdateNotification] Bind eventi notifica aggiornamenti...');
+        console.log('🔔 [UpdateNotification] Binding update notification events...');
         console.log('🔍 [UpdateNotification] UpdateManager state:', {
             updateAvailable: updateManager.updateAvailable,
             currentUpdate: updateManager.currentUpdate,
@@ -510,13 +510,13 @@ export class UpdateNotification {
 
         // Ascolta anche quando NON ci sono aggiornamenti per nascondere la notifica
         updateManager.on('updateNotAvailable', () => {
-            console.log('👍 [UpdateNotification] Nessun aggiornamento disponibile - nascondo notifica');
+            console.log('👍 [UpdateNotification] No updates available - nascondo notifica');
             this.hide();
         });
 
         // Nasconde la notifica anche quando il controllo fallisce
         updateManager.on('checkError', () => {
-            console.log('❌ [UpdateNotification] Errore controllo aggiornamenti - nascondo notifica');
+            console.log('❌ [UpdateNotification] Update check error - nascondo notifica');
             this.hide();
         });
 
@@ -538,16 +538,16 @@ export class UpdateNotification {
      * Shows update available notification
      */
     showUpdateAvailable(updateInfo) {
-        console.log('🔔 [UpdateNotification] Richiesta mostra notifica aggiornamento:', updateInfo);
+        console.log('🔔 [UpdateNotification] Show update notification requested:', updateInfo);
 
         if (!updateInfo || !updateInfo.version) {
-            console.log('❌ [UpdateNotification] Informazioni aggiornamento non valide - non mostro notifica');
+            console.log('❌ [UpdateNotification] Invalid update info - not showing notification');
             return;
         }
 
         // Verifica esplicita che l'aggiornamento sia davvero disponibile
         if (updateInfo.available === false) {
-            console.log('❌ [UpdateNotification] Aggiornamento esplicitamente non disponibile - non mostro notifica');
+            console.log('❌ [UpdateNotification] Update explicitly unavailable - not showing notification');
             return;
         }
 
@@ -557,18 +557,18 @@ export class UpdateNotification {
         // if (updateManager && updateManager.isDevelopmentMode && updateManager.isDevelopmentMode()) {
         //     const hasTestMode = localStorage.getItem('presto_force_update_test') === 'true';
         //     if (!hasTestMode) {
-        //         console.log('🔍 [UpdateNotification] Modalità sviluppo senza test mode - non mostro notifica');
+        //         console.log('🔍 [UpdateNotification] Development mode without test mode - not showing notification');
         //         return;
         //     }
         // }
 
         // Don't show if this version has been skipped
         if (this.isVersionSkipped(updateInfo.version)) {
-            console.log(`⏭️ [UpdateNotification] Versione ${updateInfo.version} è stata saltata - non mostro notifica`);
+            console.log(`⏭️ [UpdateNotification] Version ${updateInfo.version} was skipped - not showing notification`);
             return;
         }
 
-        console.log(`✅ [UpdateNotification] Mostro notifica per aggiornamento ${updateInfo.version}`);
+        console.log(`✅ [UpdateNotification] Showing notification for update ${updateInfo.version}`);
 
         this.currentVersion = updateInfo.version;
 
@@ -610,11 +610,11 @@ export class UpdateNotification {
      */
     show() {
         if (this.isVisible) {
-            console.log('🔔 [UpdateNotification] Notifica già visibile - skip');
+            console.log('🔔 [UpdateNotification] Notification already visible - skip');
             return;
         }
 
-        console.log('🔔 [UpdateNotification] Mostro notifica aggiornamento');
+        console.log('🔔 [UpdateNotification] Showing update notification');
 
         this.container.style.display = 'block';
 
@@ -633,11 +633,11 @@ export class UpdateNotification {
      */
     hide() {
         if (!this.isVisible) {
-            console.log('🔔 [UpdateNotification] Notifica già nascosta - skip');
+            console.log('🔔 [UpdateNotification] Notification already hidden - skip');
             return;
         }
 
-        console.log('🔔 [UpdateNotification] Nascondo notifica aggiornamento');
+        console.log('🔔 [UpdateNotification] Hiding update notification');
 
         this.container.classList.remove('visible');
 

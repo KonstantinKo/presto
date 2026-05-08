@@ -1790,9 +1790,9 @@ function setupUpdateManagement() {
       if (currentVersionDisplay) {
         currentVersionDisplay.textContent = currentVersion;
       }
-      console.log('📋 Versione corrente impostata:', currentVersion);
+      console.log('📋 Current version set:', currentVersion);
     } catch (error) {
-      console.error('❌ Errore nel recupero versione corrente:', error);
+      console.error('❌ Error retrieving current version:', error);
       // Fallback ai valori di default
       if (currentVersionElement) {
         currentVersionElement.textContent = '0.1.0';
