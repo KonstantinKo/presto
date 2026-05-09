@@ -19,6 +19,9 @@ mod helpers;
 // Type alias for the app handle to avoid generic complexity
 type AppHandle = tauri::AppHandle<tauri::Wry>;
 
+/// Tauri managed state holding the in-memory settings cache.
+struct SettingsState(Mutex<AppSettings>);
+
 static ACTIVITY_MONITOR: Mutex<Option<ActivityMonitor>> = Mutex::new(None);
 
 static SHORTCUT_DEBOUNCE: LazyLock<Mutex<HashMap<String, Instant>>> =
@@ -124,11 +127,27 @@ const fn default_analytics_enabled() -> bool {
     true
 }
 
-async fn are_analytics_enabled(app: &AppHandle) -> bool {
-    match load_settings(app.clone()).await {
-        Ok(settings) => settings.analytics_enabled,
-        Err(_) => true, // Default to enabled if we can't load settings
+/// Loads settings synchronously from disk, falling back to defaults on any error.
+fn load_settings_sync(app: &AppHandle) -> AppSettings {
+    let Ok(app_data_dir) = app.path().app_data_dir() else {
+        return AppSettings::default();
+    };
+    let file_path = app_data_dir.join("settings.json");
+    if !file_path.exists() {
+        return AppSettings::default();
     }
+    let Ok(contents) = fs::read_to_string(file_path) else {
+        return AppSettings::default();
+    };
+    serde_json::from_str(&contents).unwrap_or_default()
+}
+
+fn are_analytics_enabled(app: &AppHandle) -> bool {
+    app.state::<SettingsState>()
+        .0
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .analytics_enabled
 }
 
 /// User-facing notification preferences; each bool maps to an independent
@@ -216,6 +235,7 @@ impl ActivityMonitor {
         let app_handle = self.app_handle.clone();
 
         thread::spawn(move || {
+            let mut prev_active = false;
             loop {
                 {
                     let monitoring = helpers::lock_or_recover(&is_monitoring_clone);
@@ -236,9 +256,13 @@ impl ActivityMonitor {
                         let mut last = helpers::lock_or_recover(&last_activity);
                         *last = Instant::now();
                     }
-
-                    let _ = app_handle.emit("user-activity", ());
+                    // Only emit on idle→active transition to avoid flooding IPC
+                    if !prev_active {
+                        let _ = app_handle.emit("user-activity", ());
+                    }
+                    prev_active = true;
                 } else {
+                    prev_active = false;
                     let elapsed = {
                         let last = helpers::lock_or_recover(&last_activity);
                         last.elapsed()
@@ -347,7 +371,7 @@ async fn save_session_data(session: PomodoroSession, app: AppHandle) -> Result<(
     let file_path = app_data_dir.join("session.json");
     helpers::write_json_atomic(&file_path, &session)?;
 
-    if are_analytics_enabled(&app).await {
+    if are_analytics_enabled(&app) {
         let properties = Some(serde_json::json!({
             "completed_pomodoros": session.completed_pomodoros,
             "total_focus_time": session.total_focus_time,
@@ -410,7 +434,7 @@ async fn save_tasks(tasks: Vec<Task>, app: AppHandle) -> Result<(), String> {
     let file_path = app_data_dir.join("tasks.json");
     helpers::write_json_atomic(&file_path, &tasks)?;
 
-    if are_analytics_enabled(&app).await {
+    if are_analytics_enabled(&app) {
         let _ = app.track_event("tasks_saved", None);
     }
 
@@ -592,6 +616,11 @@ async fn save_settings(settings: AppSettings, app: AppHandle) -> Result<(), Stri
     let file_path = app_data_dir.join("settings.json");
     helpers::write_json_atomic(&file_path, &settings)?;
 
+    *app.state::<SettingsState>()
+        .0
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner) = settings;
+
     Ok(())
 }
 
@@ -722,7 +751,7 @@ async fn save_manual_sessions(sessions: Vec<ManualSession>, app: AppHandle) -> R
     let file_path = app_data_dir.join("manual_sessions.json");
     helpers::write_json_atomic(&file_path, &sessions)?;
 
-    if are_analytics_enabled(&app).await {
+    if are_analytics_enabled(&app) {
         let properties = Some(serde_json::json!({
             "session_count": sessions.len()
         }));
@@ -868,9 +897,12 @@ pub fn run() {
                 set_status_bar_visibility
             ])
             .setup(|app| {
+                let initial_settings = load_settings_sync(app.handle());
+                app.manage(SettingsState(Mutex::new(initial_settings)));
+
                 let app_handle_analytics = app.handle().clone();
                 tauri::async_runtime::spawn(async move {
-                    if are_analytics_enabled(&app_handle_analytics).await {
+                    if are_analytics_enabled(&app_handle_analytics) {
                         let _ = app_handle_analytics.track_event("app_started", None);
                     }
                 });

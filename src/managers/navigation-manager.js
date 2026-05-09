@@ -1855,12 +1855,16 @@ export class NavigationManager {
         return;
       }
 
-      const XLSX = window.XLSX;
-      if (!XLSX) {
-        logger.error("XLSX library not found");
-        alert("Excel export functionality is not available.");
-        return;
+      if (!window.XLSX) {
+        await new Promise((resolve, reject) => {
+          const s = document.createElement("script");
+          s.src = "https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js";
+          s.onload = resolve;
+          s.onerror = reject;
+          document.head.appendChild(s);
+        });
       }
+      const XLSX = window.XLSX;
 
       const exportData = [];
       for (const session of sessions) {
