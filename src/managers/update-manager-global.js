@@ -731,7 +731,7 @@ if (_isDevMode) {
       const mgr = window.updateManager || window.updateManagerInstance;
       if (!mgr) {
         logger.error("UpdateManager not initialized");
-        return Promise.reject("UpdateManager not found");
+        return Promise.reject(new Error("UpdateManager not found"));
       }
       return mgr.simulateUpdate();
     },
@@ -739,7 +739,7 @@ if (_isDevMode) {
       const mgr = window.updateManager || window.updateManagerInstance;
       if (!mgr) {
         logger.error("UpdateManager not initialized");
-        return Promise.reject("UpdateManager not found");
+        return Promise.reject(new Error("UpdateManager not found"));
       }
       return mgr.checkForUpdates();
     },
