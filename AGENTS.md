@@ -1,0 +1,93 @@
+# Agents working on presto
+
+If you are an AI coding assistant or autonomous agent working in this
+repo, read these in order:
+
+1. `VISION.md` — what the project is and isn't, and the roadmap.
+2. `CLAUDE.md` — workflow conventions and where to find things.
+3. `.specify/memory/constitution.md` — the 9 enduring principles.
+
+## Guarantees
+
+- The constitution is normative; plans and code conform to it.
+- Spec-kit feature artefacts under `specs/<NNN-feature>/` are transient
+  and per-feature. Don't merge them into root-level docs.
+- The visual regression baselines at
+  `tests/e2e/__screenshots__/visual-regression/` are the UI contract —
+  treat them like signed PDFs, not screenshots-to-update-when-convenient.
+
+## Operational notes
+
+- **Active branch**: `main`. Feature branches are `NNN-<slug>` (sequential
+  numbering, see `specs/`).
+- **Vite dev port**: 1420 (set in `playwright.config.js` baseURL); bound
+  to localhost only.
+- **Trunk dev port** (post-migration): 1420 (same — Tauri config points
+  there).
+- **Tauri dev**: `npm run dev` runs `tauri dev`. Do **not** run this in
+  CI/agentex worktrees — it requires GUI dependencies. e2e tests use the
+  vite server with `tauriMock.js` instead.
+- **Tauri bridge mock**: `tests/e2e/fixtures/tauriMock.js` mirrors every
+  Tauri command reachable from the frontend. Adding a command means
+  extending the mock first; then the test; then the real call site.
+
+## Lints and quality gates
+
+- **Backend**: `cargo clippy --all-targets -- -D warnings -W clippy::pedantic`
+  for `src-tauri/`. `cargo fmt --check`. `cargo build --frozen`.
+- **Frontend (today)**: `eslint src tests *.config.js`, `tsc --noEmit`,
+  `prettier --check .`, `vitest run`.
+- **Frontend (post-Leptos)**: same `clippy --all-targets -- -D warnings
+  -W clippy::pedantic` posture for the Leptos crate. `wasm-bindgen-test`
+  for unit tests. `trunk build --release` on PR.
+- **E2E**: `npx playwright test` against the vite (or trunk) dev server
+  with `tauriMock.js`. Visual regression suite is part of this.
+- **Pre-commit**: husky runs format + cheap lints + lockfile-drift check
+  on touched files.
+- **CI**: full `.agentex.yml` qa pipeline runs on every PR.
+
+## Spec-kit gates installed in this repo
+
+`git`, `memorylint`, `superb` (TDD enforcement + verification gate),
+`qa` (acceptance-criteria validation), `architecture-guard` (constitution
+drift detection), `ripple` (post-impl side-effect scan).
+
+Per-feature game loop:
+
+```
+specify -> [clarify] -> [memorylint.load-agents] -> plan ->
+[architecture-guard.violation-detection] -> tasks ->
+[superb.review, architecture-guard.refactor-generator] ->
+analyze -> implement (TDD-enforced by superb.tdd) ->
+[qa.run -> ripple.scan -> architecture-guard.review ->
+superb.verify (mandatory)] -> commit.
+```
+
+The full hook configuration is in `.specify/extensions.yml`. Slash
+commands are installed under `.claude/skills/speckit-*/SKILL.md`. Use
+the **hyphenated** form (`/speckit-constitution`, `/speckit-plan`); the
+public docs are wrong about dots.
+
+## Things not to do
+
+- **Don't write the constitution by hand.** Use `/speckit-constitution`.
+  Same for spec, plan, tasks, analyze, implement.
+- **Don't update visual regression baselines without explicit visual
+  review.** A failing diff is either a regression or an intended visual
+  change; commit it with a one-line PR note explaining why.
+- **Don't add Tauri commands without extending the mock first.**
+- **Don't bypass the analytics opt-in toggle** (`settings.analytics_enabled`).
+  Even "anonymous" events.
+- **Don't `--no-verify`** unless the next commit fixes the bypass.
+
+## Things you can find quickly
+
+- **Timer state machine** — `src/core/pomodoro-timer.js` (post-migration:
+  the corresponding Leptos module).
+- **Manager classes** — `src/managers/*.js` (auth, session, settings,
+  navigation, tag, team, update).
+- **Tauri commands** — `src-tauri/src/lib.rs`.
+- **Persistence helpers** — `src-tauri/src/helpers.rs`.
+- **Tauri mock** — `tests/e2e/fixtures/tauriMock.js`.
+- **Visual baselines** — `tests/e2e/__screenshots__/visual-regression/`.
+- **CI / agentex pipeline** — `.agentex.yml`.
