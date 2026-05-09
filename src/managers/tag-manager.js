@@ -1,5 +1,8 @@
 import { logger } from "../utils/logger.js";
 
+const COLOR_REGEX =
+  /^(#[0-9a-fA-F]{3,8}|rgb\(\d+,\s*\d+,\s*\d+\)|hsl\(\d+,\s*\d+%?,\s*\d+%?\)|[a-zA-Z]+)$/;
+
 class TagManager {
   constructor() {
     /** @type {any[]} */
@@ -277,11 +280,17 @@ class TagManager {
       return;
     }
 
+    const color = "#4CAF50";
+    if (!COLOR_REGEX.test(color)) {
+      logger.error("TagManager: invalid color value, refusing to save tag");
+      return;
+    }
+
     const newTag = {
       id: `tag-${crypto.randomUUID()}`,
       name,
       icon: this.selectedIcon,
-      color: "#4CAF50",
+      color,
       created_at: new Date().toISOString(),
     };
 

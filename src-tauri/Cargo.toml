@@ -46,7 +46,7 @@ tauri-build = { version = "2", features = [] }
 
 [dependencies]
 log = "0.4"
-tauri = { version = "2", features = ["tray-icon", "devtools"] }
+tauri = { version = "2", features = ["tray-icon"] }
 tauri-plugin-log = "2"
 tauri-plugin-opener = { version = "2", default-features = false }
 tauri-plugin-global-shortcut = { version = "2", default-features = false }
@@ -62,8 +62,10 @@ serde_json = { version = "1", default-features = false }
 chrono = { version = "0.4", features = ["serde", "clock"], default-features = false }
 base64 = "0.21"
 
+[target.'cfg(debug_assertions)'.dependencies]
+tauri = { version = "2", features = ["devtools"] }
+
 [target.'cfg(target_os = "macos")'.dependencies]
-libc = "0.2"
 cocoa = "0.25"
 objc = "0.2"
 

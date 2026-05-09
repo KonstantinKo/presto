@@ -30,7 +30,7 @@ qa:
 
   lint:
     - cd src-tauri && cargo clippy --all-targets -- -D warnings
-    - npx eslint src
+    - npx eslint "src/**/*.js"
     - npx tsc --noEmit -p .
 
   format:

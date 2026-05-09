@@ -255,22 +255,39 @@ export class TagStatistics {
       const othersItem = document.createElement("div");
       othersItem.className = "tag-legend-item tag-legend-others";
 
-      othersItem.innerHTML = `
-                <div class="tag-legend-color" style="background: linear-gradient(45deg, ${remainingStats
-                  .slice(0, 3)
-                  .map((s) => s.color)
-                  .join(", ")})"></div>
-                <div class="tag-legend-info">
-                    <div class="tag-legend-name">
-                        <i class="ri-more-line"></i> ${remainingStats.length} others
-                    </div>
-                    <div class="tag-legend-stats">
-                        <span class="tag-legend-time">${this.formatDuration(remainingDuration)}</span>
-                        <span class="tag-legend-percent">${remainingPercentage.toFixed(1)}%</span>
-                    </div>
-                </div>
-            `;
+      const othersColorDiv = document.createElement("div");
+      othersColorDiv.className = "tag-legend-color";
+      // Build gradient via style property to avoid injecting color values into innerHTML
+      const gradientColors = remainingStats
+        .slice(0, 3)
+        .map((s) => s.color)
+        .join(", ");
+      othersColorDiv.style.background = `linear-gradient(45deg, ${gradientColors})`;
 
+      const othersInfoDiv = document.createElement("div");
+      othersInfoDiv.className = "tag-legend-info";
+
+      const othersNameDiv = document.createElement("div");
+      othersNameDiv.className = "tag-legend-name";
+      const othersIcon = document.createElement("i");
+      othersIcon.className = "ri-more-line";
+      othersNameDiv.appendChild(othersIcon);
+      othersNameDiv.append(` ${remainingStats.length} others`);
+
+      const othersStatsDiv = document.createElement("div");
+      othersStatsDiv.className = "tag-legend-stats";
+
+      const othersTimeSpan = document.createElement("span");
+      othersTimeSpan.className = "tag-legend-time";
+      othersTimeSpan.textContent = this.formatDuration(remainingDuration);
+
+      const othersPercentSpan = document.createElement("span");
+      othersPercentSpan.className = "tag-legend-percent";
+      othersPercentSpan.textContent = `${remainingPercentage.toFixed(1)}%`;
+
+      othersStatsDiv.append(othersTimeSpan, othersPercentSpan);
+      othersInfoDiv.append(othersNameDiv, othersStatsDiv);
+      othersItem.append(othersColorDiv, othersInfoDiv);
       legendContainer.appendChild(othersItem);
     }
   }
