@@ -41,6 +41,14 @@ declare interface Window {
   // Initialization flags
   avatarListenersSetup?: boolean;
 
+  // E2E test bridge: populated by tests/e2e/fixtures via addInitScript. Production
+  // builds never set this; runtime checks gate any use. See tests/e2e/fixtures/tauriMock.js.
+  __E2E_CONFIG__?: {
+    updaterCallCount?: number;
+    updaterSecondCallUpdate?: { version?: string; currentVersion?: string };
+    [k: string]: any;
+  };
+
   // Global functions assigned in main.js
   saveSettings?: () => Promise<void>;
   resetToDefaults?: () => Promise<void>;

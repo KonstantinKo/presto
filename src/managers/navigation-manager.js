@@ -801,6 +801,7 @@ export class NavigationManager {
       const dayDate = new Date(this.displayMonth.getFullYear(), this.displayMonth.getMonth(), day);
       if (this.isSameDay(dayDate, this.currentDate)) {
         dayEl.classList.add("today");
+        dayEl.setAttribute("aria-current", "date");
       }
       if (this.selectedDate && this.isSameDay(dayDate, this.selectedDate)) {
         dayEl.classList.add("selected");

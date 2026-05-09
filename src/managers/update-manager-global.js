@@ -489,6 +489,35 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
     const currentVersion = await this.getAppVersion();
     const simulatedNewVersion = this.incrementVersion(currentVersion);
 
+    // E2E test escape hatch: when window.__E2E_CONFIG__.updaterSecondCallUpdate is set,
+    // honor a call-sequence schedule so the first 2 calls return "no update" and the
+    // 3rd+ call returns the configured update. This lets the e2e suite exercise both
+    // the "up-to-date" and "update-available" UI states deterministically without
+    // hitting the network.
+    const e2eConfig =
+      typeof window !== "undefined" && window.__E2E_CONFIG__ ? window.__E2E_CONFIG__ : null;
+    if (e2eConfig && e2eConfig.updaterSecondCallUpdate) {
+      e2eConfig.updaterCallCount = (e2eConfig.updaterCallCount || 0) + 1;
+      if (e2eConfig.updaterCallCount <= 2) {
+        this.updateAvailable = false;
+        this.currentUpdate = null;
+        this.emit("updateNotAvailable");
+        return false;
+      }
+      const cfgUpdate = {
+        version: e2eConfig.updaterSecondCallUpdate.version || simulatedNewVersion,
+        date: new Date().toISOString(),
+        body: `🧪 Simulated Update (e2e): ${e2eConfig.updaterSecondCallUpdate.version || simulatedNewVersion}`,
+        downloadUrl: `https://github.com/${GITHUB_REPO}/releases`,
+        isAutoDownloadable: true,
+        source: "test-simulation",
+      };
+      this.updateAvailable = true;
+      this.currentUpdate = cfgUpdate;
+      this.emit("updateAvailable", cfgUpdate);
+      return true;
+    }
+
     const update = {
       version: simulatedNewVersion,
       date: new Date().toISOString(),

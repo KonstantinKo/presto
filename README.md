@@ -167,6 +167,14 @@ presto/
 │   │   └── lib.rs               # Tauri commands and data persistence
 │   ├── Cargo.toml               # Rust dependencies
 │   └── tauri.conf.json          # Tauri configuration
+├── tests/
+│   ├── e2e/                     # Playwright E2E tests (browser-driven, UI-only)
+│   │   ├── CLAUDE.md            # E2E ground rules for this suite
+│   │   ├── fixtures/            # Shared fixtures (blockExternal, tauriMock, screens)
+│   │   └── *.spec.js            # One spec per screen / major flow
+│   ├── core/                    # Vitest unit tests for core logic
+│   └── managers/                # Vitest unit tests for managers
+├── playwright.config.js         # Playwright configuration (Vite dev server)
 ├── package.json                 # Node.js dependencies and scripts
 └── README.md                    # This file
 ```
@@ -223,6 +231,7 @@ The Pomodoro Technique is a time management method developed by Francesco Cirill
 - `npm run tauri build` - Build production app
 - `npm test` - Run JavaScript unit tests (Vitest)
 - `npm run typecheck` - TypeScript type-check all JS sources (`tsc --noEmit`)
+- `npm run test:e2e` - Run Playwright E2E suite (UI-driven, browser-level)
 - `cargo check` - Check Rust code (in src-tauri/)
 - `cargo test` - Run Rust tests (in src-tauri/)
 

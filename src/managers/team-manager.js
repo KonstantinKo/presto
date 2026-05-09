@@ -318,6 +318,8 @@ export class TeamManager {
   createTeamSection(team, members) {
     const section = document.createElement("div");
     section.className = "team-section base-card-compact";
+    section.setAttribute("role", "group");
+    section.setAttribute("aria-label", team.name);
 
     const header = document.createElement("div");
     header.className = "team-header";
@@ -353,6 +355,7 @@ export class TeamManager {
   createMemberRow(member) {
     const row = document.createElement("div");
     row.className = `member-row row-base row-three-col status-${member.status}`;
+    row.setAttribute("role", "listitem");
 
     const statusInfo = this.getStatusInfo(member.status);
     const onlineStatus = this.getOnlineStatus(member);
@@ -393,12 +396,15 @@ export class TeamManager {
     const memberActivityEl = row.querySelector(".member-activity-value");
     if (avatarInitialsEl) {
       avatarInitialsEl.textContent = member.avatar;
+      avatarInitialsEl.setAttribute("data-member-field", "avatar");
     }
     if (memberNameEl) {
       memberNameEl.textContent = member.name;
+      memberNameEl.setAttribute("data-member-field", "name");
     }
     if (memberRoleEl) {
       memberRoleEl.textContent = member.role;
+      memberRoleEl.setAttribute("data-member-field", "role");
     }
     if (statusLabelEl) {
       statusLabelEl.textContent = statusInfo.label;

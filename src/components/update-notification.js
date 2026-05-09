@@ -55,6 +55,7 @@ export class UpdateNotification {
   createNotificationContainer() {
     this.container = document.createElement("div");
     this.container.className = "update-notification-container";
+    this.container.id = "update-notification-container";
 
     if (window.__TAURI__ && window.__TAURI__.core) {
       this.container.classList.add("desktop");
@@ -66,7 +67,7 @@ export class UpdateNotification {
                         <i class="ri-lightbulb-flash-line"></i>
                     </div>
                     <span class="update-message">Update available</span>
-                    <span class="update-version"></span>
+                    <span class="update-version" id="update-notification-version"></span>
                     <div class="update-actions">
                         <button class="update-btn update-btn-primary" data-action="download">
                             Update via Homebrew
@@ -86,7 +87,7 @@ export class UpdateNotification {
                         <span class="update-progress-text">0%</span>
                     </div>
                 </div>
-                <button class="update-close" data-action="close">
+                <button class="update-close" id="update-notification-close" data-action="close" aria-label="Close update notification">
                     <svg width="14" height="14" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
                         <path d="M12 4L4 12M4 4L12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
                     </svg>
