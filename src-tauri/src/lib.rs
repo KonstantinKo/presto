@@ -401,8 +401,7 @@ async fn load_session_data(app: AppHandle) -> Result<Option<PomodoroSession>, St
     let is_same_day = session.date == today_legacy
         || session.date == today_iso
         || chrono::NaiveDate::parse_from_str(&session.date, "%a %b %d %Y")
-            .map(|d| d.format("%Y-%m-%d").to_string() == today_iso)
-            .unwrap_or(false);
+            .is_ok_and(|d| d.format("%Y-%m-%d").to_string() == today_iso);
 
     if is_same_day && session.date != today_legacy {
         session.date.clone_from(&today_legacy);
