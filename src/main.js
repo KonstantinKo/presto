@@ -20,8 +20,8 @@ let settingsManager = null;
 let sessionManager = null;
 let teamManager = null;
 let authChangeHandlerRegistered = false;
-let _appInitializing = false;
-let _appFullyInitialized = false;
+/** @type {Promise<void> | null} */
+let _initPromise = null;
 
 // Global functions for settings (backwards compatibility)
 window.saveSettings = async function () {
@@ -1080,96 +1080,78 @@ function wireShutdownGuards() {
 
 // Initialize the application
 //
-async function initializeApplication() {
-  // Prevent double initialization only if fully completed
-  if (_appFullyInitialized) {
-    logger.info("🚀 Application already fully initialized, skipping...");
-    return;
+function initializeApplication() {
+  if (_initPromise) {
+    return _initPromise;
   }
 
-  // Prevent concurrent initialization attempts
-  if (_appInitializing) {
-    logger.info("🚀 Application initialization already in progress, skipping...");
-    return;
-  }
-
-  // Set initialization flag early to prevent race conditions
-  _appInitializing = true;
-
-  // Declared in outer scope so the catch handler can clear it.
-  /** @type {any} */
-  let safetyTimeout = null;
-
-  try {
-    logger.info("🚀 Initializing Presto application...");
-
-    createLoadingOverlay();
-    safetyTimeout = wireShutdownGuards();
+  async function _doInitialize() {
+    // Declared in outer scope so the catch handler can clear it.
+    /** @type {any} */
+    let safetyTimeout = null;
 
     try {
-      await applyEarlyTheme();
-    } catch (e) {
-      throw new Error(`[applyEarlyTheme] ${toError(e).message}`);
-    }
+      logger.info("🚀 Initializing Presto application...");
 
-    try {
-      await detectEnvironment();
-    } catch (e) {
-      throw new Error(`[detectEnvironment] ${toError(e).message}`);
-    }
+      createLoadingOverlay();
+      safetyTimeout = wireShutdownGuards();
 
-    try {
-      await resolveAuthState();
-    } catch (e) {
-      throw new Error(`[resolveAuthState] ${toError(e).message}`);
-    }
+      try {
+        await applyEarlyTheme();
+      } catch (e) {
+        throw new Error(`[applyEarlyTheme] ${toError(e).message}`);
+      }
 
-    try {
-      await instantiateManagers();
-    } catch (e) {
-      throw new Error(`[instantiateManagers] ${toError(e).message}`);
-    }
+      try {
+        await detectEnvironment();
+      } catch (e) {
+        throw new Error(`[detectEnvironment] ${toError(e).message}`);
+      }
 
-    setupGlobalEventListeners();
-    setupUserAvatarEventListeners();
-    setupUpdateManagement();
+      try {
+        await resolveAuthState();
+      } catch (e) {
+        throw new Error(`[resolveAuthState] ${toError(e).message}`);
+      }
 
-    logger.info("✅ Application initialized successfully!");
+      try {
+        await instantiateManagers();
+      } catch (e) {
+        throw new Error(`[instantiateManagers] ${toError(e).message}`);
+      }
 
-    clearTimeout(safetyTimeout);
+      setupGlobalEventListeners();
+      setupUserAvatarEventListeners();
+      setupUpdateManagement();
 
-    // eslint-disable-next-line require-atomic-updates -- only reachable after _appInitializing is set; no concurrent writer
-    _appFullyInitialized = true;
-    // eslint-disable-next-line require-atomic-updates -- only reachable after _appInitializing is set; no concurrent writer
-    _appInitializing = false;
+      logger.info("✅ Application initialized successfully!");
 
-    const loadingOverlaySuccess = document.getElementById("app-loading");
-    if (loadingOverlaySuccess) {
-      loadingOverlaySuccess.remove();
-    }
+      clearTimeout(safetyTimeout);
 
-    NotificationUtils.showNotificationPing("Welcome to Presto! 🍅", null, "focus");
-  } catch (error) {
-    logger.error("❌ Failed to initialize application:", error);
+      const loadingOverlaySuccess = document.getElementById("app-loading");
+      if (loadingOverlaySuccess) {
+        loadingOverlaySuccess.remove();
+      }
 
-    clearTimeout(safetyTimeout);
-    const loadingOverlayError = document.getElementById("app-loading");
-    if (loadingOverlayError) {
-      loadingOverlayError.remove();
-    }
+      NotificationUtils.showNotificationPing("Welcome to Presto! 🍅", null, "focus");
+    } catch (error) {
+      logger.error("❌ Failed to initialize application:", error);
 
-    NotificationUtils.showNotificationPing("Failed to initialize app. Please refresh! 🔄", "error");
+      clearTimeout(safetyTimeout);
+      const loadingOverlayError = document.getElementById("app-loading");
+      if (loadingOverlayError) {
+        loadingOverlayError.remove();
+      }
 
-    // Reset initialization flags on error so user can retry
-    // eslint-disable-next-line require-atomic-updates -- only reachable after _appInitializing is set; no concurrent writer
-    _appInitializing = false;
-    // eslint-disable-next-line require-atomic-updates -- only reachable after _appInitializing is set; no concurrent writer
-    _appFullyInitialized = false;
+      NotificationUtils.showNotificationPing(
+        "Failed to initialize app. Please refresh! 🔄",
+        "error"
+      );
 
-    // Show error screen instead of leaving user with blank screen
-    const errorScreen = document.createElement("div");
-    errorScreen.id = "app-error";
-    errorScreen.style.cssText = `
+      // Show error screen instead of leaving user with blank screen
+      const errorScreen = document.createElement("div");
+      errorScreen.id = "app-error";
+      errorScreen.style.cssText = `
       position: fixed;
       top: 0;
       left: 0;
@@ -1183,7 +1165,7 @@ async function initializeApplication() {
       color: white;
       font-family: system-ui, -apple-system, sans-serif;
     `;
-    errorScreen.innerHTML = `
+      errorScreen.innerHTML = `
       <div style="text-align: center; max-width: 500px; padding: 40px;">
         <div style="font-size: 64px; margin-bottom: 20px;">⚠️</div>
         <h1 style="margin-bottom: 20px; color: #e74c3c;">Initialization Failed</h1>
@@ -1216,8 +1198,12 @@ async function initializeApplication() {
         ">🗑️ Reset & Retry</button>
       </div>
     `;
-    document.body.appendChild(errorScreen);
+      document.body.appendChild(errorScreen);
+    }
   }
+
+  _initPromise = _doInitialize();
+  return _initPromise;
 }
 
 function setupGlobalEventListeners() {
@@ -1618,7 +1604,7 @@ function initializeWhenReady() {
 
 // Also add a backup initialization in case DOMContentLoaded doesn't fire
 window.addEventListener("load", () => {
-  if (!_appFullyInitialized && !_appInitializing) {
+  if (!_initPromise) {
     logger.info("🚀 Backup initialization triggered by window.load");
     initializeApplication();
   }
