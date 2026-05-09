@@ -1,6 +1,11 @@
-const { invoke } = /** @type {{ invoke: (cmd: string, args?: any) => Promise<any> }} */ (
-  window.__TAURI__?.core ?? { invoke: null }
-);
+/** @param {string} cmd @param {any} [args] @returns {Promise<any>} */
+const invoke = (cmd, args) => {
+  const tauriInvoke = window.__TAURI__?.core?.invoke;
+  if (!tauriInvoke) {
+    return Promise.reject(new Error("Tauri bridge not available"));
+  }
+  return tauriInvoke(cmd, args);
+};
 import { NotificationUtils, KeyboardUtils } from "../utils/common-utils.js";
 import { logger } from "../utils/logger.js";
 

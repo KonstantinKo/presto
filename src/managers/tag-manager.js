@@ -155,11 +155,12 @@ class TagManager {
       ];
       this.saveTagsToLocalStorage();
     }
-    this.renderTagList();
+    this.currentTags = this.currentTags.filter((ct) => this.tags.some((t) => t.id === ct.id));
     if (this.currentTags.length === 0) {
       this.currentTags = [this.tags[0]];
-      this.updateStatusDisplay();
     }
+    this.updateStatusDisplay();
+    this.renderTagList();
   }
 
   async loadTags() {
@@ -171,12 +172,13 @@ class TagManager {
       }
 
       this.tags = /** @type {any[]} */ (await window.__TAURI__.core.invoke("load_tags"));
-      this.renderTagList();
 
+      this.currentTags = this.currentTags.filter((ct) => this.tags.some((t) => t.id === ct.id));
       if (this.currentTags.length === 0 && this.tags.length > 0) {
         this.currentTags = [this.tags[0]];
-        this.updateStatusDisplay();
       }
+      this.updateStatusDisplay();
+      this.renderTagList();
     } catch (error) {
       logger.error("Failed to load tags:", error);
       this._loadTagsFromLocalStorage();
