@@ -11,14 +11,12 @@ import { logger } from "../utils/logger.js";
 
 export class PomodoroTimer {
   constructor() {
-    // Timer states
     this.isRunning = false;
     this.isPaused = false;
     this.currentMode = "focus"; // 'focus', 'break', 'longBreak'
     this.timeRemaining = 25 * 60; // 25 minutes in seconds
     this.timerInterval = null;
 
-    // Smart pause states
     this.smartPauseEnabled = false;
     this.isAutoPaused = false;
     this.activityTimeout = null;
@@ -28,7 +26,6 @@ export class PomodoroTimer {
     /** @type {Array<() => void>} */
     this.activityUnlistenFns = [];
 
-    // Session tracking
     this.completedPomodoros = 0;
     this.currentSession = 1;
     this.totalSessions = 10;
@@ -48,14 +45,12 @@ export class PomodoroTimer {
     this.timerDuration = null; // Original duration when timer was started
     this.lastUpdateTime = null; // Last time we updated the display
 
-    // Timer durations (in seconds)
     this.durations = {
-      focus: 25 * 60, // 25 minutes
-      break: 5 * 60, // 5 minutes
-      longBreak: 20 * 60, // 20 minutes
+      focus: 25 * 60,
+      break: 5 * 60,
+      longBreak: 20 * 60,
     };
 
-    // DOM elements
     this.timerMinutes = document.getElementById("timer-minutes");
     this.timerSeconds = document.getElementById("timer-seconds");
     this.timerStatus = document.getElementById("timer-status");
@@ -80,13 +75,12 @@ export class PomodoroTimer {
     this.timerPlusBtn = document.getElementById("timer-plus-btn");
     this.timerMinusBtn = document.getElementById("timer-minus-btn");
 
-    // Task management
     /** @type {any[]} */
     this.tasks = [];
     this.currentTask = "";
 
     // Notification preferences
-    this.autoStartTimer = true; // Default to enabled for skip auto-start
+    this.autoStartTimer = true;
     this.allowContinuousSessions = false; // Allow focus sessions to continue beyond timer
 
     // Debug mode
@@ -107,7 +101,6 @@ export class PomodoroTimer {
   }
 
   async init() {
-    // Verify all DOM elements are found
     if (!this.undoIcon) {
       logger.error("Undo icon element not found, re-searching...");
       this.undoIcon = document.getElementById("undo-icon");
@@ -117,15 +110,13 @@ export class PomodoroTimer {
       this.stopIcon = document.getElementById("stop-icon");
     }
 
-    // Generate initial progress dots
     this.generateProgressDots();
     this.updateDisplay();
     await this.updateProgressDots();
-    this.updateStopUndoButton(); // Initialize stop/undo button state
-    this.updateSkipIcon(); // Initialize skip button icon
-    this.updateSmartIndicator(); // Initialize smart pause indicator
+    this.updateStopUndoButton();
+    this.updateSkipIcon();
+    this.updateSmartIndicator();
 
-    // Add tooltip to smart indicator if NavigationManager is available
     if (window.navigationManager && this.smartIndicator) {
       window.navigationManager.addTooltipEvents(this.smartIndicator);
     }
@@ -145,63 +136,49 @@ export class PomodoroTimer {
       });
     }
 
-    // Render loaded tasks
     this.renderTasks();
 
-    // Initialize smart indicator tooltip and click handler
     if (this.smartIndicator) {
-      // Add click handler for toggle
       this.smartIndicator.addEventListener("click", () => {
         this.toggleSmartPause();
       });
 
-      // Add tooltip using NavigationManager
       if (window.navigationManager) {
         window.navigationManager.addTooltipEvents(this.smartIndicator);
       }
     }
 
-    // Initialize auto-start indicator
     if (this.autoStartIndicator) {
       this.autoStartIndicator.addEventListener("click", () => {
         this.toggleAutoStart();
       });
 
-      // Add tooltip using NavigationManager
       if (window.navigationManager) {
         window.navigationManager.addTooltipEvents(this.autoStartIndicator);
       }
     }
 
-    // Initialize continuous session indicator
     if (this.continuousSessionIndicator) {
       this.continuousSessionIndicator.addEventListener("click", () => {
         this.toggleContinuousSessions();
       });
 
-      // Add tooltip using NavigationManager
       if (window.navigationManager) {
         window.navigationManager.addTooltipEvents(this.continuousSessionIndicator);
       }
     }
 
-    // Update all setting indicators
     // Note: This will be called again in applySettings() with the correct values
     this.updateSettingIndicators();
 
-    // Initialize sidebar state to match timer
     const sidebar = document.querySelector(".sidebar");
     if (sidebar) {
       sidebar.className = `sidebar ${this.currentMode}`;
     }
 
-    // Initialize tray menu state
     this.updateTrayMenu();
 
-    // Start midnight monitoring for daily reset
     this.startMidnightMonitoring();
-
-    // Setup event listeners for session synchronization
     this.setupSessionEventListeners();
   }
 
@@ -211,7 +188,6 @@ export class PomodoroTimer {
       const { date } = /** @type {CustomEvent} */ (event).detail;
       const today = new Date().toDateString();
 
-      // Only update dots if the session was added for today
       if (date === today) {
         await this.updateProgressDots();
       }
@@ -221,7 +197,6 @@ export class PomodoroTimer {
       const { date } = /** @type {CustomEvent} */ (event).detail;
       const today = new Date().toDateString();
 
-      // Only update dots if the session was deleted from today
       if (date === today) {
         await this.updateProgressDots();
       }
@@ -231,7 +206,6 @@ export class PomodoroTimer {
       const { date } = /** @type {CustomEvent} */ (event).detail;
       const today = new Date().toDateString();
 
-      // Only update dots if the session was updated for today
       if (date === today) {
         await this.updateProgressDots();
       }
@@ -262,7 +236,6 @@ export class PomodoroTimer {
       }
     });
 
-    // Timer adjustment buttons
     if (this.timerPlusBtn) {
       this.timerPlusBtn.addEventListener("click", () => {
         this.adjustTimer(5);
@@ -275,11 +248,9 @@ export class PomodoroTimer {
       });
     }
 
-    // Keyboard shortcuts
     document.addEventListener("keydown", async (e) => {
       // Only trigger if not typing in an input
       if (/** @type {HTMLElement} */ (e.target)?.tagName !== "INPUT") {
-        // Check custom shortcuts first
         if (this.matchesShortcut(e, this.customShortcuts.start_stop)) {
           e.preventDefault();
           if (this.isRunning && !this.isPaused && !this.isAutoPaused) {
@@ -332,7 +303,6 @@ export class PomodoroTimer {
       }
     });
 
-    // Listen for tray icon events
     this.setupTrayEventListeners();
   }
 
@@ -398,7 +368,6 @@ export class PomodoroTimer {
       return;
     }
 
-    // Setup event listeners for global activity monitoring
     await this.setupGlobalActivityListeners();
 
     logger.info("Smart pause enabled with global monitoring");
@@ -411,7 +380,6 @@ export class PomodoroTimer {
       }
       this.activityUnlistenFns = [];
 
-      // Start global activity monitoring with configurable timeout
       const timeoutSeconds = Math.floor(this.inactivityThreshold / 1000); // convert from milliseconds to seconds
       await invoke("start_activity_monitoring", { timeoutSeconds });
 
@@ -474,14 +442,12 @@ export class PomodoroTimer {
       return;
     }
 
-    // If currently auto-paused, resume the timer
     if (this.isAutoPaused) {
       logger.debug("🔄 Timer is auto-paused, calling resumeFromAutoPause()");
       this.resumeFromAutoPause();
       return; // Exit early after resume to avoid setting new timeout immediately
     }
 
-    // Clear existing timeout and countdown
     if (this.activityTimeout) {
       clearTimeout(this.activityTimeout);
     }
@@ -492,12 +458,10 @@ export class PomodoroTimer {
       return;
     }
 
-    // Set new timeout for auto-pause after configured inactivity period
     this.activityTimeout = setTimeout(() => {
       this.autoPauseTimer();
     }, this.inactivityThreshold); // Use configurable timeout
 
-    // Start countdown display
     this.startSmartPauseCountdown();
   }
 
@@ -509,7 +473,6 @@ export class PomodoroTimer {
     this.smartPauseSecondsRemaining = Math.floor(this.inactivityThreshold / 1000);
     this.updateSmartPauseCountdownDisplay();
 
-    // Start the countdown interval
     this.smartPauseCountdownInterval = setInterval(() => {
       this.smartPauseSecondsRemaining--;
       this.updateSmartPauseCountdownDisplay();
@@ -588,14 +551,12 @@ export class PomodoroTimer {
 
     this._stopTimerLoop();
 
-    // Show auto-pause notification
     NotificationUtils.showNotificationPing(
       "Timer auto-paused due to inactivity 💤",
       "warning",
       this.currentMode
     );
 
-    // Update UI to show auto-pause state
     this.updateDisplay();
     this.updateTrayIcon();
   }
@@ -607,13 +568,11 @@ export class PomodoroTimer {
 
     logger.info("🔄 Resuming from auto-pause...");
 
-    // Clear any existing timer interval first
     if (this.timerInterval) {
       clearInterval(this.timerInterval);
       this.timerInterval = null;
     }
 
-    // Set states to resume - be very explicit about the state
     this.isAutoPaused = false;
     this.isPaused = false;
     this.isRunning = true;
@@ -628,11 +587,9 @@ export class PomodoroTimer {
       this.isRunning
     );
 
-    // Initialize timer accuracy tracking for resume
     this.timerStartTime = Date.now();
     this.timerDuration = this.timeRemaining;
 
-    // Restart the timer interval with accuracy updates
     this.timerInterval = setInterval(() => {
       this.updateTimerWithAccuracy();
     }, 100);
@@ -641,30 +598,24 @@ export class PomodoroTimer {
     this.updateDisplay();
     this.updateTrayIcon();
 
-    // Clear the resume flag after UI update
     this._justResumedFromAutoPause = false;
 
-    // Show resume notification after UI update
     NotificationUtils.showNotificationPing(
       "Timer resumed - you're back! 🎯",
       "info",
       this.currentMode
     );
 
-    // Restart smart pause monitoring by setting new timeout
     if (this.smartPauseEnabled && this.currentMode === "focus") {
-      // Clear any existing timeout first
       if (this.activityTimeout) {
         clearTimeout(this.activityTimeout);
       }
       this.stopSmartPauseCountdown();
 
-      // Set new timeout for auto-pause
       this.activityTimeout = setTimeout(() => {
         this.autoPauseTimer();
       }, this.inactivityThreshold);
 
-      // Start countdown display
       this.startSmartPauseCountdown();
     }
 
@@ -679,12 +630,10 @@ export class PomodoroTimer {
 
     if (enabled) {
       await this.setupSmartPause();
-      // Start monitoring if timer is already running and in focus mode
       if (this.isRunning && !this.isPaused && this.currentMode === "focus") {
         this.handleUserActivity();
       }
     } else {
-      // Stop global monitoring
       try {
         await invoke("stop_activity_monitoring");
       } catch (error) {
@@ -726,7 +675,6 @@ export class PomodoroTimer {
         this._justResumedFromPause = true;
       }
 
-      // Track session start time if not already set
       if (!this.sessionStartTime) {
         this.sessionStartTime = Date.now();
         logger.info("🟢 NEW SESSION STARTED - sessionStartTime set to:", {
@@ -735,7 +683,7 @@ export class PomodoroTimer {
           dateLocal: new Date(this.sessionStartTime).toString(),
         });
         this.currentSessionElapsedTime = 0;
-        this.sessionCompletedButNotSaved = false; // Reset flag for new session
+        this.sessionCompletedButNotSaved = false;
       } else {
         logger.debug("⚠️ Session already started - not updating sessionStartTime:", {
           existingTimestamp: this.sessionStartTime,
@@ -744,7 +692,6 @@ export class PomodoroTimer {
         });
       }
 
-      // Initialize timer accuracy tracking
       this.timerStartTime = Date.now();
       this.timerDuration = this.timeRemaining;
       this.lastUpdateTime = this.timerStartTime;
@@ -755,7 +702,6 @@ export class PomodoroTimer {
 
       this.updateDisplay();
 
-      // Clear the resume flag after UI update
       if (wasResuming) {
         this._justResumedFromPause = false;
       }
@@ -765,15 +711,12 @@ export class PomodoroTimer {
       }
       NotificationUtils.showNotificationPing("Timer started! 🍅", "info", this.currentMode);
 
-      // Start smart pause monitoring if enabled
       if (this.smartPauseEnabled && this.currentMode === "focus") {
         this.handleUserActivity();
       }
 
-      // Update tray menu
       this.updateTrayMenu();
 
-      // Notify tag manager about timer start or resume
       if (window.tagManager) {
         if (wasResuming) {
           window.tagManager.onTimerResume();
@@ -807,7 +750,6 @@ export class PomodoroTimer {
         }
       }
 
-      // Check if max session time has been reached
       this.checkMaxSessionTime();
 
       this.updateDisplay();
@@ -832,7 +774,6 @@ export class PomodoroTimer {
         NotificationUtils.showNotificationPing("30 seconds left! ⏰", "warning", this.currentMode);
       }
 
-      // Check if timer should complete
       if (this.timeRemaining <= 0 && oldTimeRemaining > 0) {
         if (this.allowContinuousSessions) {
           // For continuous sessions, show completion notification but keep timer running
@@ -841,7 +782,6 @@ export class PomodoroTimer {
           this.timerStartTime = now;
           this.timerDuration = 0; // Start from 0 for overtime
         } else {
-          // Traditional behavior - complete and stop the session
           this.completeSession();
         }
       }
@@ -862,14 +802,12 @@ export class PomodoroTimer {
       this.maxSessionTimeReached = true;
       this.pauseTimer();
 
-      // Show notification
       const maxTimeInMinutes = Math.floor(this.maxSessionTime / (60 * 1000));
       NotificationUtils.showNotificationPing(
         `Session automatically paused after ${maxTimeInMinutes} minutes. Take a break! 🛑`,
         "warning"
       );
 
-      // Show desktop notification if enabled
       if (this.enableDesktopNotifications) {
         NotificationUtils.showDesktopNotification(
           "Session Time Limit Reached",
@@ -905,10 +843,8 @@ export class PomodoroTimer {
       this.updateDisplay();
       NotificationUtils.showNotificationPing("Timer paused ⏸️");
 
-      // Update tray menu
       this.updateTrayMenu();
 
-      // Notify tag manager about timer pause
       if (window.tagManager) {
         window.tagManager.onTimerPause();
       }
@@ -921,13 +857,11 @@ export class PomodoroTimer {
     this.isAutoPaused = false;
     this._stopTimerLoop();
 
-    // Reset session tracking
     this.sessionStartTime = null;
     this.currentSessionElapsedTime = 0;
     this.sessionCompletedButNotSaved = false; // Reset flag
     this.maxSessionTimeReached = false; // Reset max session time flag
 
-    // Reset timer accuracy tracking
     this.timerStartTime = null;
     this.timerDuration = null;
     this.lastUpdateTime = null;
@@ -936,10 +870,8 @@ export class PomodoroTimer {
     this.updateDisplay();
     NotificationUtils.showNotificationPing("Session deleted ❌", "warning");
 
-    // Update tray menu
     this.updateTrayMenu();
 
-    // Notify tag manager about timer stop
     if (window.tagManager) {
       window.tagManager.onTimerStop();
     }
@@ -949,7 +881,6 @@ export class PomodoroTimer {
     // Convert minutes to seconds
     const adjustment = minutes * 60;
 
-    // Add the adjustment to the current time remaining
     this.timeRemaining += adjustment;
 
     // Ensure we don't go below 0 seconds
@@ -957,20 +888,15 @@ export class PomodoroTimer {
       this.timeRemaining = 0;
     }
 
-    // If timer is running, we need to update the accuracy tracking
     if (this.isRunning && this.timerStartTime) {
-      // Calculate how much time should remain based on the adjustment
       const now = Date.now();
       const elapsedSinceStart = Math.floor((now - this.timerStartTime) / 1000);
 
-      // Update the timer duration to account for the adjustment
       this.timerDuration = elapsedSinceStart + this.timeRemaining;
     }
 
-    // Update the display immediately
     this.updateDisplay();
 
-    // Show notification
     const action = minutes > 0 ? "added" : "subtracted";
     const absMinutes = Math.abs(minutes);
     NotificationUtils.showNotificationPing(
@@ -979,10 +905,8 @@ export class PomodoroTimer {
   }
 
   startMidnightMonitoring() {
-    // Clear any existing monitoring
     this.stopMidnightMonitoring();
 
-    // Check for date change every minute
     this.midnightMonitorInterval = setInterval(() => {
       this.checkForMidnightReset();
     }, 60000); // Check every minute
@@ -1011,19 +935,15 @@ export class PomodoroTimer {
   async performMidnightReset() {
     logger.info("🌅 Performing midnight reset...");
 
-    // Store previous session count for notification
     const previousPomodoros = this.completedPomodoros;
 
     // Use enhanced loadSessionData with force reset to ensure clean state
     await this.loadSessionData(true);
 
-    // Update display to show the reset state
     this.updateDisplay();
 
-    // Save the reset state
     await this.saveSessionData();
 
-    // Show user notification about the reset
     if (previousPomodoros > 0) {
       NotificationUtils.showNotificationPing(
         `New day! Yesterday's ${previousPomodoros} sessions have been saved. Fresh start! 🌅`,
@@ -1036,10 +956,8 @@ export class PomodoroTimer {
       );
     }
 
-    // Update all visual elements
     this.updateTrayIcon();
 
-    // Refresh navigation charts if available
     if (window.navigationManager) {
       try {
         await window.navigationManager.updateDailyChart();
@@ -1061,7 +979,6 @@ export class PomodoroTimer {
 
     const skippedMode = this.currentMode;
 
-    // Track if we need to save session data
     let shouldSaveSession = false;
 
     // OVERTIME: If in overtime and continuous sessions, save session and skip double-counting
@@ -1394,7 +1311,6 @@ export class PomodoroTimer {
       }, 1500); // 1.5 second delay
     }
 
-    // Update tray menu
     this.updateTrayMenu();
 
     // Notify tag manager about timer completion
@@ -2002,7 +1918,6 @@ export class PomodoroTimer {
       this.currentMode
     );
 
-    // Update tray menu
     this.updateTrayMenu();
   }
 
@@ -2167,10 +2082,22 @@ export class PomodoroTimer {
       const minutes = Math.floor((focusTime % 3600) / 60);
 
       dayElement.innerHTML = `
-        <div class="day-label">${weekDays[date.getDay()]}</div>
-        <div class="day-count">${completed}</div>
-        <div class="day-time">${hours}h ${minutes}m</div>
+        <div class="day-label"></div>
+        <div class="day-count"></div>
+        <div class="day-time"></div>
       `;
+      const dayLabelEl = dayElement.querySelector(".day-label");
+      const dayCountEl = dayElement.querySelector(".day-count");
+      const dayTimeEl = dayElement.querySelector(".day-time");
+      if (dayLabelEl) {
+        dayLabelEl.textContent = weekDays[date.getDay()];
+      }
+      if (dayCountEl) {
+        dayCountEl.textContent = String(completed);
+      }
+      if (dayTimeEl) {
+        dayTimeEl.textContent = `${hours}h ${minutes}m`;
+      }
 
       weeklyStatsContainer.appendChild(dayElement);
     }
@@ -2196,44 +2123,65 @@ export class PomodoroTimer {
     const modal = document.createElement("div");
     modal.className = "history-modal";
 
+    // Build the modal structure with static HTML, then populate dynamic data via textContent
     modal.innerHTML = `
       <div class="history-content">
         <div class="history-header">
           <h3>Your Progress History</h3>
           <button class="close-btn">&times;</button>
         </div>
-        <div class="history-list">
-          ${
-            history.length === 0
-              ? "<p>No history data yet. Start your first pomodoro session!</p>"
-              : history
-                  .slice()
-                  .reverse()
-                  .map((/** @type {any} */ day) => {
-                    const date = new Date(day.date);
-                    const hours = Math.floor(day.total_focus_time / 3600);
-                    const minutes = Math.floor((day.total_focus_time % 3600) / 60);
-
-                    return `
-                <div class="history-item">
-                  <div class="history-date">${date.toLocaleDateString("it-IT", {
-                    weekday: "long",
-                    year: "numeric",
-                    month: "long",
-                    day: "numeric",
-                  })}</div>
-                  <div class="history-stats">
-                    <span>🍅 ${day.completed_pomodoros} pomodoros</span>
-                    <span>⏰ ${hours}h ${minutes}m focus</span>
-                  </div>
-                </div>
-              `;
-                  })
-                  .join("")
-          }
-        </div>
+        <div class="history-list"></div>
       </div>
     `;
+
+    const historyList = modal.querySelector(".history-list");
+    if (historyList) {
+      if (history.length === 0) {
+        const emptyMsg = document.createElement("p");
+        emptyMsg.textContent = "No history data yet. Start your first pomodoro session!";
+        historyList.appendChild(emptyMsg);
+      } else {
+        history
+          .slice()
+          .reverse()
+          .forEach((/** @type {any} */ day) => {
+            const date = new Date(day.date);
+            const hours = Math.floor(day.total_focus_time / 3600);
+            const minutes = Math.floor((day.total_focus_time % 3600) / 60);
+
+            const item = document.createElement("div");
+            item.className = "history-item";
+            item.innerHTML = `
+              <div class="history-date"></div>
+              <div class="history-stats">
+                <span class="history-pomodoros"></span>
+                <span class="history-focus-time"></span>
+              </div>
+            `;
+
+            // Use textContent for API-controlled data to prevent XSS
+            const dateEl = item.querySelector(".history-date");
+            const pomodorosEl = item.querySelector(".history-pomodoros");
+            const focusTimeEl = item.querySelector(".history-focus-time");
+            if (dateEl) {
+              dateEl.textContent = date.toLocaleDateString("it-IT", {
+                weekday: "long",
+                year: "numeric",
+                month: "long",
+                day: "numeric",
+              });
+            }
+            if (pomodorosEl) {
+              pomodorosEl.textContent = `\u{1F345} ${day.completed_pomodoros} pomodoros`;
+            }
+            if (focusTimeEl) {
+              focusTimeEl.textContent = `\u{23F0} ${hours}h ${minutes}m focus`;
+            }
+
+            historyList.appendChild(item);
+          });
+      }
+    }
 
     document.body.appendChild(modal);
 

@@ -26,7 +26,6 @@ function waitForSupabase() {
   });
 }
 
-// Initialize Supabase client
 /** @type {any} */
 let supabase = null;
 /** @type {any} */
@@ -40,7 +39,6 @@ async function initSupabase() {
   const supabaseAnonKey =
     "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxvcGd3d3BwaW5rcXZ0dG96cWZ4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTA2NzgxMDIsImV4cCI6MjA2NjI1NDEwMn0.DqPcwsBJdPeV5iWsMkZLMn6-xZ_A9l-Xh7R-wi7kc2k";
 
-  // Create Supabase client
   supabase = createClient(SUPABASE_URL, supabaseAnonKey, {
     auth: {
       // Configure redirect URLs for OAuth
@@ -52,7 +50,6 @@ async function initSupabase() {
     },
   });
 
-  // Auth helper functions
   authHelpers = {
     /** @param {string} email @param {string} password */
     async signInWithEmail(email, password) {
@@ -93,7 +90,6 @@ async function initSupabase() {
 
         logger.debug(`Starting Tauri OAuth flow for ${provider}...`);
 
-        // Start OAuth flow using tauri-plugin-oauth
         logger.debug("Invoking OAuth start...");
 
         /** @type {number | undefined} */
@@ -109,17 +105,12 @@ async function initSupabase() {
         };
 
         try {
-          // Start the OAuth server using our custom command
           port = await invoke("start_oauth_server");
           logger.debug("OAuth server started on port:", port);
 
-          // Generate redirect URI using the port
           const redirectUri = `http://localhost:${port}`;
-
-          // Build OAuth URL
           const authUrl = `${SUPABASE_URL}/auth/v1/authorize?provider=${provider}&redirect_to=${encodeURIComponent(redirectUri)}`;
 
-          // Return a promise that resolves when OAuth completes
           return new Promise((resolve, reject) => {
             /** @type {ReturnType<typeof setTimeout> | undefined} */
             let timeout;
@@ -137,7 +128,6 @@ async function initSupabase() {
             let processed = false;
             (async () => {
               try {
-                // Set up a timeout
                 timeout = setTimeout(() => {
                   cleanupListeners();
                   cancelOauthServer().catch(() => {});
@@ -146,7 +136,6 @@ async function initSupabase() {
 
                 logger.debug("Redirect URI:", redirectUri);
 
-                // Set up event listener for OAuth callback
                 const { listen } =
                   /** @type {{ listen: (event: string, handler: (e: any) => void) => Promise<() => void> }} */ (
                     window.__TAURI__?.event ?? {}
@@ -325,23 +314,19 @@ async function initSupabase() {
       }
     },
 
-    // Sign out
     async signOut() {
       const { error } = await supabase.auth.signOut();
       return { error };
     },
 
-    // Get current user
     getCurrentUser() {
       return supabase.auth.getUser();
     },
 
-    // Get current session
     getSession() {
       return supabase.auth.getSession();
     },
 
-    // Listen for auth state changes
     /** @param {any} callback */
     onAuthStateChange(callback) {
       return supabase.auth.onAuthStateChange(callback);
@@ -349,7 +334,6 @@ async function initSupabase() {
   };
 }
 
-// Export functions to get initialized instances
 export function getSupabase() {
   return supabase;
 }
@@ -358,5 +342,4 @@ export function getAuthHelpers() {
   return authHelpers;
 }
 
-// Initialize and export
 export { initSupabase };

@@ -7,7 +7,6 @@ class TagManager {
     /** @type {any[]} */
     this.currentTags = [];
     this.activeSessionTags = new Map();
-    this.isDropdownOpen = false;
     this.selectedIcon = "ri-brain-line";
     this._loadTagsRequestId = 0;
     this._degraded = false;
@@ -362,8 +361,7 @@ class TagManager {
     if (!this.iconSelector) {
       return;
     }
-    const isOpen = this.iconSelector.classList.contains("active");
-    if (isOpen) {
+    if (this.iconSelector.classList.contains("active")) {
       this.closeIconSelector();
     } else {
       this.openIconSelector();
@@ -451,7 +449,7 @@ class TagManager {
   }
 
   toggleDropdown() {
-    if (this.isDropdownOpen) {
+    if (this.dropdownMenu?.classList.contains("active")) {
       this.closeDropdown();
     } else {
       this.openDropdown();
@@ -460,7 +458,6 @@ class TagManager {
 
   openDropdown() {
     logger.debug("Opening dropdown...");
-    this.isDropdownOpen = true;
     this.timerStatus?.classList.add("active");
     this.dropdownMenu?.classList.add("active");
     logger.debug(
@@ -471,7 +468,6 @@ class TagManager {
   }
 
   closeDropdown() {
-    this.isDropdownOpen = false;
     this.timerStatus?.classList.remove("active");
     this.dropdownMenu?.classList.remove("active");
   }

@@ -19,10 +19,8 @@ mod helpers;
 // Type alias for the app handle to avoid generic complexity
 type AppHandle = tauri::AppHandle<tauri::Wry>;
 
-// Global activity monitoring state
 static ACTIVITY_MONITOR: Mutex<Option<ActivityMonitor>> = Mutex::new(None);
 
-// Global shortcut debounce state
 static SHORTCUT_DEBOUNCE: LazyLock<Mutex<HashMap<String, Instant>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
 
@@ -35,7 +33,7 @@ struct ActivityMonitor {
     inactivity_threshold: Arc<Mutex<Duration>>,
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 struct PomodoroSession {
     completed_pomodoros: u32,
     total_focus_time: u32, // in seconds
@@ -43,7 +41,7 @@ struct PomodoroSession {
     date: String,
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 struct ManualSession {
     id: String,
     session_type: String, // "focus", "break", "longBreak", "custom"
@@ -51,12 +49,12 @@ struct ManualSession {
     start_time: String,   // "HH:MM"
     end_time: String,     // "HH:MM"
     notes: Option<String>,
-    created_at: String,                   // ISO string
-    date: String,                         // Date string for the session date
+    created_at: String, // ISO string
+    date: String,
     tags: Option<Vec<serde_json::Value>>, // Array of tag objects
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 struct Tag {
     id: String,
     name: String,
@@ -65,7 +63,7 @@ struct Tag {
     created_at: String,
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 struct SessionTag {
     session_id: String,
     tag_id: String,
@@ -73,7 +71,7 @@ struct SessionTag {
     created_at: String,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 struct Task {
     id: u64,
     text: String,
@@ -85,7 +83,7 @@ struct Task {
 /// User-facing settings; the bool fields are independent toggles, splitting
 /// them into nested structs would hurt config readability.
 #[allow(clippy::struct_excessive_bools)]
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 struct AppSettings {
     shortcuts: ShortcutSettings,
     timer: TimerSettings,
@@ -101,14 +99,14 @@ struct AppSettings {
     hide_status_bar: bool,
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 struct ShortcutSettings {
     start_stop: Option<String>,
     reset: Option<String>,
     skip: Option<String>,
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 struct TimerSettings {
     focus_duration: u32,
     break_duration: u32,
@@ -123,10 +121,9 @@ const fn default_weekly_goal() -> u32 {
 }
 
 const fn default_analytics_enabled() -> bool {
-    true // Analytics enabled by default
+    true
 }
 
-// Helper function to check if analytics are enabled
 async fn are_analytics_enabled(app: &AppHandle) -> bool {
     match load_settings(app.clone()).await {
         Ok(settings) => settings.analytics_enabled,
@@ -137,7 +134,7 @@ async fn are_analytics_enabled(app: &AppHandle) -> bool {
 /// User-facing notification preferences; each bool maps to an independent
 /// UI toggle, restructuring would not match the settings UI.
 #[allow(clippy::struct_excessive_bools)]
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 struct NotificationSettings {
     desktop_notifications: bool,
     sound_notifications: bool,
@@ -150,7 +147,7 @@ struct NotificationSettings {
     smart_pause_timeout: u32, // timeout in seconds
 }
 
-#[derive(Serialize, Deserialize, Clone, Default)]
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
 struct AdvancedSettings {
     #[serde(default)]
     debug_mode: bool, // Debug mode with 3-second timers
@@ -175,22 +172,22 @@ impl Default for AppSettings {
                 desktop_notifications: true,
                 sound_notifications: true,
                 auto_start_timer: true,
-                auto_start_focus: false,          // default to disabled
-                allow_continuous_sessions: false, // default to disabled
+                auto_start_focus: false,
+                allow_continuous_sessions: false,
                 smart_pause: false,
                 smart_pause_timeout: 30, // default 30 seconds
             },
             advanced: AdvancedSettings::default(),
-            autostart: false,          // default to disabled
-            analytics_enabled: true,   // default to enabled
-            hide_icon_on_close: false, // default to disabled
-            hide_status_bar: false,    // default to disabled
+            autostart: false,
+            analytics_enabled: true,
+            hide_icon_on_close: false,
+            hide_status_bar: false,
         }
     }
 }
 
 fn should_debounce_shortcut(action: &str) -> bool {
-    let mut map = SHORTCUT_DEBOUNCE.lock().unwrap();
+    let mut map = helpers::lock_or_recover(&SHORTCUT_DEBOUNCE);
     helpers::is_debounced(&mut map, action, Instant::now(), Duration::from_millis(500))
 }
 
@@ -207,9 +204,9 @@ impl ActivityMonitor {
 
     #[cfg(target_os = "macos")]
     fn start_monitoring(&self) -> Result<(), String> {
-        let mut is_monitoring = self.is_monitoring.lock().unwrap();
+        let mut is_monitoring = helpers::lock_or_recover(&self.is_monitoring);
         if *is_monitoring {
-            return Ok(()); // Already monitoring
+            return Ok(());
         }
         *is_monitoring = true;
 
@@ -220,46 +217,39 @@ impl ActivityMonitor {
 
         thread::spawn(move || {
             loop {
-                // Check if we should stop monitoring
                 {
-                    let monitoring = is_monitoring_clone.lock().unwrap();
+                    let monitoring = helpers::lock_or_recover(&is_monitoring_clone);
                     if !*monitoring {
                         break;
                     }
                 }
 
-                // Get current threshold
                 let threshold = {
-                    let threshold_guard = inactivity_threshold.lock().unwrap();
+                    let threshold_guard = helpers::lock_or_recover(&inactivity_threshold);
                     *threshold_guard
                 };
 
-                // Check system activity
                 let has_activity = Self::check_system_activity();
 
                 if has_activity {
-                    // Update last activity time
                     {
-                        let mut last = last_activity.lock().unwrap();
+                        let mut last = helpers::lock_or_recover(&last_activity);
                         *last = Instant::now();
                     }
 
-                    // Emit activity event to frontend
                     let _ = app_handle.emit("user-activity", ());
                 } else {
-                    // Check if enough time has passed since last activity
                     let elapsed = {
-                        let last = last_activity.lock().unwrap();
+                        let last = helpers::lock_or_recover(&last_activity);
                         last.elapsed()
                     };
 
                     if elapsed >= threshold {
-                        // Emit inactivity event to frontend
                         let _ = app_handle.emit("user-inactivity", ());
 
                         // Reset the timer to avoid spam
                         {
-                            let mut last = last_activity.lock().unwrap();
+                            let mut last = helpers::lock_or_recover(&last_activity);
                             *last = Instant::now();
                         }
                     }
@@ -274,7 +264,6 @@ impl ActivityMonitor {
 
     #[cfg(target_os = "macos")]
     fn check_system_activity() -> bool {
-        // Check if system has been idle for less than 1 second
         Self::get_system_idle_time() < 1.0
     }
 
@@ -288,13 +277,11 @@ impl ActivityMonitor {
         if let Ok(output) = output {
             let output_str = String::from_utf8_lossy(&output.stdout);
 
-            // Look for HIDIdleTime in the output
             for line in output_str.lines() {
                 if line.contains("HIDIdleTime") {
                     // Line format: "HIDIdleTime" = 1234567890
                     if let Some(equals_pos) = line.find('=') {
                         let value_part = &line[equals_pos + 1..];
-                        // Clean up the value (remove whitespace and potential trailing chars)
                         let cleaned = value_part
                             .trim()
                             .trim_end_matches(|c: char| !c.is_ascii_digit());
@@ -313,12 +300,12 @@ impl ActivityMonitor {
     }
 
     fn stop_monitoring(&self) {
-        let mut is_monitoring = self.is_monitoring.lock().unwrap();
+        let mut is_monitoring = helpers::lock_or_recover(&self.is_monitoring);
         *is_monitoring = false;
     }
 
     fn update_threshold(&self, timeout_seconds: u64) {
-        let mut threshold = self.inactivity_threshold.lock().unwrap();
+        let mut threshold = helpers::lock_or_recover(&self.inactivity_threshold);
         *threshold = Duration::from_secs(timeout_seconds);
     }
 }
@@ -327,7 +314,7 @@ impl ActivityMonitor {
 async fn start_activity_monitoring(app: AppHandle, timeout_seconds: u64) -> Result<(), String> {
     #[cfg(target_os = "macos")]
     {
-        let mut monitor = ACTIVITY_MONITOR.lock().unwrap();
+        let mut monitor = helpers::lock_or_recover(&ACTIVITY_MONITOR);
         if monitor.is_none() {
             *monitor = Some(ActivityMonitor::new(app, timeout_seconds));
         }
@@ -347,7 +334,7 @@ async fn start_activity_monitoring(app: AppHandle, timeout_seconds: u64) -> Resu
 #[tauri::command]
 async fn stop_activity_monitoring() -> Result<(), String> {
     {
-        let monitor = ACTIVITY_MONITOR.lock().unwrap();
+        let monitor = helpers::lock_or_recover(&ACTIVITY_MONITOR);
         if let Some(ref m) = *monitor {
             m.stop_monitoring();
         }
@@ -357,7 +344,7 @@ async fn stop_activity_monitoring() -> Result<(), String> {
 
 #[tauri::command]
 async fn update_activity_timeout(timeout_seconds: u64) -> Result<(), String> {
-    let monitor = ACTIVITY_MONITOR.lock().unwrap();
+    let monitor = helpers::lock_or_recover(&ACTIVITY_MONITOR);
     monitor.as_ref().map_or_else(
         || Err("Activity monitor not initialized".to_string()),
         |m| {
@@ -374,16 +361,11 @@ async fn save_session_data(session: PomodoroSession, app: AppHandle) -> Result<(
         .app_data_dir()
         .map_err(|e| format!("Failed to get app data directory: {e}"))?;
 
-    // Create the directory if it doesn't exist
     fs::create_dir_all(&app_data_dir).map_err(|e| format!("Failed to create directory: {e}"))?;
 
     let file_path = app_data_dir.join("session.json");
-    let json = serde_json::to_string_pretty(&session)
-        .map_err(|e| format!("Failed to serialize session: {e}"))?;
+    helpers::write_json_atomic(&file_path, &session)?;
 
-    fs::write(file_path, json).map_err(|e| format!("Failed to write session file: {e}"))?;
-
-    // Track session saved analytics (if enabled)
     if are_analytics_enabled(&app).await {
         let properties = Some(serde_json::json!({
             "completed_pomodoros": session.completed_pomodoros,
@@ -416,31 +398,20 @@ async fn load_session_data(app: AppHandle) -> Result<Option<PomodoroSession>, St
     let today_legacy = chrono::Local::now().format("%a %b %d %Y").to_string();
     let today_iso = chrono::Local::now().format("%Y-%m-%d").to_string();
 
-    let is_same_day = if session.date == today_legacy || session.date == today_iso {
-        true
-    } else {
-        chrono::NaiveDate::parse_from_str(&session.date, "%a %b %d %Y")
-            .map(|d| d.format("%Y-%m-%d").to_string() == today_iso)
-            .unwrap_or(false)
-    };
+    let is_same_day = session.date == today_legacy
+        || session.date == today_iso
+        || chrono::NaiveDate::parse_from_str(&session.date, "%a %b %d %Y")
+            .is_ok_and(|d| d.format("%Y-%m-%d").to_string() == today_iso);
 
     if is_same_day && session.date != today_legacy {
         session.date.clone_from(&today_legacy);
-        let json = serde_json::to_string_pretty(&session)
-            .map_err(|e| format!("Failed to serialize normalized session: {e}"))?;
-        fs::write(&file_path, json)
-            .map_err(|e| format!("Failed to write normalized session file: {e}"))?;
+        helpers::write_json_atomic(&file_path, &session)?;
     } else if !is_same_day {
         session.completed_pomodoros = 0;
         session.total_focus_time = 0;
         session.current_session = 1;
         session.date.clone_from(&today_legacy);
-
-        // Save the reset session back to file
-        let json = serde_json::to_string_pretty(&session)
-            .map_err(|e| format!("Failed to serialize reset session: {e}"))?;
-        fs::write(&file_path, json)
-            .map_err(|e| format!("Failed to write reset session file: {e}"))?;
+        helpers::write_json_atomic(&file_path, &session)?;
     }
 
     Ok(Some(session))
@@ -453,16 +424,11 @@ async fn save_tasks(tasks: Vec<Task>, app: AppHandle) -> Result<(), String> {
         .app_data_dir()
         .map_err(|e| format!("Failed to get app data directory: {e}"))?;
 
-    // Create the directory if it doesn't exist
     fs::create_dir_all(&app_data_dir).map_err(|e| format!("Failed to create directory: {e}"))?;
 
     let file_path = app_data_dir.join("tasks.json");
-    let json = serde_json::to_string_pretty(&tasks)
-        .map_err(|e| format!("Failed to serialize tasks: {e}"))?;
+    helpers::write_json_atomic(&file_path, &tasks)?;
 
-    fs::write(file_path, json).map_err(|e| format!("Failed to write tasks file: {e}"))?;
-
-    // Track tasks saved analytics (if enabled)
     if are_analytics_enabled(&app).await {
         let _ = app.track_event("tasks_saved", None);
     }
@@ -517,7 +483,6 @@ async fn save_daily_stats(session: PomodoroSession, app: AppHandle) -> Result<()
         .app_data_dir()
         .map_err(|e| format!("Failed to get app data directory: {e}"))?;
 
-    // Create the directory if it doesn't exist
     fs::create_dir_all(&app_data_dir).map_err(|e| format!("Failed to create directory: {e}"))?;
 
     let history_path = app_data_dir.join("history.json");
@@ -525,12 +490,14 @@ async fn save_daily_stats(session: PomodoroSession, app: AppHandle) -> Result<()
     let mut history: Vec<PomodoroSession> = if history_path.exists() {
         let content = fs::read_to_string(&history_path)
             .map_err(|e| format!("Failed to read history: {e}"))?;
-        serde_json::from_str(&content).unwrap_or_else(|_| Vec::new())
+        serde_json::from_str(&content).unwrap_or_else(|e| {
+            log::warn!("Failed to parse history.json, starting fresh: {e}");
+            Vec::new()
+        })
     } else {
         Vec::new()
     };
 
-    // Remove existing entry for the same date and add the new one
     history.retain(|s| s.date != session.date);
     history.push(session);
 
@@ -541,9 +508,7 @@ async fn save_daily_stats(session: PomodoroSession, app: AppHandle) -> Result<()
         history.drain(0..start_index);
     }
 
-    let json = serde_json::to_string_pretty(&history)
-        .map_err(|e| format!("Failed to serialize history: {e}"))?;
-    fs::write(history_path, json).map_err(|e| format!("Failed to write history file: {e}"))?;
+    helpers::write_json_atomic(&history_path, &history)?;
 
     Ok(())
 }
@@ -564,16 +529,14 @@ async fn update_tray_icon(
     let result = Arc::new(Mutex::new(Ok(())));
     let result_clone = Arc::clone(&result);
 
-    // Clone the app handle to move into the closure
     let app_clone = app.clone();
 
     // Move the operation to the main thread using Tauri's app handle
     // This ensures macOS tray operations run on the main thread
     app.run_on_main_thread(move || {
-        let mut result_guard = result_clone.lock().unwrap();
+        let mut result_guard = helpers::lock_or_recover(&result_clone);
         *result_guard = (|| -> Result<(), String> {
             if let Some(tray) = app_clone.tray_by_id("main") {
-                // Use the provided mode_icon or fallback to default icons
                 let icon = mode_icon.unwrap_or_else(|| match session_mode.as_str() {
                     "focus" => "🧠".to_string(),
                     "break" => "☕".to_string(),
@@ -608,25 +571,22 @@ async fn update_tray_icon(
     })
     .map_err(|e| format!("Failed to run on main thread: {e}"))?;
 
-    // Extract the result from the mutex
-    let final_result = result.lock().unwrap().clone();
+    // Extract the result from the mutex (named binding required by borrow checker:
+    // the temporary MutexGuard must drop before `result` does).
+    let final_result = helpers::lock_or_recover(&result).clone();
     final_result
 }
 
 #[tauri::command]
 async fn show_window(app: AppHandle) -> Result<(), String> {
     if let Some(window) = app.get_webview_window("main") {
-        // Check if hide_icon_on_close is enabled to restore dock visibility
         if let Ok(settings) = load_settings(app.clone()).await {
             if settings.hide_icon_on_close {
-                // Restore dock visibility when showing window
                 #[cfg(target_os = "macos")]
                 {
                     let _ = set_dock_visibility(app.clone(), true).await;
                 }
             }
-        } else {
-            // Ignore error, just proceed with showing window
         }
 
         window
@@ -649,10 +609,7 @@ async fn save_settings(settings: AppSettings, app: AppHandle) -> Result<(), Stri
     fs::create_dir_all(&app_data_dir).map_err(|e| format!("Failed to create directory: {e}"))?;
 
     let file_path = app_data_dir.join("settings.json");
-    let json = serde_json::to_string_pretty(&settings)
-        .map_err(|e| format!("Failed to serialize settings: {e}"))?;
-
-    fs::write(file_path, json).map_err(|e| format!("Failed to write settings file: {e}"))?;
+    helpers::write_json_atomic(&file_path, &settings)?;
 
     Ok(())
 }
@@ -682,7 +639,6 @@ async fn register_global_shortcuts(
     app: AppHandle,
     shortcuts: ShortcutSettings,
 ) -> Result<(), String> {
-    // Unregister all existing shortcuts first
     app.global_shortcut()
         .unregister_all()
         .map_err(|e| format!("Failed to unregister shortcuts: {e}"))?;
@@ -731,7 +687,7 @@ async fn reset_all_data(app: AppHandle) -> Result<(), String> {
         .app_data_dir()
         .map_err(|e| format!("Failed to get app data directory: {e}"))?;
 
-    let files_to_delete = vec![
+    let files_to_delete = [
         "session.json",
         "tasks.json",
         "history.json",
@@ -741,10 +697,11 @@ async fn reset_all_data(app: AppHandle) -> Result<(), String> {
         "session_tags.json",
     ];
 
-    for file_name in files_to_delete {
+    for file_name in &files_to_delete {
         let file_path = app_data_dir.join(file_name);
         if file_path.exists() {
-            fs::remove_file(file_path).map_err(|e| format!("Failed to delete {file_name}: {e}"))?;
+            fs::remove_file(&file_path)
+                .map_err(|e| format!("Failed to delete {file_name}: {e}"))?;
         }
     }
 
@@ -753,26 +710,21 @@ async fn reset_all_data(app: AppHandle) -> Result<(), String> {
 
 #[tauri::command]
 async fn enable_autostart(app: AppHandle) -> Result<(), String> {
-    let autostart_manager = app.autolaunch();
-    autostart_manager
+    app.autolaunch()
         .enable()
-        .map_err(|e| format!("Failed to enable autostart: {e}"))?;
-    Ok(())
+        .map_err(|e| format!("Failed to enable autostart: {e}"))
 }
 
 #[tauri::command]
 async fn disable_autostart(app: AppHandle) -> Result<(), String> {
-    let autostart_manager = app.autolaunch();
-    autostart_manager
+    app.autolaunch()
         .disable()
-        .map_err(|e| format!("Failed to disable autostart: {e}"))?;
-    Ok(())
+        .map_err(|e| format!("Failed to disable autostart: {e}"))
 }
 
 #[tauri::command]
 async fn is_autostart_enabled(app: AppHandle) -> Result<bool, String> {
-    let autostart_manager = app.autolaunch();
-    autostart_manager
+    app.autolaunch()
         .is_enabled()
         .map_err(|e| format!("Failed to check autostart status: {e}"))
 }
@@ -784,16 +736,11 @@ async fn save_manual_sessions(sessions: Vec<ManualSession>, app: AppHandle) -> R
         .app_data_dir()
         .map_err(|e| format!("Failed to get app data directory: {e}"))?;
 
-    // Create the directory if it doesn't exist
     fs::create_dir_all(&app_data_dir).map_err(|e| format!("Failed to create directory: {e}"))?;
 
     let file_path = app_data_dir.join("manual_sessions.json");
-    let json = serde_json::to_string_pretty(&sessions)
-        .map_err(|e| format!("Failed to serialize manual sessions: {e}"))?;
+    helpers::write_json_atomic(&file_path, &sessions)?;
 
-    fs::write(file_path, json).map_err(|e| format!("Failed to write manual sessions file: {e}"))?;
-
-    // Track manual sessions saved analytics (if enabled)
     if are_analytics_enabled(&app).await {
         let properties = Some(serde_json::json!({
             "session_count": sessions.len()
@@ -826,28 +773,22 @@ async fn load_manual_sessions(app: AppHandle) -> Result<Vec<ManualSession>, Stri
 
 #[tauri::command]
 async fn save_manual_session(session: ManualSession, app: AppHandle) -> Result<(), String> {
-    // Load existing sessions
     let mut sessions = load_manual_sessions(app.clone()).await?;
 
     // Remove existing session with same ID if it exists (for updates)
     sessions.retain(|s| s.id != session.id);
 
-    // Add the new/updated session
     sessions.push(session);
 
-    // Save all sessions back
     save_manual_sessions(sessions, app).await
 }
 
 #[tauri::command]
 async fn delete_manual_session(session_id: String, app: AppHandle) -> Result<(), String> {
-    // Load existing sessions
     let mut sessions = load_manual_sessions(app.clone()).await?;
 
-    // Remove the session with the specified ID
     sessions.retain(|s| s.id != session_id);
 
-    // Save the updated sessions back
     save_manual_sessions(sessions, app).await
 }
 
@@ -857,12 +798,7 @@ async fn get_manual_sessions_for_date(
     app: AppHandle,
 ) -> Result<Vec<ManualSession>, String> {
     let sessions = load_manual_sessions(app).await?;
-
-    // Filter sessions for the specified date
-    let filtered_sessions: Vec<ManualSession> =
-        sessions.into_iter().filter(|s| s.date == date).collect();
-
-    Ok(filtered_sessions)
+    Ok(sessions.into_iter().filter(|s| s.date == date).collect())
 }
 
 /// Builds and runs the Tauri application.
@@ -951,7 +887,6 @@ pub fn run() {
                 set_status_bar_visibility
             ])
             .setup(|app| {
-                // Track app started event (if enabled)
                 let app_handle_analytics = app.handle().clone();
                 tauri::async_runtime::spawn(async move {
                     if are_analytics_enabled(&app_handle_analytics).await {
@@ -1039,21 +974,17 @@ pub fn run() {
                     let app_handle_for_close = app.handle().clone();
                     window.on_window_event(move |event| {
                         if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-                            // Always prevent close
                             api.prevent_close();
 
-                            // Check if we should hide the app icon
                             let app_handle_clone = app_handle_for_close.clone();
                             tauri::async_runtime::spawn(async move {
                                 match load_settings(app_handle_clone.clone()).await {
                                     Ok(settings) => {
                                         if settings.hide_icon_on_close {
-                                            // Hide the window and set app as dock hidden
                                             if let Some(window) =
                                                 app_handle_clone.get_webview_window("main")
                                             {
                                                 let _ = window.hide();
-                                                // Use macOS specific API to hide from dock
                                                 #[cfg(target_os = "macos")]
                                                 {
                                                     let _ = set_dock_visibility(
@@ -1086,7 +1017,6 @@ pub fn run() {
                     });
                 }
 
-                // Load and register global shortcuts
                 let app_handle_for_shortcuts = app.handle().clone();
                 tauri::async_runtime::spawn(async move {
                     match load_settings(app_handle_for_shortcuts.clone()).await {
@@ -1129,7 +1059,6 @@ pub fn run() {
                 }
                 #[cfg(target_os = "macos")]
                 tauri::RunEvent::Reopen { .. } => {
-                    // When the user clicks on the dock icon, show the window
                     if let Some(window) = app_handle.get_webview_window("main") {
                         let _ = window.show();
                         let _ = window.set_focus();
@@ -1178,10 +1107,7 @@ async fn load_tags(app: AppHandle) -> Result<Vec<Tag>, String> {
         let tags = vec![default_tag];
         fs::create_dir_all(&app_data_dir)
             .map_err(|e| format!("Failed to create directory: {e}"))?;
-        let json = serde_json::to_string_pretty(&tags)
-            .map_err(|e| format!("Failed to serialize default tags: {e}"))?;
-        fs::write(file_path, json)
-            .map_err(|e| format!("Failed to write default tags file: {e}"))?;
+        helpers::write_json_atomic(&file_path, &tags)?;
         Ok(tags)
     }
 }
@@ -1196,9 +1122,7 @@ async fn save_tags(tags: Vec<Tag>, app: AppHandle) -> Result<(), String> {
     fs::create_dir_all(&app_data_dir).map_err(|e| format!("Failed to create directory: {e}"))?;
 
     let file_path = app_data_dir.join("tags.json");
-    let json = serde_json::to_string_pretty(&tags)
-        .map_err(|e| format!("Failed to serialize tags: {e}"))?;
-    fs::write(file_path, json).map_err(|e| format!("Failed to write tags file: {e}"))?;
+    helpers::write_json_atomic(&file_path, &tags)?;
 
     Ok(())
 }
@@ -1210,10 +1134,8 @@ async fn save_tag(tag: Tag, app: AppHandle) -> Result<(), String> {
     // Remove existing tag with same ID if it exists (for updates)
     tags.retain(|t| t.id != tag.id);
 
-    // Add the new/updated tag
     tags.push(tag);
 
-    // Save all tags back
     save_tags(tags, app).await
 }
 
@@ -1221,10 +1143,8 @@ async fn save_tag(tag: Tag, app: AppHandle) -> Result<(), String> {
 async fn delete_tag(tag_id: String, app: AppHandle) -> Result<(), String> {
     let mut tags = load_tags(app.clone()).await?;
 
-    // Remove the tag with the specified ID
     tags.retain(|t| t.id != tag_id);
 
-    // Save the updated tags back
     save_tags(tags, app).await
 }
 
@@ -1257,9 +1177,7 @@ async fn save_session_tags(session_tags: Vec<SessionTag>, app: AppHandle) -> Res
     fs::create_dir_all(&app_data_dir).map_err(|e| format!("Failed to create directory: {e}"))?;
 
     let file_path = app_data_dir.join("session_tags.json");
-    let json = serde_json::to_string_pretty(&session_tags)
-        .map_err(|e| format!("Failed to serialize session tags: {e}"))?;
-    fs::write(file_path, json).map_err(|e| format!("Failed to write session tags file: {e}"))?;
+    helpers::write_json_atomic(&file_path, &session_tags)?;
 
     Ok(())
 }
@@ -1342,12 +1260,10 @@ async fn update_tray_menu(
 
 #[tauri::command]
 async fn write_excel_file(path: String, data: String) -> Result<(), String> {
-    // Decode base64 data
     let decoded_data = general_purpose::STANDARD
         .decode(data)
         .map_err(|e| format!("Failed to decode base64 data: {e}"))?;
 
-    // Write the binary data to file
     fs::write(&path, decoded_data)
         .map_err(|e| format!("Failed to write Excel file to {path}: {e}"))?;
 
@@ -1357,7 +1273,6 @@ async fn write_excel_file(path: String, data: String) -> Result<(), String> {
 #[tauri::command]
 async fn start_oauth_server(window: tauri::Window) -> Result<u16, String> {
     start(move |url| {
-        // Emit the URL to the frontend
         let _ = window.emit("oauth-callback", url);
     })
     .map_err(|err| err.to_string())
@@ -1431,7 +1346,7 @@ async fn set_status_bar_visibility(_app: AppHandle, _visible: bool) -> Result<()
         let result_clone = Arc::clone(&result);
 
         _app.run_on_main_thread(move || {
-            let mut result_guard = result_clone.lock().unwrap();
+            let mut result_guard = helpers::lock_or_recover(&result_clone);
             *result_guard = match set_system_ui_mode_safe(_visible) {
                 Ok(()) => {
                     log::info!(
@@ -1448,7 +1363,9 @@ async fn set_status_bar_visibility(_app: AppHandle, _visible: bool) -> Result<()
         })
         .map_err(|e| format!("Failed to run on main thread: {e}"))?;
 
-        let final_result = result.lock().unwrap().clone();
+        // Extract the result from the mutex (named binding required by borrow checker:
+        // the temporary MutexGuard must drop before `result` does).
+        let final_result = helpers::lock_or_recover(&result).clone();
         final_result
     }
 
@@ -1483,8 +1400,7 @@ fn set_system_ui_mode_safe(visible: bool) -> Result<(), String> {
     type SystemUIOptions = c_uint;
     type OSStatus = c_int;
 
-    // External declaration for Carbon SetSystemUIMode function
-    // This is a C function from ApplicationServices framework
+    // External declaration for Carbon SetSystemUIMode (ApplicationServices framework)
     #[allow(unsafe_code)]
     extern "C" {
         fn SetSystemUIMode(inMode: SystemUIMode, inOptions: SystemUIOptions) -> OSStatus;
@@ -1502,7 +1418,7 @@ fn set_system_ui_mode_safe(visible: bool) -> Result<(), String> {
             K_UI_MODE_CONTENT_SUPPRESSED // Hide menu bar but keep dock visible
         };
 
-        let options: SystemUIOptions = 0; // No special options
+        let options: SystemUIOptions = 0;
 
         log::debug!(
             "🔧 Carbon API: Setting SystemUIMode to {} ({})",
@@ -1514,7 +1430,6 @@ fn set_system_ui_mode_safe(visible: bool) -> Result<(), String> {
             }
         );
 
-        // Call the Carbon function - this is a pure C API call
         let result: OSStatus = SetSystemUIMode(mode, options);
 
         if result == NO_ERR {
@@ -1531,13 +1446,11 @@ fn set_system_ui_mode_safe(visible: bool) -> Result<(), String> {
         }
     };
 
-    // If primary approach succeeded, return success
-    if primary_result.is_ok() {
-        return Ok(());
-    }
-
-    // If primary approach failed, try fallback methods
-    let (status_code, error_msg) = primary_result.unwrap_err();
+    // If primary approach succeeded, return success; otherwise capture error and try fallbacks.
+    let (status_code, error_msg) = match primary_result {
+        Ok(()) => return Ok(()),
+        Err(err) => err,
+    };
 
     log::warn!("🔄 Primary method failed, attempting fallback approaches...");
 

@@ -1,9 +1,9 @@
 #!/bin/bash
 
-# Verification script for Tempo update system configuration
+# Verification script for Presto update system configuration
 # This script checks if everything is properly set up for automatic updates
 
-echo "🔍 Tempo Update System Verification"
+echo "🔍 Presto Update System Verification"
 echo "=================================="
 echo ""
 
@@ -120,8 +120,8 @@ echo "🔑 Checking Signing Keys"
 echo "------------------------"
 
 # Check for signing keys
-KEY_PATH="$HOME/.tauri/tempo_signing_key"
-PUB_KEY_PATH="$HOME/.tauri/tempo_signing_key.pub"
+KEY_PATH="$HOME/.tauri/presto_signing_key"
+PUB_KEY_PATH="$HOME/.tauri/presto_signing_key.pub"
 
 if [ -f "$KEY_PATH" ]; then
     print_status "ok" "Private signing key found"

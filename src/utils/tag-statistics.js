@@ -30,17 +30,14 @@ export class TagStatistics {
    * @returns {{ stats: any[]; totalDuration: number; totalSessions: number }}
    */
   getTagUsageStatistics(sessions, tags, startDate, endDate) {
-    // Filter sessions within the date range
     const filteredSessions = sessions.filter((session) => {
       const sessionDate = new Date(session.date || session.created_at);
       return sessionDate >= startDate && sessionDate <= endDate;
     });
 
-    // Calculate tag usage from session data
     const tagUsage = new Map();
     let totalDuration = 0;
 
-    // Process sessions to calculate tag durations
     filteredSessions.forEach((session) => {
       // All sessions are focus sessions now
       if (session.duration > 0) {
@@ -87,7 +84,6 @@ export class TagStatistics {
       }
     });
 
-    // Convert to array and calculate percentages
     const tagStats = Array.from(tagUsage.entries()).map(([tagId, data], index) => ({
       tagId,
       tag: data.tag,
@@ -97,7 +93,6 @@ export class TagStatistics {
       color: this.tagColors[index % this.tagColors.length],
     }));
 
-    // Sort by duration (highest first)
     tagStats.sort((a, b) => b.duration - a.duration);
 
     return {
@@ -163,7 +158,7 @@ export class TagStatistics {
     let currentAngle = 0;
     const gradientStops = /** @type {string[]} */ ([]);
 
-    tagStats.forEach((stat, _index) => {
+    tagStats.forEach((stat) => {
       const angle = (stat.percentage / 100) * 360;
       const nextAngle = currentAngle + angle;
 
@@ -192,12 +187,10 @@ export class TagStatistics {
 
     const { stats, totalDuration } = tagStatsData;
 
-    // Clear containers
     chartContainer.innerHTML = "";
     legendContainer.innerHTML = "";
 
     if (!stats || stats.length === 0 || totalDuration === 0) {
-      // Show placeholder
       chartContainer.innerHTML = `
                 <div class="pie-chart-placeholder">
                     <i class="ri-pie-chart-line"></i>
@@ -207,7 +200,6 @@ export class TagStatistics {
       return;
     }
 
-    // Create pie chart with CSS conic-gradient
     const gradient = this.generatePieChartGradient(stats);
     chartContainer.style.background = gradient;
     chartContainer.style.border = "1px solid #e5e7eb";
@@ -256,7 +248,6 @@ export class TagStatistics {
       legendContainer.appendChild(legendItem);
     });
 
-    // If there are more tags, show a summary
     if (remainingStats.length > 0) {
       const remainingDuration = remainingStats.reduce((sum, stat) => sum + stat.duration, 0);
       const remainingPercentage = remainingStats.reduce((sum, stat) => sum + stat.percentage, 0);

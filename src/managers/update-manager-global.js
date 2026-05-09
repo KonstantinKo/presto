@@ -357,8 +357,7 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
 
       if (hasTestMode) {
         logger.debug("Test mode - simulating update");
-        const testUpdate = await this.simulateUpdate();
-        return testUpdate;
+        return await this.simulateUpdate();
       }
 
       let currentVersion;
@@ -682,34 +681,34 @@ if (_isDevMode) {
       return "Test mode disabled!";
     },
     testUpdate: () => {
-      if (window.updateManager) {
-        return window.updateManager.simulateUpdate();
-      } else {
+      const mgr = window.updateManager || window.updateManagerInstance;
+      if (!mgr) {
         logger.error("UpdateManager not initialized");
         return Promise.reject("UpdateManager non trovato");
       }
+      return mgr.simulateUpdate();
     },
     checkRealUpdate: () => {
-      if (window.updateManager) {
-        return window.updateManager.checkForUpdates();
-      } else {
+      const mgr = window.updateManager || window.updateManagerInstance;
+      if (!mgr) {
         logger.error("UpdateManager not initialized");
         return Promise.reject("UpdateManager non trovato");
       }
+      return mgr.checkForUpdates();
     },
     getStatus: () => {
-      if (window.updateManager) {
-        return {
-          updateAvailable: window.updateManager.updateAvailable,
-          currentUpdate: window.updateManager.currentUpdate,
-          isChecking: window.updateManager.isChecking,
-          isDownloading: window.updateManager.isDownloading,
-          autoCheck: window.updateManager.autoCheck,
-          isDevelopmentMode: window.updateManager.isDevelopmentMode(),
-        };
-      } else {
+      const mgr = window.updateManager || window.updateManagerInstance;
+      if (!mgr) {
         return { error: "UpdateManager not initialized" };
       }
+      return {
+        updateAvailable: mgr.updateAvailable,
+        currentUpdate: mgr.currentUpdate,
+        isChecking: mgr.isChecking,
+        isDownloading: mgr.isDownloading,
+        autoCheck: mgr.autoCheck,
+        isDevelopmentMode: mgr.isDevelopmentMode(),
+      };
     },
     checkEnvironment: () => {
       const env = {

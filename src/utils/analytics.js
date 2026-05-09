@@ -2,19 +2,14 @@ import { trackEvent } from "@aptabase/tauri";
 import { logger } from "./logger.js";
 
 class Analytics {
-  static async isEnabled() {
-    try {
-      const settings = window.settingsManager?.settings;
-      return settings ? settings.analytics_enabled !== false : true;
-    } catch (error) {
-      logger.warn("Could not check analytics settings, defaulting to enabled:", error);
-      return true;
-    }
+  static isEnabled() {
+    const settings = window.settingsManager?.settings;
+    return !!settings && settings.analytics_enabled === true;
   }
 
   /** @param {string} eventName @param {Record<string, string | number>} [properties] */
   static async track(eventName, properties = {}) {
-    if (!(await this.isEnabled())) {
+    if (!this.isEnabled()) {
       return;
     }
     try {

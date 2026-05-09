@@ -39,8 +39,6 @@ declare interface Window {
   updateNotification?: any;
 
   // Initialization flags
-  _appInitializing?: boolean;
-  _appFullyInitialized?: boolean;
   avatarListenersSetup?: boolean;
 
   // Global functions assigned in main.js

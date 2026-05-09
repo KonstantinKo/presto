@@ -8,12 +8,10 @@ class ThemeLoader {
 
   async loadAllThemes() {
     try {
-      // Get all CSS files from the themes directory
       const themeFiles = await this.discoverThemeFiles();
 
       logger.debug(`🎨 Discovered ${themeFiles.length} theme files:`, themeFiles);
 
-      // Load each theme file
       for (const themeFile of themeFiles) {
         await this.loadThemeFile(themeFile);
       }
@@ -49,7 +47,6 @@ class ThemeLoader {
       logger.info(`✅ Theme registered: ${themeId}`);
       this.loadedThemes.add(themeId);
 
-      // Extract theme metadata from CSS file
       await this.extractThemeMetadata(themeId);
     } catch (error) {
       logger.error(`❌ Error registering theme ${themeId}:`, error);
@@ -59,15 +56,12 @@ class ThemeLoader {
   /** @param {string} themeId */
   async extractThemeMetadata(themeId) {
     try {
-      // Fetch the CSS file to read metadata from comments
       const response = await fetch(`./src/styles/themes/${themeId}.css`);
       const cssContent = await response.text();
 
-      // Parse metadata from CSS comments
       const metadata = this.parseThemeMetadata(cssContent);
 
       if (metadata) {
-        // Add to TIMER_THEMES dynamically
         const { TIMER_THEMES } = await import("./timer-themes.js");
 
         if (!TIMER_THEMES[themeId]) {
@@ -94,15 +88,13 @@ class ThemeLoader {
   /** @param {string} cssContent */
   parseThemeMetadata(cssContent) {
     try {
-      // Look for theme metadata in CSS comments
       const metadataRegex =
         /\/\*\s*Timer Theme:\s*(.+?)\s*\*\s*Author:\s*(.+?)\s*\*\s*Description:\s*(.+?)\s*\*\s*Supports:\s*(.+?)\s*\*\//s;
       const match = cssContent.match(metadataRegex);
 
       if (match) {
-        const [, name, author, description, supports] = match;
+        const [, name, , description, supports] = match;
 
-        // Parse supports field
         const supportsModes = /** @type {('light'|'dark')[]} */ (
           supports.toLowerCase().includes("light") && supports.toLowerCase().includes("dark")
             ? ["light", "dark"]
@@ -111,12 +103,10 @@ class ThemeLoader {
               : ["light"]
         );
 
-        // Try to extract color values for preview
         const preview = this.extractPreviewColors(cssContent);
 
         return {
           name: name.trim(),
-          author: author.trim(),
           description: description.trim(),
           supports: supportsModes,
           preview,
@@ -138,7 +128,6 @@ class ThemeLoader {
     };
 
     try {
-      // Extract --focus-color, --break-color, --long-break-color
       const focusMatch = cssContent.match(/--focus-color:\s*([^;]+);/);
       const breakMatch = cssContent.match(/--break-color:\s*([^;]+);/);
       const longBreakMatch = cssContent.match(/--long-break-color:\s*([^;]+);/);
@@ -185,10 +174,8 @@ class ThemeLoader {
   }
 }
 
-// Create and export a singleton instance
 export const themeLoader = new ThemeLoader();
 
-// Auto-load themes when this module is imported
 export async function initializeAutoThemeLoader() {
   logger.debug("🎨 Initializing auto theme loader...");
   const loadedThemes = await themeLoader.loadAllThemes();

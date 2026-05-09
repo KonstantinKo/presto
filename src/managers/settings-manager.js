@@ -78,7 +78,6 @@ export class SettingsManager {
         loadedSettings.hide_status_bar !== undefined &&
         loadedSettings.status_bar_display === undefined
       ) {
-        // If old setting existed but new one doesn't, migrate
         this.settings.status_bar_display = loadedSettings.hide_status_bar ? "icon-only" : "default";
         // Schedule save to persist the migrated setting
         this.scheduleAutoSave();
@@ -107,22 +106,10 @@ export class SettingsManager {
       notifications: { ...defaultSettings.notifications, ...loadedSettings.notifications },
       appearance: { ...defaultSettings.appearance, ...loadedSettings.appearance },
       advanced: { ...defaultSettings.advanced, ...loadedSettings.advanced },
-      autostart:
-        loadedSettings.autostart !== undefined
-          ? loadedSettings.autostart
-          : defaultSettings.autostart,
-      analytics_enabled:
-        loadedSettings.analytics_enabled !== undefined
-          ? loadedSettings.analytics_enabled
-          : defaultSettings.analytics_enabled,
-      hide_icon_on_close:
-        loadedSettings.hide_icon_on_close !== undefined
-          ? loadedSettings.hide_icon_on_close
-          : defaultSettings.hide_icon_on_close,
-      status_bar_display:
-        loadedSettings.status_bar_display !== undefined
-          ? loadedSettings.status_bar_display
-          : defaultSettings.status_bar_display,
+      autostart: loadedSettings.autostart ?? defaultSettings.autostart,
+      analytics_enabled: loadedSettings.analytics_enabled ?? defaultSettings.analytics_enabled,
+      hide_icon_on_close: loadedSettings.hide_icon_on_close ?? defaultSettings.hide_icon_on_close,
+      status_bar_display: loadedSettings.status_bar_display ?? defaultSettings.status_bar_display,
     };
   }
 
@@ -151,14 +138,14 @@ export class SettingsManager {
       },
       appearance: {
         theme: "auto", // auto, light, dark
-        timer_theme: "espresso", // Timer color theme
+        timer_theme: "espresso",
       },
       advanced: {
         debug_mode: false, // Debug mode with 3-second timers
       },
-      autostart: false, // default to disabled
-      analytics_enabled: true, // Analytics enabled by default
-      hide_icon_on_close: false, // Hide icon on close disabled by default
+      autostart: false,
+      analytics_enabled: true,
+      hide_icon_on_close: false,
       status_bar_display: "default", // Status bar display mode: 'default' or 'icon-only'
     };
   }
@@ -207,7 +194,6 @@ export class SettingsManager {
     /** @type {any} */ (document.getElementById("auto-start-timer")).checked =
       this.settings.notifications.auto_start_timer;
 
-    // Debug log for continuous sessions
     logger.debug(
       "🔧 PopulateUI - Raw continuous sessions value:",
       this.settings.notifications.allow_continuous_sessions
@@ -325,13 +311,7 @@ export class SettingsManager {
   /** @param {boolean} enabled */
   toggleTimeoutSetting(enabled) {
     const timeoutSetting = document.getElementById("smart-pause-timeout-setting");
-    if (timeoutSetting) {
-      if (enabled) {
-        timeoutSetting.classList.add("visible");
-      } else {
-        timeoutSetting.classList.remove("visible");
-      }
-    }
+    timeoutSetting?.classList.toggle("visible", enabled);
   }
 
   setupGlobalShortcutHandlers() {
@@ -339,12 +319,10 @@ export class SettingsManager {
     const lastShortcutTime = /** @type {Record<string, any>} */ ({});
     const debounceDelay = 500; // 500ms debounce
 
-    // Listen for global shortcut events from Rust
     window.__TAURI__?.event?.listen("global-shortcut", (event) => {
       const action = event.payload;
       const now = Date.now();
 
-      // Check if this action was triggered too recently
       if (lastShortcutTime[action] && now - lastShortcutTime[action] < debounceDelay) {
         logger.debug(`Debounced global shortcut: ${action}`);
         return;
@@ -384,12 +362,10 @@ export class SettingsManager {
       }
     });
 
-    // Listen for shortcuts update events
     window.__TAURI__?.event?.listen("shortcuts-updated", (event) => {
       logger.info("Shortcuts updated:", event.payload);
       this.settings.shortcuts = event.payload;
 
-      // Update the timer's keyboard shortcuts
       if (window.pomodoroTimer) {
         window.pomodoroTimer.updateKeyboardShortcuts(this.settings.shortcuts);
       }
@@ -469,7 +445,6 @@ export class SettingsManager {
     // Auto-finish recording after a short delay
     setTimeout(() => {
       this.stopRecordingShortcut();
-      // Schedule auto-save after shortcut is set
       this.scheduleAutoSave();
     }, 500);
   }
@@ -608,7 +583,6 @@ export class SettingsManager {
     }
   }
 
-  // Complete reset for total data reset
   resetToDefaultsForce() {
     this.settings = this.getDefaultSettings();
     this.populateSettingsUI();
@@ -621,7 +595,6 @@ export class SettingsManager {
     const input = /** @type {any} */ (document.getElementById(inputId));
     if (input) {
       input.value = "";
-      // Schedule auto-save after clearing shortcut
       this.scheduleAutoSave();
     }
   }
@@ -680,7 +653,6 @@ export class SettingsManager {
       desktopNotificationsCheckbox.addEventListener("change", async (e) => {
         if (/** @type {any} */ (e.target).checked) {
           try {
-            // Request notification permission when enabling
             logger.info("🔔 Desktop notifications enabled, requesting permission...");
             const permission = await NotificationUtils.requestNotificationPermission();
             logger.info("🔔 Notification permission result:", permission);
@@ -694,7 +666,6 @@ export class SettingsManager {
               NotificationUtils.showNotificationPing(message, "warning");
               // Don't uncheck the box - let the user's choice be saved
             } else {
-              // Permission granted, show success message
               NotificationUtils.showNotificationPing("✓ Desktop notifications enabled!", "success");
             }
           } catch (error) {
@@ -718,10 +689,8 @@ export class SettingsManager {
       });
     }
 
-    // Initialize notification status display and test button
     this.setupNotificationStatusDisplay();
 
-    // Other notification checkboxes
     const checkboxFields = ["sound-notifications", "debug-mode"];
 
     checkboxFields.forEach((fieldId) => {
@@ -738,12 +707,10 @@ export class SettingsManager {
   }
 
   scheduleAutoSave() {
-    // Clear existing timeout
     if (this.autoSaveTimeout) {
       clearTimeout(this.autoSaveTimeout);
     }
 
-    // Schedule new auto-save
     this.autoSaveTimeout = setTimeout(() => {
       this.autoSaveSettings();
     }, this.autoSaveDelay);
@@ -864,7 +831,6 @@ export class SettingsManager {
   }
 
   showAutoSaveFeedback() {
-    // Use the unified notification system instead of custom feedback
     NotificationUtils.showNotificationPing("✓ Settings saved", "success");
   }
 
@@ -876,11 +842,9 @@ export class SettingsManager {
       item.addEventListener("click", () => {
         const targetCategory = /** @type {HTMLElement} */ (item).dataset.category;
 
-        // Remove active class from all nav items and categories
         navItems.forEach((nav) => nav.classList.remove("active"));
         categories.forEach((cat) => cat.classList.remove("active"));
 
-        // Add active class to clicked nav item and corresponding category
         item.classList.add("active");
         const targetElement = document.getElementById(`category-${targetCategory}`);
         if (targetElement) {
@@ -943,34 +907,18 @@ export class SettingsManager {
     }
   }
 
-  async loadAnalyticsSetting() {
-    try {
-      const analyticsEnabled = this.settings.analytics_enabled;
+  loadAnalyticsSetting() {
+    const checkbox = /** @type {any} */ (document.getElementById("analytics-enabled"));
+    if (!checkbox) {
+      return;
+    }
+    checkbox.checked = this.settings.analytics_enabled;
 
-      const checkbox = /** @type {any} */ (document.getElementById("analytics-enabled"));
-      if (checkbox) {
-        checkbox.checked = analyticsEnabled;
-
-        if (!checkbox._analyticsHandlerBound) {
-          checkbox._analyticsHandlerBound = true;
-          checkbox.addEventListener("change", async (/** @type {any} */ e) => {
-            await this.toggleAnalytics(e.target.checked);
-          });
-        }
-      }
-    } catch (error) {
-      logger.error("Failed to load analytics setting:", error);
-      // Default to enabled if we can't check the status
-      const checkbox = /** @type {any} */ (document.getElementById("analytics-enabled"));
-      if (checkbox) {
-        checkbox.checked = true;
-        if (!checkbox._analyticsHandlerBound) {
-          checkbox._analyticsHandlerBound = true;
-          checkbox.addEventListener("change", async (/** @type {any} */ e) => {
-            await this.toggleAnalytics(e.target.checked);
-          });
-        }
-      }
+    if (!checkbox._analyticsHandlerBound) {
+      checkbox._analyticsHandlerBound = true;
+      checkbox.addEventListener("change", async (/** @type {any} */ e) => {
+        await this.toggleAnalytics(e.target.checked);
+      });
     }
   }
 
@@ -1005,33 +953,18 @@ export class SettingsManager {
     }
   }
 
-  async loadHideIconOnCloseSetting() {
-    try {
-      const hideIconOnClose = this.settings.hide_icon_on_close;
+  loadHideIconOnCloseSetting() {
+    const checkbox = /** @type {any} */ (document.getElementById("hide-icon-on-close"));
+    if (!checkbox) {
+      return;
+    }
+    checkbox.checked = this.settings.hide_icon_on_close;
 
-      const checkbox = /** @type {any} */ (document.getElementById("hide-icon-on-close"));
-      if (checkbox) {
-        checkbox.checked = hideIconOnClose;
-
-        if (!checkbox._hideIconHandlerBound) {
-          checkbox._hideIconHandlerBound = true;
-          checkbox.addEventListener("change", async (/** @type {any} */ e) => {
-            await this.toggleHideIconOnClose(e.target.checked);
-          });
-        }
-      }
-    } catch (error) {
-      logger.error("Failed to load hide icon on close setting:", error);
-      const checkbox = /** @type {any} */ (document.getElementById("hide-icon-on-close"));
-      if (checkbox) {
-        checkbox.checked = false;
-        if (!checkbox._hideIconHandlerBound) {
-          checkbox._hideIconHandlerBound = true;
-          checkbox.addEventListener("change", async (/** @type {any} */ e) => {
-            await this.toggleHideIconOnClose(e.target.checked);
-          });
-        }
-      }
+    if (!checkbox._hideIconHandlerBound) {
+      checkbox._hideIconHandlerBound = true;
+      checkbox.addEventListener("change", async (/** @type {any} */ e) => {
+        await this.toggleHideIconOnClose(e.target.checked);
+      });
     }
   }
 
@@ -1069,33 +1002,18 @@ export class SettingsManager {
     }
   }
 
-  async loadStatusBarDisplaySetting() {
-    try {
-      const statusBarDisplay = this.settings.status_bar_display || "default";
+  loadStatusBarDisplaySetting() {
+    const select = /** @type {any} */ (document.getElementById("status-bar-display"));
+    if (!select) {
+      return;
+    }
+    select.value = this.settings.status_bar_display || "default";
 
-      const select = /** @type {any} */ (document.getElementById("status-bar-display"));
-      if (select) {
-        select.value = statusBarDisplay;
-
-        if (!select._statusBarHandlerBound) {
-          select._statusBarHandlerBound = true;
-          select.addEventListener("change", async (/** @type {any} */ e) => {
-            await this.updateStatusBarDisplay(e.target.value);
-          });
-        }
-      }
-    } catch (error) {
-      logger.error("Failed to load status bar display setting:", error);
-      const select = /** @type {any} */ (document.getElementById("status-bar-display"));
-      if (select) {
-        select.value = "default";
-        if (!select._statusBarHandlerBound) {
-          select._statusBarHandlerBound = true;
-          select.addEventListener("change", async (/** @type {any} */ e) => {
-            await this.updateStatusBarDisplay(e.target.value);
-          });
-        }
-      }
+    if (!select._statusBarHandlerBound) {
+      select._statusBarHandlerBound = true;
+      select.addEventListener("change", async (/** @type {any} */ e) => {
+        await this.updateStatusBarDisplay(e.target.value);
+      });
     }
   }
 
@@ -1411,10 +1329,8 @@ export class SettingsManager {
   }
 
   getCurrentColorMode() {
-    const currentTheme = document.documentElement.getAttribute("data-theme");
-
-    // Since data-theme is now always 'light' or 'dark' (never 'auto'), this is simpler
-    return currentTheme === "dark" ? "dark" : "light";
+    // data-theme is always "light" or "dark" (never "auto") at this point.
+    return document.documentElement.getAttribute("data-theme") === "dark" ? "dark" : "light";
   }
 
   async initializeTimerTheme() {
@@ -1447,7 +1363,6 @@ export class SettingsManager {
   async applyTimerTheme(themeId) {
     const html = document.documentElement;
 
-    html.removeAttribute("data-timer-theme");
     html.setAttribute("data-timer-theme", themeId);
 
     localStorage.setItem("timer-theme-preference", themeId);
@@ -1509,37 +1424,79 @@ export class SettingsManager {
       option.classList.add("disabled");
     }
 
-    option.innerHTML = `
-            <div class="timer-theme-header">
-                <h4 class="timer-theme-name">${theme.name}</h4>
-                <div class="timer-theme-compatibility">
-                    ${theme.supports
-                      .map(
-                        (/** @type {any} */ mode) => `
-                        <span class="compatibility-badge ${mode}">
-                            <i class="ri-${mode === "light" ? "sun" : "moon"}-line"></i>
-                        </span>
-                    `
-                      )
-                      .join("")}
-                </div>
-            </div>
-            <p class="timer-theme-description">${theme.description}</p>
-            <div class="timer-theme-preview">
-                <div class="timer-preview-display" data-preview-theme="${theme.id}">
-                    <div class="timer-preview-time">25:00</div>
-                    <div class="timer-preview-status">Focus Session</div>
-                </div>
-                <div class="color-preview-strip">
-                    <div class="preview-color" style="background-color: ${theme.preview.focus}">
-                    </div>
-                    <div class="preview-color" style="background-color: ${theme.preview.break}">
-                    </div>
-                    <div class="preview-color" style="background-color: ${theme.preview.longBreak}">
-                    </div>
-                </div>
-            </div>
-        `;
+    const header = document.createElement("div");
+    header.className = "timer-theme-header";
+
+    const nameEl = document.createElement("h4");
+    nameEl.className = "timer-theme-name";
+    nameEl.textContent = theme.name;
+
+    const compatibility = document.createElement("div");
+    compatibility.className = "timer-theme-compatibility";
+
+    const allowedModes = ["light", "dark"];
+    for (const mode of theme.supports) {
+      if (!allowedModes.includes(mode)) {
+        continue;
+      }
+      const badge = document.createElement("span");
+      badge.className = `compatibility-badge ${mode}`;
+      const icon = document.createElement("i");
+      icon.className = `ri-${mode === "light" ? "sun" : "moon"}-line`;
+      badge.appendChild(icon);
+      compatibility.appendChild(badge);
+    }
+
+    header.appendChild(nameEl);
+    header.appendChild(compatibility);
+
+    const descEl = document.createElement("p");
+    descEl.className = "timer-theme-description";
+    descEl.textContent = theme.description;
+
+    const preview = document.createElement("div");
+    preview.className = "timer-theme-preview";
+
+    const previewDisplay = document.createElement("div");
+    previewDisplay.className = "timer-preview-display";
+    previewDisplay.setAttribute("data-preview-theme", theme.id);
+
+    const previewTime = document.createElement("div");
+    previewTime.className = "timer-preview-time";
+    previewTime.textContent = "25:00";
+
+    const previewStatus = document.createElement("div");
+    previewStatus.className = "timer-preview-status";
+    previewStatus.textContent = "Focus Session";
+
+    previewDisplay.appendChild(previewTime);
+    previewDisplay.appendChild(previewStatus);
+
+    const colorStrip = document.createElement("div");
+    colorStrip.className = "color-preview-strip";
+
+    const focusColor = document.createElement("div");
+    focusColor.className = "preview-color";
+    focusColor.style.backgroundColor = theme.preview.focus;
+
+    const breakColor = document.createElement("div");
+    breakColor.className = "preview-color";
+    breakColor.style.backgroundColor = theme.preview.break;
+
+    const longBreakColor = document.createElement("div");
+    longBreakColor.className = "preview-color";
+    longBreakColor.style.backgroundColor = theme.preview.longBreak;
+
+    colorStrip.appendChild(focusColor);
+    colorStrip.appendChild(breakColor);
+    colorStrip.appendChild(longBreakColor);
+
+    preview.appendChild(previewDisplay);
+    preview.appendChild(colorStrip);
+
+    option.appendChild(header);
+    option.appendChild(descEl);
+    option.appendChild(preview);
 
     this.applyThemePreviewStyles(option, theme);
 

@@ -56,7 +56,7 @@ export function registerTheme(themeId, themeConfig) {
     logger.warn(`🎨 Theme ${themeId} already exists, overriding...`);
   }
 
-  TIMER_THEMES[themeId] = {
+  const theme = {
     name: themeConfig.name || themeId,
     description: themeConfig.description || `Theme: ${themeId}`,
     supports: themeConfig.supports || ["light", "dark"],
@@ -64,8 +64,9 @@ export function registerTheme(themeId, themeConfig) {
     preview: themeConfig.preview || DEFAULT_PREVIEW,
   };
 
-  logger.info(`✅ Registered theme: ${themeId}`, TIMER_THEMES[themeId]);
-  return TIMER_THEMES[themeId];
+  TIMER_THEMES[themeId] = theme;
+  logger.info(`✅ Registered theme: ${themeId}`, theme);
+  return theme;
 }
 
 /** @param {string} themeId @returns {boolean} */
