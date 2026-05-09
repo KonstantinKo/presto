@@ -62,14 +62,23 @@ Create a new CSS file in the `src/styles/themes/` folder with the following form
 
 ### 3. Register the Theme
 
-After creating the CSS file, add its filename to the `knownThemes` array in `src/utils/theme-loader.js`:
+No manual registration needed. The `build-themes.js` script auto-scans `src/styles/themes/` and updates the `knownThemes` list in `theme-loader.js`. It runs automatically before `npm run dev` and `npm run build`, or you can trigger it manually:
 
-```js
-// src/utils/theme-loader.js — discoverThemeFiles()
-const knownThemes = ["espresso.css", "pipboy.css", "pommodore64.css", "my-theme.css"];
+```bash
+npm run build-themes
 ```
 
-Once registered:
+Expected output:
+
+```
+🔧 Starting theme discovery build script...
+🎨 Discovered 4 theme files: [ 'espresso.css', 'my-theme.css', 'pipboy.css', 'pommodore64.css' ]
+✅ Updated theme-loader.js with discovered themes
+🎉 Theme discovery build completed successfully!
+📊 Total themes: 4
+```
+
+Once the build runs:
 1. **Dynamic Loading**: CSS is loaded dynamically at runtime
 2. **Registration**: The theme is registered automatically
 3. **Availability**: Appears in the theme selector
@@ -88,7 +97,7 @@ The `build-themes.js` file automatically scans the `src/styles/themes/` folder a
 ### Theme Loader
 
 The `src/utils/theme-loader.js` handles:
-- Theme discovery from the hardcoded `knownThemes` list (manually maintained)
+- Theme discovery from the `knownThemes` list (kept up-to-date by `build-themes.js`)
 - Dynamic theme loading
 - Automatic metadata extraction
 - System registration
@@ -121,7 +130,7 @@ Metadata is extracted from CSS comments:
 ## 🎯 System Benefits
 
 ### ✅ For Developers
-- **Minimal configuration** - add a CSS file and register it in one place
+- **Minimal configuration** - just add a CSS file; `build-themes.js` handles registration automatically
 - **Automatic metadata** - extracted from CSS comments
 - **Hot reload** - works with dev server
 
@@ -139,10 +148,9 @@ Metadata is extracted from CSS comments:
 ## 🔄 Development Workflow
 
 1. **Create** `src/styles/themes/my-theme.css`
-2. **Register** the filename in the `knownThemes` array in `src/utils/theme-loader.js`
-3. **Develop** using existing examples
-4. **Test** with `npm run dev` (auto-reload)
-5. **Share** - the theme is ready!
+2. **Develop** using existing examples
+3. **Test** with `npm run dev` (`build-themes.js` runs automatically and registers your theme)
+4. **Share** - the theme is ready!
 
 ## 🎨 Quick Theme Template
 
