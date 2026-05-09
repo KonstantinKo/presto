@@ -473,6 +473,11 @@ export class PomodoroTimer {
     }
     this.stopSmartPauseCountdown();
 
+    // Only arm inactivity countdown during an active focus session
+    if (!this.isRunning || this.isPaused || this.currentMode !== "focus") {
+      return;
+    }
+
     // Set new timeout for auto-pause after configured inactivity period
     this.activityTimeout = setTimeout(() => {
       this.autoPauseTimer();

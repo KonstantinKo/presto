@@ -744,8 +744,8 @@ export class NavigationManager {
       }
 
       // Filter out break sessions from timeline display
-      const visibleSessions = allSessions.filter(
-        (/** @type {any} */ _session) => true // All sessions are focus sessions now
+      const visibleSessions = allSessions.filter((/** @type {any} */ session) =>
+        this.isFocusOrCustomSession(session)
       );
 
       // Create timeline session blocks (excluding break sessions)

@@ -513,7 +513,7 @@ export class SettingsManager {
       if (maxSessionTimeField) {
         this.settings.timer.max_session_time = this.parseNumberOrDefault(
           maxSessionTimeField.value,
-          120
+          this.settings.timer.max_session_time
         );
       }
 
@@ -521,7 +521,7 @@ export class SettingsManager {
       if (weeklyGoalField) {
         this.settings.timer.weekly_goal_minutes = this.parseNumberOrDefault(
           weeklyGoalField.value,
-          125
+          this.settings.timer.weekly_goal_minutes
         );
       }
 
@@ -771,12 +771,18 @@ export class SettingsManager {
 
       const maxSessionTimeField = /** @type {any} */ (document.getElementById("max-session-time"));
       if (maxSessionTimeField) {
-        this.settings.timer.max_session_time = parseInt(maxSessionTimeField.value, 10) || 120;
+        this.settings.timer.max_session_time = this.parseNumberOrDefault(
+          maxSessionTimeField.value,
+          this.settings.timer.max_session_time
+        );
       }
 
       const weeklyGoalField = /** @type {any} */ (document.getElementById("weekly-goal-minutes"));
       if (weeklyGoalField) {
-        this.settings.timer.weekly_goal_minutes = parseInt(weeklyGoalField.value, 10) || 125;
+        this.settings.timer.weekly_goal_minutes = this.parseNumberOrDefault(
+          weeklyGoalField.value,
+          this.settings.timer.weekly_goal_minutes
+        );
       }
 
       const themeSelect = /** @type {any} */ (document.getElementById("theme-select"));
