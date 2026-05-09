@@ -4,6 +4,9 @@ export class TeamManager {
   constructor() {
     this.teams = /** @type {any[]} */ ([]);
     this.initialized = false;
+    this.isUpdating = false;
+    /** @type {ReturnType<typeof setTimeout> | undefined} */
+    this._updateTimeout = undefined;
   }
 
   async init() {
@@ -19,11 +22,24 @@ export class TeamManager {
     this.renderTeams();
     this.updateTeamStats();
 
-    // Update team data every 30 seconds to simulate real-time updates
-    setInterval(() => {
-      this.updateDemoData();
-      this.renderTeams();
-      this.updateTeamStats();
+    this._scheduleTeamUpdate();
+  }
+
+  _scheduleTeamUpdate() {
+    this._updateTimeout = setTimeout(() => {
+      if (this.isUpdating) {
+        this._scheduleTeamUpdate();
+        return;
+      }
+      this.isUpdating = true;
+      try {
+        this.updateDemoData();
+        this.renderTeams();
+        this.updateTeamStats();
+      } finally {
+        this.isUpdating = false;
+        this._scheduleTeamUpdate();
+      }
     }, 30000);
   }
 
