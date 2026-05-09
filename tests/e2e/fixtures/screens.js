@@ -73,6 +73,17 @@ export async function selectSettingsCategory(page, name) {
 }
 
 /**
+ * Waits for the boot-time "Welcome to Presto! 🍅" notification ping to leave the DOM
+ * so it does not appear in subsequent screenshots.
+ * @param {import('@playwright/test').Page} page
+ */
+export async function dismissWelcomePing(page) {
+  await expect(page.getByRole("alert").filter({ hasText: "Welcome to Presto!" })).toHaveCount(0, {
+    timeout: 8000,
+  });
+}
+
+/**
  * Opens Settings → Advanced and enables debug mode (3-second timers).
  * Leaves the user on the Settings → Advanced view.
  *
@@ -90,8 +101,8 @@ export async function enableDebugTimers(page) {
   const isChecked = await debugCheckbox.isChecked();
   if (!isChecked) {
     await debugCheckbox.click();
-    await expect(
-      page.locator(".notification-ping").filter({ hasText: "Settings saved" })
-    ).toBeVisible({ timeout: 5000 });
+    await expect(page.getByRole("alert").filter({ hasText: "Settings saved" })).toBeVisible({
+      timeout: 5000,
+    });
   }
 }

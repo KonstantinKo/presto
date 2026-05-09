@@ -171,6 +171,7 @@ presto/
 │   ├── e2e/                     # Playwright E2E tests (browser-driven, UI-only)
 │   │   ├── CLAUDE.md            # E2E ground rules for this suite
 │   │   ├── fixtures/            # Shared fixtures (blockExternal, tauriMock, screens)
+│   │   ├── __screenshots__/     # Visual regression baselines (chromium-linux PNGs)
 │   │   └── *.spec.js            # One spec per screen / major flow
 │   ├── core/                    # Vitest unit tests for core logic
 │   └── managers/                # Vitest unit tests for managers

@@ -27,3 +27,14 @@ Each spec file contains one `test()` that walks a complete user-visible flow fro
 **`tauri dev` was rejected** for E2E because it requires `tauri-driver` + WebKit2GTK + extra OS packages in CI, with no behavioral upside given that all Tauri commands are mocked at the JS bridge level. The production Tauri IPC contract is already tested by Phase 3 cargo MockRuntime tests.
 
 **Stack-swap survivability** is the primary design constraint. This suite targets only user-visible behavior expressed through ARIA roles, accessible names, and stable element IDs that exist in `src/index.html`. Only `tests/e2e/fixtures/tauriMock.js` is implementation-coupled; it is annotated `// TODO(stack-swap):` and must be re-implemented against whatever bridge boundary the Leptos/WASM rewrite uses. Spec files contain no implementation-detail selectors and will survive the swap with at most selector-handle updates.
+
+## Updating visual baselines
+
+The committed PNGs under `tests/e2e/__screenshots__/visual-regression/` are the pixel-level contract that the new tech stack must match before it can ship.
+
+- **Baselines change only when an intentional design change has been made.** Visual diffs are a *signal*, not noise to silence.
+- To regenerate: `npx playwright test tests/e2e/visual-regression.spec.js --update-snapshots`
+- After regenerating, visually review each updated PNG (`git difftool` or IDE image diff) and confirm the change matches the design intent.
+- Commit the updated PNGs in the same PR as the design change.
+- **If CI is failing on visual diffs and you did not intentionally change the design, do not regenerate** — investigate which CSS / DOM change is responsible. Use the `playwright-test-results` artifact in the failed CI run to see `*-actual.png`, `*-expected.png`, `*-diff.png`.
+- Baselines are committed for `chromium-linux` only because CI runs on `ubuntu-latest`. Local runs on macOS / Windows may show diffs that pass on CI — trust the CI run.

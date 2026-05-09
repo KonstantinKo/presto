@@ -439,5 +439,36 @@ document.addEventListener('DOMContentLoaded', function () {
 `,
       });
     },
+
+    /**
+     * Freezes wall-clock time to a fixed ISO instant before navigation.
+     * Overrides Date constructor and Date.now() so calendar headers and
+     * team-manager demo timers render deterministically across runs.
+     * Opt-in only — existing specs continue to use real time.
+     * @param {string} isoString  e.g. '2026-05-09T12:00:00Z'
+     */
+    // TODO(stack-swap): reaches into global Date; re-evaluate if the new stack
+    // uses a different clock abstraction.
+    async freezeTime(isoString) {
+      await page.addInitScript({
+        content: `
+(function () {
+  var _frozen = ${JSON.stringify(new Date(isoString).getTime())};
+  var _OrigDate = Date;
+  function FrozenDate() {
+    if (arguments.length === 0) {
+      return new _OrigDate(_frozen);
+    }
+    return new _OrigDate(...arguments);
+  }
+  FrozenDate.now = function () { return _frozen; };
+  FrozenDate.parse = _OrigDate.parse.bind(_OrigDate);
+  FrozenDate.UTC = _OrigDate.UTC.bind(_OrigDate);
+  FrozenDate.prototype = _OrigDate.prototype;
+  globalThis.Date = FrozenDate;
+})();
+`,
+      });
+    },
   };
 }
