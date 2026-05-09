@@ -432,8 +432,10 @@ export class PomodoroTimer {
         })
       );
 
-      // Start initial timeout for local fallback
-      this.handleUserActivity();
+      // Arm inactivity timer only if a focus session is active and not auto-paused
+      if (this.isRunning && !this.isAutoPaused) {
+        this.handleUserActivity();
+      }
 
       logger.info("Global activity listeners setup complete");
     } catch (error) {
@@ -462,7 +464,9 @@ export class PomodoroTimer {
       this.activityUnlistenFns.push(() => document.removeEventListener(event, handler));
     });
 
-    this.handleUserActivity();
+    if (this.isRunning && !this.isAutoPaused) {
+      this.handleUserActivity();
+    }
   }
 
   handleUserActivity() {
@@ -781,6 +785,9 @@ export class PomodoroTimer {
   }
 
   updateTimerWithAccuracy() {
+    if (this.timerStartTime == null || this.timerDuration == null) {
+      return;
+    }
     const now = Date.now();
     const elapsedSinceStart = Math.floor(
       (now - /** @type {number} */ (this.timerStartTime)) / 1000
@@ -2831,8 +2838,8 @@ export class PomodoroTimer {
     // Update max session time (convert from minutes to milliseconds)
     this.maxSessionTime = (settings.timer.max_session_time || 120) * 60 * 1000;
 
-    // If timer is not running, update current time remaining
-    if (!this.isRunning) {
+    // Only reset time remaining when the timer is truly idle (not paused mid-session)
+    if (!this.isRunning && !this.isPaused && !this.isAutoPaused) {
       this.timeRemaining = /** @type {Record<string, number>} */ (this.durations)[this.currentMode];
       this.updateDisplay();
     }

@@ -9,6 +9,8 @@ class TagManager {
     this.activeSessionTags = new Map();
     this.isDropdownOpen = false;
     this.selectedIcon = "ri-brain-line";
+    this._loadTagsRequestId = 0;
+    this._degraded = false;
 
     this.initializeElements();
     this.bindEvents();
@@ -164,6 +166,7 @@ class TagManager {
   }
 
   async loadTags() {
+    const requestId = ++this._loadTagsRequestId;
     try {
       if (typeof window.__TAURI__?.core?.invoke !== "function") {
         logger.warn("Tauri is not available, using localStorage fallback");
@@ -171,8 +174,14 @@ class TagManager {
         return;
       }
 
-      this.tags = /** @type {any[]} */ (await window.__TAURI__.core.invoke("load_tags"));
+      const tags = /** @type {any[]} */ (await window.__TAURI__.core.invoke("load_tags"));
 
+      // Discard result if a newer load has started
+      if (requestId !== this._loadTagsRequestId) {
+        return;
+      }
+
+      this.tags = tags;
       this.currentTags = this.currentTags.filter((ct) => this.tags.some((t) => t.id === ct.id));
       if (this.currentTags.length === 0 && this.tags.length > 0) {
         this.currentTags = [this.tags[0]];
@@ -181,6 +190,7 @@ class TagManager {
       this.renderTagList();
     } catch (error) {
       logger.error("Failed to load tags:", error);
+      this._degraded = true;
       this._loadTagsFromLocalStorage();
     }
   }
@@ -279,7 +289,7 @@ class TagManager {
     try {
       this.tags.push(newTag);
 
-      if (typeof window.__TAURI__?.core?.invoke === "function") {
+      if (!this._degraded && typeof window.__TAURI__?.core?.invoke === "function") {
         await window.__TAURI__.core.invoke("save_tag", { tag: newTag });
       } else {
         this.saveTagsToLocalStorage();
@@ -291,8 +301,14 @@ class TagManager {
       this.resetIconSelection();
       this.updateCreateButtonState();
     } catch (error) {
-      this.tags = this.tags.filter((t) => t !== newTag);
-      logger.error("Failed to create tag:", error);
+      // Backend failed — fall back to localStorage so the tag is not lost
+      this._degraded = true;
+      this.saveTagsToLocalStorage();
+      this.renderTagList();
+      this.newTagName.value = "";
+      this.resetIconSelection();
+      this.updateCreateButtonState();
+      logger.error("Failed to create tag via backend, saved locally:", error);
     }
   }
 
@@ -304,14 +320,14 @@ class TagManager {
     }
 
     try {
-      if (typeof window.__TAURI__?.core?.invoke === "function") {
+      if (!this._degraded && typeof window.__TAURI__?.core?.invoke === "function") {
         await window.__TAURI__.core.invoke("delete_tag", { tag_id: tagId });
       }
 
       this.tags = this.tags.filter((t) => t.id !== tagId);
       this.currentTags = this.currentTags.filter((t) => t.id !== tagId);
 
-      if (typeof window.__TAURI__?.core?.invoke !== "function") {
+      if (this._degraded || typeof window.__TAURI__?.core?.invoke !== "function") {
         this.saveTagsToLocalStorage();
       }
 
@@ -327,7 +343,18 @@ class TagManager {
       this.updateStatusDisplay();
       this.renderTagList();
     } catch (error) {
-      logger.error("Failed to delete tag:", error);
+      // Backend failed — fall back to localStorage so the deletion is durable
+      this._degraded = true;
+      this.tags = this.tags.filter((t) => t.id !== tagId);
+      this.currentTags = this.currentTags.filter((t) => t.id !== tagId);
+      this.saveTagsToLocalStorage();
+      this.stopTagTracking(tagId);
+      if (this.currentTags.length === 0 && this.tags.length > 0) {
+        this.currentTags = [this.tags[0]];
+      }
+      this.updateStatusDisplay();
+      this.renderTagList();
+      logger.error("Failed to delete tag via backend, saved locally:", error);
     }
   }
 
