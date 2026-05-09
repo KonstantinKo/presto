@@ -70,7 +70,7 @@ npm run build-themes
 
 Expected output:
 
-```
+```text
 🔧 Starting theme discovery build script...
 🎨 Discovered 4 theme files: [ 'espresso.css', 'my-theme.css', 'pipboy.css', 'pommodore64.css' ]
 ✅ Updated theme-loader.js with discovered themes
