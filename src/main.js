@@ -80,13 +80,6 @@ window.confirmTotalReset = async function () {
     }
   } catch (error) {
     logger.error("Error in confirmTotalReset:", error);
-
-    const manualConfirm = confirm(
-      "Si è verificato un errore nei dialog. Vuoi resettare tutti i dati comunque?"
-    );
-    if (manualConfirm) {
-      await window.performTotalReset?.();
-    }
   }
 };
 
@@ -132,11 +125,22 @@ function showCustomConfirm(title, message, type = "warning") {
     });
     const color = colors[type] || colors.warning;
 
-    modal.innerHTML = `
-      <div style="background: ${color.bg}; border: 2px solid ${color.border}; border-radius: 8px; padding: 16px; margin-bottom: 20px;">
-        <h3 style="margin: 0 0 12px 0; color: ${color.text}; font-size: 20px;">${title}</h3>
-        <p style="margin: 0; color: ${color.text}; line-height: 1.5; white-space: pre-line;">${message}</p>
-      </div>
+    const contentWrapper = document.createElement("div");
+    contentWrapper.style.cssText = `background: ${color.bg}; border: 2px solid ${color.border}; border-radius: 8px; padding: 16px; margin-bottom: 20px;`;
+
+    const titleEl = document.createElement("h3");
+    titleEl.style.cssText = `margin: 0 0 12px 0; color: ${color.text}; font-size: 20px;`;
+    titleEl.textContent = title;
+
+    const messageEl = document.createElement("p");
+    messageEl.style.cssText = `margin: 0; color: ${color.text}; line-height: 1.5; white-space: pre-line;`;
+    messageEl.textContent = message;
+
+    contentWrapper.appendChild(titleEl);
+    contentWrapper.appendChild(messageEl);
+
+    const buttonsContainer = document.createElement("div");
+    buttonsContainer.innerHTML = `
       <div style="display: flex; gap: 12px; justify-content: center;">
         <button id="confirm-btn" style="
           background: #dc3545;
@@ -162,6 +166,9 @@ function showCustomConfirm(title, message, type = "warning") {
         ">ANNULLA</button>
       </div>
     `;
+
+    modal.appendChild(contentWrapper);
+    modal.appendChild(buttonsContainer);
 
     overlay.appendChild(modal);
     document.body.appendChild(overlay);
