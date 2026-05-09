@@ -282,6 +282,8 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
         logger.debug(`Current version: ${currentVersion}`);
       } catch (error) {
         logger.error("❌ Error retrieving current version:", error);
+        this.updateAvailable = false;
+        this.currentUpdate = null;
         this.emit("checkError", { message: "Unable to determine current version" });
         if (showDialog) {
           await this.showMessage(
@@ -341,6 +343,8 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
       return true;
     } catch (error) {
       logger.error("❌ Error checking GitHub version:", error);
+      this.updateAvailable = false;
+      this.currentUpdate = null;
       this.emit("checkError", { message: `Network error: ${toError(error).message}` });
       if (showDialog) {
         await this.showMessage(`Error checking for updates:\n${toError(error).message}`, {
