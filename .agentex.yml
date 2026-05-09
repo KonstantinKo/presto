@@ -21,6 +21,13 @@ prompts:
 # Each section runs in sequence; format commands declare an autofix.
 qa:
   setup:
+    # Phase 0 baseline (spec 001-leptos-migration T008): workspace-frozen
+    # fetch validates the repo-root Cargo.lock before any `cargo build`
+    # downstream tries to mutate it. The scoped `(cd tests/e2e && npm ci)`
+    # line lands in Phase 6 once tests/e2e/package.json exists; the
+    # repo-root `npm ci` stays for the transition so the legacy JS app
+    # still builds.
+    - cargo fetch --locked
     - npm ci
 
   test:

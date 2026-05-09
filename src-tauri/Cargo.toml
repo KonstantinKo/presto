@@ -7,19 +7,8 @@ edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
-[lints.rust]
-unsafe_code = "deny"
-unreachable_pub = "warn"
-rust_2018_idioms = { level = "warn", priority = -1 }
-
-[lints.clippy]
-all = { level = "deny", priority = -1 }
-pedantic = { level = "deny", priority = -1 }
-nursery = { level = "deny", priority = -1 }
-dbg_macro = "deny"
-todo = "deny"
-print_stdout = "deny"
-print_stderr = "deny"
+[lints]
+workspace = true
 
 [lib]
 # The `_lib` suffix may seem redundant but it is necessary
@@ -28,18 +17,9 @@ print_stderr = "deny"
 name = "presto_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
-# Ottimizzazioni per compilazione veloce
-[profile.dev]
-opt-level = 0
-debug = true
-split-debuginfo = "unpacked"
-
-[profile.release]
-opt-level = "s"  # Ottimizza per dimensione invece che velocità
-lto = "thin"     # Link time optimization leggero
-codegen-units = 1
-panic = "abort"
-strip = true     # Rimuove simboli debug
+# Build profiles moved to the workspace root Cargo.toml. Per Cargo,
+# `[profile.*]` in non-root members is silently ignored when the package
+# is part of a workspace.
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }

@@ -1,0 +1,14 @@
+[package]
+name = "presto-build-themes"
+version = "0.0.0"
+description = "Theme code-gen binary: reads src/style/themes/*.css and emits src/src/theme/themes.rs"
+authors = ["Konstantin Koss"]
+edition = "2021"
+publish = false
+
+[[bin]]
+name = "presto-build-themes"
+path = "src/main.rs"
+
+[lints]
+workspace = true

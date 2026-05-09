@@ -1,0 +1,29 @@
+# Trunk configuration for the presto-web Leptos crate.
+# Per spec 001-leptos-migration research.md §1.
+
+[build]
+target = "index.html"
+# `dist` is Trunk's default; declared explicitly so tauri.conf.json
+# `frontendDist = "../src/dist"` is unambiguous.
+dist = "dist"
+# wasm-opt is disabled per `data-wasm-opt="0"` on the Rust link tag in
+# index.html (the system binaryen <= 126 rejects rustc 1.95+ wasm output;
+# Trunk's auto-downloaded binaryen 116 has no arm64 archive). Re-enable
+# once the toolchain catches up.
+
+[serve]
+addresses = ["127.0.0.1"]
+port = 1420
+
+[watch]
+# Only watch source paths the Leptos crate cares about. `style/` and
+# `assets/` will be populated in Phase 5; harmless to list now.
+watch = ["src", "style", "assets", "index.html", "Trunk.toml"]
+
+# Theme code-gen runs before every build. Phase 0 emits a one-line
+# placeholder (see tools/build-themes/src/main.rs); the real generator
+# lands in Phase 5.
+[[hooks]]
+stage = "pre_build"
+command = "cargo"
+command_arguments = ["run", "-p", "presto-build-themes"]
