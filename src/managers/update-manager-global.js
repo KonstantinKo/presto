@@ -188,7 +188,7 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
       if (window.__TAURI__?.core?.invoke) {
         return await window.__TAURI__.core.invoke("plugin:dialog|ask", {
           message: content,
-          ...options,
+          ...opts,
         });
       }
 
@@ -299,7 +299,7 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
 
         if (showDialog) {
           alert(
-            `No updates available.\n\nCurrent version: ${currentVersion}\nUltima versione: ${latestVersion}`
+            `No updates available.\n\nCurrent version: ${currentVersion}\nLatest version: ${latestVersion}`
           );
         }
         return false;
@@ -319,15 +319,15 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
         const message =
           `🎉 Update available!\n\n` +
           `Current version: ${currentVersion}\n` +
-          `Nuova versione: ${latestVersion}\n\n` +
-          `Nota: In modalità sviluppo, scarica manualmente da GitHub.`;
+          `New version: ${latestVersion}\n\n` +
+          `Note: In development mode, download manually from GitHub.`;
         alert(message);
       }
 
       return true;
     } catch (error) {
       logger.error("❌ Error checking GitHub version:", error);
-      this.emit("checkError", { message: `Errore di rete: ${toError(error).message}` });
+      this.emit("checkError", { message: `Network error: ${toError(error).message}` });
       if (showDialog) {
         await this.showMessage(`Error checking for updates:\n${toError(error).message}`, {
           title: "Error",

@@ -1943,7 +1943,7 @@ export class NavigationManager {
           XLSX.writeFile(wb, defaultFilename);
           logger.warn(`Tauri save failed, using fallback download: ${defaultFilename}`);
           NotificationUtils.showNotificationPing(
-            `File saved to Downloads folder as: ${defaultFilename}`,
+            `Export started: ${defaultFilename} (browser will prompt for save location)`,
             "info"
           );
         }

@@ -1228,6 +1228,8 @@ function initializeApplication() {
       </div>
     `;
       document.body.appendChild(errorScreen);
+      _initPromise = null;
+      throw error;
     }
   }
 

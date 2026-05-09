@@ -22,9 +22,12 @@ import { initializeAutoThemeLoader } from "../utils/theme-loader.js";
  * @returns {HTMLInputElement}
  */
 function getInputById(id) {
-  const el = /** @type {HTMLInputElement | null} */ (document.getElementById(id));
+  const el = document.getElementById(id);
   if (!el) {
     throw new Error(`Missing element: ${id}`);
+  }
+  if (!(el instanceof HTMLInputElement)) {
+    throw new Error(`Element with id ${id} is not an HTMLInputElement`);
   }
   return el;
 }
@@ -34,9 +37,15 @@ function getInputById(id) {
  * @returns {HTMLInputElement}
  */
 function getCheckboxById(id) {
-  const el = /** @type {HTMLInputElement | null} */ (document.getElementById(id));
+  const el = document.getElementById(id);
   if (!el) {
     throw new Error(`Missing element: ${id}`);
+  }
+  if (!(el instanceof HTMLInputElement)) {
+    throw new Error(`Element with id ${id} is not an HTMLInputElement`);
+  }
+  if (el.type !== "checkbox") {
+    throw new Error(`Element with id ${id} is not an input[type=checkbox]`);
   }
   return el;
 }
@@ -1245,7 +1254,11 @@ export class SettingsManager {
     const themeButtons = themeSelector.querySelectorAll(".theme-option");
     themeButtons.forEach((button) => {
       button.addEventListener("click", async (_e) => {
-        const selectedTheme = button.getAttribute("data-theme") ?? "";
+        const selectedTheme = button.getAttribute("data-theme");
+        if (!selectedTheme) {
+          logger.error("Theme option is missing data-theme");
+          return;
+        }
 
         // Update visual state
         this.updateThemeSelector(selectedTheme);

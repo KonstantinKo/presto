@@ -94,15 +94,15 @@ function md5cycle(x, k) {
   x[3] = add32(d, x[3]);
 }
 
-/** @param {string} s @returns {number[]} */
-function md5blk(s) {
+/** @param {Uint8Array} bytes @param {number} offset @returns {number[]} */
+function md5blk(bytes, offset) {
   const md5blks = [];
   for (let i = 0; i < 64; i += 4) {
     md5blks[i >> 2] =
-      s.charCodeAt(i) +
-      (s.charCodeAt(i + 1) << 8) +
-      (s.charCodeAt(i + 2) << 16) +
-      (s.charCodeAt(i + 3) << 24);
+      bytes[offset + i] +
+      (bytes[offset + i + 1] << 8) +
+      (bytes[offset + i + 2] << 16) +
+      (bytes[offset + i + 3] << 24);
   }
   return md5blks;
 }
@@ -120,16 +120,17 @@ function rhex(n) {
 
 /** @param {string} input @returns {string} */
 function md5(input) {
-  const n = input.length;
+  const bytes = new TextEncoder().encode(input);
+  const n = bytes.length;
   const state = [1732584193, -271733879, -1732584194, 271733878];
   let i;
   for (i = 64; i <= n; i += 64) {
-    md5cycle(state, md5blk(input.substring(i - 64, i)));
+    md5cycle(state, md5blk(bytes, i - 64));
   }
-  const s = input.substring(i - 64);
   const tail = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
-  for (i = 0; i < s.length; i++) {
-    tail[i >> 2] |= s.charCodeAt(i) << ((i % 4) << 3);
+  const remaining = bytes.subarray(i - 64);
+  for (i = 0; i < remaining.length; i++) {
+    tail[i >> 2] |= remaining[i] << ((i % 4) << 3);
   }
   tail[i >> 2] |= 0x80 << ((i % 4) << 3);
   if (i > 55) {
