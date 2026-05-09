@@ -187,8 +187,8 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
 
       if (window.__TAURI__?.core?.invoke) {
         return await window.__TAURI__.core.invoke("plugin:dialog|ask", {
-          message: content,
           ...opts,
+          message: content,
         });
       }
 
