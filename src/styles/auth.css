@@ -506,20 +506,6 @@
   .form-row {
     grid-template-columns: 1fr;
   }
-
-  .guest-icon {
-    width: 60px;
-    height: 60px;
-    margin-bottom: 16px;
-  }
-
-  .guest-icon i {
-    font-size: 28px;
-  }
-
-  .guest-section h3 {
-    font-size: 20px;
-  }
 }
 
 @media (max-width: 480px) {

@@ -46,12 +46,13 @@ echo "📝 Generating signing keys..."
 # Check if tauri CLI is available
 if ! command -v tauri &> /dev/null; then
     echo "❌ Tauri CLI not found. Installing..."
-    npm install --save-dev @tauri-apps/cli@latest
 
-    if ! command -v npx &> /dev/null; then
+    if ! command -v npm &> /dev/null || ! command -v npx &> /dev/null; then
         echo "❌ NPM not found. Please install Node.js first."
         exit 1
     fi
+
+    npm install --save-dev @tauri-apps/cli@latest
 
     # Use npx if tauri is not in PATH
     TAURI_CMD="npx tauri"
@@ -69,6 +70,11 @@ if $TAURI_CMD signer generate -w "$key_dir/$key_name"; then
     echo "🔑 Your public key is:"
     echo "----------------------------------------"
     public_key=$($TAURI_CMD signer sign -k "$key_dir/$key_name" --password "" 2>/dev/null | head -1)
+    if [ -z "$(echo "$public_key" | tr -d '[:space:]')" ]; then
+        echo "❌ Failed to retrieve public key from '$key_dir/$key_name'." >&2
+        echo "   Ensure the key was generated successfully and the signer command works." >&2
+        exit 1
+    fi
     echo "$public_key"
     echo "----------------------------------------"
     
