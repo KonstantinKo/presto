@@ -1,4 +1,5 @@
 import { SessionManager } from "../../src/managers/session-manager.js";
+import { resetTauriMock, withInvokeHandler } from "../setup/tauri-mock.js";
 
 // Minimal DOM satisfying SessionManager.setupEventListeners() and openAddSessionModal().
 const SESSION_DOM = `
@@ -190,5 +191,169 @@ describe("SessionManager.closeModal", () => {
     manager.selectedDate = new Date();
     manager.closeModal();
     expect(manager.selectedDate).toBeNull();
+  });
+});
+
+describe("SessionManager – load/save/edit/delete (Tauri-mocked)", () => {
+  beforeEach(() => {
+    resetTauriMock();
+    document.body.innerHTML = SESSION_DOM;
+  });
+
+  it("loads sessions from the backend and rebuilds the in-memory map (happy path)", async () => {
+    // TODO(stack-swap): asserts the "load_manual_sessions" Tauri command name; rename or remove on stack swap.
+    withInvokeHandler({
+      load_manual_sessions: () => [
+        {
+          id: "s1",
+          date: "Wed May 06 2026",
+          duration: 25,
+          start_time: "09:00",
+          end_time: "09:25",
+          session_type: "focus",
+          created_at: new Date().toISOString(),
+        },
+      ],
+    });
+
+    const m = new SessionManager(null);
+    await vi.waitFor(() => expect(m.sessions["Wed May 06 2026"]).toHaveLength(1));
+    expect(m.sessions["Wed May 06 2026"][0].id).toBe("s1");
+  });
+
+  it("falls back to empty sessions map when the backend rejects (failure path)", async () => {
+    // TODO(stack-swap): asserts the "load_manual_sessions" Tauri command name; rename or remove on stack swap.
+    withInvokeHandler({
+      load_manual_sessions: () => {
+        throw new Error("backend down");
+      },
+    });
+
+    const m = new SessionManager(null);
+    await vi.waitFor(() => expect(m.sessions).toEqual({}));
+  });
+
+  it("flattens sessions to array and calls save_manual_sessions (happy path)", async () => {
+    const m = new SessionManager(null);
+    await vi.waitFor(() => expect(m.sessions).toEqual({}));
+
+    const dateStr = new Date(2026, 4, 6).toDateString(); // "Wed May 06 2026"
+    m.sessions = {
+      [dateStr]: [{ id: "s1", duration: 25, start_time: "09:00", end_time: "09:25" }],
+    };
+
+    // TODO(stack-swap): asserts the "save_manual_sessions" Tauri command name; rename or remove on stack swap.
+    await m.saveSessionsToStorage();
+
+    expect(globalThis.__TAURI__.core.invoke).toHaveBeenCalledWith("save_manual_sessions", {
+      sessions: expect.arrayContaining([expect.objectContaining({ id: "s1", date: dateStr })]),
+    });
+  });
+
+  it("adds a session, persists, and dispatches sessionAdded event (happy path)", async () => {
+    const m = new SessionManager(null);
+    await vi.waitFor(() => expect(m.sessions).toEqual({}));
+
+    m.selectedDate = new Date(2026, 4, 6);
+
+    const events = [];
+    const handler = (e) => events.push(e);
+    window.addEventListener("sessionAdded", handler);
+
+    try {
+      await m.addSession({
+        id: "new",
+        duration: 25,
+        start_time: "10:00",
+        end_time: "10:25",
+        session_type: "focus",
+      });
+
+      const dateStr = new Date(2026, 4, 6).toDateString();
+      expect(m.sessions[dateStr]).toHaveLength(1);
+      expect(m.sessions[dateStr][0].id).toBe("new");
+      expect(events).toHaveLength(1);
+      expect(events[0].detail.sessionData.id).toBe("new");
+    } finally {
+      window.removeEventListener("sessionAdded", handler);
+    }
+  });
+
+  it("replaces an existing session and dispatches sessionUpdated event (happy path)", async () => {
+    const m = new SessionManager(null);
+    await vi.waitFor(() => expect(m.sessions).toEqual({}));
+
+    const dateStr = new Date(2026, 4, 6).toDateString();
+    m.sessions = {
+      [dateStr]: [
+        { id: "s1", duration: 25, start_time: "09:00", end_time: "09:25", session_type: "focus" },
+      ],
+    };
+    m.selectedDate = new Date(2026, 4, 6);
+
+    const events = [];
+    const handler = (e) => events.push(e);
+    window.addEventListener("sessionUpdated", handler);
+
+    try {
+      await m.updateSession({
+        id: "s1",
+        duration: 30,
+        start_time: "09:00",
+        end_time: "09:30",
+        session_type: "focus",
+      });
+
+      expect(m.sessions[dateStr][0].duration).toBe(30);
+      expect(events).toHaveLength(1);
+      expect(events[0].detail.sessionData.id).toBe("s1");
+    } finally {
+      window.removeEventListener("sessionUpdated", handler);
+    }
+  });
+
+  it("removes a session and dispatches sessionDeleted event (happy path)", async () => {
+    const m = new SessionManager(null);
+    await vi.waitFor(() => expect(m.sessions).toEqual({}));
+
+    const dateStr = new Date(2026, 4, 6).toDateString();
+    m.sessions = {
+      [dateStr]: [{ id: "s1", duration: 25, start_time: "09:00", end_time: "09:25" }],
+    };
+    m.selectedDate = new Date(2026, 4, 6);
+    m.currentEditingSession = { id: "s1" };
+
+    const events = [];
+    const handler = (e) => events.push(e);
+    window.addEventListener("sessionDeleted", handler);
+
+    try {
+      await m.deleteCurrentSession();
+
+      expect(m.sessions[dateStr]).toHaveLength(0);
+      expect(events).toHaveLength(1);
+      expect(events[0].detail.sessionId).toBe("s1");
+    } finally {
+      window.removeEventListener("sessionDeleted", handler);
+    }
+  });
+
+  it("does not throw when save_manual_sessions rejects (failure path)", async () => {
+    const m = new SessionManager(null);
+    await vi.waitFor(() => expect(m.sessions).toEqual({}));
+
+    const dateStr = new Date(2026, 4, 6).toDateString();
+    m.sessions = {
+      [dateStr]: [{ id: "s1", duration: 25, start_time: "09:00", end_time: "09:25" }],
+    };
+
+    // TODO(stack-swap): asserts the "save_manual_sessions" Tauri command name; rename or remove on stack swap.
+    withInvokeHandler({
+      save_manual_sessions: () => {
+        throw new Error("disk full");
+      },
+    });
+
+    await expect(m.saveSessionsToStorage()).resolves.toBeUndefined();
   });
 });

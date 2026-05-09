@@ -9,23 +9,8 @@ vi.mock("@tauri-apps/plugin-log", () => ({
   error: vi.fn(() => Promise.resolve()),
 }));
 
+import { installTauriMock } from "./setup/tauri-mock.js";
+
 // Stub window.__TAURI__ at module level so that pomodoro-timer.js can destructure
 // `window.__TAURI__.core` at import time (before any beforeAll hook runs).
-globalThis.__TAURI__ = {
-  core: {
-    invoke: vi.fn((cmd) => {
-      if (cmd === "load_tasks") {
-        return Promise.resolve([]);
-      }
-      return Promise.reject(new Error(`Unmocked invoke command: ${cmd}`));
-    }),
-  },
-  notification: {
-    isPermissionGranted: vi.fn(async () => true),
-    requestPermission: vi.fn(async () => "granted"),
-    sendNotification: vi.fn(),
-  },
-  event: {
-    listen: vi.fn(async () => () => {}),
-  },
-};
+installTauriMock();
