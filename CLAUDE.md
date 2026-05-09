@@ -76,6 +76,6 @@ mode.
 ## Active plan
 
 <!-- SPECKIT START -->
-No active feature plan. Last completed: spec-kit retrofit (this commit).
-Next: feature 001 — Leptos frontend migration.
+Active plan: [`specs/001-leptos-migration/plan.md`](specs/001-leptos-migration/plan.md)
+— Leptos frontend migration (CSR + WASM via Trunk; Tauri backend unchanged).
 <!-- SPECKIT END -->
