@@ -61,9 +61,7 @@ fi
 
 # Generate keys
 echo "🔑 Generating keypair..."
-$TAURI_CMD signer generate -w "$key_dir/$key_name"
-
-if [ $? -eq 0 ]; then
+if $TAURI_CMD signer generate -w "$key_dir/$key_name"; then
     echo "✅ Keys generated successfully!"
 
     # Get the public key
@@ -84,10 +82,15 @@ if [ $? -eq 0 ]; then
         # Backup of the original file
         cp "$config_file" "$config_file.backup"
 
+        # Escape values for safe use in sed substitutions (/, &, \)
+        sed_username=$(printf '%s' "$github_username" | sed 's/[\/&]/\\&/g')
+        sed_repo=$(printf '%s' "$github_repo" | sed 's/[\/&]/\\&/g')
+        sed_pubkey=$(printf '%s' "$public_key" | sed 's/[\/&]/\\&/g')
+
         # Substitutions
-        sed -i.tmp "s/{{OWNER}}/$github_username/g" "$config_file"
-        sed -i.tmp "s/{{REPO}}/$github_repo/g" "$config_file"
-        sed -i.tmp "s/YOUR_PUBLIC_KEY_HERE/$public_key/g" "$config_file"
+        sed -i.tmp "s/{{OWNER}}/$sed_username/g" "$config_file"
+        sed -i.tmp "s/{{REPO}}/$sed_repo/g" "$config_file"
+        sed -i.tmp "s/YOUR_PUBLIC_KEY_HERE/$sed_pubkey/g" "$config_file"
         rm "$config_file.tmp" 2>/dev/null
 
         echo "✅ Configuration updated!"
@@ -98,8 +101,8 @@ if [ $? -eq 0 ]; then
     # Update main.js with repository links
     main_js_file="src/main.js"
     if [ -f "$main_js_file" ]; then
-        sed -i.tmp "s/YOUR_USERNAME/$github_username/g" "$main_js_file"
-        sed -i.tmp "s/YOUR_REPO/$github_repo/g" "$main_js_file"
+        sed -i.tmp "s/YOUR_USERNAME/$sed_username/g" "$main_js_file"
+        sed -i.tmp "s/YOUR_REPO/$sed_repo/g" "$main_js_file"
         rm "$main_js_file.tmp" 2>/dev/null
         echo "✅ Repository links updated!"
     fi
@@ -107,7 +110,7 @@ if [ $? -eq 0 ]; then
     # Update the update manager
     update_manager_file="src/managers/update-manager-global.js"
     if [ -f "$update_manager_file" ]; then
-        sed -i.tmp "s/USERNAME\/REPOSITORY/$github_username\/$github_repo/g" "$update_manager_file"
+        sed -i.tmp "s/USERNAME\/REPOSITORY/$sed_username\/$sed_repo/g" "$update_manager_file"
         rm "$update_manager_file.tmp" 2>/dev/null
         echo "✅ Update manager configured!"
     fi
