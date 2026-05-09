@@ -16,6 +16,92 @@ use tauri_plugin_oauth::start;
 
 mod helpers;
 
+// `BridgeError` — typed return variant for every Tauri command.
+//
+// Spec 001-leptos-migration §Phase 1A T025; data-model.md §`BridgeError`.
+// Mirrors `presto-web/src/bridge/error.rs` byte-for-byte on the wire so a
+// `Result<T, BridgeError>` round-trips through `invoke()` without a
+// translation layer.
+//
+// Wire form: externally-tagged JSON via
+// `#[serde(tag = "kind", rename_all = "snake_case")]`. The
+// `bridge_error_serde_roundtrip_*` test suite (see `mod tests` below) pins
+// each variant's serialised bytes; any divergence between this mirror and
+// the Leptos-side definition fails both crates' tests at once.
+//
+// Mapping strategy (T027 mechanical rewrite of every legacy
+// `.map_err(|e| format!(…))` call site): default to `Internal { msg }`
+// when the call site has no semantic context; tighten to `NotFound`,
+// `InvalidArgument`, or `NotAuthenticated` where it does. Keeps spec
+// FR-008's compile-time-mismatch promise load-bearing.
+//
+// Note: `BridgeUnavailable` is intentionally part of the same enum even
+// though the Tauri side never produces it. Both crates share one type
+// definition so the wire format cannot drift; the variant is consumed
+// solely by the Leptos wrappers when `window.__TAURI_INTERNALS__` is
+// absent.
+#[derive(Debug, Clone, Serialize, Deserialize, thiserror::Error)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum BridgeError {
+    /// `window.__TAURI_INTERNALS__` is absent (Leptos-side only).
+    #[error("bridge unavailable")]
+    BridgeUnavailable,
+    /// The caller lacks the required session for this command.
+    #[error("not authenticated")]
+    NotAuthenticated,
+    /// An argument failed validation at the boundary.
+    #[error("invalid argument {field}: {reason}")]
+    InvalidArgument { field: String, reason: String },
+    /// The requested file, key, or row does not exist.
+    #[error("not found: {resource}")]
+    NotFound { resource: String },
+    /// `serde-wasm-bindgen` failed to deserialise the return on the Leptos
+    /// side. Tauri-side handlers do not produce this variant; it exists in
+    /// the mirror so the type definition stays single-sourced.
+    ///
+    /// `command: String` (not `&'static str`) so the enum's `Deserialize`
+    /// impl works for non-static input. See the matching note in
+    /// `presto-web/src/bridge/error.rs` for the full rationale.
+    #[error("serde roundtrip failed in {command}: {error}")]
+    SerdeRoundtrip { command: String, error: String },
+    /// Catch-all for unexpected Tauri-side failures.
+    #[error("internal: {msg}")]
+    Internal { msg: String },
+}
+
+/// `TimerMode` — closed-domain enum for the live-engine session mode.
+///
+/// Spec 001-leptos-migration §Phase 1A T027; data-model.md §`TimerMode`.
+/// On-disk wire form is camelCase strings (`"focus"`, `"break"`,
+/// `"longBreak"`). Tray-handler args (`update_tray_menu.current_mode`,
+/// `update_tray_icon.session_mode`) tighten from `String` to this enum.
+/// The Leptos-side mirror lands in Phase 1C (T076-T079).
+///
+/// Distinct from `SessionType` (T028-T029): manual sessions can carry the
+/// `Custom` variant; the live engine cannot.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum TimerMode {
+    Focus,
+    Break,
+    LongBreak,
+}
+
+// `String → BridgeError` via Internal. Lets `?` auto-convert legacy
+// `Result<_, String>` returns from `helpers.rs` (which keeps the legacy
+// error type for now) into `BridgeError` at the handler boundary. The
+// conversion is a "no semantic context" mapping. Tighter variants
+// (NotFound / InvalidArgument / NotAuthenticated) are still spelled out
+// at the call sites that warrant them — `From<String>` is the catch-all
+// fallback for plumbing.
+//
+// Spec 001-leptos-migration §Phase 1A T027.
+impl From<String> for BridgeError {
+    fn from(msg: String) -> Self {
+        Self::Internal { msg }
+    }
+}
+
 // Type alias for the app handle to avoid generic complexity
 type AppHandle = tauri::AppHandle<tauri::Wry>;
 
@@ -308,7 +394,7 @@ impl ActivityMonitor {
 }
 
 #[tauri::command]
-async fn start_activity_monitoring(app: AppHandle, timeout_seconds: u64) -> Result<(), String> {
+async fn start_activity_monitoring(app: AppHandle, timeout_seconds: u64) -> Result<(), BridgeError> {
     #[cfg(target_os = "macos")]
     {
         let mut monitor = helpers::lock_or_recover(&ACTIVITY_MONITOR);
@@ -324,12 +410,12 @@ async fn start_activity_monitoring(app: AppHandle, timeout_seconds: u64) -> Resu
     #[cfg(not(target_os = "macos"))]
     {
         let _ = (app, timeout_seconds);
-        Err("Activity monitoring is only supported on macOS".to_string())
+        Err(BridgeError::Internal { msg: "Activity monitoring is only supported on macOS".to_string() })
     }
 }
 
 #[tauri::command]
-async fn stop_activity_monitoring() -> Result<(), String> {
+async fn stop_activity_monitoring() -> Result<(), BridgeError> {
     {
         let monitor = helpers::lock_or_recover(&ACTIVITY_MONITOR);
         if let Some(ref m) = *monitor {
@@ -340,10 +426,10 @@ async fn stop_activity_monitoring() -> Result<(), String> {
 }
 
 #[tauri::command]
-async fn update_activity_timeout(timeout_seconds: u64) -> Result<(), String> {
+async fn update_activity_timeout(timeout_seconds: u64) -> Result<(), BridgeError> {
     let monitor = helpers::lock_or_recover(&ACTIVITY_MONITOR);
     monitor.as_ref().map_or_else(
-        || Err("Activity monitor not initialized".to_string()),
+        || Err(BridgeError::Internal { msg: "Activity monitor not initialized".to_string() }),
         |m| {
             m.update_threshold(timeout_seconds);
             Ok(())
@@ -352,11 +438,11 @@ async fn update_activity_timeout(timeout_seconds: u64) -> Result<(), String> {
 }
 
 #[tauri::command]
-async fn save_session_data(session: PomodoroSession, app: AppHandle) -> Result<(), String> {
+async fn save_session_data(session: PomodoroSession, app: AppHandle) -> Result<(), BridgeError> {
     let app_data_dir = app
         .path()
         .app_data_dir()
-        .map_err(|e| format!("Failed to get app data directory: {e}"))?;
+        .map_err(|e| BridgeError::Internal { msg: format!("Failed to get app data directory: {e}") })?;
 
     helpers::write_session_to(&app_data_dir, &session)?;
 
@@ -373,20 +459,20 @@ async fn save_session_data(session: PomodoroSession, app: AppHandle) -> Result<(
 }
 
 #[tauri::command]
-async fn load_session_data(app: AppHandle) -> Result<Option<PomodoroSession>, String> {
+async fn load_session_data(app: AppHandle) -> Result<Option<PomodoroSession>, BridgeError> {
     let app_data_dir = app
         .path()
         .app_data_dir()
-        .map_err(|e| format!("Failed to get app data directory: {e}"))?;
-    helpers::read_session_from(&app_data_dir)
+        .map_err(|e| BridgeError::Internal { msg: format!("Failed to get app data directory: {e}") })?;
+    helpers::read_session_from(&app_data_dir).map_err(BridgeError::from)
 }
 
 #[tauri::command]
-async fn save_tasks(tasks: Vec<Task>, app: AppHandle) -> Result<(), String> {
+async fn save_tasks(tasks: Vec<Task>, app: AppHandle) -> Result<(), BridgeError> {
     let app_data_dir = app
         .path()
         .app_data_dir()
-        .map_err(|e| format!("Failed to get app data directory: {e}"))?;
+        .map_err(|e| BridgeError::Internal { msg: format!("Failed to get app data directory: {e}") })?;
 
     helpers::write_tasks_to(&app_data_dir, &tasks)?;
 
@@ -398,46 +484,50 @@ async fn save_tasks(tasks: Vec<Task>, app: AppHandle) -> Result<(), String> {
 }
 
 #[tauri::command]
-async fn load_tasks(app: AppHandle) -> Result<Vec<Task>, String> {
+async fn load_tasks(app: AppHandle) -> Result<Vec<Task>, BridgeError> {
     let app_data_dir = app
         .path()
         .app_data_dir()
-        .map_err(|e| format!("Failed to get app data directory: {e}"))?;
-    helpers::read_tasks_from(&app_data_dir)
+        .map_err(|e| BridgeError::Internal { msg: format!("Failed to get app data directory: {e}") })?;
+    helpers::read_tasks_from(&app_data_dir).map_err(BridgeError::from)
 }
 
 #[tauri::command]
-async fn get_stats_history(app: AppHandle) -> Result<Vec<PomodoroSession>, String> {
+async fn get_stats_history(app: AppHandle) -> Result<Vec<PomodoroSession>, BridgeError> {
     let app_data_dir = app
         .path()
         .app_data_dir()
-        .map_err(|e| format!("Failed to get app data directory: {e}"))?;
-    helpers::read_history_from(&app_data_dir)
+        .map_err(|e| BridgeError::Internal { msg: format!("Failed to get app data directory: {e}") })?;
+    helpers::read_history_from(&app_data_dir).map_err(BridgeError::from)
 }
 
 #[tauri::command]
-async fn save_daily_stats(session: PomodoroSession, app: AppHandle) -> Result<(), String> {
+async fn save_daily_stats(session: PomodoroSession, app: AppHandle) -> Result<(), BridgeError> {
     let app_data_dir = app
         .path()
         .app_data_dir()
-        .map_err(|e| format!("Failed to get app data directory: {e}"))?;
-    helpers::append_daily_stats_to(&app_data_dir, &session)
+        .map_err(|e| BridgeError::Internal { msg: format!("Failed to get app data directory: {e}") })?;
+    helpers::append_daily_stats_to(&app_data_dir, &session).map_err(BridgeError::from)
 }
 
+// `session_mode: TimerMode` (was `String`) per spec 001 T027 — closed-domain
+// enum tightening. Wire format unchanged: camelCase ("focus"/"break"/
+// "longBreak") via `#[serde(rename_all = "camelCase")]` on `TimerMode`.
 #[tauri::command]
 async fn update_tray_icon(
     app: AppHandle,
     timer_text: String,
     is_running: bool,
-    session_mode: String,
+    session_mode: TimerMode,
     current_session: u32,
     total_sessions: u32,
     mode_icon: Option<String>,
-) -> Result<(), String> {
+) -> Result<(), BridgeError> {
     use std::sync::{Arc, Mutex};
 
-    // Use Arc<Mutex<Result<(), String>>> to capture the result from the main thread
-    let result = Arc::new(Mutex::new(Ok(())));
+    // Use Arc<Mutex<Result<(), BridgeError>>> to capture the result from
+    // the main thread.
+    let result: Arc<Mutex<Result<(), BridgeError>>> = Arc::new(Mutex::new(Ok(())));
     let result_clone = Arc::clone(&result);
 
     let app_clone = app.clone();
@@ -446,41 +536,37 @@ async fn update_tray_icon(
     // This ensures macOS tray operations run on the main thread
     app.run_on_main_thread(move || {
         let mut result_guard = helpers::lock_or_recover(&result_clone);
-        *result_guard = (|| -> Result<(), String> {
+        *result_guard = (|| -> Result<(), BridgeError> {
             if let Some(tray) = app_clone.tray_by_id("main") {
-                let icon = mode_icon.unwrap_or_else(|| match session_mode.as_str() {
-                    "focus" => "🧠".to_string(),
-                    "break" => "☕".to_string(),
-                    "longBreak" => "🌙".to_string(),
-                    _ => "⏱️".to_string(),
+                let icon = mode_icon.unwrap_or_else(|| {
+                    match session_mode {
+                        TimerMode::Focus => "🧠",
+                        TimerMode::Break => "☕",
+                        TimerMode::LongBreak => "🌙",
+                    }
+                    .to_string()
                 });
 
                 let status = if is_running { "Running" } else { "Paused" };
                 let title = format!("{icon} {timer_text}");
                 tray.set_title(Some(title))
-                    .map_err(|e| format!("Failed to set title: {e}"))?;
+                    .map_err(|e| BridgeError::Internal { msg: format!("Failed to set title: {e}") })?;
 
-                let tooltip = if session_mode == "focus" {
-                    format!("Presto - Session {current_session}/{total_sessions} ({status})")
-                } else {
-                    format!(
-                        "Presto - {} ({})",
-                        if session_mode == "longBreak" {
-                            "Long Break"
-                        } else {
-                            "Short Break"
-                        },
-                        status
-                    )
+                let tooltip = match session_mode {
+                    TimerMode::Focus => format!(
+                        "Presto - Session {current_session}/{total_sessions} ({status})"
+                    ),
+                    TimerMode::LongBreak => format!("Presto - Long Break ({status})"),
+                    TimerMode::Break => format!("Presto - Short Break ({status})"),
                 };
 
                 tray.set_tooltip(Some(tooltip))
-                    .map_err(|e| format!("Failed to set tooltip: {e}"))?;
+                    .map_err(|e| BridgeError::Internal { msg: format!("Failed to set tooltip: {e}") })?;
             }
             Ok(())
         })();
     })
-    .map_err(|e| format!("Failed to run on main thread: {e}"))?;
+    .map_err(|e| BridgeError::Internal { msg: format!("Failed to run on main thread: {e}") })?;
 
     // Extract the result from the mutex (named binding required by borrow checker:
     // the temporary MutexGuard must drop before `result` does).
@@ -509,17 +595,17 @@ async fn show_app_window(app: AppHandle) {
 }
 
 #[tauri::command]
-async fn show_window(app: AppHandle) -> Result<(), String> {
+async fn show_window(app: AppHandle) -> Result<(), BridgeError> {
     show_app_window(app).await;
     Ok(())
 }
 
 #[tauri::command]
-async fn save_settings(settings: AppSettings, app: AppHandle) -> Result<(), String> {
+async fn save_settings(settings: AppSettings, app: AppHandle) -> Result<(), BridgeError> {
     let app_data_dir = app
         .path()
         .app_data_dir()
-        .map_err(|e| format!("Failed to get app data directory: {e}"))?;
+        .map_err(|e| BridgeError::Internal { msg: format!("Failed to get app data directory: {e}") })?;
 
     helpers::write_settings_to(&app_data_dir, &settings)?;
 
@@ -532,22 +618,23 @@ async fn save_settings(settings: AppSettings, app: AppHandle) -> Result<(), Stri
 }
 
 #[tauri::command]
-async fn load_settings(app: AppHandle) -> Result<AppSettings, String> {
+async fn load_settings(app: AppHandle) -> Result<AppSettings, BridgeError> {
     let app_data_dir = app
         .path()
         .app_data_dir()
-        .map_err(|e| format!("Failed to get app data directory: {e}"))?;
-    helpers::read_settings_from(&app_data_dir).map_err(|e| format!("Failed to read settings: {e}"))
+        .map_err(|e| BridgeError::Internal { msg: format!("Failed to get app data directory: {e}") })?;
+    helpers::read_settings_from(&app_data_dir)
+        .map_err(|e| BridgeError::Internal { msg: format!("Failed to read settings: {e}") })
 }
 
 #[tauri::command]
 async fn register_global_shortcuts(
     app: AppHandle,
     shortcuts: ShortcutSettings,
-) -> Result<(), String> {
+) -> Result<(), BridgeError> {
     app.global_shortcut()
         .unregister_all()
-        .map_err(|e| format!("Failed to unregister shortcuts: {e}"))?;
+        .map_err(|e| BridgeError::Internal { msg: format!("Failed to unregister shortcuts: {e}") })?;
 
     for (action, shortcut_str) in [
         ("start-stop", &shortcuts.start_stop),
@@ -557,7 +644,7 @@ async fn register_global_shortcuts(
         if let Some(ref shortcut_str) = shortcut_str {
             let shortcut: Shortcut = shortcut_str
                 .parse()
-                .map_err(|e| format!("Invalid {action} shortcut '{shortcut_str}': {e}"))?;
+                .map_err(|e| BridgeError::Internal { msg: format!("Invalid {action} shortcut '{shortcut_str}': {e}") })?;
 
             let app_handle = app.clone();
             let action_owned = action.to_string();
@@ -567,31 +654,31 @@ async fn register_global_shortcuts(
                         let _ = app_handle.emit("global-shortcut", action_owned.as_str());
                     }
                 })
-                .map_err(|e| format!("Failed to register {action} shortcut: {e}"))?;
+                .map_err(|e| BridgeError::Internal { msg: format!("Failed to register {action} shortcut: {e}") })?;
         }
     }
 
     // Emit an event to the frontend to update local shortcuts as well
     app.emit("shortcuts-updated", &shortcuts)
-        .map_err(|e| format!("Failed to emit shortcuts update: {e}"))?;
+        .map_err(|e| BridgeError::Internal { msg: format!("Failed to emit shortcuts update: {e}") })?;
 
     Ok(())
 }
 
 #[tauri::command]
-async fn unregister_global_shortcuts(app: AppHandle) -> Result<(), String> {
+async fn unregister_global_shortcuts(app: AppHandle) -> Result<(), BridgeError> {
     app.global_shortcut()
         .unregister_all()
-        .map_err(|e| format!("Failed to unregister shortcuts: {e}"))?;
+        .map_err(|e| BridgeError::Internal { msg: format!("Failed to unregister shortcuts: {e}") })?;
     Ok(())
 }
 
 #[tauri::command]
-async fn reset_all_data(app: AppHandle) -> Result<(), String> {
+async fn reset_all_data(app: AppHandle) -> Result<(), BridgeError> {
     let app_data_dir = app
         .path()
         .app_data_dir()
-        .map_err(|e| format!("Failed to get app data directory: {e}"))?;
+        .map_err(|e| BridgeError::Internal { msg: format!("Failed to get app data directory: {e}") })?;
 
     helpers::delete_all_data_in(&app_data_dir)?;
 
@@ -604,32 +691,32 @@ async fn reset_all_data(app: AppHandle) -> Result<(), String> {
 }
 
 #[tauri::command]
-async fn enable_autostart(app: AppHandle) -> Result<(), String> {
+async fn enable_autostart(app: AppHandle) -> Result<(), BridgeError> {
     app.autolaunch()
         .enable()
-        .map_err(|e| format!("Failed to enable autostart: {e}"))
+        .map_err(|e| BridgeError::Internal { msg: format!("Failed to enable autostart: {e}") })
 }
 
 #[tauri::command]
-async fn disable_autostart(app: AppHandle) -> Result<(), String> {
+async fn disable_autostart(app: AppHandle) -> Result<(), BridgeError> {
     app.autolaunch()
         .disable()
-        .map_err(|e| format!("Failed to disable autostart: {e}"))
+        .map_err(|e| BridgeError::Internal { msg: format!("Failed to disable autostart: {e}") })
 }
 
 #[tauri::command]
-async fn is_autostart_enabled(app: AppHandle) -> Result<bool, String> {
+async fn is_autostart_enabled(app: AppHandle) -> Result<bool, BridgeError> {
     app.autolaunch()
         .is_enabled()
-        .map_err(|e| format!("Failed to check autostart status: {e}"))
+        .map_err(|e| BridgeError::Internal { msg: format!("Failed to check autostart status: {e}") })
 }
 
 #[tauri::command]
-async fn save_manual_sessions(sessions: Vec<ManualSession>, app: AppHandle) -> Result<(), String> {
+async fn save_manual_sessions(sessions: Vec<ManualSession>, app: AppHandle) -> Result<(), BridgeError> {
     let app_data_dir = app
         .path()
         .app_data_dir()
-        .map_err(|e| format!("Failed to get app data directory: {e}"))?;
+        .map_err(|e| BridgeError::Internal { msg: format!("Failed to get app data directory: {e}") })?;
 
     helpers::write_manual_sessions_to(&app_data_dir, &sessions)?;
 
@@ -644,41 +731,41 @@ async fn save_manual_sessions(sessions: Vec<ManualSession>, app: AppHandle) -> R
 }
 
 #[tauri::command]
-async fn load_manual_sessions(app: AppHandle) -> Result<Vec<ManualSession>, String> {
+async fn load_manual_sessions(app: AppHandle) -> Result<Vec<ManualSession>, BridgeError> {
     let app_data_dir = app
         .path()
         .app_data_dir()
-        .map_err(|e| format!("Failed to get app data directory: {e}"))?;
-    helpers::read_manual_sessions_from(&app_data_dir)
+        .map_err(|e| BridgeError::Internal { msg: format!("Failed to get app data directory: {e}") })?;
+    helpers::read_manual_sessions_from(&app_data_dir).map_err(BridgeError::from)
 }
 
 #[tauri::command]
-async fn save_manual_session(session: ManualSession, app: AppHandle) -> Result<(), String> {
+async fn save_manual_session(session: ManualSession, app: AppHandle) -> Result<(), BridgeError> {
     let app_data_dir = app
         .path()
         .app_data_dir()
-        .map_err(|e| format!("Failed to get app data directory: {e}"))?;
-    helpers::upsert_manual_session_in(&app_data_dir, session)
+        .map_err(|e| BridgeError::Internal { msg: format!("Failed to get app data directory: {e}") })?;
+    helpers::upsert_manual_session_in(&app_data_dir, session).map_err(BridgeError::from)
 }
 
 #[tauri::command]
-async fn delete_manual_session(session_id: String, app: AppHandle) -> Result<(), String> {
+async fn delete_manual_session(session_id: String, app: AppHandle) -> Result<(), BridgeError> {
     let app_data_dir = app
         .path()
         .app_data_dir()
-        .map_err(|e| format!("Failed to get app data directory: {e}"))?;
-    helpers::delete_manual_session_in(&app_data_dir, &session_id)
+        .map_err(|e| BridgeError::Internal { msg: format!("Failed to get app data directory: {e}") })?;
+    helpers::delete_manual_session_in(&app_data_dir, &session_id).map_err(BridgeError::from)
 }
 
 #[tauri::command]
 async fn get_manual_sessions_for_date(
     date: String,
     app: AppHandle,
-) -> Result<Vec<ManualSession>, String> {
+) -> Result<Vec<ManualSession>, BridgeError> {
     let app_data_dir = app
         .path()
         .app_data_dir()
-        .map_err(|e| format!("Failed to get app data directory: {e}"))?;
+        .map_err(|e| BridgeError::Internal { msg: format!("Failed to get app data directory: {e}") })?;
     let sessions = helpers::read_manual_sessions_from(&app_data_dir)?;
     Ok(sessions.into_iter().filter(|s| s.date == date).collect())
 }
@@ -948,80 +1035,82 @@ pub fn run() {
 }
 
 #[tauri::command]
-async fn load_tags(app: AppHandle) -> Result<Vec<Tag>, String> {
+async fn load_tags(app: AppHandle) -> Result<Vec<Tag>, BridgeError> {
     let app_data_dir = app
         .path()
         .app_data_dir()
-        .map_err(|e| format!("Failed to get app data directory: {e}"))?;
-    helpers::read_tags_from(&app_data_dir)
+        .map_err(|e| BridgeError::Internal { msg: format!("Failed to get app data directory: {e}") })?;
+    helpers::read_tags_from(&app_data_dir).map_err(BridgeError::from)
 }
 
 #[tauri::command]
-async fn save_tags(tags: Vec<Tag>, app: AppHandle) -> Result<(), String> {
+async fn save_tags(tags: Vec<Tag>, app: AppHandle) -> Result<(), BridgeError> {
     let app_data_dir = app
         .path()
         .app_data_dir()
-        .map_err(|e| format!("Failed to get app data directory: {e}"))?;
-    helpers::write_tags_to(&app_data_dir, &tags)
+        .map_err(|e| BridgeError::Internal { msg: format!("Failed to get app data directory: {e}") })?;
+    helpers::write_tags_to(&app_data_dir, &tags).map_err(BridgeError::from)
 }
 
 #[tauri::command]
-async fn save_tag(tag: Tag, app: AppHandle) -> Result<(), String> {
+async fn save_tag(tag: Tag, app: AppHandle) -> Result<(), BridgeError> {
     let app_data_dir = app
         .path()
         .app_data_dir()
-        .map_err(|e| format!("Failed to get app data directory: {e}"))?;
-    helpers::upsert_tag_in(&app_data_dir, tag)
+        .map_err(|e| BridgeError::Internal { msg: format!("Failed to get app data directory: {e}") })?;
+    helpers::upsert_tag_in(&app_data_dir, tag).map_err(BridgeError::from)
 }
 
 #[tauri::command]
-async fn delete_tag(tag_id: String, app: AppHandle) -> Result<(), String> {
+async fn delete_tag(tag_id: String, app: AppHandle) -> Result<(), BridgeError> {
     let app_data_dir = app
         .path()
         .app_data_dir()
-        .map_err(|e| format!("Failed to get app data directory: {e}"))?;
-    helpers::delete_tag_in(&app_data_dir, &tag_id)
+        .map_err(|e| BridgeError::Internal { msg: format!("Failed to get app data directory: {e}") })?;
+    helpers::delete_tag_in(&app_data_dir, &tag_id).map_err(BridgeError::from)
 }
 
 #[tauri::command]
-async fn load_session_tags(app: AppHandle) -> Result<Vec<SessionTag>, String> {
+async fn load_session_tags(app: AppHandle) -> Result<Vec<SessionTag>, BridgeError> {
     let app_data_dir = app
         .path()
         .app_data_dir()
-        .map_err(|e| format!("Failed to get app data directory: {e}"))?;
-    helpers::read_session_tags_from(&app_data_dir)
+        .map_err(|e| BridgeError::Internal { msg: format!("Failed to get app data directory: {e}") })?;
+    helpers::read_session_tags_from(&app_data_dir).map_err(BridgeError::from)
 }
 
 #[tauri::command]
-async fn save_session_tags(session_tags: Vec<SessionTag>, app: AppHandle) -> Result<(), String> {
+async fn save_session_tags(session_tags: Vec<SessionTag>, app: AppHandle) -> Result<(), BridgeError> {
     let app_data_dir = app
         .path()
         .app_data_dir()
-        .map_err(|e| format!("Failed to get app data directory: {e}"))?;
-    helpers::write_session_tags_to(&app_data_dir, &session_tags)
+        .map_err(|e| BridgeError::Internal { msg: format!("Failed to get app data directory: {e}") })?;
+    helpers::write_session_tags_to(&app_data_dir, &session_tags).map_err(BridgeError::from)
 }
 
 #[tauri::command]
-async fn add_session_tag(session_tag: SessionTag, app: AppHandle) -> Result<(), String> {
+async fn add_session_tag(session_tag: SessionTag, app: AppHandle) -> Result<(), BridgeError> {
     let app_data_dir = app
         .path()
         .app_data_dir()
-        .map_err(|e| format!("Failed to get app data directory: {e}"))?;
-    helpers::append_session_tag_in(&app_data_dir, session_tag)
+        .map_err(|e| BridgeError::Internal { msg: format!("Failed to get app data directory: {e}") })?;
+    helpers::append_session_tag_in(&app_data_dir, session_tag).map_err(BridgeError::from)
 }
 
+// `current_mode: TimerMode` (was `String`) per spec 001 T027 — closed-domain
+// enum tightening. Wire format unchanged: camelCase strings.
 #[tauri::command]
 async fn update_tray_menu(
     app: AppHandle,
     is_running: bool,
     is_paused: bool,
-    current_mode: String,
-) -> Result<(), String> {
+    current_mode: TimerMode,
+) -> Result<(), BridgeError> {
     let tray = app.tray_by_id("main");
 
     if let Some(tray) = tray {
         let show_item = MenuItem::with_id(&app, "show", "Show Presto", true, None::<&str>)
-            .map_err(|e| format!("Failed to create show item: {e}"))?;
+            .map_err(|e| BridgeError::Internal { msg: format!("Failed to create show item: {e}") })?;
 
         // Start Session: enabled only if not running
         let start_session_item = MenuItem::with_id(
@@ -1031,7 +1120,7 @@ async fn update_tray_menu(
             !is_running,
             None::<&str>,
         )
-        .map_err(|e| format!("Failed to create start session item: {e}"))?;
+        .map_err(|e| BridgeError::Internal { msg: format!("Failed to create start session item: {e}") })?;
 
         // Pause: enabled only if running and not paused
         let pause_item = MenuItem::with_id(
@@ -1041,23 +1130,23 @@ async fn update_tray_menu(
             is_running && !is_paused,
             None::<&str>,
         )
-        .map_err(|e| format!("Failed to create pause item: {e}"))?;
+        .map_err(|e| BridgeError::Internal { msg: format!("Failed to create pause item: {e}") })?;
 
         // Skip: enabled only if running
         let skip_item = MenuItem::with_id(&app, "skip", "Skip Session", is_running, None::<&str>)
-            .map_err(|e| format!("Failed to create skip item: {e}"))?;
+            .map_err(|e| BridgeError::Internal { msg: format!("Failed to create skip item: {e}") })?;
 
         // Cancel: enabled if in focus mode, disabled in break/longBreak (undo)
-        let cancel_text = if current_mode == "focus" {
+        let cancel_text = if matches!(current_mode, TimerMode::Focus) {
             "Cancel"
         } else {
             "Cancel Last"
         };
         let cancel_item = MenuItem::with_id(&app, "cancel", cancel_text, true, None::<&str>)
-            .map_err(|e| format!("Failed to create cancel item: {e}"))?;
+            .map_err(|e| BridgeError::Internal { msg: format!("Failed to create cancel item: {e}") })?;
 
         let quit_item = MenuItem::with_id(&app, "quit", "Quit", true, None::<&str>)
-            .map_err(|e| format!("Failed to create quit item: {e}"))?;
+            .map_err(|e| BridgeError::Internal { msg: format!("Failed to create quit item: {e}") })?;
 
         let new_menu = Menu::with_items(
             &app,
@@ -1070,10 +1159,10 @@ async fn update_tray_menu(
                 &quit_item,
             ],
         )
-        .map_err(|e| format!("Failed to create menu: {e}"))?;
+        .map_err(|e| BridgeError::Internal { msg: format!("Failed to create menu: {e}") })?;
 
         tray.set_menu(Some(new_menu))
-            .map_err(|e| format!("Failed to set tray menu: {e}"))?;
+            .map_err(|e| BridgeError::Internal { msg: format!("Failed to set tray menu: {e}") })?;
     }
 
     Ok(())
@@ -1088,44 +1177,50 @@ async fn update_tray_menu(
 ///
 /// # Errors
 ///
-/// Returns an error string if `data` is not valid base64 or if the file
-/// cannot be written to `path`.
-pub fn decode_and_write_file(path: &str, data: &str) -> Result<(), String> {
+/// Returns `BridgeError::InvalidArgument` if `data` is not valid base64
+/// (caller's input failed validation), or `BridgeError::Internal` if the
+/// file cannot be written to `path` (filesystem failure with no
+/// caller-actionable detail). Spec 001-leptos-migration §Phase 1A T027.
+pub fn decode_and_write_file(path: &str, data: &str) -> Result<(), BridgeError> {
     let decoded_data = general_purpose::STANDARD
         .decode(data)
-        .map_err(|e| format!("Failed to decode base64 data: {e}"))?;
-    fs::write(path, decoded_data)
-        .map_err(|e| format!("Failed to write Excel file to {path}: {e}"))?;
+        .map_err(|e| BridgeError::InvalidArgument {
+            field: "data".to_string(),
+            reason: format!("invalid base64: {e}"),
+        })?;
+    fs::write(path, decoded_data).map_err(|e| BridgeError::Internal {
+        msg: format!("Failed to write Excel file to {path}: {e}"),
+    })?;
     Ok(())
 }
 
 #[tauri::command]
-async fn write_excel_file(path: String, data: String) -> Result<(), String> {
+async fn write_excel_file(path: String, data: String) -> Result<(), BridgeError> {
     decode_and_write_file(&path, &data)
 }
 
 #[tauri::command]
-async fn start_oauth_server(window: tauri::Window) -> Result<u16, String> {
+async fn start_oauth_server(window: tauri::Window) -> Result<u16, BridgeError> {
     start(move |url| {
         let _ = window.emit("oauth-callback", url);
     })
-    .map_err(|err| err.to_string())
+    .map_err(|err| BridgeError::Internal { msg: err.to_string() })
 }
 
 #[tauri::command]
-async fn set_dock_visibility(_app: AppHandle, _visible: bool) -> Result<(), String> {
+async fn set_dock_visibility(_app: AppHandle, _visible: bool) -> Result<(), BridgeError> {
     #[cfg(target_os = "macos")]
     {
         _app.run_on_main_thread(move || {
             set_dock_visibility_native(_visible);
         })
-        .map_err(|e| format!("Failed to run on main thread: {e}"))?;
+        .map_err(|e| BridgeError::Internal { msg: format!("Failed to run on main thread: {e}") })?;
         Ok(())
     }
 
     #[cfg(not(target_os = "macos"))]
     {
-        Err("Dock visibility is only supported on macOS".to_string())
+        Err(BridgeError::Internal { msg: "Dock visibility is only supported on macOS".to_string() })
     }
 }
 
@@ -1154,7 +1249,7 @@ fn set_dock_visibility_native(visible: bool) {
 }
 
 #[tauri::command]
-async fn set_status_bar_visibility(_app: AppHandle, _visible: bool) -> Result<(), String> {
+async fn set_status_bar_visibility(_app: AppHandle, _visible: bool) -> Result<(), BridgeError> {
     #[cfg(target_os = "macos")]
     {
         use std::sync::{Arc, Mutex};
@@ -1174,11 +1269,11 @@ async fn set_status_bar_visibility(_app: AppHandle, _visible: bool) -> Result<()
                 }
                 Err(e) => {
                     log::error!("❌ Failed to set status bar visibility: {e}");
-                    Err(format!("Failed to set status bar visibility: {e}"))
+                    Err(BridgeError::Internal { msg: format!("Failed to set status bar visibility: {e}") })
                 }
             };
         })
-        .map_err(|e| format!("Failed to run on main thread: {e}"))?;
+        .map_err(|e| BridgeError::Internal { msg: format!("Failed to run on main thread: {e}") })?;
 
         // Extract the result from the mutex (named binding required by borrow checker:
         // the temporary MutexGuard must drop before `result` does).
@@ -1188,7 +1283,7 @@ async fn set_status_bar_visibility(_app: AppHandle, _visible: bool) -> Result<()
 
     #[cfg(not(target_os = "macos"))]
     {
-        Err("Status bar visibility is only supported on macOS".to_string())
+        Err(BridgeError::Internal { msg: "Status bar visibility is only supported on macOS".to_string() })
     }
 }
 
@@ -1204,7 +1299,7 @@ fn set_system_ui_mode_safe(visible: bool) -> Result<(), String> {
     unsafe {
         let app = NSApp();
         if app == nil {
-            return Err("NSApplication shared instance is nil".to_string());
+            return Err(BridgeError::Internal { msg: "NSApplication shared instance is nil".to_string() });
         }
 
         let options = if visible {
@@ -1218,59 +1313,6 @@ fn set_system_ui_mode_safe(visible: bool) -> Result<(), String> {
     }
 
     Ok(())
-}
-
-// `BridgeError` — typed return variant for every Tauri command.
-//
-// Spec 001-leptos-migration §Phase 1A T025; data-model.md §`BridgeError`.
-// Mirrors `presto-web/src/bridge/error.rs` byte-for-byte on the wire so a
-// `Result<T, BridgeError>` round-trips through `invoke()` without a
-// translation layer.
-//
-// Wire form: externally-tagged JSON via
-// `#[serde(tag = "kind", rename_all = "snake_case")]`. The
-// `bridge_error_serde_roundtrip_*` test suite below pins each variant's
-// serialised bytes; any divergence between this mirror and the Leptos-side
-// definition fails both crates' tests at once.
-//
-// Mapping strategy (applied in T026 mechanical rewrite of every
-// `.map_err(|e| format!(…))` call site): default to `Internal { msg }`
-// when the call site has no semantic context; tighten to `NotFound`,
-// `InvalidArgument`, or `NotAuthenticated` where it does. Keeps spec
-// FR-008's compile-time-mismatch promise load-bearing.
-//
-// Note: `BridgeUnavailable` is intentionally part of the same enum even
-// though the Tauri side never produces it. Both crates share one type
-// definition so the wire format cannot drift; the variant is consumed
-// solely by the Leptos wrappers when `window.__TAURI_INTERNALS__` is
-// absent.
-#[derive(Debug, Clone, Serialize, Deserialize, thiserror::Error)]
-#[serde(tag = "kind", rename_all = "snake_case")]
-pub enum BridgeError {
-    /// `window.__TAURI_INTERNALS__` is absent (Leptos-side only).
-    #[error("bridge unavailable")]
-    BridgeUnavailable,
-    /// The caller lacks the required session for this command.
-    #[error("not authenticated")]
-    NotAuthenticated,
-    /// An argument failed validation at the boundary.
-    #[error("invalid argument {field}: {reason}")]
-    InvalidArgument { field: String, reason: String },
-    /// The requested file, key, or row does not exist.
-    #[error("not found: {resource}")]
-    NotFound { resource: String },
-    /// `serde-wasm-bindgen` failed to deserialise the return on the Leptos
-    /// side. Tauri-side handlers do not produce this variant; it exists in
-    /// the mirror so the type definition stays single-sourced.
-    ///
-    /// `command: String` (not `&'static str`) so the enum's `Deserialize`
-    /// impl works for non-static input. See the matching note in
-    /// `presto-web/src/bridge/error.rs` for the full rationale.
-    #[error("serde roundtrip failed in {command}: {error}")]
-    SerdeRoundtrip { command: String, error: String },
-    /// Catch-all for unexpected Tauri-side failures.
-    #[error("internal: {msg}")]
-    Internal { msg: String },
 }
 
 #[cfg(test)]

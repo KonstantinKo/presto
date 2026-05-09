@@ -34,7 +34,7 @@ use tauri::WebviewUrl;
 // needless_pass_by_value suggestion of &str would break the command contract.
 #[allow(clippy::needless_pass_by_value)]
 #[tauri::command]
-fn write_excel_file(path: String, data: String) -> Result<(), String> {
+fn write_excel_file(path: String, data: String) -> Result<(), presto_lib::BridgeError> {
     presto_lib::decode_and_write_file(&path, &data)
 }
 
