@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "dev",
+  "description": "Additional capabilities for development builds only",
+  "windows": ["main"],
+  "permissions": ["core:webview:allow-internal-toggle-devtools"]
+}

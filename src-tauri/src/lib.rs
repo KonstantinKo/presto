@@ -1319,23 +1319,6 @@ fn set_dock_visibility_native(visible: bool) {
     }
 }
 
-// Status bar visibility management using Carbon APIs
-//
-// Implementation Notes:
-// This feature uses Apple's Carbon SetSystemUIMode API, which is a pure C function
-// from the ApplicationServices framework. This approach is much safer than using
-// Objective-C APIs because:
-//
-// 1. No foreign exceptions: C APIs return error codes instead of throwing exceptions
-// 2. Direct system integration: Carbon APIs are lower-level and more stable
-// 3. Robust fallback system: Multiple approaches with retry mechanisms
-// 4. Comprehensive error handling: Detailed OSStatus code interpretation
-//
-// The implementation uses:
-// - Primary: SetSystemUIMode with K_UI_MODE_CONTENT_SUPPRESSED (hides menu bar, keeps dock)
-// - Fallback 1: Retry with delay for transient errors
-// - Fallback 2: Conservative two-step approach for hiding
-// - Detailed error reporting with manual recovery instructions
 #[tauri::command]
 async fn set_status_bar_visibility(_app: AppHandle, _visible: bool) -> Result<(), String> {
     #[cfg(target_os = "macos")]
@@ -1378,168 +1361,29 @@ async fn set_status_bar_visibility(_app: AppHandle, _visible: bool) -> Result<()
 #[cfg(target_os = "macos")]
 #[allow(unsafe_code)]
 fn set_system_ui_mode_safe(visible: bool) -> Result<(), String> {
-    use libc::{c_int, c_uint};
-    use std::thread;
-    use std::time::Duration;
+    use cocoa::appkit::{NSApp, NSApplication, NSApplicationPresentationOptions};
+    use cocoa::base::nil;
 
-    // Carbon SetSystemUIMode constants
-    const K_UI_MODE_NORMAL: c_uint = 0; // Normal mode - menu bar visible
-    const K_UI_MODE_CONTENT_SUPPRESSED: c_uint = 1; // Menu bar hidden, dock visible
-    #[allow(dead_code)]
-    const K_UI_MODE_CONTENT_HIDDEN: c_uint = 2; // Menu bar hidden, dock auto-hide
-    #[allow(dead_code)]
-    const K_UI_MODE_ALL_HIDDEN: c_uint = 3; // Everything hidden
+    // SAFETY: NSApp() returns a raw pointer that is nil if no shared NSApplication exists.
+    // We null-check before calling setPresentationOptions_, and this function is only
+    // invoked from the main thread via run_on_main_thread, satisfying AppKit's requirement.
+    unsafe {
+        let app = NSApp();
+        if app == nil {
+            return Err("NSApplication shared instance is nil".to_string());
+        }
 
-    // OSStatus codes
-    const NO_ERR: c_int = 0;
-    const PARAM_ERR: c_int = -50;
-    const MEM_FULL_ERR: c_int = -108;
-
-    // SystemUIMode and SystemUIOptions are both UInt32 (c_uint)
-    type SystemUIMode = c_uint;
-    type SystemUIOptions = c_uint;
-    type OSStatus = c_int;
-
-    // External declaration for Carbon SetSystemUIMode (ApplicationServices framework)
-    #[allow(unsafe_code)]
-    extern "C" {
-        fn SetSystemUIMode(inMode: SystemUIMode, inOptions: SystemUIOptions) -> OSStatus;
-    }
-
-    // Try the primary approach with Carbon SetSystemUIMode
-    // SAFETY: SetSystemUIMode is a pure C function from Apple's ApplicationServices
-    // (Carbon) framework with no pointer parameters and no aliasing/lifetime contract.
-    // The arguments (mode and options) are plain UInt32 values constructed above.
-    // The call is dispatched to the main thread via run_on_main_thread upstream.
-    let primary_result = unsafe {
-        let mode = if visible {
-            K_UI_MODE_NORMAL // Show menu bar
+        let options = if visible {
+            NSApplicationPresentationOptions::NSApplicationPresentationDefault
         } else {
-            K_UI_MODE_CONTENT_SUPPRESSED // Hide menu bar but keep dock visible
+            NSApplicationPresentationOptions::NSApplicationPresentationHideMenuBar
+                | NSApplicationPresentationOptions::NSApplicationPresentationHideDock
         };
 
-        let options: SystemUIOptions = 0;
-
-        log::debug!(
-            "🔧 Carbon API: Setting SystemUIMode to {} ({})",
-            mode,
-            if visible {
-                "normal/visible"
-            } else {
-                "content suppressed/hidden"
-            }
-        );
-
-        let result: OSStatus = SetSystemUIMode(mode, options);
-
-        if result == NO_ERR {
-            log::debug!("✅ Carbon API: SetSystemUIMode succeeded");
-            Ok(())
-        } else {
-            let error_msg = format!(
-                "Carbon API failed with OSStatus: {} ({})",
-                result,
-                get_osstatus_description(result)
-            );
-            log::error!("❌ Carbon API: {}", error_msg);
-            Err((result, error_msg))
-        }
-    };
-
-    // If primary approach succeeded, return success; otherwise capture error and try fallbacks.
-    let (status_code, error_msg) = match primary_result {
-        Ok(()) => return Ok(()),
-        Err(err) => err,
-    };
-
-    log::warn!("🔄 Primary method failed, attempting fallback approaches...");
-
-    // Fallback 1: Try with a small delay and retry
-    if status_code == PARAM_ERR || status_code == MEM_FULL_ERR {
-        log::warn!("🔄 Fallback 1: Retrying after brief delay...");
-        thread::sleep(Duration::from_millis(100));
-
-        // SAFETY: Same contract as the primary SetSystemUIMode call above — pure C ABI,
-        // scalar arguments, main-thread dispatched.
-        let retry_result = unsafe {
-            let mode = if visible {
-                K_UI_MODE_NORMAL
-            } else {
-                K_UI_MODE_CONTENT_SUPPRESSED
-            };
-            let result: OSStatus = SetSystemUIMode(mode, 0);
-
-            if result == NO_ERR {
-                log::info!("✅ Fallback 1: Retry succeeded");
-                Ok(())
-            } else {
-                Err(format!("Retry failed with OSStatus: {}", result))
-            }
-        };
-
-        if retry_result.is_ok() {
-            return Ok(());
-        }
+        app.setPresentationOptions_(options);
     }
 
-    // Fallback 2: For hiding, try a more conservative approach
-    if !visible {
-        log::warn!("🔄 Fallback 2: Trying conservative hide approach...");
-
-        // SAFETY: Same contract as above — pure C ABI, scalar arguments, main-thread
-        // dispatched. The intervening thread::sleep is safe regardless.
-        let conservative_result = unsafe {
-            // Try normal mode first, then content suppressed
-            SetSystemUIMode(K_UI_MODE_NORMAL, 0);
-            thread::sleep(Duration::from_millis(50));
-            let result: OSStatus = SetSystemUIMode(K_UI_MODE_CONTENT_SUPPRESSED, 0);
-
-            if result == NO_ERR {
-                log::info!("✅ Fallback 2: Conservative approach succeeded");
-                Ok(())
-            } else {
-                Err(format!(
-                    "Conservative approach failed with OSStatus: {}",
-                    result
-                ))
-            }
-        };
-
-        if conservative_result.is_ok() {
-            return Ok(());
-        }
-    }
-
-    // All methods failed - provide detailed error information
-    let detailed_error = format!(
-        "All status bar visibility methods failed. Primary error: {}. \
-         This might be due to system restrictions or macOS version compatibility. \
-         You can manually hide the menu bar using System Preferences > Dock & Menu Bar > 'Automatically hide and show the menu bar'.",
-        error_msg
-    );
-
-    log::error!("❌ {}", detailed_error);
-    Err(detailed_error)
-}
-
-#[cfg(target_os = "macos")]
-fn get_osstatus_description(status: libc::c_int) -> &'static str {
-    match status {
-        0 => "No error - Success",
-        -50 => "Parameter error - Invalid parameters passed to function",
-        -108 => "Memory full error - Insufficient memory available",
-        -25291 => "Invalid system UI mode - The specified UI mode is not valid",
-        -25292 => {
-            "Operation not supported in current mode - Cannot change UI mode in current state"
-        }
-        -25293 => "System UI server not available - UI server is not responding",
-        -25294 => "System UI mode locked - UI mode changes are currently locked",
-        -128 => "User canceled - Operation was canceled by user",
-        -43 => "File not found - Required system component not found",
-        -5000 => "System policy error - Operation blocked by system policy",
-        -1 => "General error - Unspecified error occurred",
-        _ => "Unknown error - Undocumented error code",
-    }
+    Ok(())
 }
 
 #[cfg(test)]

@@ -277,11 +277,12 @@ class TagManager {
       return;
     }
 
+    const color = "#4CAF50";
     const newTag = {
       id: `tag-${crypto.randomUUID()}`,
       name,
       icon: this.selectedIcon,
-      color: "#4CAF50",
+      color,
       created_at: new Date().toISOString(),
     };
 
