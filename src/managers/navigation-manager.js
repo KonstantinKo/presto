@@ -158,19 +158,14 @@ export class NavigationManager {
 
   updateWeekDisplay() {
     const weekRangeEl = document.getElementById("week-range");
+    if (!weekRangeEl) {
+      return;
+    }
     const weekStart = new Date(this.selectedWeek || new Date());
-    const weekEnd = new Date(this.selectedWeek || new Date());
+    const weekEnd = new Date(weekStart);
     weekEnd.setDate(weekEnd.getDate() + 6);
 
-    /** @type {Intl.DateTimeFormatOptions} */
-    const formatOptions = { day: "numeric", month: "short" };
-    const startStr = weekStart.toLocaleDateString("en-US", formatOptions);
-    const endStr = weekEnd.toLocaleDateString("en-US", formatOptions);
-    const year = weekEnd.getFullYear();
-
-    if (weekRangeEl) {
-      weekRangeEl.textContent = `${startStr} - ${endStr} ${year}`;
-    }
+    weekRangeEl.textContent = TimeUtils.formatDateRange(weekStart, weekEnd);
   }
 
   async updateFocusSummary() {
@@ -1348,10 +1343,6 @@ export class NavigationManager {
       window.sessionManager.selectedDate = this.currentDate;
       window.sessionManager.updateSession(session);
     }
-  }
-
-  generateSessionId() {
-    return Date.now().toString() + Math.random().toString(36).substring(2, 11);
   }
 
   /** @param {any} element */

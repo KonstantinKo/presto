@@ -107,22 +107,10 @@ export class SettingsManager {
       notifications: { ...defaultSettings.notifications, ...loadedSettings.notifications },
       appearance: { ...defaultSettings.appearance, ...loadedSettings.appearance },
       advanced: { ...defaultSettings.advanced, ...loadedSettings.advanced },
-      autostart:
-        loadedSettings.autostart !== undefined
-          ? loadedSettings.autostart
-          : defaultSettings.autostart,
-      analytics_enabled:
-        loadedSettings.analytics_enabled !== undefined
-          ? loadedSettings.analytics_enabled
-          : defaultSettings.analytics_enabled,
-      hide_icon_on_close:
-        loadedSettings.hide_icon_on_close !== undefined
-          ? loadedSettings.hide_icon_on_close
-          : defaultSettings.hide_icon_on_close,
-      status_bar_display:
-        loadedSettings.status_bar_display !== undefined
-          ? loadedSettings.status_bar_display
-          : defaultSettings.status_bar_display,
+      autostart: loadedSettings.autostart ?? defaultSettings.autostart,
+      analytics_enabled: loadedSettings.analytics_enabled ?? defaultSettings.analytics_enabled,
+      hide_icon_on_close: loadedSettings.hide_icon_on_close ?? defaultSettings.hide_icon_on_close,
+      status_bar_display: loadedSettings.status_bar_display ?? defaultSettings.status_bar_display,
     };
   }
 
@@ -325,13 +313,7 @@ export class SettingsManager {
   /** @param {boolean} enabled */
   toggleTimeoutSetting(enabled) {
     const timeoutSetting = document.getElementById("smart-pause-timeout-setting");
-    if (timeoutSetting) {
-      if (enabled) {
-        timeoutSetting.classList.add("visible");
-      } else {
-        timeoutSetting.classList.remove("visible");
-      }
-    }
+    timeoutSetting?.classList.toggle("visible", enabled);
   }
 
   setupGlobalShortcutHandlers() {
@@ -943,34 +925,18 @@ export class SettingsManager {
     }
   }
 
-  async loadAnalyticsSetting() {
-    try {
-      const analyticsEnabled = this.settings.analytics_enabled;
+  loadAnalyticsSetting() {
+    const checkbox = /** @type {any} */ (document.getElementById("analytics-enabled"));
+    if (!checkbox) {
+      return;
+    }
+    checkbox.checked = this.settings.analytics_enabled;
 
-      const checkbox = /** @type {any} */ (document.getElementById("analytics-enabled"));
-      if (checkbox) {
-        checkbox.checked = analyticsEnabled;
-
-        if (!checkbox._analyticsHandlerBound) {
-          checkbox._analyticsHandlerBound = true;
-          checkbox.addEventListener("change", async (/** @type {any} */ e) => {
-            await this.toggleAnalytics(e.target.checked);
-          });
-        }
-      }
-    } catch (error) {
-      logger.error("Failed to load analytics setting:", error);
-      // Default to enabled if we can't check the status
-      const checkbox = /** @type {any} */ (document.getElementById("analytics-enabled"));
-      if (checkbox) {
-        checkbox.checked = true;
-        if (!checkbox._analyticsHandlerBound) {
-          checkbox._analyticsHandlerBound = true;
-          checkbox.addEventListener("change", async (/** @type {any} */ e) => {
-            await this.toggleAnalytics(e.target.checked);
-          });
-        }
-      }
+    if (!checkbox._analyticsHandlerBound) {
+      checkbox._analyticsHandlerBound = true;
+      checkbox.addEventListener("change", async (/** @type {any} */ e) => {
+        await this.toggleAnalytics(e.target.checked);
+      });
     }
   }
 
@@ -1005,33 +971,18 @@ export class SettingsManager {
     }
   }
 
-  async loadHideIconOnCloseSetting() {
-    try {
-      const hideIconOnClose = this.settings.hide_icon_on_close;
+  loadHideIconOnCloseSetting() {
+    const checkbox = /** @type {any} */ (document.getElementById("hide-icon-on-close"));
+    if (!checkbox) {
+      return;
+    }
+    checkbox.checked = this.settings.hide_icon_on_close;
 
-      const checkbox = /** @type {any} */ (document.getElementById("hide-icon-on-close"));
-      if (checkbox) {
-        checkbox.checked = hideIconOnClose;
-
-        if (!checkbox._hideIconHandlerBound) {
-          checkbox._hideIconHandlerBound = true;
-          checkbox.addEventListener("change", async (/** @type {any} */ e) => {
-            await this.toggleHideIconOnClose(e.target.checked);
-          });
-        }
-      }
-    } catch (error) {
-      logger.error("Failed to load hide icon on close setting:", error);
-      const checkbox = /** @type {any} */ (document.getElementById("hide-icon-on-close"));
-      if (checkbox) {
-        checkbox.checked = false;
-        if (!checkbox._hideIconHandlerBound) {
-          checkbox._hideIconHandlerBound = true;
-          checkbox.addEventListener("change", async (/** @type {any} */ e) => {
-            await this.toggleHideIconOnClose(e.target.checked);
-          });
-        }
-      }
+    if (!checkbox._hideIconHandlerBound) {
+      checkbox._hideIconHandlerBound = true;
+      checkbox.addEventListener("change", async (/** @type {any} */ e) => {
+        await this.toggleHideIconOnClose(e.target.checked);
+      });
     }
   }
 
@@ -1069,33 +1020,18 @@ export class SettingsManager {
     }
   }
 
-  async loadStatusBarDisplaySetting() {
-    try {
-      const statusBarDisplay = this.settings.status_bar_display || "default";
+  loadStatusBarDisplaySetting() {
+    const select = /** @type {any} */ (document.getElementById("status-bar-display"));
+    if (!select) {
+      return;
+    }
+    select.value = this.settings.status_bar_display || "default";
 
-      const select = /** @type {any} */ (document.getElementById("status-bar-display"));
-      if (select) {
-        select.value = statusBarDisplay;
-
-        if (!select._statusBarHandlerBound) {
-          select._statusBarHandlerBound = true;
-          select.addEventListener("change", async (/** @type {any} */ e) => {
-            await this.updateStatusBarDisplay(e.target.value);
-          });
-        }
-      }
-    } catch (error) {
-      logger.error("Failed to load status bar display setting:", error);
-      const select = /** @type {any} */ (document.getElementById("status-bar-display"));
-      if (select) {
-        select.value = "default";
-        if (!select._statusBarHandlerBound) {
-          select._statusBarHandlerBound = true;
-          select.addEventListener("change", async (/** @type {any} */ e) => {
-            await this.updateStatusBarDisplay(e.target.value);
-          });
-        }
-      }
+    if (!select._statusBarHandlerBound) {
+      select._statusBarHandlerBound = true;
+      select.addEventListener("change", async (/** @type {any} */ e) => {
+        await this.updateStatusBarDisplay(e.target.value);
+      });
     }
   }
 
@@ -1411,10 +1347,8 @@ export class SettingsManager {
   }
 
   getCurrentColorMode() {
-    const currentTheme = document.documentElement.getAttribute("data-theme");
-
-    // Since data-theme is now always 'light' or 'dark' (never 'auto'), this is simpler
-    return currentTheme === "dark" ? "dark" : "light";
+    // data-theme is always "light" or "dark" (never "auto") at this point.
+    return document.documentElement.getAttribute("data-theme") === "dark" ? "dark" : "light";
   }
 
   async initializeTimerTheme() {
@@ -1447,7 +1381,6 @@ export class SettingsManager {
   async applyTimerTheme(themeId) {
     const html = document.documentElement;
 
-    html.removeAttribute("data-timer-theme");
     html.setAttribute("data-timer-theme", themeId);
 
     localStorage.setItem("timer-theme-preference", themeId);

@@ -362,8 +362,7 @@ class TagManager {
     if (!this.iconSelector) {
       return;
     }
-    const isOpen = this.iconSelector.classList.contains("active");
-    if (isOpen) {
+    if (this.iconSelector.classList.contains("active")) {
       this.closeIconSelector();
     } else {
       this.openIconSelector();

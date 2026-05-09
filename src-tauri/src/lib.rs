@@ -416,13 +416,11 @@ async fn load_session_data(app: AppHandle) -> Result<Option<PomodoroSession>, St
     let today_legacy = chrono::Local::now().format("%a %b %d %Y").to_string();
     let today_iso = chrono::Local::now().format("%Y-%m-%d").to_string();
 
-    let is_same_day = if session.date == today_legacy || session.date == today_iso {
-        true
-    } else {
-        chrono::NaiveDate::parse_from_str(&session.date, "%a %b %d %Y")
+    let is_same_day = session.date == today_legacy
+        || session.date == today_iso
+        || chrono::NaiveDate::parse_from_str(&session.date, "%a %b %d %Y")
             .map(|d| d.format("%Y-%m-%d").to_string() == today_iso)
-            .unwrap_or(false)
-    };
+            .unwrap_or(false);
 
     if is_same_day && session.date != today_legacy {
         session.date.clone_from(&today_legacy);
@@ -525,7 +523,7 @@ async fn save_daily_stats(session: PomodoroSession, app: AppHandle) -> Result<()
     let mut history: Vec<PomodoroSession> = if history_path.exists() {
         let content = fs::read_to_string(&history_path)
             .map_err(|e| format!("Failed to read history: {e}"))?;
-        serde_json::from_str(&content).unwrap_or_else(|_| Vec::new())
+        serde_json::from_str(&content).unwrap_or_default()
     } else {
         Vec::new()
     };
@@ -608,7 +606,8 @@ async fn update_tray_icon(
     })
     .map_err(|e| format!("Failed to run on main thread: {e}"))?;
 
-    // Extract the result from the mutex
+    // Extract the result from the mutex (named binding required by borrow checker:
+    // the temporary MutexGuard must drop before `result` does).
     let final_result = result.lock().unwrap().clone();
     final_result
 }
@@ -619,14 +618,11 @@ async fn show_window(app: AppHandle) -> Result<(), String> {
         // Check if hide_icon_on_close is enabled to restore dock visibility
         if let Ok(settings) = load_settings(app.clone()).await {
             if settings.hide_icon_on_close {
-                // Restore dock visibility when showing window
                 #[cfg(target_os = "macos")]
                 {
                     let _ = set_dock_visibility(app.clone(), true).await;
                 }
             }
-        } else {
-            // Ignore error, just proceed with showing window
         }
 
         window
@@ -731,7 +727,7 @@ async fn reset_all_data(app: AppHandle) -> Result<(), String> {
         .app_data_dir()
         .map_err(|e| format!("Failed to get app data directory: {e}"))?;
 
-    let files_to_delete = vec![
+    let files_to_delete = [
         "session.json",
         "tasks.json",
         "history.json",
@@ -741,10 +737,10 @@ async fn reset_all_data(app: AppHandle) -> Result<(), String> {
         "session_tags.json",
     ];
 
-    for file_name in files_to_delete {
+    for file_name in &files_to_delete {
         let file_path = app_data_dir.join(file_name);
         if file_path.exists() {
-            fs::remove_file(file_path).map_err(|e| format!("Failed to delete {file_name}: {e}"))?;
+            fs::remove_file(&file_path).map_err(|e| format!("Failed to delete {file_name}: {e}"))?;
         }
     }
 
@@ -753,26 +749,21 @@ async fn reset_all_data(app: AppHandle) -> Result<(), String> {
 
 #[tauri::command]
 async fn enable_autostart(app: AppHandle) -> Result<(), String> {
-    let autostart_manager = app.autolaunch();
-    autostart_manager
+    app.autolaunch()
         .enable()
-        .map_err(|e| format!("Failed to enable autostart: {e}"))?;
-    Ok(())
+        .map_err(|e| format!("Failed to enable autostart: {e}"))
 }
 
 #[tauri::command]
 async fn disable_autostart(app: AppHandle) -> Result<(), String> {
-    let autostart_manager = app.autolaunch();
-    autostart_manager
+    app.autolaunch()
         .disable()
-        .map_err(|e| format!("Failed to disable autostart: {e}"))?;
-    Ok(())
+        .map_err(|e| format!("Failed to disable autostart: {e}"))
 }
 
 #[tauri::command]
 async fn is_autostart_enabled(app: AppHandle) -> Result<bool, String> {
-    let autostart_manager = app.autolaunch();
-    autostart_manager
+    app.autolaunch()
         .is_enabled()
         .map_err(|e| format!("Failed to check autostart status: {e}"))
 }
@@ -857,12 +848,7 @@ async fn get_manual_sessions_for_date(
     app: AppHandle,
 ) -> Result<Vec<ManualSession>, String> {
     let sessions = load_manual_sessions(app).await?;
-
-    // Filter sessions for the specified date
-    let filtered_sessions: Vec<ManualSession> =
-        sessions.into_iter().filter(|s| s.date == date).collect();
-
-    Ok(filtered_sessions)
+    Ok(sessions.into_iter().filter(|s| s.date == date).collect())
 }
 
 /// Builds and runs the Tauri application.
@@ -1448,6 +1434,8 @@ async fn set_status_bar_visibility(_app: AppHandle, _visible: bool) -> Result<()
         })
         .map_err(|e| format!("Failed to run on main thread: {e}"))?;
 
+        // Extract the result from the mutex (named binding required by borrow checker:
+        // the temporary MutexGuard must drop before `result` does).
         let final_result = result.lock().unwrap().clone();
         final_result
     }
@@ -1531,13 +1519,11 @@ fn set_system_ui_mode_safe(visible: bool) -> Result<(), String> {
         }
     };
 
-    // If primary approach succeeded, return success
-    if primary_result.is_ok() {
-        return Ok(());
-    }
-
-    // If primary approach failed, try fallback methods
-    let (status_code, error_msg) = primary_result.unwrap_err();
+    // If primary approach succeeded, return success; otherwise capture error and try fallbacks.
+    let (status_code, error_msg) = match primary_result {
+        Ok(()) => return Ok(()),
+        Err(err) => err,
+    };
 
     log::warn!("🔄 Primary method failed, attempting fallback approaches...");
 

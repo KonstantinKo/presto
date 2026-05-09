@@ -271,7 +271,6 @@ export class TeamManager {
             return 0;
           case "break":
           case "long-break":
-            return 1;
           case "privacy":
             return 1;
           case "offline":
@@ -362,19 +361,14 @@ export class TeamManager {
 
   /** @param {any} member @returns {string} */
   getOnlineStatus(member) {
-    const now = new Date();
-    const lastSeenMinutes = (now.getTime() - member.lastSeen.getTime()) / (1000 * 60);
-
     if (member.status === "offline") {
       return "offline";
     }
     if (member.status === "privacy") {
       return "privacy";
     }
-    if (lastSeenMinutes < 5) {
-      return "online";
-    }
-    return "offline";
+    const lastSeenMinutes = (Date.now() - member.lastSeen.getTime()) / (1000 * 60);
+    return lastSeenMinutes < 5 ? "online" : "offline";
   }
 
   updateTeamStats() {

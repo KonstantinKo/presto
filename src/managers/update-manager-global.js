@@ -357,8 +357,7 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
 
       if (hasTestMode) {
         logger.debug("Test mode - simulating update");
-        const testUpdate = await this.simulateUpdate();
-        return testUpdate;
+        return await this.simulateUpdate();
       }
 
       let currentVersion;
@@ -682,34 +681,31 @@ if (_isDevMode) {
       return "Test mode disabled!";
     },
     testUpdate: () => {
-      if (window.updateManager) {
-        return window.updateManager.simulateUpdate();
-      } else {
+      if (!window.updateManager) {
         logger.error("UpdateManager not initialized");
         return Promise.reject("UpdateManager non trovato");
       }
+      return window.updateManager.simulateUpdate();
     },
     checkRealUpdate: () => {
-      if (window.updateManager) {
-        return window.updateManager.checkForUpdates();
-      } else {
+      if (!window.updateManager) {
         logger.error("UpdateManager not initialized");
         return Promise.reject("UpdateManager non trovato");
       }
+      return window.updateManager.checkForUpdates();
     },
     getStatus: () => {
-      if (window.updateManager) {
-        return {
-          updateAvailable: window.updateManager.updateAvailable,
-          currentUpdate: window.updateManager.currentUpdate,
-          isChecking: window.updateManager.isChecking,
-          isDownloading: window.updateManager.isDownloading,
-          autoCheck: window.updateManager.autoCheck,
-          isDevelopmentMode: window.updateManager.isDevelopmentMode(),
-        };
-      } else {
+      if (!window.updateManager) {
         return { error: "UpdateManager not initialized" };
       }
+      return {
+        updateAvailable: window.updateManager.updateAvailable,
+        currentUpdate: window.updateManager.currentUpdate,
+        isChecking: window.updateManager.isChecking,
+        isDownloading: window.updateManager.isDownloading,
+        autoCheck: window.updateManager.autoCheck,
+        isDevelopmentMode: window.updateManager.isDevelopmentMode(),
+      };
     },
     checkEnvironment: () => {
       const env = {

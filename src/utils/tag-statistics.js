@@ -163,7 +163,7 @@ export class TagStatistics {
     let currentAngle = 0;
     const gradientStops = /** @type {string[]} */ ([]);
 
-    tagStats.forEach((stat, _index) => {
+    tagStats.forEach((stat) => {
       const angle = (stat.percentage / 100) * 360;
       const nextAngle = currentAngle + angle;
 

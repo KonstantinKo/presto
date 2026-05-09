@@ -100,7 +100,7 @@ class ThemeLoader {
       const match = cssContent.match(metadataRegex);
 
       if (match) {
-        const [, name, author, description, supports] = match;
+        const [, name, , description, supports] = match;
 
         // Parse supports field
         const supportsModes = /** @type {('light'|'dark')[]} */ (
@@ -116,7 +116,6 @@ class ThemeLoader {
 
         return {
           name: name.trim(),
-          author: author.trim(),
           description: description.trim(),
           supports: supportsModes,
           preview,
