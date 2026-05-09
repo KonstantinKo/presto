@@ -68,8 +68,7 @@ export class TagStatistics {
           sessionTags.forEach((/** @type {any} */ sessionTag) => {
             // Handle both tag objects and tag IDs
             const tagId = typeof sessionTag === "string" ? sessionTag : sessionTag.id;
-            const tag =
-                typeof sessionTag === "object" ? sessionTag : tagMap.get(tagId);
+            const tag = typeof sessionTag === "object" ? sessionTag : tagMap.get(tagId);
 
             if (tag) {
               const current = tagUsage.get(tagId) || { duration: 0, sessions: 0 };
