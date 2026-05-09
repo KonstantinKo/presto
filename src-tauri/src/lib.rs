@@ -1436,4 +1436,85 @@ mod tests {
         assert_eq!(history[0].completed_pomodoros, 5);
         assert_eq!(history[29].completed_pomodoros, 34);
     }
+
+    // -- BridgeError mirror tests (spec 001-leptos-migration T023 RED / T025 GREEN).
+    //
+    // The Tauri-side `BridgeError` enum mirrors the Leptos-side definition in
+    // `presto-web/src/bridge/error.rs`. Wire shape: externally-tagged JSON via
+    // `#[serde(tag = "kind", rename_all = "snake_case")]`. Both sides assert
+    // the same byte-for-byte representation so a serde-incompatible change
+    // breaks both crates' tests at once.
+    //
+    // RED-phase content: these tests reference `BridgeError`, which is not
+    // yet declared; the module fails to compile. The implementation lands in
+    // T025 GREEN.
+
+    #[test]
+    fn bridge_error_serde_roundtrip_bridge_unavailable() {
+        let json = serde_json::to_string(&super::BridgeError::BridgeUnavailable).unwrap();
+        assert_eq!(json, r#"{"kind":"bridge_unavailable"}"#);
+    }
+
+    #[test]
+    fn bridge_error_serde_roundtrip_not_authenticated() {
+        let json = serde_json::to_string(&super::BridgeError::NotAuthenticated).unwrap();
+        assert_eq!(json, r#"{"kind":"not_authenticated"}"#);
+    }
+
+    #[test]
+    fn bridge_error_serde_roundtrip_invalid_argument() {
+        let err = super::BridgeError::InvalidArgument {
+            field: "email".to_string(),
+            reason: "empty".to_string(),
+        };
+        let json = serde_json::to_string(&err).unwrap();
+        assert_eq!(
+            json,
+            r#"{"kind":"invalid_argument","field":"email","reason":"empty"}"#
+        );
+    }
+
+    #[test]
+    fn bridge_error_serde_roundtrip_not_found() {
+        let err = super::BridgeError::NotFound {
+            resource: "settings.json".to_string(),
+        };
+        let json = serde_json::to_string(&err).unwrap();
+        assert_eq!(json, r#"{"kind":"not_found","resource":"settings.json"}"#);
+    }
+
+    #[test]
+    fn bridge_error_serde_roundtrip_serde_roundtrip_variant() {
+        let err = super::BridgeError::SerdeRoundtrip {
+            command: "load_settings",
+            error: "missing field `timer`".to_string(),
+        };
+        let json = serde_json::to_string(&err).unwrap();
+        assert_eq!(
+            json,
+            r#"{"kind":"serde_roundtrip","command":"load_settings","error":"missing field `timer`"}"#
+        );
+    }
+
+    #[test]
+    fn bridge_error_serde_roundtrip_internal() {
+        let err = super::BridgeError::Internal {
+            msg: "boom".to_string(),
+        };
+        let json = serde_json::to_string(&err).unwrap();
+        assert_eq!(json, r#"{"kind":"internal","msg":"boom"}"#);
+    }
+
+    #[test]
+    fn bridge_error_serde_roundtrip_decodes_external_tag() {
+        let json = r#"{"kind":"invalid_argument","field":"password","reason":"too short"}"#;
+        let decoded: super::BridgeError = serde_json::from_str(json).unwrap();
+        match decoded {
+            super::BridgeError::InvalidArgument { field, reason } => {
+                assert_eq!(field, "password");
+                assert_eq!(reason, "too short");
+            }
+            other => panic!("expected InvalidArgument, got {other:?}"),
+        }
+    }
 }
