@@ -92,7 +92,7 @@ Per principle, Roman numeral + name (per plan-template.md):
 
 ### Drift gate + verification
 
-- [ ] T021 [US3] Add a CI step to `.agentex.yml` (or `scripts/check-mock-drift.sh`) that greps `src-tauri/src/lib.rs` for `#[tauri::command]` names and asserts each name appears as a `case` in `tauriMock.js`, and inverse — done-signal: the script exits 0 on the reconciled HEAD; intentionally renaming a case in a throwaway branch makes it exit 1.
+- [x] T021 [US3] Add a CI step to `.agentex.yml` (or `scripts/check-mock-drift.sh`) that greps `src-tauri/src/lib.rs` for `#[tauri::command]` names and asserts each name appears as a `case` in `tauriMock.js`, and inverse — done-signal: the script exits 0 on the reconciled HEAD; intentionally renaming a case in a throwaway branch makes it exit 1.
 - [ ] T022 [US3] Run the full e2e + visual regression suite as the verification of the reconciled mock — done-signal: `(cd tests/e2e && npx playwright test)` returns 0; `(cd tests/e2e && npx playwright test visual-regression.spec.js)` returns 0 with 0 baselines re-captured.
 
 **Checkpoint**: mock matches today's handler set. Phase 1 may add new commands.

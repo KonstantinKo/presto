@@ -39,6 +39,12 @@ qa:
     - cd src-tauri && cargo clippy --all-targets -- -D warnings
     - npx eslint "src/**/*.{js,mjs,cjs}" "tests/**/*.{js,mjs,cjs}" "*.js" "*.mjs" "*.cjs" --no-error-on-unmatched-pattern
     - npx tsc --noEmit -p .
+    # Mock drift gate (spec 001-leptos-migration T021): every #[tauri::command]
+    # handler in src-tauri/src/lib.rs must have a matching `case "<name>":` in
+    # tests/e2e/fixtures/tauriMock.js, and vice versa. Phase-6 deletions and
+    # plugin-injected commands are exempt. See scripts/check-mock-drift.sh
+    # header for the full exemption list.
+    - bash scripts/check-mock-drift.sh
 
   format:
     - command: cd src-tauri && cargo fmt -- --check
