@@ -49,7 +49,7 @@ struct ManualSession {
     start_time: String,   // "HH:MM"
     end_time: String,     // "HH:MM"
     notes: Option<String>,
-    created_at: String,                   // ISO string
+    created_at: String, // ISO string
     date: String,
     tags: Option<Vec<serde_json::Value>>, // Array of tag objects
 }
