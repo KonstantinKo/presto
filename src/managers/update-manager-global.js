@@ -554,14 +554,39 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
 
         const tauriAPI = await this.getTauriUpdaterAPI();
         if (tauriAPI && tauriAPI.downloadAndInstall) {
+          let downloaded = 0;
+          let contentLength = 0;
           await tauriAPI.downloadAndInstall((/** @type {any} */ progress) => {
-            logger.debug(`📥 Download progress: ${progress}%`);
-            this.downloadProgress = progress;
-            this.emit("downloadProgress", {
-              progress,
-              chunkLength: progress,
-              contentLength: 100,
-            });
+            if (typeof progress === "number") {
+              this.downloadProgress = progress;
+              this.emit("downloadProgress", {
+                progress,
+                chunkLength: progress,
+                contentLength: 100,
+              });
+              return;
+            }
+
+            switch (progress?.event) {
+              case "Started":
+                downloaded = 0;
+                contentLength = progress.data?.contentLength ?? 0;
+                break;
+              case "Progress": {
+                const chunkLength = progress.data?.chunkLength ?? 0;
+                downloaded += chunkLength;
+                const pct = contentLength > 0 ? Math.round((downloaded / contentLength) * 100) : 0;
+                logger.debug(`📥 Download progress: ${pct}%`);
+                this.downloadProgress = pct;
+                if (contentLength > 0) {
+                  this.emit("downloadProgress", { progress: pct, chunkLength, contentLength });
+                }
+                break;
+              }
+              case "Finished":
+                this.downloadProgress = 100;
+                break;
+            }
           });
 
           this.downloadProgress = 100;
