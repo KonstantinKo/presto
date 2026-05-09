@@ -78,7 +78,6 @@ export class SettingsManager {
         loadedSettings.hide_status_bar !== undefined &&
         loadedSettings.status_bar_display === undefined
       ) {
-        // If old setting existed but new one doesn't, migrate
         this.settings.status_bar_display = loadedSettings.hide_status_bar ? "icon-only" : "default";
         // Schedule save to persist the migrated setting
         this.scheduleAutoSave();
@@ -139,14 +138,14 @@ export class SettingsManager {
       },
       appearance: {
         theme: "auto", // auto, light, dark
-        timer_theme: "espresso", // Timer color theme
+        timer_theme: "espresso",
       },
       advanced: {
         debug_mode: false, // Debug mode with 3-second timers
       },
-      autostart: false, // default to disabled
-      analytics_enabled: true, // Analytics enabled by default
-      hide_icon_on_close: false, // Hide icon on close disabled by default
+      autostart: false,
+      analytics_enabled: true,
+      hide_icon_on_close: false,
       status_bar_display: "default", // Status bar display mode: 'default' or 'icon-only'
     };
   }
@@ -195,7 +194,6 @@ export class SettingsManager {
     /** @type {any} */ (document.getElementById("auto-start-timer")).checked =
       this.settings.notifications.auto_start_timer;
 
-    // Debug log for continuous sessions
     logger.debug(
       "🔧 PopulateUI - Raw continuous sessions value:",
       this.settings.notifications.allow_continuous_sessions
@@ -321,12 +319,10 @@ export class SettingsManager {
     const lastShortcutTime = /** @type {Record<string, any>} */ ({});
     const debounceDelay = 500; // 500ms debounce
 
-    // Listen for global shortcut events from Rust
     window.__TAURI__?.event?.listen("global-shortcut", (event) => {
       const action = event.payload;
       const now = Date.now();
 
-      // Check if this action was triggered too recently
       if (lastShortcutTime[action] && now - lastShortcutTime[action] < debounceDelay) {
         logger.debug(`Debounced global shortcut: ${action}`);
         return;
@@ -366,12 +362,10 @@ export class SettingsManager {
       }
     });
 
-    // Listen for shortcuts update events
     window.__TAURI__?.event?.listen("shortcuts-updated", (event) => {
       logger.info("Shortcuts updated:", event.payload);
       this.settings.shortcuts = event.payload;
 
-      // Update the timer's keyboard shortcuts
       if (window.pomodoroTimer) {
         window.pomodoroTimer.updateKeyboardShortcuts(this.settings.shortcuts);
       }
@@ -451,7 +445,6 @@ export class SettingsManager {
     // Auto-finish recording after a short delay
     setTimeout(() => {
       this.stopRecordingShortcut();
-      // Schedule auto-save after shortcut is set
       this.scheduleAutoSave();
     }, 500);
   }
@@ -590,7 +583,6 @@ export class SettingsManager {
     }
   }
 
-  // Complete reset for total data reset
   resetToDefaultsForce() {
     this.settings = this.getDefaultSettings();
     this.populateSettingsUI();
@@ -603,7 +595,6 @@ export class SettingsManager {
     const input = /** @type {any} */ (document.getElementById(inputId));
     if (input) {
       input.value = "";
-      // Schedule auto-save after clearing shortcut
       this.scheduleAutoSave();
     }
   }
@@ -662,7 +653,6 @@ export class SettingsManager {
       desktopNotificationsCheckbox.addEventListener("change", async (e) => {
         if (/** @type {any} */ (e.target).checked) {
           try {
-            // Request notification permission when enabling
             logger.info("🔔 Desktop notifications enabled, requesting permission...");
             const permission = await NotificationUtils.requestNotificationPermission();
             logger.info("🔔 Notification permission result:", permission);
@@ -676,7 +666,6 @@ export class SettingsManager {
               NotificationUtils.showNotificationPing(message, "warning");
               // Don't uncheck the box - let the user's choice be saved
             } else {
-              // Permission granted, show success message
               NotificationUtils.showNotificationPing("✓ Desktop notifications enabled!", "success");
             }
           } catch (error) {
@@ -700,10 +689,8 @@ export class SettingsManager {
       });
     }
 
-    // Initialize notification status display and test button
     this.setupNotificationStatusDisplay();
 
-    // Other notification checkboxes
     const checkboxFields = ["sound-notifications", "debug-mode"];
 
     checkboxFields.forEach((fieldId) => {
@@ -720,12 +707,10 @@ export class SettingsManager {
   }
 
   scheduleAutoSave() {
-    // Clear existing timeout
     if (this.autoSaveTimeout) {
       clearTimeout(this.autoSaveTimeout);
     }
 
-    // Schedule new auto-save
     this.autoSaveTimeout = setTimeout(() => {
       this.autoSaveSettings();
     }, this.autoSaveDelay);
@@ -846,7 +831,6 @@ export class SettingsManager {
   }
 
   showAutoSaveFeedback() {
-    // Use the unified notification system instead of custom feedback
     NotificationUtils.showNotificationPing("✓ Settings saved", "success");
   }
 
@@ -858,11 +842,9 @@ export class SettingsManager {
       item.addEventListener("click", () => {
         const targetCategory = /** @type {HTMLElement} */ (item).dataset.category;
 
-        // Remove active class from all nav items and categories
         navItems.forEach((nav) => nav.classList.remove("active"));
         categories.forEach((cat) => cat.classList.remove("active"));
 
-        // Add active class to clicked nav item and corresponding category
         item.classList.add("active");
         const targetElement = document.getElementById(`category-${targetCategory}`);
         if (targetElement) {

@@ -55,7 +55,6 @@ export class UpdateNotification {
     this.container = document.createElement("div");
     this.container.className = "update-notification-container";
 
-    // Add desktop class if running in Tauri desktop app
     if (window.__TAURI__ && window.__TAURI__.core) {
       this.container.classList.add("desktop");
     }
@@ -596,7 +595,6 @@ export class UpdateNotification {
 
     // REMOVED: We now allow notifications even in development mode for GitHub releases
 
-    // Don't show if this version has been skipped
     if (this.isVersionSkipped(updateInfo.version)) {
       logger.debug(
         `⏭️ [UpdateNotification] Version ${updateInfo.version} was skipped - not showing notification`

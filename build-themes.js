@@ -8,7 +8,6 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Paths
 const themesDir = path.join(__dirname, 'src/styles/themes');
 const themeLoaderPath = path.join(__dirname, 'src/utils/theme-loader.js');
 
@@ -37,15 +36,12 @@ function updateThemeLoader(themeFiles) {
     try {
         let content = fs.readFileSync(themeLoaderPath, 'utf-8');
 
-        // Create the new themes array
         const themesArray = themeFiles.map(file => `'${file}'`).join(',\n            ');
 
-        // Replace the knownThemes array in the file
         const newKnownThemes = `        const knownThemes = [
             ${themesArray}
         ];`;
 
-        // Find and replace the knownThemes array
         const knownThemesRegex = /const knownThemes = \[[\s\S]*?\];/;
 
         if (knownThemesRegex.test(content)) {
@@ -88,5 +84,4 @@ function main() {
     }
 }
 
-// Run the script
 main();

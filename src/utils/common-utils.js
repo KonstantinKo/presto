@@ -50,7 +50,6 @@ export class NotificationUtils {
       document.body.appendChild(container);
     }
 
-    // Check if we have too many active notifications
     if (this.activeNotifications.size >= this.maxSimultaneousNotifications) {
       // If it's a low priority notification (like auto-save), queue it
       if (isSettingsSaved(message, type)) {
@@ -72,20 +71,17 @@ export class NotificationUtils {
       }
     }
 
-    // Check for duplicate messages and update if found
     const existingNotifications = container.querySelectorAll(".notification-ping");
     for (const existing of existingNotifications) {
       if (existing.textContent === message) {
         // Don't refresh if notification is already dismissing
         if (!existing.classList.contains("dismissing")) {
-          // Update existing notification instead of creating a new one
           this.refreshNotification(/** @type {HTMLElement} */ (existing));
         }
         return;
       }
     }
 
-    // Create new notification
     const notification = document.createElement("div");
     const variant = timerState || type || "info";
     notification.className = `notification-ping ${variant}`;
@@ -108,7 +104,6 @@ export class NotificationUtils {
     // eslint-disable-next-line no-unused-expressions -- intentional layout trigger
     notification.offsetHeight;
 
-    // Start the animation by removing the entering class
     requestAnimationFrame(() => {
       if (notification.parentNode) {
         notification.classList.remove("entering");
@@ -136,7 +131,6 @@ export class NotificationUtils {
    * @param {string | null} timerState
    */
   static queueNotification(message, type, timerState) {
-    // Check if this notification is already in the queue
     const isDuplicate = this.notificationQueue.some((item) => item.message === message);
     if (isDuplicate) {
       return; // Don't queue duplicates
@@ -163,10 +157,8 @@ export class NotificationUtils {
 
   /** @param {HTMLElement} notification */
   static refreshNotification(notification) {
-    // Add a refresh animation class
     notification.classList.add("refreshing");
 
-    // Remove the class after animation
     setTimeout(() => {
       notification.classList.remove("refreshing");
     }, 300);
@@ -275,7 +267,6 @@ export class NotificationUtils {
       this.activeNotifications.delete(notificationId);
     }
 
-    // Add dismissing class for animation
     notification.classList.add("dismissing");
 
     // Wait for animation to complete before removing from DOM
@@ -287,7 +278,6 @@ export class NotificationUtils {
 
   static playNotificationSound() {
     try {
-      // Create a simple beep sound
       const audioContext = new (window.AudioContext || window.webkitAudioContext)();
       const oscillator = audioContext.createOscillator();
       const gainNode = audioContext.createGain();
@@ -328,7 +318,6 @@ export class NotificationUtils {
         const { isPermissionGranted, requestPermission, sendNotification } =
           window.__TAURI__.notification;
 
-        // Check if permission is granted, request if not
         let permissionGranted = await isPermissionGranted();
         if (!permissionGranted) {
           permissionGranted = (await requestPermission()) === "granted";
@@ -514,7 +503,6 @@ export class DOMUtils {
    * @returns {HTMLElement}
    */
   static createModal(title, content, className = "") {
-    // Remove existing modal if any
     const existing = document.querySelector(".modal-overlay");
     if (existing) {
       existing.remove();
@@ -539,7 +527,6 @@ export class DOMUtils {
     overlay.appendChild(modal);
     document.body.appendChild(overlay);
 
-    // Add event listeners
     const closeBtn = /** @type {HTMLElement} */ (modal.querySelector(".close-btn"));
     closeBtn.addEventListener("click", () => this.closeModal(overlay));
 
@@ -549,7 +536,6 @@ export class DOMUtils {
       }
     });
 
-    // Show modal with animation
     setTimeout(() => {
       overlay.classList.add("show");
     }, 10);

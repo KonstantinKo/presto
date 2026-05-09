@@ -113,7 +113,6 @@ function showCustomConfirm(title, message, type = "warning") {
       backdrop-filter: blur(5px);
     `;
 
-    // Create modal content
     const modal = document.createElement("div");
     modal.className = "custom-confirm-modal";
     modal.style.cssText = `
@@ -127,7 +126,6 @@ function showCustomConfirm(title, message, type = "warning") {
       font-family: system-ui, -apple-system, sans-serif;
     `;
 
-    // Determine colors based on type
     const colors = /** @type {Record<string, {bg: string, border: string, text: string}>} */ ({
       warning: { bg: "#fff3cd", border: "#ffeaa7", text: "#856404" },
       error: { bg: "#f8d7da", border: "#f5c6cb", text: "#721c24" },
@@ -845,7 +843,6 @@ function positionDropdown(avatarBtn, dropdown) {
 }
 
 function setupUserAvatarEventListeners() {
-  // Prevent multiple setups
   if (window.avatarListenersSetup) {
     logger.debug("🔄 Avatar listeners already setup, skipping...");
     return;
@@ -1016,7 +1013,6 @@ async function initializeApplication() {
         logger.error("⚠️ Initialization timeout - removing loading overlay");
         stuckOverlay.remove();
 
-        // Show error message
         NotificationUtils.showNotificationPing(
           "Initialization timed out. Please refresh! 🔄",
           "error"
@@ -1054,12 +1050,12 @@ async function initializeApplication() {
     window.updateManager = new window.UpdateManagerV2();
     window.updateManagerInstance = window.updateManager; // Alias for compatibility
     if (window.updateManager.loadPreferences) {
-      window.updateManager.loadPreferences(); // Carica le preferenze salvate se supportato
+      window.updateManager.loadPreferences();
     }
 
     logger.info("🔔 Initializing Update Notification...");
     const updateNotification = new UpdateNotification();
-    window.updateNotification = updateNotification; // Make it globally available
+    window.updateNotification = updateNotification;
 
     if (authManager.isFirstRun()) {
       logger.info("👋 First run detected, proceeding as guest...");
@@ -1076,7 +1072,7 @@ async function initializeApplication() {
 
     logger.info("⏱️ Initializing Pomodoro Timer...");
     timer = new PomodoroTimer();
-    window.pomodoroTimer = timer; // Make it globally accessible
+    window.pomodoroTimer = timer;
 
     if (settingsManager.settings) {
       await timer.applySettings(settingsManager.settings);

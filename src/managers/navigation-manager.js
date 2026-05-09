@@ -8,7 +8,7 @@ export class NavigationManager {
     this.initialized = false;
     this.currentTooltip = null; // Track current tooltip for proper cleanup
     this.tooltipTimeout = null; // Track timeout for debounced tooltip removal
-    this.tagStatistics = new TagStatistics(); // Initialize tag statistics utility
+    this.tagStatistics = new TagStatistics();
 
     // Apply timer-active class on initial load since default view is timer
     document.body.classList.add("timer-active");
@@ -16,7 +16,6 @@ export class NavigationManager {
   }
 
   async init() {
-    // Prevent duplicate initialization
     if (this.initialized) {
       logger.debug("NavigationManager already initialized, skipping...");
       return;
@@ -401,54 +400,45 @@ export class NavigationManager {
         const hourBar = document.createElement("div");
         hourBar.className = "hour-bar";
 
-        // Calculate height based on focus activity in this hour
         const height =
           totalMinutes > 0 ? Math.max((totalMinutes / maxTotalMinutes) * maxHeight, 8) : 8; // Minimum height for visibility
 
         hourBar.style.height = `${height}px`;
 
-        // Create focus segment if there's data
         if (totalMinutes > 0) {
           const focusSegment = document.createElement("div");
           focusSegment.className = "hour-bar-focus";
           focusSegment.style.height = "100%"; // Full height since only focus
           hourBar.appendChild(focusSegment);
         } else {
-          // Empty hour - show subtle background
           hourBar.classList.add("hour-bar-empty");
         }
 
-        // Hour label at bottom
         const hourLabel = document.createElement("div");
         hourLabel.className = "hour-label";
         hourLabel.textContent = hour.toString().padStart(2, "0");
         hourBar.appendChild(hourLabel);
 
-        // Enhanced tooltip with session details (focus only)
         const focusText = data.focusMinutes > 0 ? `${data.focusMinutes}m focus` : "";
         const activityText = focusText || "No activity";
 
         // Use custom tooltip instead of native title
         hourBar.dataset.tooltip = `${hour}:00 - ${activityText}`;
 
-        // Add hover event listeners for custom tooltip
         this.addTooltipEvents(hourBar);
 
-        // Add data attributes for potential future interactions
         hourBar.dataset.hour = String(hour);
         hourBar.dataset.focusMinutes = String(data.focusMinutes);
 
         dailyChart.appendChild(hourBar);
       });
 
-      // Add cleanup event for when mouse leaves the entire chart
       dailyChart.addEventListener("mouseleave", () => {
         this.removeTooltip();
       });
     } catch (error) {
       logger.error("Failed to load daily chart data:", error);
 
-      // Show fallback empty state
       hours.forEach((hour) => {
         const hourBar = document.createElement("div");
         hourBar.className = "hour-bar hour-bar-empty";
@@ -514,7 +504,6 @@ export class NavigationManager {
           isPast: date <= today,
         });
 
-        // Track maximum for proportional scaling
         if (sessionsMinutes > maxSessionsMinutes) {
           maxSessionsMinutes = sessionsMinutes;
         }
@@ -537,24 +526,21 @@ export class NavigationManager {
       // Use a minimum baseline for maxSessionsMinutes to avoid tiny bars
       const scalingMax = Math.max(maxSessionsMinutes, Math.max(avgSessionTime, 60)); // Include average in scaling
 
-      // Add average session time line if we have data
       if (avgSessionTime > 0 && daysWithSessions > 0) {
         const avgLine = document.createElement("div");
         avgLine.className = "week-average-line";
 
-        // Calculate position of average line
         const avgLineHeight = (avgSessionTime / scalingMax) * maxHeight;
         avgLine.style.bottom = `${avgLineHeight}px`;
         avgLine.style.left = "0";
         avgLine.style.right = "0";
         avgLine.style.position = "absolute";
         avgLine.style.height = "1px"; // Reduced thickness for dashed line
-        avgLine.style.backgroundColor = "transparent"; // No solid background
+        avgLine.style.backgroundColor = "transparent";
         avgLine.style.borderTop = "1px dashed #d1d5db"; // Light gray dashed line
         avgLine.style.zIndex = "10";
-        avgLine.style.opacity = "0.6"; // Semi-transparent
+        avgLine.style.opacity = "0.6";
 
-        // Add label for average
         const avgLabel = document.createElement("div");
         avgLabel.className = "week-average-label";
         avgLabel.textContent = `Avg: ${Math.round(avgSessionTime)}m`;
@@ -563,12 +549,12 @@ export class NavigationManager {
         avgLabel.style.top = "-18px";
         avgLabel.style.fontSize = "10px";
         avgLabel.style.color = "#9ca3af"; // Light gray to match dashed line
-        avgLabel.style.fontWeight = "500"; // Slightly lighter weight
+        avgLabel.style.fontWeight = "500";
         avgLabel.style.background = "white";
         avgLabel.style.padding = "1px 4px";
         avgLabel.style.borderRadius = "3px";
         avgLabel.style.whiteSpace = "nowrap";
-        avgLabel.style.opacity = "0.8"; // Semi-transparent like the line
+        avgLabel.style.opacity = "0.8";
 
         avgLine.appendChild(avgLabel);
 
@@ -586,12 +572,10 @@ export class NavigationManager {
 
         dayBar.style.height = `${height}px`;
 
-        // Add visual indicator if this day was used in average calculation
         if (isPast && sessions > 0) {
           dayBar.style.borderTop = "1px solid #d1d5db"; // Light gray to match dashed line
         }
 
-        // Add value label on hover
         if (sessionsMinutes > 0) {
           const valueLabel = document.createElement("div");
           valueLabel.className = "week-day-bar-value";
@@ -599,7 +583,6 @@ export class NavigationManager {
           dayBar.appendChild(valueLabel);
         }
 
-        // Add hover tooltip with average session time info
         const hours = Math.floor(sessionsMinutes / 60);
         const minutes = Math.floor(sessionsMinutes % 60);
         const timeText = hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
@@ -612,19 +595,16 @@ export class NavigationManager {
         // Use custom tooltip instead of native title
         dayBar.dataset.tooltip = tooltipText;
 
-        // Add hover event listeners for custom tooltip
         this.addTooltipEvents(dayBar);
 
         weeklyChart.appendChild(dayBar);
       });
 
-      // Add cleanup event for when mouse leaves the entire chart
       weeklyChart.addEventListener("mouseleave", () => {
         this.removeTooltip();
       });
     } catch (error) {
       logger.error("Failed to load weekly chart data:", error);
-      // Show empty chart on error
       days.forEach((day, _index) => {
         const dayBar = document.createElement("div");
         dayBar.className = "week-day-bar";
@@ -633,7 +613,6 @@ export class NavigationManager {
         // Use custom tooltip instead of native title
         dayBar.dataset.tooltip = `${day}: No data available`;
 
-        // Add hover event listeners for custom tooltip
         this.addTooltipEvents(dayBar);
 
         weeklyChart.appendChild(dayBar);
@@ -643,10 +622,8 @@ export class NavigationManager {
 
   async updateTagUsageChart() {
     try {
-      // Get all available tags
       const tags = window.tagManager ? window.tagManager.tags : [];
 
-      // Get sessions for the current week
       const sessions = [];
       const startOfWeek = new Date(this.selectedWeek || this.getWeekStart(this.currentDate));
 
@@ -668,15 +645,12 @@ export class NavigationManager {
         }
       }
 
-      // Get tag statistics for current week
       const tagStatsData = this.tagStatistics.getCurrentWeekTagStats(sessions, tags);
 
-      // Render the pie chart
       this.tagStatistics.renderTagPieChart("tag-pie-chart", "tag-legend", tagStatsData);
     } catch (error) {
       logger.error("Error updating tag usage chart:", error);
 
-      // Show placeholder on error
       const chartContainer = document.getElementById("tag-pie-chart");
       const legendContainer = document.getElementById("tag-legend");
 
@@ -748,10 +722,8 @@ export class NavigationManager {
         this.createTimelineSession(session, date, timelineTrack, visibleSessions);
       });
 
-      // Calculate and set timeline height after all sessions are added
       this.updateTimelineHeight(timelineTrack, visibleSessions.length);
 
-      // Initialize timeline interactions
       this.initializeTimelineInteractions();
     } catch (error) {
       logger.error("Failed to load session details:", error);
@@ -897,8 +869,8 @@ export class NavigationManager {
   updateTimelineHeight(timelineTrack, totalSessions) {
     const rowHeight = 20; // Spacing between rows
     const sessionHeight = 15; // Height of each session
-    const topPadding = 10; // Top padding
-    const bottomPadding = 10; // Bottom padding
+    const topPadding = 10;
+    const bottomPadding = 10;
     const minHeight = 60; // Minimum height even with no sessions
 
     if (totalSessions === 0) {
@@ -920,11 +892,9 @@ export class NavigationManager {
 
   /** @param {any} timelineTrack */
   addTimelineGridLines(timelineTrack) {
-    // Remove existing grid lines
     const existingLines = timelineTrack.querySelectorAll(".timeline-grid-line");
     existingLines.forEach((/** @type {any} */ line) => line.remove());
 
-    // Add grid lines for major hours: 0, 4, 8, 12, 16, 20
     const majorHours = [0, 4, 8, 12, 16, 20];
     const timelineStartHour = 0;
     const timelineRangeHours = 24;
@@ -933,7 +903,6 @@ export class NavigationManager {
       const line = document.createElement("div");
       line.className = "timeline-grid-line";
 
-      // Calculate position percentage
       const hoursFromStart = hour - timelineStartHour;
       const percentage = (hoursFromStart / timelineRangeHours) * 100;
       line.style.left = `${percentage}%`;
@@ -949,7 +918,6 @@ export class NavigationManager {
     }
     timelineHours.innerHTML = "";
 
-    // Show major hours every 4 hours: 0, 4, 8, 12, 16, 20
     const majorHours = [0, 4, 8, 12, 16, 20];
     const timelineStartHour = 0; // 12 AM (midnight)
     const timelineRangeHours = 24; // Full day = 24 hours
@@ -959,7 +927,6 @@ export class NavigationManager {
       hourElement.className = "timeline-hour";
       hourElement.textContent = `${hour.toString().padStart(2, "0")}:00`;
 
-      // Calculate correct position percentage
       const hoursFromStart = hour - timelineStartHour;
       const percentage = (hoursFromStart / timelineRangeHours) * 100;
       hourElement.style.left = `${percentage}%`;

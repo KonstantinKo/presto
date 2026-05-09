@@ -1,4 +1,3 @@
-// Team Manager for Team Dashboard
 import { logger } from "../utils/logger.js";
 
 export class TeamManager {
@@ -16,7 +15,6 @@ export class TeamManager {
     this.initialized = true;
     logger.info("Initializing TeamManager...");
 
-    // Initialize with demo data
     this.initializeDemoData();
     this.renderTeams();
     this.updateTeamStats();
@@ -153,7 +151,6 @@ export class TeamManager {
           member.status === "break" ||
           member.status === "long-break"
         ) {
-          // Update timer
           if (member.currentSessionStart) {
             const elapsed = Math.floor((Date.now() - member.currentSessionStart.getTime()) / 1000);
 
@@ -200,7 +197,6 @@ export class TeamManager {
             }
           }
 
-          // Update last seen
           member.lastSeen = new Date();
         }
 
