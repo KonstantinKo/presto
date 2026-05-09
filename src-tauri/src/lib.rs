@@ -276,15 +276,11 @@ impl ActivityMonitor {
                         last.elapsed()
                     };
 
-                    if elapsed >= threshold {
+                    // Only emit on active→idle transition; without resetting the
+                    // timer, prev_active gates further emissions until activity resumes.
+                    if elapsed >= threshold && prev_active {
                         let _ = app_handle.emit("user-inactivity", ());
                         prev_active = false;
-
-                        // Reset the timer to avoid spam
-                        {
-                            let mut last = helpers::lock_or_recover(&last_activity);
-                            *last = Instant::now();
-                        }
                     }
                 }
 
@@ -725,13 +721,14 @@ async fn reset_all_data(app: AppHandle) -> Result<(), String> {
         if file_path.exists() {
             fs::remove_file(&file_path)
                 .map_err(|e| format!("Failed to delete {file_name}: {e}"))?;
+            if *file_name == "settings.json" {
+                *app.state::<SettingsState>()
+                    .0
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner) = AppSettings::default();
+            }
         }
     }
-
-    *app.state::<SettingsState>()
-        .0
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner) = AppSettings::default();
 
     Ok(())
 }

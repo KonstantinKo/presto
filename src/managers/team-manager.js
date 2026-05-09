@@ -33,8 +33,15 @@ export class TeamManager {
   }
 
   _scheduleTeamUpdate() {
+    if (!this.initialized) {
+      return;
+    }
     clearTimeout(this._updateTimeout);
     this._updateTimeout = setTimeout(() => {
+      if (!this.initialized) {
+        this._updateTimeout = undefined;
+        return;
+      }
       if (this.isUpdating) {
         this._scheduleTeamUpdate();
         return;
@@ -46,7 +53,11 @@ export class TeamManager {
         this.updateTeamStats();
       } finally {
         this.isUpdating = false;
-        this._scheduleTeamUpdate();
+        if (this.initialized) {
+          this._scheduleTeamUpdate();
+        } else {
+          this._updateTimeout = undefined;
+        }
       }
     }, 30000);
   }
