@@ -5,9 +5,9 @@
 // types that travel across the bridge:
 //
 // - `error` — `BridgeError` enum (Phase 1A T023-T025).
-// - `session_type` — `SessionType` enum (Phase 1A T028-T029; lands later in
-//   this phase, not yet declared).
+// - `session_type` — `SessionType` enum (Phase 1A T028-T029).
 //
 // Per AGENTS.md §IPC: `invoke()` + `listen()` only; no other channels.
 
 pub mod error;
+pub mod session_type;
