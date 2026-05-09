@@ -31,4 +31,22 @@ test("team view: stats cards display numeric values, member grid renders", async
   const memberRows = page.locator("#team-members-grid .member-row");
   const rowCount = await memberRows.count();
   expect(rowCount).toBeGreaterThan(0);
+
+  // No detail UI exists today; assert visible member data within the first row
+  // (per plan step 24 fallback: 'assert the card shows correct member info: name, role, avatar')
+  const firstRow = memberRows.first();
+  const memberName = firstRow.locator(".member-name");
+  await expect(memberName).toBeVisible();
+  const nameText = await memberName.textContent();
+  expect(nameText && nameText.trim().length).toBeGreaterThan(0);
+
+  const memberRole = firstRow.locator(".member-role-small");
+  await expect(memberRole).toBeVisible();
+  const roleText = await memberRole.textContent();
+  expect(roleText && roleText.trim().length).toBeGreaterThan(0);
+
+  const memberAvatar = firstRow.locator(".member-avatar-initials");
+  await expect(memberAvatar).toBeVisible();
+  const avatarText = await memberAvatar.textContent();
+  expect(avatarText && avatarText.trim().length).toBeGreaterThan(0);
 });
