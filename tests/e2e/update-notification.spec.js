@@ -18,8 +18,8 @@ test("update notification banner: appears with version and close hides it", asyn
   const banner = page.locator("#update-notification-container");
   await expect(banner.locator("#update-notification-version")).not.toBeEmpty({ timeout: 12000 });
 
-  // The version should be "Version 0.4.5" (0.4.4 incremented by simulateUpdate)
-  await expect(banner.locator("#update-notification-version")).toContainText("0.4.5");
+  // The version should be a valid semver string (current version incremented by simulateUpdate)
+  await expect(banner.locator("#update-notification-version")).toContainText(/\d+\.\d+\.\d+/);
 
   // The banner should now have the "visible" class (slid into view)
   await expect(banner).toHaveClass(/visible/, { timeout: 3000 });

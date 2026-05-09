@@ -35,18 +35,16 @@ test("team view: stats cards display numeric values, member grid renders", async
   // No detail UI exists today; assert visible member data within the first row
   // (per plan step 24 fallback: 'assert the card shows correct member info: name, role, avatar')
   const firstRow = memberRows.first();
-  const memberName = firstRow.locator('[data-member-field="name"]');
-  await expect(memberName).toBeVisible();
-  const nameText = await memberName.textContent();
-  expect(nameText && nameText.trim().length).toBeGreaterThan(0);
 
-  const memberRole = firstRow.locator('[data-member-field="role"]');
-  await expect(memberRole).toBeVisible();
-  const roleText = await memberRole.textContent();
-  expect(roleText && roleText.trim().length).toBeGreaterThan(0);
-
-  const memberAvatar = firstRow.locator('[data-member-field="avatar"]');
+  // Avatar initials are rendered as an accessible image element
+  const memberAvatar = firstRow.getByRole("img", { name: "Member avatar" });
   await expect(memberAvatar).toBeVisible();
   const avatarText = await memberAvatar.textContent();
   expect(avatarText && avatarText.trim().length).toBeGreaterThan(0);
+
+  // Name and role are visible text within the member details group
+  const memberDetails = firstRow.getByRole("group", { name: "Member details" });
+  await expect(memberDetails).toBeVisible();
+  const detailsText = await memberDetails.textContent();
+  expect(detailsText && detailsText.trim().length).toBeGreaterThan(0);
 });

@@ -13,7 +13,7 @@ test("run debug-mode focus session to completion and verify it appears in calend
   // Pick a tag (default "Focus" tag)
   await page.locator("#timer-status").click();
   await expect(page.locator("#tag-dropdown-menu")).toBeVisible();
-  await page.locator("#tag-list .tag-item").first().click();
+  await page.locator("#tag-dropdown-menu").getByRole("listitem").first().click();
   // Toggle the dropdown closed by clicking the trigger again (clicking the
   // timer-status label re-invokes toggleDropdown(), which closes the open menu).
   await page.locator("#timer-status").click();

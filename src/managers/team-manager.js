@@ -391,20 +391,24 @@ export class TeamManager {
     const avatarInitialsEl = row.querySelector(".member-avatar-initials");
     const memberNameEl = row.querySelector(".member-name");
     const memberRoleEl = row.querySelector(".member-role-small");
+    const memberDetailsEl = row.querySelector(".member-details");
     const statusLabelEl = row.querySelector(".status-label");
     const memberTimerEl = row.querySelector(".member-timer-value");
     const memberActivityEl = row.querySelector(".member-activity-value");
     if (avatarInitialsEl) {
       avatarInitialsEl.textContent = member.avatar;
-      avatarInitialsEl.setAttribute("data-member-field", "avatar");
+      avatarInitialsEl.setAttribute("role", "img");
+      avatarInitialsEl.setAttribute("aria-label", "Member avatar");
+    }
+    if (memberDetailsEl) {
+      memberDetailsEl.setAttribute("role", "group");
+      memberDetailsEl.setAttribute("aria-label", "Member details");
     }
     if (memberNameEl) {
       memberNameEl.textContent = member.name;
-      memberNameEl.setAttribute("data-member-field", "name");
     }
     if (memberRoleEl) {
       memberRoleEl.textContent = member.role;
-      memberRoleEl.setAttribute("data-member-field", "role");
     }
     if (statusLabelEl) {
       statusLabelEl.textContent = statusInfo.label;
