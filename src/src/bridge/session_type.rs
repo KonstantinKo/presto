@@ -7,10 +7,27 @@
 // `TimerMode` (live engine) because manual entries can carry the
 // `Custom` variant for user-defined session shapes.
 //
-// RED-phase content: this file currently contains only the failing serde
-// round-trip tests (T028). The `SessionType` type itself lands in T029
-// GREEN. Per AGENTS.md §"Test-first commit ordering": a single combined
-// commit is rejected; the diff has to show RED first, then GREEN.
+// The Tauri-side mirror lives in `src-tauri/src/lib.rs`; both definitions
+// have byte-identical serde shapes so a `ManualSession` round-trips
+// across the bridge without translation (FR-013 closed-domain enum;
+// Principle VI typed boundary).
+
+use serde::{Deserialize, Serialize};
+
+/// Closed-domain variant for the `session_type` field on a manual
+/// session record (`ManualSession.session_type`).
+///
+/// Wire form: camelCase strings. The `Custom` variant exists on the
+/// manual-entry side (user-defined session shapes); the live engine's
+/// `TimerMode` has no equivalent.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum SessionType {
+    Focus,
+    Break,
+    LongBreak,
+    Custom,
+}
 
 #[cfg(test)]
 mod tests {

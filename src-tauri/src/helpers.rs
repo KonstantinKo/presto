@@ -678,7 +678,10 @@ mod tests {
     fn make_manual_session(id: &str, date: &str) -> ManualSession {
         ManualSession {
             id: id.to_string(),
-            session_type: "focus".to_string(),
+            // Spec 001-leptos-migration T029: SessionType is the closed-domain
+            // replacement for the legacy `session_type: String` field on
+            // ManualSession. Wire format unchanged (camelCase strings).
+            session_type: crate::SessionType::Focus,
             duration: 25,
             start_time: "09:00".to_string(),
             end_time: "09:25".to_string(),

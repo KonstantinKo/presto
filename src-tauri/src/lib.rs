@@ -87,6 +87,23 @@ pub enum TimerMode {
     LongBreak,
 }
 
+/// `SessionType` — closed-domain enum for manual-session entries.
+///
+/// Spec 001-leptos-migration §Phase 1A T029; data-model.md §`SessionType`.
+/// Mirrors `presto-web/src/bridge/session_type.rs`. Wire form: camelCase
+/// strings (`"focus"`, `"break"`, `"longBreak"`, `"custom"`).
+///
+/// Distinct from `TimerMode` because manual entries can carry the
+/// `Custom` variant for user-defined session shapes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum SessionType {
+    Focus,
+    Break,
+    LongBreak,
+    Custom,
+}
+
 // `String → BridgeError` via Internal. Lets `?` auto-convert legacy
 // `Result<_, String>` returns from `helpers.rs` (which keeps the legacy
 // error type for now) into `BridgeError` at the handler boundary. The
@@ -130,13 +147,17 @@ struct PomodoroSession {
     date: String,
 }
 
+// `session_type: SessionType` (was `String`) per spec 001 T029 —
+// closed-domain enum tightening. Wire format unchanged: camelCase
+// strings via `#[serde(rename_all = "camelCase")]` on `SessionType`.
+// On-disk shape preserved exactly (FR-005 idempotent round-trip).
 #[derive(Debug, Serialize, Deserialize, Clone)]
 struct ManualSession {
     id: String,
-    session_type: String, // "focus", "break", "longBreak", "custom"
-    duration: u32,        // in minutes
-    start_time: String,   // "HH:MM"
-    end_time: String,     // "HH:MM"
+    session_type: SessionType,
+    duration: u32,      // in minutes
+    start_time: String, // "HH:MM"
+    end_time: String,   // "HH:MM"
     notes: Option<String>,
     created_at: String, // ISO string
     date: String,
@@ -1462,7 +1483,7 @@ mod tests {
     fn manual_session_serializes_with_optional_fields() {
         let session_with_tags = ManualSession {
             id: "session-1".to_string(),
-            session_type: "focus".to_string(),
+            session_type: super::SessionType::Focus,
             duration: 25,
             start_time: "09:00".to_string(),
             end_time: "09:25".to_string(),
@@ -1475,12 +1496,13 @@ mod tests {
         let parsed: ManualSession = serde_json::from_str(&json).unwrap();
         assert_eq!(parsed.id, "session-1");
         assert_eq!(parsed.duration, 25);
+        assert_eq!(parsed.session_type, super::SessionType::Focus);
         assert!(parsed.notes.is_some());
         assert!(parsed.tags.is_some());
 
         let session_no_extras = ManualSession {
             id: "session-2".to_string(),
-            session_type: "break".to_string(),
+            session_type: super::SessionType::Break,
             duration: 5,
             start_time: "09:25".to_string(),
             end_time: "09:30".to_string(),
@@ -1491,6 +1513,7 @@ mod tests {
         };
         let json = serde_json::to_string(&session_no_extras).unwrap();
         let parsed: ManualSession = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed.session_type, super::SessionType::Break);
         assert!(parsed.notes.is_none());
         assert!(parsed.tags.is_none());
     }
@@ -1611,6 +1634,52 @@ mod tests {
             }
             other => panic!("expected InvalidArgument, got {other:?}"),
         }
+    }
+
+    // -- SessionType mirror tests (spec 001-leptos-migration T029).
+    //
+    // Mirrors `presto-web/src/bridge/session_type.rs` — same wire shape,
+    // same camelCase strings. The mirror lets a `ManualSession` round-trip
+    // across the bridge without translation (FR-013 closed-domain enum).
+
+    #[test]
+    fn session_type_serde_roundtrip_focus() {
+        assert_eq!(
+            serde_json::to_string(&super::SessionType::Focus).unwrap(),
+            r#""focus""#
+        );
+        let decoded: super::SessionType = serde_json::from_str(r#""focus""#).unwrap();
+        assert_eq!(decoded, super::SessionType::Focus);
+    }
+
+    #[test]
+    fn session_type_serde_roundtrip_break() {
+        assert_eq!(
+            serde_json::to_string(&super::SessionType::Break).unwrap(),
+            r#""break""#
+        );
+        let decoded: super::SessionType = serde_json::from_str(r#""break""#).unwrap();
+        assert_eq!(decoded, super::SessionType::Break);
+    }
+
+    #[test]
+    fn session_type_serde_roundtrip_long_break() {
+        assert_eq!(
+            serde_json::to_string(&super::SessionType::LongBreak).unwrap(),
+            r#""longBreak""#
+        );
+        let decoded: super::SessionType = serde_json::from_str(r#""longBreak""#).unwrap();
+        assert_eq!(decoded, super::SessionType::LongBreak);
+    }
+
+    #[test]
+    fn session_type_serde_roundtrip_custom() {
+        assert_eq!(
+            serde_json::to_string(&super::SessionType::Custom).unwrap(),
+            r#""custom""#
+        );
+        let decoded: super::SessionType = serde_json::from_str(r#""custom""#).unwrap();
+        assert_eq!(decoded, super::SessionType::Custom);
     }
 
     // -- BridgeError mapping coverage (spec 001-leptos-migration T026 RED / T027 GREEN).
