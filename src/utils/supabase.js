@@ -127,6 +127,7 @@ async function initSupabase() {
             };
             let processed = false;
             (async () => {
+              let setupSucceeded = false;
               try {
                 timeout = setTimeout(() => {
                   cleanupListeners();
@@ -168,13 +169,21 @@ async function initSupabase() {
                           hasPayload: Boolean(event?.payload),
                         });
 
-                        // Process the callback
-                        await processOAuthCallback(
-                          event.payload,
-                          resolve,
-                          reject,
-                          /** @type {ReturnType<typeof setTimeout>} */ (timeout)
-                        );
+                        try {
+                          // Process the callback
+                          await processOAuthCallback(
+                            event.payload,
+                            resolve,
+                            reject,
+                            /** @type {ReturnType<typeof setTimeout>} */ (timeout)
+                          );
+                        } catch (callbackError) {
+                          clearTimeout(timeout);
+                          await cancelOauthServer().catch(() => {});
+                          reject(
+                            new Error(`OAuth callback failed: ${toError(callbackError).message}`)
+                          );
+                        }
                       }
                     );
 
@@ -294,12 +303,16 @@ async function initSupabase() {
                 }
 
                 logger.debug("OAuth event listeners set up. Waiting for callback...");
+                setupSucceeded = true;
               } catch (setupError) {
                 logger.error("Error setting up OAuth listeners:", setupError);
-                clearTimeout(timeout);
-                cleanupListeners();
-                await cancelOauthServer();
                 reject(new Error(`OAuth setup failed: ${toError(setupError).message}`));
+              } finally {
+                if (!setupSucceeded) {
+                  clearTimeout(timeout);
+                  cleanupListeners();
+                  await cancelOauthServer();
+                }
               }
             })();
           });

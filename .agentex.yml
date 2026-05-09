@@ -30,7 +30,7 @@ qa:
 
   lint:
     - cd src-tauri && cargo clippy --all-targets -- -D warnings
-    - npx eslint "src/**/*.{js,mjs,cjs}" "tests/**/*.{js,mjs,cjs}" "*.{js,mjs,cjs}"
+    - npx eslint "src/**/*.{js,mjs,cjs}" "tests/**/*.{js,mjs,cjs}" "*.js" "*.mjs" "*.cjs" --no-error-on-unmatched-pattern
     - npx tsc --noEmit -p .
 
   format:

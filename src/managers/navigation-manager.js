@@ -9,6 +9,9 @@ export class NavigationManager {
     this.currentTooltip = null; // Track current tooltip for proper cleanup
     this.tooltipTimeout = null; // Track timeout for debounced tooltip removal
     this.tagStatistics = new TagStatistics();
+    /** @type {Map<string, any>} */
+    this.focusSummaryCache = new Map();
+    this.focusSummaryCacheDirty = true;
 
     // Apply timer-active class on initial load since default view is timer
     document.body.classList.add("timer-active");
@@ -23,6 +26,13 @@ export class NavigationManager {
 
     this.initialized = true;
     logger.info("Initializing NavigationManager...");
+
+    const invalidateFocusCache = () => {
+      this.focusSummaryCacheDirty = true;
+    };
+    window.addEventListener("sessionAdded", invalidateFocusCache);
+    window.addEventListener("sessionUpdated", invalidateFocusCache);
+    window.addEventListener("sessionDeleted", invalidateFocusCache);
 
     const navButtons = document.querySelectorAll(".sidebar-icon, .sidebar-icon-large");
     navButtons.forEach((btn) => {
@@ -147,6 +157,16 @@ export class NavigationManager {
       });
     }
 
+    // Set up container-level mouseleave listeners once to avoid accumulation across re-renders
+    const dailyChart = document.getElementById("daily-chart");
+    if (dailyChart) {
+      dailyChart.addEventListener("mouseleave", () => this.removeTooltip());
+    }
+    const weeklyChart = document.getElementById("weekly-chart");
+    if (weeklyChart) {
+      weeklyChart.addEventListener("mouseleave", () => this.removeTooltip());
+    }
+
     // Initial updates will be handled by switchView when calendar is shown
   }
 
@@ -168,33 +188,41 @@ export class NavigationManager {
   }
 
   async updateFocusSummary() {
-    const totalFocusWeekEl = document.getElementById("total-focus-week");
-    const totalFocusChangeEl = document.getElementById("total-focus-change");
-    const avgFocusDayEl = document.getElementById("avg-focus-day");
-    const avgFocusChangeEl = document.getElementById("avg-focus-change");
-    const weeklySessionsEl = document.getElementById("weekly-sessions");
-    const weeklySessionsChangeEl = document.getElementById("weekly-sessions-change");
-    const weeklyFocusTimeEl = document.getElementById("weekly-focus-time");
-    const weeklyFocusChangeEl = document.getElementById("weekly-focus-change");
+    const weekStart = new Date(this.selectedWeek || this.getWeekStart(this.currentDate));
+    const cacheKey = `${weekStart.getFullYear()}-${weekStart.getMonth()}-${weekStart.getDate()}`;
 
-    let avgFocus = 0;
-    let weeklyFocusTime = 0;
-    let weeklySessions = 0;
-    let previousWeekAvgFocus = 0;
-    let previousWeekFocusTime = 0;
-    let previousWeeklySessions = 0;
+    if (this.focusSummaryCacheDirty) {
+      this.focusSummaryCache.clear();
+      this.focusSummaryCacheDirty = false;
+    }
 
-    try {
-      const weekStart = new Date(this.selectedWeek || this.getWeekStart(this.currentDate));
-      const previousWeekStart = new Date(weekStart);
-      previousWeekStart.setDate(weekStart.getDate() - 7);
+    let cached = this.focusSummaryCache.get(cacheKey);
 
+    if (!cached) {
+      cached = await this.computeFocusSummary(weekStart);
+      this.focusSummaryCache.set(cacheKey, cached);
+    }
+
+    this.applyFocusSummaryToDOM(cached);
+  }
+
+  /** @param {Date} weekStart */
+  async computeFocusSummary(weekStart) {
+    const previousWeekStart = new Date(weekStart);
+    previousWeekStart.setDate(weekStart.getDate() - 7);
+
+    /**
+     * @param {Date} start
+     * @returns {{ totalTime: number, sessions: number, avgFocus: number }}
+     */
+    const computeWeek = (start) => {
       let weekTotal = 0;
+      let weeklySessions = 0;
       let daysWithData = 0;
 
       for (let i = 0; i < 7; i++) {
-        const date = new Date(weekStart);
-        date.setDate(weekStart.getDate() + i);
+        const date = new Date(start);
+        date.setDate(start.getDate() + i);
 
         let dayTotalTime = 0;
         let daySessions = 0;
@@ -215,79 +243,66 @@ export class NavigationManager {
 
         if (dayTotalTime > 0) {
           weekTotal += dayTotalTime;
-          weeklyFocusTime += dayTotalTime;
           weeklySessions += daySessions;
           daysWithData++;
         }
       }
 
-      avgFocus = daysWithData > 0 ? weekTotal / daysWithData : 0;
+      return {
+        totalTime: weekTotal,
+        sessions: weeklySessions,
+        avgFocus: daysWithData > 0 ? weekTotal / daysWithData : 0,
+      };
+    };
 
-      let previousWeekTotal = 0;
-      let previousDaysWithData = 0;
+    let current = { totalTime: 0, sessions: 0, avgFocus: 0 };
+    let previous = { totalTime: 0, sessions: 0, avgFocus: 0 };
 
-      for (let i = 0; i < 7; i++) {
-        const date = new Date(previousWeekStart);
-        date.setDate(previousWeekStart.getDate() + i);
-
-        let dayTotalTime = 0;
-        let daySessions = 0;
-
-        if (window.sessionManager) {
-          const sessions = window.sessionManager.getSessionsForDate(date);
-          const focusSessions = sessions.filter((/** @type {any} */ s) =>
-            this.isFocusOrCustomSession(s)
-          );
-
-          dayTotalTime = focusSessions.reduce(
-            (/** @type {any} */ total, /** @type {any} */ session) =>
-              total + (session.duration || 0) * 60,
-            0
-          );
-          daySessions = focusSessions.length;
-        }
-
-        if (dayTotalTime > 0) {
-          previousWeekTotal += dayTotalTime;
-          previousWeekFocusTime += dayTotalTime;
-          previousWeeklySessions += daySessions;
-          previousDaysWithData++;
-        }
-      }
-
-      previousWeekAvgFocus =
-        previousDaysWithData > 0 ? previousWeekTotal / previousDaysWithData : 0;
+    try {
+      current = computeWeek(weekStart);
+      previous = computeWeek(previousWeekStart);
     } catch (error) {
       logger.error("Failed to load weekly data:", error);
     }
 
-    const weeklyFocusChange = this.calculatePercentageChange(
-      weeklyFocusTime,
-      previousWeekFocusTime
-    );
-    const avgFocusChange = this.calculatePercentageChange(avgFocus, previousWeekAvgFocus);
+    return { current, previous };
+  }
+
+  /** @param {{ current: any, previous: any }} summary */
+  applyFocusSummaryToDOM({ current, previous }) {
+    const totalFocusWeekEl = document.getElementById("total-focus-week");
+    const totalFocusChangeEl = document.getElementById("total-focus-change");
+    const avgFocusDayEl = document.getElementById("avg-focus-day");
+    const avgFocusChangeEl = document.getElementById("avg-focus-change");
+    const weeklySessionsEl = document.getElementById("weekly-sessions");
+    const weeklySessionsChangeEl = document.getElementById("weekly-sessions-change");
+    const weeklyFocusTimeEl = document.getElementById("weekly-focus-time");
+    const weeklyFocusChangeEl = document.getElementById("weekly-focus-change");
+
+    const weeklyFocusChange = this.calculatePercentageChange(current.totalTime, previous.totalTime);
+    const avgFocusChange = this.calculatePercentageChange(current.avgFocus, previous.avgFocus);
     const weeklySessionsChange = this.calculatePercentageChange(
-      weeklySessions,
-      previousWeeklySessions
+      current.sessions,
+      previous.sessions
     );
 
     if (totalFocusWeekEl) {
-      totalFocusWeekEl.textContent = TimeUtils.formatTime(weeklyFocusTime);
+      totalFocusWeekEl.textContent = TimeUtils.formatTime(current.totalTime);
     }
     this.updateChangeElement(totalFocusChangeEl, weeklyFocusChange);
 
     if (avgFocusDayEl) {
-      avgFocusDayEl.textContent = TimeUtils.formatTime(avgFocus);
+      avgFocusDayEl.textContent = TimeUtils.formatTime(current.avgFocus);
     }
     this.updateChangeElement(avgFocusChangeEl, avgFocusChange);
 
     if (weeklySessionsEl) {
-      weeklySessionsEl.textContent = weeklySessions.toString();
+      weeklySessionsEl.textContent = current.sessions.toString();
     }
     this.updateChangeElement(weeklySessionsChangeEl, weeklySessionsChange);
 
     if (weeklyFocusTimeEl) {
-      weeklyFocusTimeEl.textContent = TimeUtils.formatTime(weeklyFocusTime);
+      weeklyFocusTimeEl.textContent = TimeUtils.formatTime(current.totalTime);
     }
     this.updateChangeElement(weeklyFocusChangeEl, weeklyFocusChange);
   }
@@ -431,10 +446,6 @@ export class NavigationManager {
         hourBar.dataset.focusMinutes = String(data.focusMinutes);
 
         dailyChart.appendChild(hourBar);
-      });
-
-      dailyChart.addEventListener("mouseleave", () => {
-        this.removeTooltip();
       });
     } catch (error) {
       logger.error("Failed to load daily chart data:", error);
@@ -598,10 +609,6 @@ export class NavigationManager {
         this.addTooltipEvents(dayBar);
 
         weeklyChart.appendChild(dayBar);
-      });
-
-      weeklyChart.addEventListener("mouseleave", () => {
-        this.removeTooltip();
       });
     } catch (error) {
       logger.error("Failed to load weekly chart data:", error);
@@ -1848,12 +1855,7 @@ export class NavigationManager {
         return;
       }
 
-      const XLSX = window.XLSX;
-      if (!XLSX) {
-        logger.error("XLSX library not found");
-        alert("Excel export functionality is not available.");
-        return;
-      }
+      const XLSX = (await import("xlsx")).default;
 
       const exportData = [];
       for (const session of sessions) {

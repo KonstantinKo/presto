@@ -19,6 +19,9 @@ mod helpers;
 // Type alias for the app handle to avoid generic complexity
 type AppHandle = tauri::AppHandle<tauri::Wry>;
 
+/// Tauri managed state holding the in-memory settings cache.
+struct SettingsState(Mutex<AppSettings>);
+
 static ACTIVITY_MONITOR: Mutex<Option<ActivityMonitor>> = Mutex::new(None);
 
 static SHORTCUT_DEBOUNCE: LazyLock<Mutex<HashMap<String, Instant>>> =
@@ -124,11 +127,36 @@ const fn default_analytics_enabled() -> bool {
     true
 }
 
-async fn are_analytics_enabled(app: &AppHandle) -> bool {
-    match load_settings(app.clone()).await {
-        Ok(settings) => settings.analytics_enabled,
-        Err(_) => true, // Default to enabled if we can't load settings
+/// Loads settings synchronously from disk, falling back to defaults on any error.
+fn load_settings_sync(app: &AppHandle) -> AppSettings {
+    let Ok(app_data_dir) = app.path().app_data_dir() else {
+        return AppSettings {
+            analytics_enabled: false,
+            ..AppSettings::default()
+        };
+    };
+    let file_path = app_data_dir.join("settings.json");
+    if !file_path.exists() {
+        return AppSettings::default();
     }
+    let Ok(contents) = fs::read_to_string(file_path) else {
+        return AppSettings {
+            analytics_enabled: false,
+            ..AppSettings::default()
+        };
+    };
+    serde_json::from_str(&contents).unwrap_or_else(|_| AppSettings {
+        analytics_enabled: false,
+        ..AppSettings::default()
+    })
+}
+
+fn are_analytics_enabled(app: &AppHandle) -> bool {
+    app.state::<SettingsState>()
+        .0
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .analytics_enabled
 }
 
 /// User-facing notification preferences; each bool maps to an independent
@@ -216,6 +244,7 @@ impl ActivityMonitor {
         let app_handle = self.app_handle.clone();
 
         thread::spawn(move || {
+            let mut prev_active = false;
             loop {
                 {
                     let monitoring = helpers::lock_or_recover(&is_monitoring_clone);
@@ -236,22 +265,22 @@ impl ActivityMonitor {
                         let mut last = helpers::lock_or_recover(&last_activity);
                         *last = Instant::now();
                     }
-
-                    let _ = app_handle.emit("user-activity", ());
+                    // Only emit on idle→active transition to avoid flooding IPC
+                    if !prev_active {
+                        let _ = app_handle.emit("user-activity", ());
+                    }
+                    prev_active = true;
                 } else {
                     let elapsed = {
                         let last = helpers::lock_or_recover(&last_activity);
                         last.elapsed()
                     };
 
-                    if elapsed >= threshold {
+                    // Only emit on active→idle transition; without resetting the
+                    // timer, prev_active gates further emissions until activity resumes.
+                    if elapsed >= threshold && prev_active {
                         let _ = app_handle.emit("user-inactivity", ());
-
-                        // Reset the timer to avoid spam
-                        {
-                            let mut last = helpers::lock_or_recover(&last_activity);
-                            *last = Instant::now();
-                        }
+                        prev_active = false;
                     }
                 }
 
@@ -268,35 +297,16 @@ impl ActivityMonitor {
     }
 
     #[cfg(target_os = "macos")]
+    #[allow(unsafe_code)]
     fn get_system_idle_time() -> f64 {
-        use std::process::Command;
-
-        // Use ioreg to get HID idle time - most reliable method on macOS
-        let output = Command::new("ioreg").args(&["-c", "IOHIDSystem"]).output();
-
-        if let Ok(output) = output {
-            let output_str = String::from_utf8_lossy(&output.stdout);
-
-            for line in output_str.lines() {
-                if line.contains("HIDIdleTime") {
-                    // Line format: "HIDIdleTime" = 1234567890
-                    if let Some(equals_pos) = line.find('=') {
-                        let value_part = &line[equals_pos + 1..];
-                        let cleaned = value_part
-                            .trim()
-                            .trim_end_matches(|c: char| !c.is_ascii_digit());
-
-                        if let Ok(idle_ns) = cleaned.parse::<u64>() {
-                            // Convert nanoseconds to seconds
-                            return idle_ns as f64 / 1_000_000_000.0;
-                        }
-                    }
-                }
-            }
+        #[link(name = "CoreGraphics", kind = "framework")]
+        extern "C" {
+            fn CGEventSourceSecondsSinceLastEventType(state_id: u32, event_type: u32) -> f64;
         }
 
-        // If ioreg fails, assume no idle time (active)
-        0.0
+        // SAFETY: CGEventSourceSecondsSinceLastEventType is a pure read-only CoreGraphics
+        // function. kCGEventSourceStateCombinedSessionState=0, kCGAnyInputEventType=0xFFFF_FFFF.
+        unsafe { CGEventSourceSecondsSinceLastEventType(0, 0xFFFF_FFFF) }
     }
 
     fn stop_monitoring(&self) {
@@ -366,7 +376,7 @@ async fn save_session_data(session: PomodoroSession, app: AppHandle) -> Result<(
     let file_path = app_data_dir.join("session.json");
     helpers::write_json_atomic(&file_path, &session)?;
 
-    if are_analytics_enabled(&app).await {
+    if are_analytics_enabled(&app) {
         let properties = Some(serde_json::json!({
             "completed_pomodoros": session.completed_pomodoros,
             "total_focus_time": session.total_focus_time,
@@ -429,7 +439,7 @@ async fn save_tasks(tasks: Vec<Task>, app: AppHandle) -> Result<(), String> {
     let file_path = app_data_dir.join("tasks.json");
     helpers::write_json_atomic(&file_path, &tasks)?;
 
-    if are_analytics_enabled(&app).await {
+    if are_analytics_enabled(&app) {
         let _ = app.track_event("tasks_saved", None);
     }
 
@@ -577,25 +587,29 @@ async fn update_tray_icon(
     final_result
 }
 
+#[allow(clippy::unused_async)] // awaits set_dock_visibility on macOS
+async fn show_app_window(app: AppHandle) {
+    let settings = app
+        .state::<SettingsState>()
+        .0
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .clone();
+    if settings.hide_icon_on_close {
+        #[cfg(target_os = "macos")]
+        {
+            let _ = set_dock_visibility(app.clone(), true).await;
+        }
+    }
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.show();
+        let _ = window.set_focus();
+    }
+}
+
 #[tauri::command]
 async fn show_window(app: AppHandle) -> Result<(), String> {
-    if let Some(window) = app.get_webview_window("main") {
-        if let Ok(settings) = load_settings(app.clone()).await {
-            if settings.hide_icon_on_close {
-                #[cfg(target_os = "macos")]
-                {
-                    let _ = set_dock_visibility(app.clone(), true).await;
-                }
-            }
-        }
-
-        window
-            .show()
-            .map_err(|e| format!("Failed to show window: {e}"))?;
-        window
-            .set_focus()
-            .map_err(|e| format!("Failed to focus window: {e}"))?;
-    }
+    show_app_window(app).await;
     Ok(())
 }
 
@@ -610,6 +624,11 @@ async fn save_settings(settings: AppSettings, app: AppHandle) -> Result<(), Stri
 
     let file_path = app_data_dir.join("settings.json");
     helpers::write_json_atomic(&file_path, &settings)?;
+
+    *app.state::<SettingsState>()
+        .0
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner) = settings;
 
     Ok(())
 }
@@ -702,6 +721,12 @@ async fn reset_all_data(app: AppHandle) -> Result<(), String> {
         if file_path.exists() {
             fs::remove_file(&file_path)
                 .map_err(|e| format!("Failed to delete {file_name}: {e}"))?;
+            if *file_name == "settings.json" {
+                *app.state::<SettingsState>()
+                    .0
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner) = AppSettings::default();
+            }
         }
     }
 
@@ -741,7 +766,7 @@ async fn save_manual_sessions(sessions: Vec<ManualSession>, app: AppHandle) -> R
     let file_path = app_data_dir.join("manual_sessions.json");
     helpers::write_json_atomic(&file_path, &sessions)?;
 
-    if are_analytics_enabled(&app).await {
+    if are_analytics_enabled(&app) {
         let properties = Some(serde_json::json!({
             "session_count": sessions.len()
         }));
@@ -887,9 +912,12 @@ pub fn run() {
                 set_status_bar_visibility
             ])
             .setup(|app| {
+                let initial_settings = load_settings_sync(app.handle());
+                app.manage(SettingsState(Mutex::new(initial_settings)));
+
                 let app_handle_analytics = app.handle().clone();
                 tauri::async_runtime::spawn(async move {
-                    if are_analytics_enabled(&app_handle_analytics).await {
+                    if are_analytics_enabled(&app_handle_analytics) {
                         let _ = app_handle_analytics.track_event("app_started", None);
                     }
                 });
@@ -922,38 +950,46 @@ pub fn run() {
                     .show_menu_on_left_click(true)
                     .on_menu_event(move |_tray, event| match event.id.as_ref() {
                         "show" => {
-                            if let Some(window) = app_handle.get_webview_window("main") {
-                                let _ = window.show();
-                                let _ = window.set_focus();
-                            }
+                            let app_clone = app_handle.clone();
+                            tauri::async_runtime::spawn(async move {
+                                show_app_window(app_clone).await;
+                            });
                         }
                         "start_session" => {
                             if let Some(window) = app_handle.get_webview_window("main") {
                                 let _ = window.emit("tray-start-session", ());
-                                let _ = window.show();
-                                let _ = window.set_focus();
                             }
+                            let app_clone = app_handle.clone();
+                            tauri::async_runtime::spawn(async move {
+                                show_app_window(app_clone).await;
+                            });
                         }
                         "pause" => {
                             if let Some(window) = app_handle.get_webview_window("main") {
                                 let _ = window.emit("tray-pause", ());
-                                let _ = window.show();
-                                let _ = window.set_focus();
                             }
+                            let app_clone = app_handle.clone();
+                            tauri::async_runtime::spawn(async move {
+                                show_app_window(app_clone).await;
+                            });
                         }
                         "skip" => {
                             if let Some(window) = app_handle.get_webview_window("main") {
                                 let _ = window.emit("tray-skip", ());
-                                let _ = window.show();
-                                let _ = window.set_focus();
                             }
+                            let app_clone = app_handle.clone();
+                            tauri::async_runtime::spawn(async move {
+                                show_app_window(app_clone).await;
+                            });
                         }
                         "cancel" => {
                             if let Some(window) = app_handle.get_webview_window("main") {
                                 let _ = window.emit("tray-cancel", ());
-                                let _ = window.show();
-                                let _ = window.set_focus();
                             }
+                            let app_clone = app_handle.clone();
+                            tauri::async_runtime::spawn(async move {
+                                show_app_window(app_clone).await;
+                            });
                         }
                         "quit" => {
                             app_handle.exit(0);
@@ -962,10 +998,10 @@ pub fn run() {
                     })
                     .on_tray_icon_event(move |_tray, event| {
                         if let TrayIconEvent::Click { .. } = event {
-                            if let Some(window) = app_handle_for_click.get_webview_window("main") {
-                                let _ = window.show();
-                                let _ = window.set_focus();
-                            }
+                            let app_clone = app_handle_for_click.clone();
+                            tauri::async_runtime::spawn(async move {
+                                show_app_window(app_clone).await;
+                            });
                         }
                     })
                     .build(app)?;
@@ -976,39 +1012,24 @@ pub fn run() {
                         if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                             api.prevent_close();
 
+                            let settings = app_handle_for_close
+                                .state::<SettingsState>()
+                                .0
+                                .lock()
+                                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                                .clone();
                             let app_handle_clone = app_handle_for_close.clone();
                             tauri::async_runtime::spawn(async move {
-                                match load_settings(app_handle_clone.clone()).await {
-                                    Ok(settings) => {
-                                        if settings.hide_icon_on_close {
-                                            if let Some(window) =
-                                                app_handle_clone.get_webview_window("main")
-                                            {
-                                                let _ = window.hide();
-                                                #[cfg(target_os = "macos")]
-                                                {
-                                                    let _ = set_dock_visibility(
-                                                        app_handle_clone.clone(),
-                                                        false,
-                                                    )
-                                                    .await;
-                                                }
-                                            }
-                                        } else {
-                                            // Just hide the window without hiding from dock
-                                            if let Some(window) =
-                                                app_handle_clone.get_webview_window("main")
-                                            {
-                                                let _ = window.hide();
-                                            }
-                                        }
-                                    }
-                                    Err(_) => {
-                                        // Default behavior: just hide the window
-                                        if let Some(window) =
-                                            app_handle_clone.get_webview_window("main")
+                                if let Some(window) = app_handle_clone.get_webview_window("main") {
+                                    let _ = window.hide();
+                                    if settings.hide_icon_on_close {
+                                        #[cfg(target_os = "macos")]
                                         {
-                                            let _ = window.hide();
+                                            let _ = set_dock_visibility(
+                                                app_handle_clone.clone(),
+                                                false,
+                                            )
+                                            .await;
                                         }
                                     }
                                 }
@@ -1059,15 +1080,10 @@ pub fn run() {
                 }
                 #[cfg(target_os = "macos")]
                 tauri::RunEvent::Reopen { .. } => {
-                    if let Some(window) = app_handle.get_webview_window("main") {
-                        let _ = window.show();
-                        let _ = window.set_focus();
-                        // If the app was previously hidden from dock, restore it
-                        let app_handle_clone = app_handle.clone();
-                        tauri::async_runtime::spawn(async move {
-                            let _ = set_dock_visibility(app_handle_clone, true).await;
-                        });
-                    }
+                    let app_handle_clone = app_handle.clone();
+                    tauri::async_runtime::spawn(async move {
+                        show_app_window(app_handle_clone).await;
+                    });
                 }
                 _ => {}
             });
