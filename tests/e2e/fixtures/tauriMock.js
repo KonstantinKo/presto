@@ -247,7 +247,7 @@ const TAURI_MOCK_INIT_SCRIPT = `
             var ucfg = window.__E2E_CONFIG__ || {};
             if (ucfg.updaterCallCount === undefined) { ucfg.updaterCallCount = 0; }
             ucfg.updaterCallCount++;
-            if (ucfg.updaterSecondCallUpdate && ucfg.updaterCallCount >= 2) {
+            if (ucfg.updaterSecondCallUpdate && ucfg.updaterCallCount > 2) {
               return Object.assign({ available: true }, ucfg.updaterSecondCallUpdate);
             }
             return null;

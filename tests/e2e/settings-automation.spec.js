@@ -52,7 +52,7 @@ test("automation settings: toggles update UI state and smart-pause timeout shows
   await page.locator("#play-pause-btn").click();
 
   // Wait for the 3-second focus session to complete — timer should transition to Break
-  await expect(page.locator("#timer-mode-display")).toHaveText("Break", { timeout: 15000 });
+  await expect(page.locator("#status-text")).toHaveText("Break", { timeout: 15000 });
 
   // Wait for the 3-second break to complete — auto-start-timer should start the next focus
   // session automatically, leaving the timer running (pause icon visible, no play needed)

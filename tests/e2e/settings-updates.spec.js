@@ -35,7 +35,7 @@ test("updates settings: version display, toggle checkboxes, check-updates shows 
   await page.locator("#check-updates-btn").click();
   await expect(page.locator("#update-info")).not.toBeVisible({ timeout: 5000 });
 
-  // Second click: now call #3 (>= 2), the update object is returned
+  // Second click: now call #3 (> 2), the update object is returned
   await page.locator("#check-updates-btn").click();
 
   // The update-info panel should become visible showing the simulated version
