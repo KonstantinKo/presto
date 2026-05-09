@@ -28,6 +28,8 @@ export class TeamManager {
   dispose() {
     clearTimeout(this._updateTimeout);
     this._updateTimeout = undefined;
+    this.isUpdating = false;
+    this.initialized = false;
   }
 
   _scheduleTeamUpdate() {

@@ -130,7 +130,10 @@ const fn default_analytics_enabled() -> bool {
 /// Loads settings synchronously from disk, falling back to defaults on any error.
 fn load_settings_sync(app: &AppHandle) -> AppSettings {
     let Ok(app_data_dir) = app.path().app_data_dir() else {
-        return AppSettings::default();
+        return AppSettings {
+            analytics_enabled: false,
+            ..AppSettings::default()
+        };
     };
     let file_path = app_data_dir.join("settings.json");
     if !file_path.exists() {
