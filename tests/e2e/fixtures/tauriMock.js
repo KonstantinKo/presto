@@ -216,13 +216,16 @@ const TAURI_MOCK_INIT_SCRIPT = `
             return;
           }
 
-          case "append_daily_stats":
+          case "save_daily_stats":
+            // Rust handler signature: (session: PomodoroSession, app) -> Result<(), String>
             return;
 
-          case "load_history":
+          case "get_stats_history":
+            // Rust handler signature: (app) -> Result<Vec<PomodoroSession>, String>
             return _state.history.slice();
 
-          case "delete_all_data": {
+          case "reset_all_data": {
+            // Rust handler signature: (app) -> Result<(), String>
             _state.tags = [
               {
                 id: "default-focus",
@@ -237,6 +240,29 @@ const TAURI_MOCK_INIT_SCRIPT = `
             _state.history = [];
             return;
           }
+
+          case "start_activity_monitoring":
+            // Rust handler signature: (app, timeout_seconds: u64) -> Result<(), String>
+            return;
+
+          case "stop_activity_monitoring":
+            // Rust handler signature: () -> Result<(), String>
+            return;
+
+          case "update_activity_timeout":
+            // Rust handler signature: (timeout_seconds: u64) -> Result<(), String>
+            return;
+
+          case "update_tray_icon":
+            // Rust handler signature: (app, timer_text, is_running, session_mode,
+            //                         current_session, total_sessions, mode_icon)
+            //                         -> Result<(), String>
+            return;
+
+          case "update_tray_menu":
+            // Rust handler signature: (app, is_running, is_paused, current_mode)
+            //                         -> Result<(), String>
+            return;
 
           case "write_excel_file":
             return null;
@@ -278,7 +304,6 @@ const TAURI_MOCK_INIT_SCRIPT = `
           case "plugin:oauth|cancel":
             return;
 
-          case "open_url":
           case "plugin:opener|open_url":
             return;
 
