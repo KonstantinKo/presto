@@ -1570,4 +1570,64 @@ mod tests {
             other => panic!("expected InvalidArgument, got {other:?}"),
         }
     }
+
+    // -- BridgeError mapping coverage (spec 001-leptos-migration T026 RED / T027 GREEN).
+    //
+    // Source-level invariant: post-T026, no `#[tauri::command]` handler in
+    // `src-tauri/src/lib.rs` returns `Result<_, String>`. Every handler returns
+    // `Result<_, BridgeError>` (or `Result<_, BridgeError<…>>` if generic in
+    // future). The test reads its own crate source via `include_str!` and
+    // greps for the legacy pattern.
+    //
+    // Why source-level rather than runtime: the rewrite is mechanical and
+    // exhaustive — the only durable invariant is "no Result<_, String> on a
+    // command signature". Exercising every handler at runtime would duplicate
+    // the per-wrapper tests that land in Phase 1C (T032+).
+    //
+    // RED-phase content: the assertion fails because today's handlers all
+    // return Result<_, String>. T027 GREEN flips this to zero by mechanically
+    // rewriting every map_err call site.
+    #[test]
+    fn bridge_error_mapping_coverage_no_string_result_in_handlers() {
+        let src = include_str!("lib.rs");
+        let lines: Vec<&str> = src.lines().collect();
+        let mut offenders: Vec<(usize, &str)> = Vec::new();
+        let mut prev_was_command_attr = false;
+        for (idx, line) in lines.iter().enumerate() {
+            let trimmed = line.trim_start();
+            // Look for the function-line that immediately follows
+            // `#[tauri::command]`. We accept multi-line attribute blocks too
+            // (the attribute may sit a few lines above with cfg-gates) but in
+            // this codebase #[tauri::command] is always on the line directly
+            // before the fn declaration.
+            let is_fn_line = trimmed.starts_with("async fn ") || trimmed.starts_with("fn ");
+            if prev_was_command_attr && is_fn_line {
+                // The signature may span multiple lines; concatenate until we
+                // hit `{`.
+                let mut sig = String::new();
+                for line2 in &lines[idx..] {
+                    sig.push_str(line2);
+                    sig.push(' ');
+                    if line2.contains('{') {
+                        break;
+                    }
+                }
+                if sig.contains("Result<") && sig.contains(", String>") {
+                    offenders.push((idx + 1, line.trim()));
+                }
+            }
+            prev_was_command_attr = trimmed == "#[tauri::command]";
+        }
+        assert!(
+            offenders.is_empty(),
+            "Found {} #[tauri::command] handler(s) still returning Result<_, String>; \
+             expected zero post-T027. Offenders (line: signature head):\n{}",
+            offenders.len(),
+            offenders
+                .iter()
+                .map(|(ln, s)| format!("  L{ln}: {s}"))
+                .collect::<Vec<_>>()
+                .join("\n")
+        );
+    }
 }
