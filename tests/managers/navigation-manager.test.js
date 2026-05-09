@@ -17,13 +17,18 @@ vi.mock("xlsx", () => ({ default: MOCK_XLSX }));
 describe("NavigationManager – lazy XLSX loading", () => {
   let originalTauri;
   let originalAlert;
+  let hadOriginalTauri;
+
+  beforeEach(() => {
+    originalAlert = window.alert;
+    originalTauri = globalThis.__TAURI__;
+    hadOriginalTauri = "__TAURI__" in globalThis;
+  });
 
   afterEach(() => {
     delete window.sessionManager;
-    if (originalAlert !== undefined) {
-      window.alert = originalAlert;
-    }
-    if (originalTauri !== undefined) {
+    window.alert = originalAlert;
+    if (hadOriginalTauri) {
       globalThis.__TAURI__ = originalTauri;
     } else {
       delete globalThis.__TAURI__;
@@ -36,9 +41,6 @@ describe("NavigationManager – lazy XLSX loading", () => {
   });
 
   it("loads XLSX via dynamic import on first export call", async () => {
-    originalAlert = window.alert;
-    originalTauri = globalThis.__TAURI__;
-
     window.alert = vi.fn();
     globalThis.__TAURI__ = {
       ...globalThis.__TAURI__,
