@@ -25,7 +25,7 @@ pub enum TimerMode {
 }
 ```
 
-**Scope**: shared. The Tauri side currently uses `String` (e.g., `"focus"`, `"break"`, `"longBreak"`) — see `update_tray_icon` in `src-tauri/src/lib.rs:432`. The cutover commit tightens both sides: `update_tray_menu`'s `current_mode` arg and `update_tray_icon`'s `session_mode` arg both become `TimerMode` (see [contracts/tauri-bridge.md](./contracts/tauri-bridge.md) §Error handling, "stringly-typed boundary args, tightened"). The wire format remains the same camelCase strings via `#[serde(rename_all = "camelCase")]`, so no on-disk or in-flight payload shapes change.
+**Scope**: shared. The Tauri side currently uses `String` (e.g., `"focus"`, `"break"`, `"longBreak"`) — see `update_tray_icon` in `src-tauri/src/lib.rs §update_tray_icon` (section reference, not line number; future-proofs against drift). The cutover commit tightens both sides: `update_tray_menu`'s `current_mode` arg and `update_tray_icon`'s `session_mode` arg both become `TimerMode` (see [contracts/tauri-bridge.md](./contracts/tauri-bridge.md) §Error handling, "stringly-typed boundary args, tightened"). The wire format remains the same camelCase strings via `#[serde(rename_all = "camelCase")]`, so no on-disk or in-flight payload shapes change.
 
 **Current JS**: `src/core/pomodoro-timer.js` uses string constants `"focus" | "break" | "longBreak"`.
 
@@ -59,7 +59,7 @@ pub struct Session {
 #[serde(rename_all = "snake_case")]
 pub struct ManualSession {
     pub id: String,
-    pub session_type: String,         // "focus" | "break" | "longBreak" | "custom"
+    pub session_type: SessionType,    // closed-domain sum type per FR-013
     pub duration: u32,                // minutes
     pub start_time: String,           // "HH:MM"
     pub end_time: String,             // "HH:MM"
@@ -70,9 +70,32 @@ pub struct ManualSession {
 }
 ```
 
-**Scope**: shared. Mirrors `src-tauri/src/lib.rs:48-58`. Note `session_type` is a `String` today (open enum); a follow-up may tighten to a sum type, but per A2 this feature does not change the on-disk shape.
+**Scope**: shared. Mirrors `src-tauri/src/lib.rs:48-58`. The Tauri-side `session_type: String` is tightened to `SessionType` in the cutover commit; the on-disk wire form is preserved exactly (camelCase strings) via `#[serde(rename_all = "camelCase")]` on the enum, satisfying both FR-013 (closed-domain sum types) and A2 (no on-disk shape change).
 
 **`TagRef`**: a deliberately loose reference type (`{ id: String, name: String }`-ish) because the current JS stores tag objects inline, not ID-only. The Leptos side normalises at consumption time but does not reshape the on-disk record.
+
+---
+
+### `SessionType`
+
+```rust
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum SessionType {
+    Focus,
+    Break,
+    LongBreak,
+    Custom,
+}
+```
+
+**Scope**: shared. Closed-domain replacement for the `session_type: String` field on `ManualSession` (and any other manual-session record). Distinct from `TimerMode` because manual entries can carry the `"custom"` variant for user-defined session shapes (see the Tauri-side comment at `src-tauri/src/lib.rs:50` documenting `"focus" | "break" | "longBreak" | "custom"`); `TimerMode` is the live-engine domain and has only the three intrinsic modes.
+
+**Wire format**: camelCase strings (`"focus"`, `"break"`, `"longBreak"`, `"custom"`) — the exact on-disk shape the JS era already writes. Pinned by `#[serde(rename_all = "camelCase")]` so the round-trip is byte-stable across the cutover.
+
+**Current JS**: `src/managers/session-manager.js:277` and `src/core/pomodoro-timer.js:2345` both write `session_type: "focus"`; `src/managers/navigation-manager.js:314,958` reads `session.session_type || session.type`.
+
+**Constitutional anchor**: III (Type Safety Over Defensive Code) — closed sum type; FR-013 closed-domain promise is now backed for manual sessions.
 
 ---
 
@@ -155,7 +178,7 @@ pub struct Settings {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
-#[serde(rename_all = "snake_case")]
+#[serde(rename_all = "kebab-case")]
 pub enum StatusBarDisplay {
     #[default]
     Default,
@@ -167,14 +190,14 @@ pub enum StatusBarDisplay {
 
 #### Settings legacy migration
 
-Existing on-disk JSON written by any released `0.4.x` build carries `hide_status_bar: bool`. The custom deserializer `deserialize_status_bar_display_with_legacy_fallback` reads the JSON object once and resolves `status_bar_display`:
+Existing on-disk JSON written by any released `0.4.x` build carries `hide_status_bar: bool` (and, in builds where the JS-side `status_bar_display` field was already written, the kebab-case string `"default"` or `"icon-only"`). The custom deserializer `deserialize_status_bar_display_with_legacy_fallback` reads the JSON object once and resolves `status_bar_display`:
 
-1. If `status_bar_display` is present, use it.
-2. Else if `hide_status_bar: true` is present, use `StatusBarDisplay::IconOnly`.
-3. Else if `hide_status_bar: false` is present, use `StatusBarDisplay::Default`.
+1. If `status_bar_display` is present, use it. The on-disk wire form is kebab-case (`"default"` / `"icon-only"`), matched by the enum's `#[serde(rename_all = "kebab-case")]`.
+2. Else if `hide_status_bar: true` is present, use `StatusBarDisplay::IconOnly` (emits `"icon-only"` on next save).
+3. Else if `hide_status_bar: false` is present, use `StatusBarDisplay::Default` (emits `"default"` on next save).
 4. Else, use `StatusBarDisplay::default()` (i.e., `Default`).
 
-On the next save, the file is rewritten with `status_bar_display` only — `hide_status_bar` is not emitted (it has no field in the struct). This mirrors the JS-side migration logic at `src/managers/settings-manager.js:109-119` ported to Rust, and is exercised by `managers/settings::tests::migrates_hide_status_bar_to_status_bar_display`.
+On the next save, the file is rewritten with `status_bar_display` only — `hide_status_bar` is not emitted (it has no field in the struct). This mirrors the JS-side migration logic at `src/managers/settings-manager.js:109-119` ported to Rust, and is exercised by `managers/settings::tests::migrates_hide_status_bar_to_status_bar_display`. The named test fixture literally contains `"status_bar_display": "icon-only"` from a pre-cutover JS-era settings JSON to assert the kebab-case wire form round-trips correctly.
 
 ---
 
@@ -444,6 +467,7 @@ Sunset: the migration entry point and all `import_legacy_*` commands are slated 
 | Type | Defined where | Used by |
 |---|---|---|
 | `TimerMode` | `src/src/bridge/types.rs` (mirror in `src-tauri/`) | `engine/timer.rs`, `bridge/commands.rs` `update_tray_icon`, `update_tray_menu` |
+| `SessionType` | `src/src/bridge/types.rs` (mirror in `src-tauri/`) | `bridge/types.rs` `ManualSession.session_type`; `managers/session.rs` |
 | `Session` | `src/src/bridge/types.rs` | `bridge/commands.rs::save_session_data` etc. |
 | `ManualSession` | `src/src/bridge/types.rs` | `managers/session.rs` |
 | `Task` | `src/src/bridge/types.rs` | `managers/session.rs` (the JS today couples tasks to session manager) |
