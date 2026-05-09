@@ -87,6 +87,7 @@ export class SettingsManager {
     } catch (error) {
       logger.error("Failed to load settings:", error);
       this.settings = this.getDefaultSettings();
+      this.populateSettingsUI();
     }
   }
 
@@ -501,6 +502,11 @@ export class SettingsManager {
       const maxSessionTimeField = /** @type {any} */ (document.getElementById("max-session-time"));
       if (maxSessionTimeField) {
         this.settings.timer.max_session_time = parseInt(maxSessionTimeField.value, 10) || 120;
+      }
+
+      const weeklyGoalField = /** @type {any} */ (document.getElementById("weekly-goal-minutes"));
+      if (weeklyGoalField) {
+        this.settings.timer.weekly_goal_minutes = parseInt(weeklyGoalField.value, 10) || 125;
       }
 
       const themeSelect = /** @type {any} */ (document.getElementById("theme-select"));

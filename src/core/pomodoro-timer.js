@@ -20,6 +20,8 @@ export class PomodoroTimer {
     this.inactivityThreshold = 30000; // 30 seconds in milliseconds (configurable)
     this.smartPauseCountdownInterval = null;
     this.smartPauseSecondsRemaining = 0;
+    /** @type {Array<() => void>} */
+    this.activityUnlistenFns = [];
 
     // Session tracking
     this.completedPomodoros = 0;
@@ -330,36 +332,34 @@ export class PomodoroTimer {
   }
 
   async setupTrayEventListeners() {
-    const { listen } =
-      /** @type {{ listen: (event: string, handler: (...args: any[]) => any) => Promise<() => void> }} */ (
-        window.__TAURI__ ? window.__TAURI__.event : { listen: null }
-      );
+    const listen = window.__TAURI__?.event?.listen;
+    if (!listen) {
+      return;
+    }
 
-    // Listen for start session from tray
-    await listen("tray-start-session", () => {
-      this.startTimer();
-    });
+    try {
+      await listen("tray-start-session", () => {
+        this.startTimer();
+      });
 
-    // Listen for pause from tray
-    await listen("tray-pause", () => {
-      this.pauseTimer();
-    });
+      await listen("tray-pause", () => {
+        this.pauseTimer();
+      });
 
-    // Listen for skip from tray
-    await listen("tray-skip", async () => {
-      await this.skipSession();
-    });
+      await listen("tray-skip", async () => {
+        await this.skipSession();
+      });
 
-    // Listen for cancel from tray
-    await listen("tray-cancel", () => {
-      if (this.currentMode === "focus") {
-        // Delete/reset the current session
-        this.resetTimer();
-      } else {
-        // In break/longBreak mode: undo last session
-        this.undoLastSession();
-      }
-    });
+      await listen("tray-cancel", () => {
+        if (this.currentMode === "focus") {
+          this.resetTimer();
+        } else {
+          this.undoLastSession();
+        }
+      });
+    } catch (error) {
+      logger.warn("Failed to register tray listeners:", error);
+    }
   }
 
   async updateTrayMenu() {
@@ -400,25 +400,31 @@ export class PomodoroTimer {
 
   async setupGlobalActivityListeners() {
     try {
+      for (const unlisten of this.activityUnlistenFns) {
+        unlisten();
+      }
+      this.activityUnlistenFns = [];
+
       // Start global activity monitoring with configurable timeout
       const timeoutSeconds = Math.floor(this.inactivityThreshold / 1000); // convert from milliseconds to seconds
       await invoke("start_activity_monitoring", { timeoutSeconds });
 
-      // Listen for activity events from backend
-      const { listen } =
-        /** @type {{ listen: (event: string, handler: (...args: any[]) => any) => Promise<() => void> }} */ (
-          window.__TAURI__ ? window.__TAURI__.event : { listen: null }
-        );
+      const listen = window.__TAURI__?.event?.listen;
+      if (!listen) {
+        throw new Error("Tauri event API unavailable");
+      }
 
-      // Listen for user activity
-      await listen("user-activity", () => {
-        this.handleUserActivity();
-      });
+      this.activityUnlistenFns.push(
+        await listen("user-activity", () => {
+          this.handleUserActivity();
+        })
+      );
 
-      // Listen for user inactivity
-      await listen("user-inactivity", () => {
-        this.autoPauseTimer();
-      });
+      this.activityUnlistenFns.push(
+        await listen("user-inactivity", () => {
+          this.autoPauseTimer();
+        })
+      );
 
       // Start initial timeout for local fallback
       this.handleUserActivity();
@@ -426,6 +432,10 @@ export class PomodoroTimer {
       logger.info("Global activity listeners setup complete");
     } catch (error) {
       logger.error("Failed to setup global activity monitoring:", error);
+      for (const unlisten of this.activityUnlistenFns) {
+        unlisten();
+      }
+      this.activityUnlistenFns = [];
       // Fallback to local monitoring
       this.setupLocalActivityListeners();
     }
@@ -651,6 +661,11 @@ export class PomodoroTimer {
       } catch (error) {
         logger.error("Failed to stop activity monitoring:", error);
       }
+
+      for (const unlisten of this.activityUnlistenFns) {
+        unlisten();
+      }
+      this.activityUnlistenFns = [];
 
       // Clear local timeout, countdown, and resume if auto-paused
       if (this.activityTimeout) {
@@ -2762,7 +2777,17 @@ export class PomodoroTimer {
     }
   }
 
-  async applySettings(/** @type {any} */ settings) {
+  /**
+   * @typedef {{ focus_duration: number, break_duration: number, long_break_duration: number, total_sessions: number, max_session_time: number, weekly_goal_minutes?: number }} AppSettingsTimer
+   * @typedef {{ desktop_notifications: boolean, sound_notifications: boolean, auto_start_timer: boolean, allow_continuous_sessions: boolean, smart_pause: boolean, smart_pause_timeout: number }} AppSettingsNotifications
+   * @typedef {{ start_stop?: string | null, reset?: string | null, skip?: string | null }} AppSettingsShortcuts
+   * @typedef {{ theme?: string, timer_theme?: string }} AppSettingsAppearance
+   * @typedef {{ debug_mode?: boolean }} AppSettingsAdvanced
+   * @typedef {{ timer: AppSettingsTimer, notifications: AppSettingsNotifications, shortcuts: AppSettingsShortcuts, appearance: AppSettingsAppearance, advanced?: AppSettingsAdvanced }} AppSettings
+   */
+
+  /** @param {AppSettings} settings */
+  async applySettings(settings) {
     // Update timer durations
     this.durations.focus = settings.timer.focus_duration * 60;
     this.durations.break = settings.timer.break_duration * 60;

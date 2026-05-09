@@ -1314,14 +1314,20 @@ export class NavigationManager {
     const startMinutes = timelineStartMinutes + (leftPercent / 100) * timelineRangeMinutes;
     const endMinutes = timelineStartMinutes + (rightPercent / 100) * timelineRangeMinutes;
 
-    const startHour = Math.floor(startMinutes / 60);
-    const startMin = Math.round(startMinutes % 60);
-    const endHour = Math.floor(endMinutes / 60);
-    const endMin = Math.round(endMinutes % 60);
+    const roundedStartMinutes = Math.max(0, Math.min(23 * 60 + 59, Math.round(startMinutes)));
+    const roundedEndMinutes = Math.max(
+      roundedStartMinutes + 1,
+      Math.min(23 * 60 + 59, Math.round(endMinutes))
+    );
+
+    const startHour = Math.floor(roundedStartMinutes / 60);
+    const startMin = roundedStartMinutes % 60;
+    const endHour = Math.floor(roundedEndMinutes / 60);
+    const endMin = roundedEndMinutes % 60;
 
     const newStartTime = `${startHour.toString().padStart(2, "0")}:${startMin.toString().padStart(2, "0")}`;
     const newEndTime = `${endHour.toString().padStart(2, "0")}:${endMin.toString().padStart(2, "0")}`;
-    const newDuration = Math.round(endMinutes - startMinutes);
+    const newDuration = roundedEndMinutes - roundedStartMinutes;
 
     session.start_time = newStartTime;
     session.end_time = newEndTime;

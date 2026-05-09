@@ -2,7 +2,7 @@ import { NotificationUtils } from "../utils/common-utils.js";
 import { logger } from "../utils/logger.js";
 
 const { invoke } = /** @type {{ invoke: ((cmd: string, args?: any) => Promise<any>) | null }} */ (
-  window.__TAURI__ ? window.__TAURI__.core : { invoke: null }
+  window.__TAURI__?.core ?? { invoke: null }
 );
 
 export class SessionManager {

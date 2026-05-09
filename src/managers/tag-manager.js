@@ -313,7 +313,7 @@ class TagManager {
 
     try {
       if (typeof window.__TAURI__?.core?.invoke === "function") {
-        await window.__TAURI__.core.invoke("delete_tag", tagId);
+        await window.__TAURI__.core.invoke("delete_tag", { tag_id: tagId });
       }
 
       this.tags = this.tags.filter((t) => t.id !== tagId);
