@@ -15,7 +15,10 @@
     "format": "prettier --check .",
     "format:fix": "prettier --write .",
     "typecheck": "tsc --noEmit -p .",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "test:watch": "vitest",
+    "validate": "npm run typecheck && npm run lint && npm test"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.4",

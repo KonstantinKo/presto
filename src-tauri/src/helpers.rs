@@ -1,5 +1,39 @@
+use serde::Serialize;
 use std::collections::HashMap;
+use std::path::Path;
+use std::sync::{Mutex, MutexGuard};
 use std::time::{Duration, Instant};
+
+/// Serializes `value` as pretty-printed JSON and atomically writes it to `path`.
+///
+/// Writes to a sibling `.tmp` file first, then renames on success, preventing
+/// partial writes from corrupting the target file on crash or power loss.
+///
+/// # Errors
+///
+/// Returns an error string if serialization, temp-file write, or rename fails.
+#[allow(clippy::redundant_pub_crate)]
+pub(super) fn write_json_atomic<T: Serialize>(path: &Path, value: &T) -> Result<(), String> {
+    let json = serde_json::to_string_pretty(value)
+        .map_err(|e| format!("Failed to serialize JSON: {e}"))?;
+    let tmp_path = path.with_extension("tmp");
+    std::fs::write(&tmp_path, json.as_bytes())
+        .map_err(|e| format!("Failed to write temp file: {e}"))?;
+    std::fs::rename(&tmp_path, path).map_err(|e| format!("Failed to persist file: {e}"))?;
+    Ok(())
+}
+
+/// Acquires a `Mutex` lock, recovering from a poisoned state if necessary.
+///
+/// If the mutex was poisoned by a prior panicking holder, logs a warning and
+/// returns the inner value rather than propagating the panic.
+#[allow(clippy::redundant_pub_crate)]
+pub(super) fn lock_or_recover<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
+    m.lock().unwrap_or_else(|e| {
+        log::warn!("recovering poisoned mutex");
+        e.into_inner()
+    })
+}
 
 /// Returns `true` when `action` was last called within `window` of `now`,
 /// and records `now` as the latest call time otherwise.

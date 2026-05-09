@@ -1013,16 +1013,27 @@ export class NavigationManager {
         <div class="session-handle right"></div>
       `;
 
+      // Use textContent-safe title (no innerHTML) for session data
       sessionElement.title = `Focus: ${session.start_time} - ${session.end_time} (${session.duration}m)`;
     } else {
       sessionElement.innerHTML = `
         <div class="session-handle left"></div>
         <div class="timeline-session-content">
-          <span class="timeline-session-type">${sessionType}</span>
-          <span class="timeline-session-time">${session.start_time} - ${session.end_time}</span>
+          <span class="timeline-session-type"></span>
+          <span class="timeline-session-time"></span>
         </div>
         <div class="session-handle right"></div>
       `;
+
+      // Use textContent for session data (API-controlled) to prevent XSS
+      const typeEl = sessionElement.querySelector(".timeline-session-type");
+      const timeEl = sessionElement.querySelector(".timeline-session-time");
+      if (typeEl) {
+        typeEl.textContent = sessionType;
+      }
+      if (timeEl) {
+        timeEl.textContent = `${session.start_time} - ${session.end_time}`;
+      }
     }
 
     this.addTimelineSessionEventListeners(sessionElement, session, date);

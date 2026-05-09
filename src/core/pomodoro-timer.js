@@ -2167,10 +2167,22 @@ export class PomodoroTimer {
       const minutes = Math.floor((focusTime % 3600) / 60);
 
       dayElement.innerHTML = `
-        <div class="day-label">${weekDays[date.getDay()]}</div>
-        <div class="day-count">${completed}</div>
-        <div class="day-time">${hours}h ${minutes}m</div>
+        <div class="day-label"></div>
+        <div class="day-count"></div>
+        <div class="day-time"></div>
       `;
+      const dayLabelEl = dayElement.querySelector(".day-label");
+      const dayCountEl = dayElement.querySelector(".day-count");
+      const dayTimeEl = dayElement.querySelector(".day-time");
+      if (dayLabelEl) {
+        dayLabelEl.textContent = weekDays[date.getDay()];
+      }
+      if (dayCountEl) {
+        dayCountEl.textContent = String(completed);
+      }
+      if (dayTimeEl) {
+        dayTimeEl.textContent = `${hours}h ${minutes}m`;
+      }
 
       weeklyStatsContainer.appendChild(dayElement);
     }
@@ -2196,44 +2208,65 @@ export class PomodoroTimer {
     const modal = document.createElement("div");
     modal.className = "history-modal";
 
+    // Build the modal structure with static HTML, then populate dynamic data via textContent
     modal.innerHTML = `
       <div class="history-content">
         <div class="history-header">
           <h3>Your Progress History</h3>
           <button class="close-btn">&times;</button>
         </div>
-        <div class="history-list">
-          ${
-            history.length === 0
-              ? "<p>No history data yet. Start your first pomodoro session!</p>"
-              : history
-                  .slice()
-                  .reverse()
-                  .map((/** @type {any} */ day) => {
-                    const date = new Date(day.date);
-                    const hours = Math.floor(day.total_focus_time / 3600);
-                    const minutes = Math.floor((day.total_focus_time % 3600) / 60);
-
-                    return `
-                <div class="history-item">
-                  <div class="history-date">${date.toLocaleDateString("it-IT", {
-                    weekday: "long",
-                    year: "numeric",
-                    month: "long",
-                    day: "numeric",
-                  })}</div>
-                  <div class="history-stats">
-                    <span>🍅 ${day.completed_pomodoros} pomodoros</span>
-                    <span>⏰ ${hours}h ${minutes}m focus</span>
-                  </div>
-                </div>
-              `;
-                  })
-                  .join("")
-          }
-        </div>
+        <div class="history-list"></div>
       </div>
     `;
+
+    const historyList = modal.querySelector(".history-list");
+    if (historyList) {
+      if (history.length === 0) {
+        const emptyMsg = document.createElement("p");
+        emptyMsg.textContent = "No history data yet. Start your first pomodoro session!";
+        historyList.appendChild(emptyMsg);
+      } else {
+        history
+          .slice()
+          .reverse()
+          .forEach((/** @type {any} */ day) => {
+            const date = new Date(day.date);
+            const hours = Math.floor(day.total_focus_time / 3600);
+            const minutes = Math.floor((day.total_focus_time % 3600) / 60);
+
+            const item = document.createElement("div");
+            item.className = "history-item";
+            item.innerHTML = `
+              <div class="history-date"></div>
+              <div class="history-stats">
+                <span class="history-pomodoros"></span>
+                <span class="history-focus-time"></span>
+              </div>
+            `;
+
+            // Use textContent for API-controlled data to prevent XSS
+            const dateEl = item.querySelector(".history-date");
+            const pomodorosEl = item.querySelector(".history-pomodoros");
+            const focusTimeEl = item.querySelector(".history-focus-time");
+            if (dateEl) {
+              dateEl.textContent = date.toLocaleDateString("it-IT", {
+                weekday: "long",
+                year: "numeric",
+                month: "long",
+                day: "numeric",
+              });
+            }
+            if (pomodorosEl) {
+              pomodorosEl.textContent = `\u{1F345} ${day.completed_pomodoros} pomodoros`;
+            }
+            if (focusTimeEl) {
+              focusTimeEl.textContent = `\u{23F0} ${hours}h ${minutes}m focus`;
+            }
+
+            historyList.appendChild(item);
+          });
+      }
+    }
 
     document.body.appendChild(modal);
 

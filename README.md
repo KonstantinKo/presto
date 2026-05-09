@@ -131,7 +131,7 @@ The Tauri CLI is pulled in automatically via `npm install` (`@tauri-apps/cli`); 
 ## 🏗️ Project Structure
 
 ```
-tempo/
+presto/
 ├── src/                    # Frontend source files
 │   ├── index.html         # Main HTML interface
 │   ├── styles.css         # CSS styles and animations

@@ -291,9 +291,18 @@ export class TeamManager {
     const header = document.createElement("div");
     header.className = "team-header";
     header.innerHTML = `
-            <h3>${team.name}</h3>
-            <p class="team-description">${team.description}</p>
+            <h3></h3>
+            <p class="team-description"></p>
         `;
+    // Use textContent for API-controlled strings to prevent XSS
+    const teamNameEl = header.querySelector("h3");
+    const teamDescEl = header.querySelector(".team-description");
+    if (teamNameEl) {
+      teamNameEl.textContent = team.name;
+    }
+    if (teamDescEl) {
+      teamDescEl.textContent = team.description;
+    }
 
     const membersTable = document.createElement("div");
     membersTable.className = "team-members-table";
@@ -320,29 +329,55 @@ export class TeamManager {
     row.innerHTML = `
             <div class="member-basic-info">
                 <div class="member-avatar-small">
-                    ${member.avatar}
+                    <span class="member-avatar-initials"></span>
                     <div class="online-indicator-small ${onlineStatus}"></div>
                 </div>
                 <div class="member-details">
-                    <span class="member-name text-ellipsis">${member.name}</span>
-                    <span class="member-role-small text-ellipsis">${member.role}</span>
+                    <span class="member-name text-ellipsis"></span>
+                    <span class="member-role-small text-ellipsis"></span>
                 </div>
             </div>
-            
+
             <div class="member-status-info flex-center">
                 <div class="status-badge-small badge-base badge-${member.status}">
                     <i class="status-icon ${statusInfo.icon}"></i>
-                    <span>${statusInfo.label}</span>
+                    <span class="status-label"></span>
                 </div>
                 <div class="member-timer-small ${member.status}">
-                    ${member.timer}
+                    <span class="member-timer-value"></span>
                 </div>
             </div>
-            
+
             <div class="member-activity-small text-ellipsis">
-                ${member.activity}
+                <span class="member-activity-value"></span>
             </div>
         `;
+
+    // Use textContent for API-controlled strings to prevent XSS
+    const avatarInitialsEl = row.querySelector(".member-avatar-initials");
+    const memberNameEl = row.querySelector(".member-name");
+    const memberRoleEl = row.querySelector(".member-role-small");
+    const statusLabelEl = row.querySelector(".status-label");
+    const memberTimerEl = row.querySelector(".member-timer-value");
+    const memberActivityEl = row.querySelector(".member-activity-value");
+    if (avatarInitialsEl) {
+      avatarInitialsEl.textContent = member.avatar;
+    }
+    if (memberNameEl) {
+      memberNameEl.textContent = member.name;
+    }
+    if (memberRoleEl) {
+      memberRoleEl.textContent = member.role;
+    }
+    if (statusLabelEl) {
+      statusLabelEl.textContent = statusInfo.label;
+    }
+    if (memberTimerEl) {
+      memberTimerEl.textContent = member.timer;
+    }
+    if (memberActivityEl) {
+      memberActivityEl.textContent = member.activity;
+    }
 
     return row;
   }

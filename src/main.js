@@ -20,6 +20,8 @@ let settingsManager = null;
 let sessionManager = null;
 let teamManager = null;
 let authChangeHandlerRegistered = false;
+let _appInitializing = false;
+let _appFullyInitialized = false;
 
 // Global functions for settings (backwards compatibility)
 window.saveSettings = async function () {
@@ -509,546 +511,6 @@ function showAuthScreen() {
       </div>
     </div>
   `;
-
-  const authStyles = document.createElement("style");
-  authStyles.textContent = `
-    .auth-overlay {
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100vw;
-      height: 100vh;
-      background: #ffffff;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      z-index: 10000;
-      animation: fadeIn 0.3s ease-in;
-    }
-    
-    .auth-container {
-      background: white;
-      border-radius: 16px;
-      max-width: 480px;
-      width: 90%;
-      max-height: 90vh;
-      overflow-y: auto;
-      padding: 32px;
-    }
-    
-    .auth-header {
-      text-align: center;
-      margin-bottom: 32px;
-    }
-    
-    .auth-header h1 {
-      margin: 0 0 8px 0;
-      color: #2d3748;
-      font-size: 28px;
-      font-weight: 600;
-    }
-    
-    .auth-header p {
-      margin: 0;
-      color: #718096;
-      font-size: 16px;
-    }
-    
-    .auth-section h2 {
-      margin: 0 0 8px 0;
-      color: #2d3748;
-      font-size: 20px;
-      font-weight: 600;
-    }
-    
-    .auth-section p {
-      margin: 0 0 24px 0;
-      color: #718096;
-      font-size: 14px;
-    }
-    
-    .auth-providers {
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-      margin-bottom: 24px;
-    }
-    
-    .auth-btn {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 12px;
-      padding: 12px 16px;
-      border: 1px solid #e2e8f0;
-      border-radius: 8px;
-      background: white;
-      color: #2d3748;
-      font-size: 14px;
-      font-weight: 500;
-      cursor: pointer;
-      transition: all 0.2s ease;
-      text-decoration: none;
-    }
-    
-    .auth-btn:hover {
-      background: #f7fafc;
-      border-color: #cbd5e0;
-      transform: translateY(-1px);
-    }
-    
-    .google-btn:hover {
-      background: #f8f9ff;
-      border-color: #4285F4;
-    }
-    
-    .github-btn:hover {
-      background: #f8f9fa;
-      border-color: #24292e;
-    }
-    
-    .apple-btn:hover {
-      background: #f8f9fa;
-      border-color: #000000;
-    }
-    
-    .primary-btn {
-      background: #4299e1;
-      color: white;
-      border-color: #4299e1;
-    }
-    
-    .primary-btn:hover {
-      background: #3182ce;
-      border-color: #3182ce;
-    }
-    
-    .secondary-btn {
-      background: #e2e8f0;
-      color: #4a5568;
-      border-color: #e2e8f0;
-    }
-    
-    .secondary-btn:hover {
-      background: #cbd5e0;
-      border-color: #cbd5e0;
-    }
-    
-    .guest-btn {
-      background: #48bb78;
-      color: white;
-      border-color: #48bb78;
-      width: 100%;
-    }
-    
-    .guest-btn:hover {
-      background: #38a169;
-      border-color: #38a169;
-    }
-    
-    .auth-divider, .auth-divider-main {
-      display: flex;
-      align-items: center;
-      margin: 24px 0;
-      text-align: center;
-    }
-    
-    .auth-divider::before, .auth-divider::after,
-    .auth-divider-main::before, .auth-divider-main::after {
-      content: '';
-      flex: 1;
-      height: 1px;
-      background: #e2e8f0;
-    }
-    
-    .auth-divider span, .auth-divider-main span {
-      padding: 0 16px;
-      color: #a0aec0;
-      font-size: 12px;
-      text-transform: uppercase;
-      font-weight: 500;
-    }
-    
-    .email-auth {
-      margin-bottom: 24px;
-    }
-    
-    .form-group {
-      margin-bottom: 16px;
-    }
-    
-    .form-group input {
-      width: 100%;
-      padding: 12px 16px;
-      border: 1px solid #e2e8f0;
-      border-radius: 8px;
-      font-size: 14px;
-      transition: border-color 0.2s ease;
-      box-sizing: border-box;
-    }
-    
-    .form-group input:focus {
-      outline: none;
-      border-color: #4299e1;
-      box-shadow: 0 0 0 3px rgba(66, 153, 225, 0.1);
-    }
-    
-    .form-actions {
-      display: flex;
-      gap: 12px;
-    }
-    
-    .form-actions .auth-btn {
-      flex: 1;
-    }
-    
-    .guest-section {
-      text-align: center;
-      padding: 24px;
-      background: #f7fafc;
-      border-radius: 12px;
-    }
-    
-    .guest-section h3 {
-      margin: 0 0 8px 0;
-      color: #2d3748;
-      font-size: 18px;
-      font-weight: 600;
-    }
-    
-    .guest-section p {
-      margin: 0 0 16px 0;
-      color: #718096;
-      font-size: 14px;
-    }
-    
-    @keyframes fadeIn {
-      from { opacity: 0; transform: scale(0.95); }
-      to { opacity: 1; transform: scale(1); }
-    }
-    
-    .auth-loading {
-      opacity: 0.7;
-      pointer-events: none;
-    }
-    
-    .auth-loading::after {
-      content: '';
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      width: 20px;
-      height: 20px;
-      margin: -10px 0 0 -10px;
-      border: 2px solid #ffffff;
-      border-radius: 50%;
-      border-top-color: transparent;
-      animation: spin 1s ease-in-out infinite;
-    }
-    
-    @keyframes spin {
-      to { transform: rotate(360deg); }
-    }
-    
-    .auth-container {
-      width: 100%;
-      max-width: 900px;
-      max-height: 95vh;
-      overflow: hidden;
-      margin: 20px;
-    }
-    
-    .auth-header {
-      text-align: center;
-      padding: 32px 32px 24px 32px;
-      border-bottom: 1px solid #f1f5f9;
-      margin-bottom: 0;
-    }
-    
-    .auth-header h1 {
-      margin: 0 0 8px 0;
-      color: #1e293b;
-      font-size: 28px;
-      font-weight: 700;
-    }
-    
-    .auth-header p {
-      margin: 0;
-      color: #64748b;
-      font-size: 16px;
-    }
-    
-    .auth-content {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      min-height: calc(95vh - 140px);
-    }
-    
-    .auth-column {
-      padding: 32px;
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
-    }
-    
-    .auth-main {
-      border-left: 1px solid #f1f5f9;
-    }
-    
-    .auth-main h2 {
-      margin: 0 0 24px 0;
-      color: #1e293b;
-      font-size: 20px;
-      font-weight: 600;
-      text-align: center;
-    }
-    
-    .auth-providers {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 8px;
-      margin-bottom: 0px;
-    }
-    
-    .auth-btn {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 8px;
-      padding: 12px 16px;
-      border: 1px solid #e2e8f0;
-      border-radius: 10px;
-      background: white;
-      color: #374151;
-      font-size: 14px;
-      font-weight: 500;
-      cursor: pointer;
-      transition: all 0.2s ease;
-      text-decoration: none;
-      min-height: 44px;
-    }
-    
-    .auth-btn:hover {
-      background: #f8fafc;
-      border-color: #cbd5e0;
-      transform: translateY(-1px);
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-    }
-    
-    .form-row {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 12px;
-      margin-bottom: 16px;
-    }
-    
-    .form-row input {
-      width: 100%;
-      padding: 12px 16px;
-      border: 1px solid #e2e8f0;
-      border-radius: 8px;
-      font-size: 14px;
-      transition: all 0.2s ease;
-      box-sizing: border-box;
-    }
-    
-    .primary-btn {
-      background: #3b82f6;
-      color: white;
-      border-color: #3b82f6;
-    }
-    
-    .primary-btn:hover {
-      background: #2563eb;
-      border-color: #2563eb;
-    }
-    
-    .secondary-btn {
-      background: #f1f5f9;
-      color: #475569;
-      border-color: #e2e8f0;
-    }
-    
-    .secondary-btn:hover {
-      background: #e2e8f0;
-      border-color: #cbd5e0;
-    }
-    
-    .auth-guest {
-      background: #f1f5f9;
-      align-items: center;
-      text-align: center;
-    }
-    
-    .guest-section {
-      max-width: 280px;
-      margin: 0 auto;
-      text-align: center;
-      padding: 0;
-      background: transparent;
-      border-radius: 0;
-    }
-    
-    .guest-icon {
-      width: 80px;
-      height: 80px;
-      background: #e2e8f0;
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      margin: 0 auto 24px auto;
-      box-shadow: 0 8px 25px rgba(226, 232, 240, 0.25);
-    }
-    
-    .guest-icon i {
-      font-size: 36px;
-      color: #4a5568;
-    }
-    
-    .guest-section h3 {
-      margin: 0 0 12px 0;
-      color: #1e293b;
-      font-size: 22px;
-      font-weight: 600;
-    }
-    
-    .guest-section p {
-      margin: 0 0 24px 0;
-      color: #64748b;
-      font-size: 14px;
-      line-height: 1.5;
-    }
-    
-    .guest-btn {
-      background: #e2e8f0;
-      color: #4a5568;
-      border-color: #e2e8f0;
-      font-weight: 600;
-      padding: 14px 24px;
-      border-radius: 12px;
-      width: 100%;
-      gap: 8px;
-    }
-    
-    .guest-btn:hover {
-      background: #cbd5e0;
-      border-color: #cbd5e0;
-      transform: translateY(-2px);
-      box-shadow: 0 8px 25px rgba(226, 232, 240, 0.3);
-    }
-    
-    @media (max-width: 768px) {
-      .auth-container {
-        margin: 0;
-        border-radius: 0;
-        max-height: 100vh;
-        height: 100vh;
-        box-shadow: none;
-        border: none;
-      }
-      
-      .auth-content {
-        grid-template-columns: 1fr;
-        min-height: calc(100vh - 140px);
-        grid-template-areas: 
-          "main"
-          "guest";
-      }
-      
-      .auth-main {
-        border-left: none;
-        border-bottom: 1px solid #f1f5f9;
-        padding: 24px;
-        grid-area: main;
-      }
-      
-      .auth-guest {
-        padding: 24px;
-        grid-area: guest;
-        background: transparent;
-      }
-      
-      .guest-btn {
-        display: none !important;
-      }
-      
-      .guest-icon {
-        display: none !important;
-      }
-      
-      .guest-section h3 {
-        display: none !important;
-      }
-      
-      .guest-section p {
-        display: none !important;
-      }
-      
-      .guest-link {
-        display: inline-flex !important;
-        align-items: center;
-        gap: 8px;
-        color: #3b82f6;
-        text-decoration: underline;
-        background: none;
-        border: none;
-        padding: 0;
-        font-size: 16px;
-        font-weight: 500;
-        cursor: pointer;
-      }
-      
-      .guest-link:hover {
-        color: #2563eb;
-        transform: none;
-        box-shadow: none;
-      }
-      
-      .auth-providers {
-        grid-template-columns: 1fr;
-        gap: 10px;
-      }
-      
-      .form-row {
-        grid-template-columns: 1fr;
-      }
-      
-      .guest-icon {
-        width: 60px;
-        height: 60px;
-        margin-bottom: 16px;
-      }
-      
-      .guest-icon i {
-        font-size: 28px;
-      }
-      
-      .guest-section h3 {
-        font-size: 20px;
-      }
-    }
-    
-    @media (max-width: 480px) {
-      .auth-header {
-        padding: 24px 20px 20px 20px;
-      }
-      
-      .auth-column {
-        padding: 20px;
-      }
-      
-      .auth-header h1 {
-        font-size: 24px;
-      }
-      
-      .auth-header p {
-        font-size: 14px;
-      }
-    }
-  `;
-
-  document.head.appendChild(authStyles);
   document.body.appendChild(authOverlay);
 
   setupAuthEventListeners();
@@ -1501,19 +963,19 @@ function setupUserAvatarEventListeners() {
 /* eslint-disable require-atomic-updates */
 async function initializeApplication() {
   // Prevent double initialization only if fully completed
-  if (window._appFullyInitialized) {
+  if (_appFullyInitialized) {
     logger.info("🚀 Application already fully initialized, skipping...");
     return;
   }
 
   // Prevent concurrent initialization attempts
-  if (window._appInitializing) {
+  if (_appInitializing) {
     logger.info("🚀 Application initialization already in progress, skipping...");
     return;
   }
 
   // Set initialization flag early to prevent race conditions
-  window._appInitializing = true;
+  _appInitializing = true;
 
   // Declared in outer scope so the catch handler can clear it.
   /** @type {any} */
@@ -1643,8 +1105,8 @@ async function initializeApplication() {
 
     clearTimeout(safetyTimeout);
 
-    window._appFullyInitialized = true;
-    window._appInitializing = false;
+    _appFullyInitialized = true;
+    _appInitializing = false;
 
     const loadingOverlaySuccess = document.getElementById("app-loading");
     if (loadingOverlaySuccess) {
@@ -1664,8 +1126,8 @@ async function initializeApplication() {
     NotificationUtils.showNotificationPing("Failed to initialize app. Please refresh! 🔄", "error");
 
     // Reset initialization flags on error so user can retry
-    window._appInitializing = false;
-    window._appFullyInitialized = false;
+    _appInitializing = false;
+    _appFullyInitialized = false;
 
     // Show error screen instead of leaving user with blank screen
     const errorScreen = document.createElement("div");
@@ -2069,7 +1531,7 @@ function initializeWhenReady() {
 
 // Also add a backup initialization in case DOMContentLoaded doesn't fire
 window.addEventListener("load", () => {
-  if (!window._appFullyInitialized && !window._appInitializing) {
+  if (!_appFullyInitialized && !_appInitializing) {
     logger.info("🚀 Backup initialization triggered by window.load");
     initializeApplication();
   }

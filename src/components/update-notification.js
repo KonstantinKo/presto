@@ -4,7 +4,7 @@
  * Component for showing update notifications in the user interface
  */
 
-// Usa l'updateManager globale invece dell'import per essere sincronizzato con main.js
+// Use the global updateManager instead of an import to stay in sync with main.js
 const getUpdateManager = () => window.updateManager || window.updateManagerInstance;
 import { logger } from "../utils/logger.js";
 
@@ -24,7 +24,7 @@ export class UpdateNotification {
   }
 
   /**
-   * Aspetta che l'updateManager sia disponibile e poi bind gli eventi
+   * Waits for the updateManager to be available and then binds events
    */
   async waitForUpdateManager() {
     let attempts = 0;
@@ -41,8 +41,8 @@ export class UpdateNotification {
       logger.info("✅ [UpdateNotification] UpdateManager found, binding notification events");
       this.bindEvents();
 
-      // RIMOSSO: Il controllo dello stato iniziale può causare problemi
-      // L'updateManager dovrebbe emettere gli eventi corretti al momento giusto
+      // REMOVED: Checking initial state can cause problems
+      // The updateManager should emit the correct events at the right time
     } else {
       logger.warn("⚠️ [UpdateNotification] UpdateManager not found after 10 seconds");
     }
@@ -360,9 +360,9 @@ export class UpdateNotification {
     logger.debug("🔔 [UpdateNotification] Found", buttons.length, "buttons with data-action");
     buttons.forEach((button) => {
       const btn = /** @type {HTMLElement} */ (button);
-      logger.debug("🔔 [UpdateNotification] Binding evento per pulsante:", btn.dataset.action);
+      logger.debug("🔔 [UpdateNotification] Binding event for button:", btn.dataset.action);
       btn.addEventListener("click", (e) => {
-        // Trova il pulsante con data-action, anche se si clicca su un elemento figlio (come l'icona SVG)
+        // Find the button with data-action, even if a child element (like an SVG icon) is clicked
         let target = /** @type {HTMLElement | null} */ (e.target);
         while (target && !target.dataset.action) {
           target = target.parentElement;
@@ -384,7 +384,7 @@ export class UpdateNotification {
    */
   /** @param {string} action */
   handleAction(action) {
-    logger.debug("🔔 [UpdateNotification] Azione pulsante:", action);
+    logger.debug("🔔 [UpdateNotification] Button action:", action);
     switch (action) {
       case "download":
         this.startDownload();
@@ -532,17 +532,17 @@ export class UpdateNotification {
     });
 
     this._onUpdateAvailable = (/** @type {any} */ event) => {
-      logger.debug("🔔 [UpdateNotification] Evento updateAvailable ricevuto:", event.detail);
+      logger.debug("🔔 [UpdateNotification] updateAvailable event received:", event.detail);
       this.showUpdateAvailable(event.detail);
     };
 
     this._onUpdateNotAvailable = () => {
-      logger.info("👍 [UpdateNotification] No updates available - nascondo notifica");
+      logger.info("👍 [UpdateNotification] No updates available - hiding notification");
       this.hide();
     };
 
     this._onCheckError = () => {
-      logger.warn("❌ [UpdateNotification] Update check error - nascondo notifica");
+      logger.warn("❌ [UpdateNotification] Update check error - hiding notification");
       this.hide();
     };
 
@@ -594,7 +594,7 @@ export class UpdateNotification {
       return;
     }
 
-    // RIMOSSO: Ora permettiamo la notifica anche in modalità sviluppo per GitHub releases
+    // REMOVED: We now allow notifications even in development mode for GitHub releases
 
     // Don't show if this version has been skipped
     if (this.isVersionSkipped(updateInfo.version)) {

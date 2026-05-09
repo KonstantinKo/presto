@@ -1442,22 +1442,24 @@ export class SettingsManager {
       option.classList.add("disabled");
     }
 
+    const supportsBadges = theme.supports
+      .map(
+        (/** @type {any} */ mode) => `
+        <span class="compatibility-badge ${mode}">
+            <i class="ri-${mode === "light" ? "sun" : "moon"}-line"></i>
+        </span>
+    `
+      )
+      .join("");
+
     option.innerHTML = `
             <div class="timer-theme-header">
-                <h4 class="timer-theme-name">${theme.name}</h4>
+                <h4 class="timer-theme-name"></h4>
                 <div class="timer-theme-compatibility">
-                    ${theme.supports
-                      .map(
-                        (/** @type {any} */ mode) => `
-                        <span class="compatibility-badge ${mode}">
-                            <i class="ri-${mode === "light" ? "sun" : "moon"}-line"></i>
-                        </span>
-                    `
-                      )
-                      .join("")}
+                    ${supportsBadges}
                 </div>
             </div>
-            <p class="timer-theme-description">${theme.description}</p>
+            <p class="timer-theme-description"></p>
             <div class="timer-theme-preview">
                 <div class="timer-preview-display" data-preview-theme="${theme.id}">
                     <div class="timer-preview-time">25:00</div>
@@ -1473,6 +1475,16 @@ export class SettingsManager {
                 </div>
             </div>
         `;
+
+    // Use textContent for user/API-controlled strings to prevent XSS
+    const nameEl = option.querySelector(".timer-theme-name");
+    const descEl = option.querySelector(".timer-theme-description");
+    if (nameEl) {
+      nameEl.textContent = theme.name;
+    }
+    if (descEl) {
+      descEl.textContent = theme.description;
+    }
 
     this.applyThemePreviewStyles(option, theme);
 
