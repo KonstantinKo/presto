@@ -173,8 +173,26 @@ pub(super) fn read_history_from(dir: &Path) -> Result<Vec<super::PomodoroSession
     serde_json::from_str(&content).map_err(|e| format!("Failed to parse history: {e}"))
 }
 
+/// Converts a date string to canonical ISO `"%Y-%m-%d"` format.
+///
+/// Accepts both ISO `"%Y-%m-%d"` and the legacy JS `"%a %b %d %Y"` format
+/// (e.g. "Mon Jan 01 2024"). Unrecognised strings are returned unchanged so
+/// callers are never worse off than before normalization.
+fn normalize_date(date: &str) -> String {
+    if chrono::NaiveDate::parse_from_str(date, "%Y-%m-%d").is_ok() {
+        return date.to_owned();
+    }
+    chrono::NaiveDate::parse_from_str(date, "%a %b %d %Y")
+        .map_or_else(|_| date.to_owned(), |d| d.format("%Y-%m-%d").to_string())
+}
+
 /// Appends `session` to `history.json`, replacing any existing entry for the
 /// same date, then trims to the most recent 30 entries.
+///
+/// All dates (both the incoming session and any existing history entries) are
+/// normalized to ISO `"%Y-%m-%d"` before deduplication, sorting, and write-back
+/// so that legacy-format entries and ISO-format entries for the same day are
+/// always treated as identical.
 #[allow(clippy::redundant_pub_crate)]
 pub(super) fn append_daily_stats_to(
     dir: &Path,
@@ -194,8 +212,15 @@ pub(super) fn append_daily_stats_to(
         Vec::new()
     };
 
-    history.retain(|s| s.date != session.date);
-    history.push(session.clone());
+    for entry in &mut history {
+        entry.date = normalize_date(&entry.date);
+    }
+
+    let mut normalized_session = session.clone();
+    normalized_session.date = normalize_date(&session.date);
+
+    history.retain(|s| s.date != normalized_session.date);
+    history.push(normalized_session);
 
     history.sort_by(|a, b| a.date.cmp(&b.date));
     if history.len() > 30 {
@@ -607,6 +632,29 @@ mod tests {
         let history = read_history_from(dir.path()).expect("read");
         assert_eq!(history.len(), 1);
         assert_eq!(history[0].completed_pomodoros, 5);
+    }
+
+    #[test]
+    fn history_legacy_date_deduplicates_with_iso_date() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let legacy = PomodoroSession {
+            completed_pomodoros: 1,
+            total_focus_time: 0,
+            current_session: 1,
+            date: "Sat Jun 01 2024".to_string(),
+        };
+        let iso = PomodoroSession {
+            completed_pomodoros: 5,
+            total_focus_time: 0,
+            current_session: 1,
+            date: "2024-06-01".to_string(),
+        };
+        append_daily_stats_to(dir.path(), &legacy).expect("append legacy");
+        append_daily_stats_to(dir.path(), &iso).expect("append iso");
+        let history = read_history_from(dir.path()).expect("read");
+        assert_eq!(history.len(), 1);
+        assert_eq!(history[0].completed_pomodoros, 5);
+        assert_eq!(history[0].date, "2024-06-01");
     }
 
     // ── Manual session helpers ────────────────────────────────────────────────
