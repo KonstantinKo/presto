@@ -9,8 +9,8 @@ test("updates settings: version display, toggle checkboxes, check-updates shows 
   page,
   tauriMock,
 }) => {
-  // Enable test mode so clicking Check for Updates calls simulateUpdate() instead of GitHub API
-  await tauriMock.setUpdateAvailable();
+  // First call (startup auto-check) returns null; second call (button click) returns update
+  await tauriMock.configureUpdaterCalls({ version: "0.4.5", currentVersion: "0.4.4" });
 
   await gotoTimer(page);
   await openSettings(page);
@@ -31,7 +31,11 @@ test("updates settings: version display, toggle checkboxes, check-updates shows 
   await page.locator("#include-prerelease").click();
   await expect(page.locator("#include-prerelease")).toBeChecked();
 
-  // Click Check for Updates — in test mode this calls simulateUpdate() which returns version 0.4.5
+  // First click: startup auto-check was call #1 (null), button click is call #2 (null) — no update yet
+  await page.locator("#check-updates-btn").click();
+  await expect(page.locator("#update-info")).not.toBeVisible({ timeout: 5000 });
+
+  // Second click: now call #3 (>= 2), the update object is returned
   await page.locator("#check-updates-btn").click();
 
   // The update-info panel should become visible showing the simulated version

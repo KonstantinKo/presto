@@ -1,3 +1,5 @@
+import { expect } from "@playwright/test";
+
 /**
  * Page-object-style helpers shared across spec files.
  * All helpers are pure UI: they use Playwright locators and never call page.evaluate().

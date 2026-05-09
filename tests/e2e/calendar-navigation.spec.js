@@ -5,6 +5,10 @@ test("calendar week and month navigation updates displayed ranges", async ({ pag
   await gotoTimer(page);
   await tapTab(page, "Calendar");
 
+  // Assert elements are populated before capturing their text
+  await expect(page.locator("#week-range")).not.toBeEmpty();
+  await expect(page.locator("#current-month")).not.toBeEmpty();
+
   // Capture initial week range and month
   const initialWeekRange = await page.locator("#week-range").textContent();
   const initialMonth = await page.locator("#current-month").textContent();
@@ -23,7 +27,7 @@ test("calendar week and month navigation updates displayed ranges", async ({ pag
 
   // Return to initial week
   await page.locator("#prev-week").click();
-  await expect(page.locator("#week-range")).toHaveText(initialWeekRange || "");
+  await expect(page.locator("#week-range")).toHaveText(initialWeekRange);
 
   // Navigate to previous month
   await page.locator("#prev-month").click();
@@ -39,5 +43,5 @@ test("calendar week and month navigation updates displayed ranges", async ({ pag
 
   // Return to initial month
   await page.locator("#prev-month").click();
-  await expect(page.locator("#current-month")).toHaveText(initialMonth || "");
+  await expect(page.locator("#current-month")).toHaveText(initialMonth);
 });

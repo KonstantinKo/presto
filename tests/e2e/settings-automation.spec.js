@@ -1,5 +1,11 @@
 import { test, expect } from "./fixtures/index.js";
-import { gotoTimer, openSettings, selectSettingsCategory } from "./fixtures/screens.js";
+import {
+  gotoTimer,
+  openSettings,
+  selectSettingsCategory,
+  enableDebugTimers,
+  tapTab,
+} from "./fixtures/screens.js";
 
 test("automation settings: toggles update UI state and smart-pause timeout shows when enabled", async ({
   page,
@@ -33,4 +39,22 @@ test("automation settings: toggles update UI state and smart-pause timeout shows
   await expect(page.locator("#prevent-interruptions")).not.toBeChecked();
   await page.locator("label.checkbox-label:has(#prevent-interruptions)").click();
   await expect(page.locator("#prevent-interruptions")).toBeChecked();
+
+  // Re-enable auto-start-timer (it was toggled off above; the behavioral test requires it on)
+  await page.locator("label.checkbox-label:has(#auto-start-timer)").click();
+  await expect(page.locator("#auto-start-timer")).toBeChecked();
+
+  // Enable 3-second debug timers so the end-to-end flow completes quickly
+  await enableDebugTimers(page);
+
+  // Navigate to Timer and start a session
+  await tapTab(page, "Timer");
+  await page.locator("#play-pause-btn").click();
+
+  // Wait for the 3-second focus session to complete — timer should transition to Break
+  await expect(page.locator("#timer-mode-display")).toHaveText("Break", { timeout: 15000 });
+
+  // Wait for the 3-second break to complete — auto-start-timer should start the next focus
+  // session automatically, leaving the timer running (pause icon visible, no play needed)
+  await expect(page.locator("#pause-icon")).toBeVisible({ timeout: 15000 });
 });
