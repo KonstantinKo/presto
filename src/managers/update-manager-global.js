@@ -376,12 +376,12 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
         this.currentUpdate = null;
         this.eventTarget?.dispatchEvent(
           new CustomEvent("checkError", {
-            detail: { message: "Impossibile verificare la versione corrente dell'applicazione" },
+            detail: { message: "Unable to determine current application version" },
           })
         );
         if (showDialog) {
-          await this.showMessage("Impossibile verificare la versione corrente dell'applicazione", {
-            title: "Errore",
+          await this.showMessage("Unable to determine current application version", {
+            title: "Error",
             kind: "error",
           });
         }
@@ -438,7 +438,7 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
       const manualUpdate = {
         version: latestVersion,
         date: githubRelease.published_at,
-        body: githubRelease.body || "Nessuna descrizione disponibile",
+        body: githubRelease.body || "No description available",
         downloadUrl: githubRelease.html_url,
         isAutoDownloadable: false,
         source: "github-manual",
@@ -455,10 +455,10 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
       this.emit("checkError", { message: toError(error).message || String(error) });
 
       if (showDialog) {
-        await this.showMessage(
-          "Errore durante il controllo degli aggiornamenti.\n\nRiprova più tardi.",
-          { title: "Errore", kind: "error" }
-        );
+        await this.showMessage("Error checking for updates.\n\nPlease try again later.", {
+          title: "Error",
+          kind: "error",
+        });
       }
       return false;
     } finally {
