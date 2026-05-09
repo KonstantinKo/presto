@@ -1220,6 +1220,59 @@ fn set_system_ui_mode_safe(visible: bool) -> Result<(), String> {
     Ok(())
 }
 
+// `BridgeError` — typed return variant for every Tauri command.
+//
+// Spec 001-leptos-migration §Phase 1A T025; data-model.md §`BridgeError`.
+// Mirrors `presto-web/src/bridge/error.rs` byte-for-byte on the wire so a
+// `Result<T, BridgeError>` round-trips through `invoke()` without a
+// translation layer.
+//
+// Wire form: externally-tagged JSON via
+// `#[serde(tag = "kind", rename_all = "snake_case")]`. The
+// `bridge_error_serde_roundtrip_*` test suite below pins each variant's
+// serialised bytes; any divergence between this mirror and the Leptos-side
+// definition fails both crates' tests at once.
+//
+// Mapping strategy (applied in T026 mechanical rewrite of every
+// `.map_err(|e| format!(…))` call site): default to `Internal { msg }`
+// when the call site has no semantic context; tighten to `NotFound`,
+// `InvalidArgument`, or `NotAuthenticated` where it does. Keeps spec
+// FR-008's compile-time-mismatch promise load-bearing.
+//
+// Note: `BridgeUnavailable` is intentionally part of the same enum even
+// though the Tauri side never produces it. Both crates share one type
+// definition so the wire format cannot drift; the variant is consumed
+// solely by the Leptos wrappers when `window.__TAURI_INTERNALS__` is
+// absent.
+#[derive(Debug, Clone, Serialize, Deserialize, thiserror::Error)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum BridgeError {
+    /// `window.__TAURI_INTERNALS__` is absent (Leptos-side only).
+    #[error("bridge unavailable")]
+    BridgeUnavailable,
+    /// The caller lacks the required session for this command.
+    #[error("not authenticated")]
+    NotAuthenticated,
+    /// An argument failed validation at the boundary.
+    #[error("invalid argument {field}: {reason}")]
+    InvalidArgument { field: String, reason: String },
+    /// The requested file, key, or row does not exist.
+    #[error("not found: {resource}")]
+    NotFound { resource: String },
+    /// `serde-wasm-bindgen` failed to deserialise the return on the Leptos
+    /// side. Tauri-side handlers do not produce this variant; it exists in
+    /// the mirror so the type definition stays single-sourced.
+    ///
+    /// `command: String` (not `&'static str`) so the enum's `Deserialize`
+    /// impl works for non-static input. See the matching note in
+    /// `presto-web/src/bridge/error.rs` for the full rationale.
+    #[error("serde roundtrip failed in {command}: {error}")]
+    SerdeRoundtrip { command: String, error: String },
+    /// Catch-all for unexpected Tauri-side failures.
+    #[error("internal: {msg}")]
+    Internal { msg: String },
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
@@ -1486,7 +1539,7 @@ mod tests {
     #[test]
     fn bridge_error_serde_roundtrip_serde_roundtrip_variant() {
         let err = super::BridgeError::SerdeRoundtrip {
-            command: "load_settings",
+            command: "load_settings".to_string(),
             error: "missing field `timer`".to_string(),
         };
         let json = serde_json::to_string(&err).unwrap();
