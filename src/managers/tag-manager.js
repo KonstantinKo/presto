@@ -112,41 +112,46 @@ class TagManager {
     }
   }
 
+  /** @private */
+  _loadTagsFromLocalStorage() {
+    const savedTags = localStorage.getItem("presto-tags");
+    if (savedTags) {
+      try {
+        const parsed = JSON.parse(savedTags);
+        if (!Array.isArray(parsed)) {
+          throw new TypeError("presto-tags must be an array");
+        }
+        this.tags = parsed;
+      } catch (_parseError) {
+        logger.error("TagManager: corrupted tags in localStorage, resetting");
+        localStorage.removeItem("presto-tags");
+        this.tags = [];
+      }
+    }
+    if (this.tags.length === 0) {
+      this.tags = [
+        {
+          id: "default-focus",
+          name: "Focus",
+          icon: "ri-brain-line",
+          color: "#4CAF50",
+          created_at: new Date().toISOString(),
+        },
+      ];
+      this.saveTagsToLocalStorage();
+    }
+    this.renderTagList();
+    if (this.currentTags.length === 0) {
+      this.currentTags = [this.tags[0]];
+      this.updateStatusDisplay();
+    }
+  }
+
   async loadTags() {
     try {
       if (typeof window.__TAURI__?.core?.invoke !== "function") {
         logger.warn("Tauri is not available, using localStorage fallback");
-        const savedTags = localStorage.getItem("presto-tags");
-        if (savedTags) {
-          try {
-            const parsed = JSON.parse(savedTags);
-            if (!Array.isArray(parsed)) {
-              throw new TypeError("presto-tags must be an array");
-            }
-            this.tags = parsed;
-          } catch (_parseError) {
-            logger.error("TagManager: corrupted tags in localStorage, resetting");
-            localStorage.removeItem("presto-tags");
-            this.tags = [];
-          }
-        }
-        if (this.tags.length === 0) {
-          this.tags = [
-            {
-              id: "default-focus",
-              name: "Focus",
-              icon: "ri-brain-line",
-              color: "#4CAF50",
-              created_at: new Date().toISOString(),
-            },
-          ];
-          this.saveTagsToLocalStorage();
-        }
-        this.renderTagList();
-        if (this.currentTags.length === 0) {
-          this.currentTags = [this.tags[0]];
-          this.updateStatusDisplay();
-        }
+        this._loadTagsFromLocalStorage();
         return;
       }
 
@@ -159,37 +164,7 @@ class TagManager {
       }
     } catch (error) {
       logger.error("Failed to load tags:", error);
-      const savedTags = localStorage.getItem("presto-tags");
-      if (savedTags) {
-        try {
-          const parsed = JSON.parse(savedTags);
-          if (!Array.isArray(parsed)) {
-            throw new TypeError("presto-tags must be an array");
-          }
-          this.tags = parsed;
-        } catch (_parseError) {
-          logger.error("TagManager: corrupted tags in localStorage, resetting");
-          localStorage.removeItem("presto-tags");
-          this.tags = [];
-        }
-      }
-      if (this.tags.length === 0) {
-        this.tags = [
-          {
-            id: "default-focus",
-            name: "Focus",
-            icon: "ri-brain-line",
-            color: "#4CAF50",
-            created_at: new Date().toISOString(),
-          },
-        ];
-        this.saveTagsToLocalStorage();
-      }
-      this.renderTagList();
-      if (this.currentTags.length === 0) {
-        this.currentTags = [this.tags[0]];
-        this.updateStatusDisplay();
-      }
+      this._loadTagsFromLocalStorage();
     }
   }
 
@@ -288,7 +263,7 @@ class TagManager {
       this.tags.push(newTag);
 
       if (typeof window.__TAURI__?.core?.invoke === "function") {
-        await window.__TAURI__.core.invoke("save_tag", newTag);
+        await window.__TAURI__.core.invoke("save_tag", { tag: newTag });
       } else {
         this.saveTagsToLocalStorage();
       }
@@ -470,13 +445,13 @@ class TagManager {
       const tag = this.currentTags[0];
       this.statusText.textContent = tag.name;
 
-      if (tag.icon.startsWith("ri-")) {
+      if (typeof tag.icon === "string" && tag.icon.startsWith("ri-")) {
         this.statusIcon.className = tag.icon;
         this.statusIcon.style.fontFamily = "remixicon";
         this.statusIcon.textContent = "";
       } else {
         this.statusIcon.style.fontFamily = "inherit";
-        this.statusIcon.textContent = tag.icon;
+        this.statusIcon.textContent = String(tag.icon ?? "");
         this.statusIcon.className = "";
       }
     } else {

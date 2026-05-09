@@ -387,13 +387,13 @@ export class PomodoroTimer {
     return KeyboardUtils.matchesShortcut(event, shortcutString);
   }
 
-  setupSmartPause() {
+  async setupSmartPause() {
     if (!this.smartPauseEnabled) {
       return;
     }
 
     // Setup event listeners for global activity monitoring
-    this.setupGlobalActivityListeners();
+    await this.setupGlobalActivityListeners();
 
     logger.info("Smart pause enabled with global monitoring");
   }
@@ -456,6 +456,10 @@ export class PomodoroTimer {
   }
 
   handleUserActivity() {
+    if (!this.smartPauseEnabled) {
+      return;
+    }
+
     // If currently auto-paused, resume the timer
     if (this.isAutoPaused) {
       logger.debug("🔄 Timer is auto-paused, calling resumeFromAutoPause()");
@@ -547,7 +551,13 @@ export class PomodoroTimer {
       this.currentMode
     );
 
-    if (!this.isRunning || this.isPaused || this.isAutoPaused || this.currentMode !== "focus") {
+    if (
+      !this.smartPauseEnabled ||
+      !this.isRunning ||
+      this.isPaused ||
+      this.isAutoPaused ||
+      this.currentMode !== "focus"
+    ) {
       logger.debug("❌ autoPauseTimer early return due to conditions");
       return;
     }

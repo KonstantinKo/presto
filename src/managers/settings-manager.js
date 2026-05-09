@@ -473,6 +473,16 @@ export class SettingsManager {
     return keys.join("+");
   }
 
+  /**
+   * @param {string} value
+   * @param {number} fallback
+   * @returns {number}
+   */
+  parseNumberOrDefault(value, fallback) {
+    const n = parseInt(value, 10);
+    return Number.isFinite(n) ? n : fallback;
+  }
+
   async saveSettings() {
     try {
       this.settings.shortcuts.start_stop =
@@ -482,31 +492,37 @@ export class SettingsManager {
       this.settings.shortcuts.skip =
         /** @type {any} */ (document.getElementById("skip-shortcut")).value || null;
 
-      this.settings.timer.focus_duration = parseInt(
+      this.settings.timer.focus_duration = this.parseNumberOrDefault(
         /** @type {any} */ (document.getElementById("focus-duration")).value,
-        10
+        this.settings.timer.focus_duration
       );
-      this.settings.timer.break_duration = parseInt(
+      this.settings.timer.break_duration = this.parseNumberOrDefault(
         /** @type {any} */ (document.getElementById("break-duration")).value,
-        10
+        this.settings.timer.break_duration
       );
-      this.settings.timer.long_break_duration = parseInt(
+      this.settings.timer.long_break_duration = this.parseNumberOrDefault(
         /** @type {any} */ (document.getElementById("long-break-duration")).value,
-        10
+        this.settings.timer.long_break_duration
       );
-      this.settings.timer.total_sessions = parseInt(
+      this.settings.timer.total_sessions = this.parseNumberOrDefault(
         /** @type {any} */ (document.getElementById("total-sessions")).value,
-        10
+        this.settings.timer.total_sessions
       );
 
       const maxSessionTimeField = /** @type {any} */ (document.getElementById("max-session-time"));
       if (maxSessionTimeField) {
-        this.settings.timer.max_session_time = parseInt(maxSessionTimeField.value, 10) || 120;
+        this.settings.timer.max_session_time = this.parseNumberOrDefault(
+          maxSessionTimeField.value,
+          120
+        );
       }
 
       const weeklyGoalField = /** @type {any} */ (document.getElementById("weekly-goal-minutes"));
       if (weeklyGoalField) {
-        this.settings.timer.weekly_goal_minutes = parseInt(weeklyGoalField.value, 10) || 125;
+        this.settings.timer.weekly_goal_minutes = this.parseNumberOrDefault(
+          weeklyGoalField.value,
+          125
+        );
       }
 
       const themeSelect = /** @type {any} */ (document.getElementById("theme-select"));
@@ -863,26 +879,25 @@ export class SettingsManager {
   }
 
   async loadAutostartSetting() {
+    const checkbox = /** @type {any} */ (document.getElementById("autostart-enabled"));
+
+    if (checkbox && !checkbox._autostartHandlerBound) {
+      checkbox._autostartHandlerBound = true;
+      checkbox.addEventListener("change", async (/** @type {any} */ e) => {
+        await this.toggleAutostart(e.target.checked);
+      });
+    }
+
     try {
       const isEnabled = await invoke("is_autostart_enabled");
-
       this.settings.autostart = isEnabled;
-      const checkbox = /** @type {any} */ (document.getElementById("autostart-enabled"));
       if (checkbox) {
         checkbox.checked = isEnabled;
-
-        checkbox.addEventListener("change", async (/** @type {any} */ e) => {
-          await this.toggleAutostart(e.target.checked);
-        });
       }
     } catch (error) {
       logger.error("Failed to check autostart status:", error);
-      const checkbox = /** @type {any} */ (document.getElementById("autostart-enabled"));
       if (checkbox) {
         checkbox.checked = false;
-        checkbox.addEventListener("change", async (/** @type {any} */ e) => {
-          await this.toggleAutostart(e.target.checked);
-        });
       }
     }
   }

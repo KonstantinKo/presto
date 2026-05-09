@@ -327,6 +327,9 @@ export class NavigationManager {
 
     const icon = element.querySelector("i");
     const span = element.querySelector("span");
+    if (!icon || !span) {
+      return;
+    }
 
     if (change > 0) {
       span.textContent = `+${change}%`;
@@ -921,7 +924,6 @@ export class NavigationManager {
   }
 
   /** @param {any} timelineTrack */
-  /** @param {any} timelineTrack */
   addTimelineGridLines(timelineTrack) {
     // Remove existing grid lines
     const existingLines = timelineTrack.querySelectorAll(".timeline-grid-line");
@@ -1354,8 +1356,8 @@ export class NavigationManager {
 
   /** @param {any} element */
   addTooltipEvents(element) {
-    element.addEventListener("mouseenter", (/** @type {any} */ e) => {
-      const tooltipText = /** @type {HTMLElement} */ (e.target).dataset.tooltip;
+    element.addEventListener("mouseenter", () => {
+      const tooltipText = element.dataset.tooltip;
       if (!tooltipText) {
         return;
       }
@@ -1372,7 +1374,7 @@ export class NavigationManager {
       tooltipElement.className = "custom-tooltip";
       tooltipElement.textContent = tooltipText;
 
-      const rect = /** @type {Element} */ (e.target).getBoundingClientRect();
+      const rect = element.getBoundingClientRect();
       const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
       const scrollLeft = window.pageXOffset || document.documentElement.scrollLeft;
 
