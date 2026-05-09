@@ -177,9 +177,7 @@ describe("SessionManager.closeModal", () => {
   it("removes the show class from the modal overlay", () => {
     document.getElementById("session-modal-overlay").classList.add("show");
     manager.closeModal();
-    expect(document.getElementById("session-modal-overlay").classList.contains("show")).toBe(
-      false
-    );
+    expect(document.getElementById("session-modal-overlay").classList.contains("show")).toBe(false);
   });
 
   it("resets currentEditingSession to null", () => {
