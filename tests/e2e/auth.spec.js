@@ -23,7 +23,7 @@ test("auth flow: sign in via email form, user name updates, sign out returns to 
   await page.locator("#password").fill("test-password");
 
   // Submit the form via the Login button
-  await page.locator('#auth-form button[data-action="signin"]').click();
+  await page.locator("#auth-form").getByRole("button", { name: /login/i }).click();
 
   // The Supabase mock returns a session with name "Test User"
   await expect(page.locator("#user-name")).toHaveText("Test User", { timeout: 5000 });

@@ -1,8 +1,7 @@
 import { test, expect } from "./fixtures/index.js";
-import { gotoTimer } from "./fixtures/screens.js";
 
 test("timer play / pause / resume / stop flow", async ({ page }) => {
-  await gotoTimer(page);
+  await page.goto("/index.html");
 
   // Start timer
   await expect(page.locator("#play-icon")).toBeVisible();

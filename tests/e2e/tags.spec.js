@@ -20,10 +20,10 @@ test("create tag with custom icon, verify persistence, delete tag", async ({ pag
   await page.locator("#new-tag-name").fill("Deep Work");
   await page.locator("#create-tag-btn").click();
 
-  // Assert the new tag appears in #tag-list
-  const newTag = page.locator("#tag-list .tag-item").filter({ hasText: "Deep Work" });
+  // Assert the new tag appears in #tag-list (role="listitem" with aria-label set by tag-manager)
+  const newTag = page.locator('#tag-list [role="listitem"]').filter({ hasText: "Deep Work" });
   await expect(newTag).toBeVisible();
-  await expect(newTag.locator(".tag-item-name")).toHaveText("Deep Work");
+  await expect(newTag).toContainText("Deep Work");
 
   // Close the dropdown by navigating away (Settings), then back (Timer) — verifies in-memory persistence
   await tapTab(page, "Settings");
@@ -32,11 +32,11 @@ test("create tag with custom icon, verify persistence, delete tag", async ({ pag
   // Re-open the dropdown and assert tag is still present
   await page.locator("#timer-status").click();
   await expect(page.locator("#tag-dropdown-menu")).toBeVisible();
-  const persistedTag = page.locator("#tag-list .tag-item").filter({ hasText: "Deep Work" });
+  const persistedTag = page.locator('#tag-list [role="listitem"]').filter({ hasText: "Deep Work" });
   await expect(persistedTag).toBeVisible();
 
-  // Delete the tag via its delete icon
-  await persistedTag.locator(".tag-item-delete").click();
+  // Delete the tag via its delete button (role="button" with aria-label set by tag-manager)
+  await persistedTag.getByRole("button", { name: /delete deep work tag/i }).click();
 
   // Assert tag is removed from the list
   await expect(persistedTag).toBeHidden();

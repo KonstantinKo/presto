@@ -1,22 +1,22 @@
 import { test, expect } from "./fixtures/index.js";
-import { gotoTimer, openSettings, selectSettingsCategory, tapTab } from "./fixtures/screens.js";
+import { openSettings, selectSettingsCategory, tapTab } from "./fixtures/screens.js";
 
 test("advanced settings: autostart, hide-icon, status bar, analytics, debug mode, cancel reset", async ({
   page,
 }) => {
-  await gotoTimer(page);
+  await page.goto("/index.html");
   await openSettings(page);
   await selectSettingsCategory(page, "Advanced");
 
-  // Toggle autostart on then off via label (custom checkmark overlay requires label click)
+  // Toggle autostart on then off
   await expect(page.locator("#autostart-enabled")).not.toBeChecked();
-  await page.locator("label.checkbox-label:has(#autostart-enabled)").click();
+  await page.locator("#autostart-enabled").click();
   await expect(page.locator("#autostart-enabled")).toBeChecked();
-  await page.locator("label.checkbox-label:has(#autostart-enabled)").click();
+  await page.locator("#autostart-enabled").click();
   await expect(page.locator("#autostart-enabled")).not.toBeChecked();
 
   // Toggle hide-icon-on-close
-  await page.locator("label.checkbox-label:has(#hide-icon-on-close)").click();
+  await page.locator("#hide-icon-on-close").click();
   await expect(page.locator("#hide-icon-on-close")).toBeChecked();
 
   // Change status bar display to icon-only
@@ -25,11 +25,11 @@ test("advanced settings: autostart, hide-icon, status bar, analytics, debug mode
 
   // Toggle analytics off (default is enabled)
   await expect(page.locator("#analytics-enabled")).toBeChecked();
-  await page.locator("label.checkbox-label:has(#analytics-enabled)").click();
+  await page.locator("#analytics-enabled").click();
   await expect(page.locator("#analytics-enabled")).not.toBeChecked();
 
   // Enable debug mode (3-second timers)
-  await page.locator("label.checkbox-label:has(#debug-mode)").click();
+  await page.locator("#debug-mode").click();
   await expect(page.locator("#debug-mode")).toBeChecked();
 
   // Navigate to Timer — timer should now show 0:03 (debug duration)

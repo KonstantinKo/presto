@@ -33,6 +33,8 @@ export async function tapTab(page, title) {
   } else if (title === "Settings") {
     await page.locator("#settings-nav").click();
     await page.waitForSelector("#settings-view:not(.hidden)", { timeout: 5000 });
+  } else {
+    throw new Error(`tapTab: unsupported title "${title}"`);
   }
 }
 
@@ -61,6 +63,11 @@ export async function selectSettingsCategory(page, name) {
     Updates: "updates",
   };
   const cat = categoryMap[name];
+  if (!cat) {
+    throw new Error(
+      `selectSettingsCategory: unrecognized name "${name}". Valid names: ${Object.keys(categoryMap).join(", ")}`
+    );
+  }
   await page.locator(`.settings-nav-item[data-category="${cat}"]`).click();
   await page.waitForSelector(`#category-${cat}.active`, { timeout: 5000 });
 }

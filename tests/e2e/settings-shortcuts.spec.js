@@ -2,12 +2,12 @@
 // equivalently. Global OS shortcuts (CommandOrControl+Alt+Space) cannot be triggered from a
 // browser context and are tested separately via Cargo (#9 follow-up).
 import { test, expect } from "./fixtures/index.js";
-import { gotoTimer, openSettings, selectSettingsCategory, tapTab } from "./fixtures/screens.js";
+import { openSettings, selectSettingsCategory, tapTab } from "./fixtures/screens.js";
 
 test("shortcut recording: record Space key, verify saved, verify Space starts/pauses timer", async ({
   page,
 }) => {
-  await gotoTimer(page);
+  await page.goto("/index.html");
   await openSettings(page);
   await selectSettingsCategory(page, "Shortcuts");
 

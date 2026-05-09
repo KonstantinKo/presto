@@ -1,5 +1,5 @@
 import { test, expect } from "./fixtures/index.js";
-import { gotoTimer, openSettings, selectSettingsCategory } from "./fixtures/screens.js";
+import { openSettings, selectSettingsCategory } from "./fixtures/screens.js";
 
 test("notification settings: permission granted, status shown, toggle sound, test button", async ({
   page,
@@ -8,7 +8,7 @@ test("notification settings: permission granted, status shown, toggle sound, tes
   // Grant notification permission before navigation
   await tauriMock.setNotificationPermission("granted");
 
-  await gotoTimer(page);
+  await page.goto("/index.html");
   await openSettings(page);
   await selectSettingsCategory(page, "Notifications");
 

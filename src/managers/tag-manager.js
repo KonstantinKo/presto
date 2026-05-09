@@ -206,6 +206,8 @@ class TagManager {
       const tagItem = document.createElement("div");
       tagItem.className = "tag-item";
       tagItem.dataset.tagId = tag.id;
+      tagItem.setAttribute("role", "listitem");
+      tagItem.setAttribute("aria-label", tag.name);
 
       const isSelected = this.currentTags.some((t) => t.id === tag.id);
       if (isSelected) {
@@ -229,6 +231,8 @@ class TagManager {
       const deleteEl = document.createElement("div");
       deleteEl.className = "tag-item-delete ri-delete-bin-line";
       deleteEl.dataset.tagId = String(tag.id);
+      deleteEl.setAttribute("role", "button");
+      deleteEl.setAttribute("aria-label", `Delete ${tag.name} tag`);
 
       tagItem.append(iconWrap, nameEl, deleteEl);
 

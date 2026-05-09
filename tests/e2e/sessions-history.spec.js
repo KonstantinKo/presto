@@ -28,15 +28,15 @@ test("run debug-mode focus session to completion and verify it appears in calend
   // Navigate to the Calendar view
   await tapTab(page, "Calendar");
 
-  // Today's date should be highlighted in the calendar grid
-  await expect(page.locator("#calendar-grid .today")).toBeVisible({ timeout: 5000 });
+  // Today's date should be highlighted in the calendar grid (aria-current="date" marks today)
+  await expect(page.locator('#calendar-grid [aria-current="date"]')).toBeVisible({ timeout: 5000 });
 
   // At least one session row should appear in the history table for today
-  const rows = page.locator("#sessions-table-body tr");
+  const rows = page.locator("#sessions-table-body").getByRole("row");
   await expect(rows.first()).toBeVisible({ timeout: 5000 });
 
   // Click the edit button in the first row to open the session edit modal
-  await rows.first().locator(".session-action-btn.edit").click();
+  await rows.first().getByRole("button", { name: "Edit session" }).click();
   await expect(page.locator("#session-modal-overlay")).toBeVisible({ timeout: 3000 });
   // Modal shows duration field
   await expect(page.locator("#session-duration")).toBeVisible();

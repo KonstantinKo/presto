@@ -1,8 +1,8 @@
 import { test, expect } from "./fixtures/index.js";
-import { gotoTimer, openSettings, selectSettingsCategory, tapTab } from "./fixtures/screens.js";
+import { openSettings, selectSettingsCategory, tapTab } from "./fixtures/screens.js";
 
 test("setting weekly goal updates focus summary metrics on calendar view", async ({ page }) => {
-  await gotoTimer(page);
+  await page.goto("/index.html");
 
   // Open Settings → Goals and set a low weekly goal of 50 minutes
   await openSettings(page);
@@ -18,7 +18,7 @@ test("setting weekly goal updates focus summary metrics on calendar view", async
 
   // Navigate to Calendar view — focus summary card should be visible
   await tapTab(page, "Calendar");
-  await expect(page.locator(".focus-summary-card")).toBeVisible({ timeout: 3000 });
+  await expect(page.locator("#focus-summary-card")).toBeVisible({ timeout: 3000 });
 
   // Weekly summary metrics should be present
   await expect(page.locator("#total-focus-week")).toBeVisible();

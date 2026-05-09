@@ -243,7 +243,11 @@ const TAURI_MOCK_INIT_SCRIPT = `
 
           case "plugin:updater|check": {
             // Read config lazily so override scripts that run after this init script
-            // can configure the updater response
+            // can configure the updater response.
+            // Call sequence when ucfg.updaterSecondCallUpdate is set:
+            //   call #1 (startup check) → returns null
+            //   call #2 (button click)  → returns null (ucfg.updaterCallCount === 2, not > 2)
+            //   call #3+               → returns Object.assign({ available: true }, ucfg.updaterSecondCallUpdate)
             var ucfg = window.__E2E_CONFIG__ || {};
             if (ucfg.updaterCallCount === undefined) { ucfg.updaterCallCount = 0; }
             ucfg.updaterCallCount++;
@@ -365,8 +369,10 @@ localStorage.setItem('presto_force_update_test', 'true');
     },
 
     /**
-     * Configures the updater mock for the settings-updates spec:
-     * first call returns no-update, second call returns the provided update.
+     * Configures the updater mock for the settings-updates spec.
+     * Call sequence: call #1 → null, call #2 → null, call #3+ → provided update.
+     * (The update is returned on the 3rd+ invocation because the handler checks
+     * ucfg.updaterCallCount > 2, i.e. strictly greater than 2.)
      * @param {{ version: string }} secondCallUpdate
      */
     async configureUpdaterCalls(secondCallUpdate) {
