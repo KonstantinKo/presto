@@ -204,10 +204,22 @@ pub(super) fn append_daily_stats_to(
     let mut history: Vec<super::PomodoroSession> = if history_path.exists() {
         let content = fs::read_to_string(&history_path)
             .map_err(|e| format!("Failed to read history: {e}"))?;
-        serde_json::from_str(&content).unwrap_or_else(|e| {
-            log::warn!("Failed to parse history.json, starting fresh: {e}");
-            Vec::new()
-        })
+        match serde_json::from_str(&content) {
+            Ok(h) => h,
+            Err(e) => {
+                let corrupt_path = history_path.with_extension("json.corrupt");
+                match fs::rename(&history_path, &corrupt_path) {
+                    Ok(()) => log::warn!(
+                        "history.json could not be parsed, preserved as {}: {e}",
+                        corrupt_path.display()
+                    ),
+                    Err(rename_err) => log::warn!(
+                        "history.json could not be parsed and rename to .corrupt failed ({rename_err}): {e}"
+                    ),
+                }
+                Vec::new()
+            }
+        }
     } else {
         Vec::new()
     };
@@ -387,9 +399,10 @@ pub(super) fn delete_all_data_in(dir: &Path) -> Result<(), String> {
     ];
     for file_name in FILES {
         let file_path = dir.join(file_name);
-        if file_path.exists() {
-            fs::remove_file(&file_path)
-                .map_err(|e| format!("Failed to delete {file_name}: {e}"))?;
+        if let Err(e) = fs::remove_file(&file_path) {
+            if e.kind() != std::io::ErrorKind::NotFound {
+                return Err(format!("Failed to delete {file_name}: {e}"));
+            }
         }
     }
     Ok(())
