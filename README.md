@@ -167,6 +167,14 @@ presto/
 │   │   └── lib.rs               # Tauri commands and data persistence
 │   ├── Cargo.toml               # Rust dependencies
 │   └── tauri.conf.json          # Tauri configuration
+├── tests/
+│   ├── e2e/                     # Playwright E2E tests (browser-driven, UI-only)
+│   │   ├── CLAUDE.md            # E2E ground rules for this suite
+│   │   ├── fixtures/            # Shared fixtures (blockExternal, tauriMock, screens)
+│   │   └── *.spec.js            # One spec per screen / major flow
+│   ├── core/                    # Vitest unit tests for core logic
+│   └── managers/                # Vitest unit tests for managers
+├── playwright.config.js         # Playwright configuration (Vite dev server)
 ├── package.json                 # Node.js dependencies and scripts
 └── README.md                    # This file
 ```
