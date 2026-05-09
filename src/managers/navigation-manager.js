@@ -1855,16 +1855,7 @@ export class NavigationManager {
         return;
       }
 
-      if (!window.XLSX) {
-        await new Promise((resolve, reject) => {
-          const s = document.createElement("script");
-          s.src = "https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js";
-          s.onload = resolve;
-          s.onerror = reject;
-          document.head.appendChild(s);
-        });
-      }
-      const XLSX = window.XLSX;
+      const XLSX = (await import("xlsx")).default;
 
       const exportData = [];
       for (const session of sessions) {

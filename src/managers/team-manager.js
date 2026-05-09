@@ -25,7 +25,13 @@ export class TeamManager {
     this._scheduleTeamUpdate();
   }
 
+  dispose() {
+    clearTimeout(this._updateTimeout);
+    this._updateTimeout = undefined;
+  }
+
   _scheduleTeamUpdate() {
+    clearTimeout(this._updateTimeout);
     this._updateTimeout = setTimeout(() => {
       if (this.isUpdating) {
         this._scheduleTeamUpdate();

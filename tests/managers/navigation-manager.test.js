@@ -1,3 +1,4 @@
+import { vi, describe, it, expect, afterEach } from "vitest";
 import { NavigationManager } from "../../src/managers/navigation-manager.js";
 
 const MOCK_XLSX = {
@@ -10,22 +11,33 @@ const MOCK_XLSX = {
   writeFile: vi.fn(),
 };
 
+vi.mock("xlsx", () => ({ default: MOCK_XLSX }));
+
 describe("NavigationManager – lazy XLSX loading", () => {
+  let originalTauri;
+  let originalAlert;
+
+  afterEach(() => {
+    delete window.sessionManager;
+    if (originalAlert !== undefined) {
+      window.alert = originalAlert;
+    }
+    if (originalTauri !== undefined) {
+      globalThis.__TAURI__ = originalTauri;
+    } else {
+      delete globalThis.__TAURI__;
+    }
+    vi.clearAllMocks();
+  });
+
   it("XLSX global is absent at module load time", () => {
     expect(window.XLSX).toBeUndefined();
   });
 
-  it("loads XLSX dynamically on first export call", async () => {
-    // Intercept appendChild to simulate script load without hitting the network.
-    const appendChildSpy = vi.spyOn(document.head, "appendChild").mockImplementation((el) => {
-      if (el instanceof HTMLScriptElement && el.src.includes("xlsx")) {
-        window.XLSX = MOCK_XLSX;
-        el.onload();
-      }
-      return el;
-    });
+  it("loads XLSX via dynamic import on first export call", async () => {
+    originalAlert = window.alert;
+    originalTauri = globalThis.__TAURI__;
 
-    // Suppress alert and provide Tauri dialog mock that confirms a file path.
     window.alert = vi.fn();
     globalThis.__TAURI__ = {
       ...globalThis.__TAURI__,
@@ -53,12 +65,7 @@ describe("NavigationManager – lazy XLSX loading", () => {
 
     await manager.exportSessionsToExcel();
 
-    expect(window.XLSX).toBe(MOCK_XLSX);
-    expect(appendChildSpy).toHaveBeenCalled();
-
-    appendChildSpy.mockRestore();
-    delete window.XLSX;
-    delete window.sessionManager;
-    delete window.alert;
+    expect(MOCK_XLSX.utils.json_to_sheet).toHaveBeenCalled();
+    expect(MOCK_XLSX.utils.book_new).toHaveBeenCalled();
   });
 });
