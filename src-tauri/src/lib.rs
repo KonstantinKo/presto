@@ -740,7 +740,8 @@ async fn reset_all_data(app: AppHandle) -> Result<(), String> {
     for file_name in &files_to_delete {
         let file_path = app_data_dir.join(file_name);
         if file_path.exists() {
-            fs::remove_file(&file_path).map_err(|e| format!("Failed to delete {file_name}: {e}"))?;
+            fs::remove_file(&file_path)
+                .map_err(|e| format!("Failed to delete {file_name}: {e}"))?;
         }
     }
 
