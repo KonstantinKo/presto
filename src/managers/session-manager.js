@@ -283,12 +283,12 @@ export class SessionManager {
     };
 
     if (!sessionData.start_time) {
-      alert("Please enter a start time");
+      await NotificationUtils.showMessage("Please enter a start time", { kind: "warning" });
       return;
     }
 
     if (!sessionData.end_time) {
-      alert("Please enter an end time");
+      await NotificationUtils.showMessage("Please enter an end time", { kind: "warning" });
       return;
     }
 
@@ -300,7 +300,7 @@ export class SessionManager {
       }
       const computedDuration = endMinutes - startMinutes;
       if (isNaN(computedDuration) || computedDuration <= 0) {
-        alert("Please enter a valid duration");
+        await NotificationUtils.showMessage("Please enter a valid duration", { kind: "warning" });
         return;
       }
       sessionData.duration = computedDuration;

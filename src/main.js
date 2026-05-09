@@ -20,8 +20,8 @@ let settingsManager = null;
 let sessionManager = null;
 let teamManager = null;
 let authChangeHandlerRegistered = false;
-let _appInitializing = false;
-let _appFullyInitialized = false;
+/** @type {Promise<void> | null} */
+let _initPromise = null;
 
 // Global functions for settings (backwards compatibility)
 window.saveSettings = async function () {
@@ -80,13 +80,6 @@ window.confirmTotalReset = async function () {
     }
   } catch (error) {
     logger.error("Error in confirmTotalReset:", error);
-
-    const manualConfirm = confirm(
-      "Si è verificato un errore nei dialog. Vuoi resettare tutti i dati comunque?"
-    );
-    if (manualConfirm) {
-      await window.performTotalReset?.();
-    }
   }
 };
 
@@ -132,11 +125,22 @@ function showCustomConfirm(title, message, type = "warning") {
     });
     const color = colors[type] || colors.warning;
 
-    modal.innerHTML = `
-      <div style="background: ${color.bg}; border: 2px solid ${color.border}; border-radius: 8px; padding: 16px; margin-bottom: 20px;">
-        <h3 style="margin: 0 0 12px 0; color: ${color.text}; font-size: 20px;">${title}</h3>
-        <p style="margin: 0; color: ${color.text}; line-height: 1.5; white-space: pre-line;">${message}</p>
-      </div>
+    const contentWrapper = document.createElement("div");
+    contentWrapper.style.cssText = `background: ${color.bg}; border: 2px solid ${color.border}; border-radius: 8px; padding: 16px; margin-bottom: 20px;`;
+
+    const titleEl = document.createElement("h3");
+    titleEl.style.cssText = `margin: 0 0 12px 0; color: ${color.text}; font-size: 20px;`;
+    titleEl.textContent = title;
+
+    const messageEl = document.createElement("p");
+    messageEl.style.cssText = `margin: 0; color: ${color.text}; line-height: 1.5; white-space: pre-line;`;
+    messageEl.textContent = message;
+
+    contentWrapper.appendChild(titleEl);
+    contentWrapper.appendChild(messageEl);
+
+    const buttonsContainer = document.createElement("div");
+    buttonsContainer.innerHTML = `
       <div style="display: flex; gap: 12px; justify-content: center;">
         <button id="confirm-btn" style="
           background: #dc3545;
@@ -162,6 +166,9 @@ function showCustomConfirm(title, message, type = "warning") {
         ">ANNULLA</button>
       </div>
     `;
+
+    modal.appendChild(contentWrapper);
+    modal.appendChild(buttonsContainer);
 
     overlay.appendChild(modal);
     document.body.appendChild(overlay);
@@ -279,7 +286,10 @@ window.performTotalReset = async function () {
       errorMessage += `Error: ${toError(error).message}`;
     }
 
-    alert(`❌ ${errorMessage}`);
+    await NotificationUtils.showMessage(`❌ ${errorMessage}`, {
+      title: "Reset Failed",
+      kind: "error",
+    });
 
     const resetButton = /** @type {HTMLButtonElement | null} */ (
       document.querySelector(".btn-danger")
@@ -448,7 +458,7 @@ function showAuthScreen() {
         <h1>Welcome to Presto! 🍅</h1>
         <p>Your productivity companion is ready to help you stay focused.</p>
       </div>
-      
+
       <div class="auth-content">
         <div class="auth-column auth-guest">
           <div class="guest-section">
@@ -467,10 +477,10 @@ function showAuthScreen() {
             </a>
           </div>
         </div>
-        
+
         <div class="auth-column auth-main">
           <h2>Sign in to sync your data</h2>
-          
+
           <div class="auth-providers">
             <button class="auth-btn google-btn" data-provider="google">
               <svg width="18" height="18" viewBox="0 0 24 24">
@@ -481,20 +491,20 @@ function showAuthScreen() {
               </svg>
               Google
             </button>
-            
+
             <button class="auth-btn github-btn" data-provider="github">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
               </svg>
               GitHub
             </button>
-            
+
           </div>
-          
+
           <div class="auth-divider">
             <span>or</span>
           </div>
-          
+
           <form id="auth-form" class="email-auth">
             <div class="form-row">
               <input type="email" id="email" placeholder="Email address" required>
@@ -546,7 +556,9 @@ function setupAuthEventListeners() {
           .value;
 
         if (!email || !password) {
-          alert("Please enter both email and password");
+          await NotificationUtils.showMessage("Please enter both email and password", {
+            kind: "warning",
+          });
           return;
         }
 
@@ -592,11 +604,17 @@ async function handleOAuthSignIn(provider, button) {
   try {
     const result = await window.authManager.signInWithProvider(provider);
     if (!result.success) {
-      alert(`Sign-in failed: ${result.error}`);
+      await NotificationUtils.showMessage(`Sign-in failed: ${result.error}`, {
+        title: "Sign In Failed",
+        kind: "error",
+      });
     }
   } catch (error) {
     logger.error("OAuth sign-in error:", error);
-    alert(`Sign-in failed: ${toError(error).message}`);
+    await NotificationUtils.showMessage(`Sign-in failed: ${toError(error).message}`, {
+      title: "Sign In Failed",
+      kind: "error",
+    });
   } finally {
     setButtonLoading(button, false);
   }
@@ -610,7 +628,9 @@ async function handleOAuthSignIn(provider, button) {
  */
 async function handleEmailAuth(email, password, action, button) {
   if (!email || !password) {
-    alert("Please enter both email and password");
+    await NotificationUtils.showMessage("Please enter both email and password", {
+      kind: "warning",
+    });
     return;
   }
 
@@ -625,11 +645,17 @@ async function handleEmailAuth(email, password, action, button) {
     }
 
     if (!result.success) {
-      alert(`${action === "signin" ? "Sign-in" : "Sign-up"} failed: ${result.error}`);
+      await NotificationUtils.showMessage(
+        `${action === "signin" ? "Sign-in" : "Sign-up"} failed: ${result.error}`,
+        { title: "Authentication Failed", kind: "error" }
+      );
     }
   } catch (error) {
     logger.error("Email auth error:", error);
-    alert(`${action === "signin" ? "Sign-in" : "Sign-up"} failed: ${toError(error).message}`);
+    await NotificationUtils.showMessage(
+      `${action === "signin" ? "Sign-in" : "Sign-up"} failed: ${toError(error).message}`,
+      { title: "Authentication Failed", kind: "error" }
+    );
   } finally {
     setButtonLoading(button, false);
   }
@@ -918,7 +944,10 @@ function setupUserAvatarEventListeners() {
         await updateUserAvatarUI();
         NotificationUtils.showNotificationPing("Signed out successfully! 👋", null, "focus");
       } else {
-        alert(`Sign out failed: ${result.error}`);
+        await NotificationUtils.showMessage(`Sign out failed: ${result.error}`, {
+          title: "Sign Out Failed",
+          kind: "error",
+        });
       }
     });
   }
@@ -951,39 +980,23 @@ function setupUserAvatarEventListeners() {
   logger.info("✅ Avatar listeners setup complete");
 }
 
-// Initialize the application
-//
-// require-atomic-updates: this function runs once at app boot — the early-out
-// guards above (`_appFullyInitialized` / `_appInitializing`) plus the fact
-// that nothing else writes these globals make the race condition warning a
-// false positive here.
-/* eslint-disable require-atomic-updates */
-async function initializeApplication() {
-  // Prevent double initialization only if fully completed
-  if (_appFullyInitialized) {
-    logger.info("🚀 Application already fully initialized, skipping...");
-    return;
+// --- Boot phase helpers for initializeApplication (cq-003) ---
+
+/** @param {string} text */
+function updateLoadingText(text) {
+  const overlay = document.getElementById("app-loading");
+  if (overlay) {
+    const textElement = overlay.querySelector("div:last-child");
+    if (textElement) {
+      textElement.textContent = text;
+    }
   }
+}
 
-  // Prevent concurrent initialization attempts
-  if (_appInitializing) {
-    logger.info("🚀 Application initialization already in progress, skipping...");
-    return;
-  }
-
-  // Set initialization flag early to prevent race conditions
-  _appInitializing = true;
-
-  // Declared in outer scope so the catch handler can clear it.
-  /** @type {any} */
-  let safetyTimeout = null;
-
-  try {
-    logger.info("🚀 Initializing Presto application...");
-
-    const loadingOverlay = document.createElement("div");
-    loadingOverlay.id = "app-loading";
-    loadingOverlay.style.cssText = `
+function createLoadingOverlay() {
+  const loadingOverlay = document.createElement("div");
+  loadingOverlay.id = "app-loading";
+  loadingOverlay.style.cssText = `
       position: fixed;
       top: 0;
       left: 0;
@@ -998,137 +1011,176 @@ async function initializeApplication() {
       font-size: 18px;
       font-family: system-ui, -apple-system, sans-serif;
     `;
-    loadingOverlay.innerHTML = `
+  loadingOverlay.innerHTML = `
       <div style="text-align: center;">
         <div style="font-size: 48px; margin-bottom: 20px;">🍅</div>
         <div>Initializing Presto...</div>
       </div>
     `;
-    document.body.appendChild(loadingOverlay);
+  document.body.appendChild(loadingOverlay);
+}
 
-    // Safety timeout to remove loading overlay if initialization hangs
-    safetyTimeout = setTimeout(() => {
-      const stuckOverlay = document.getElementById("app-loading");
-      if (stuckOverlay) {
-        logger.error("⚠️ Initialization timeout - removing loading overlay");
-        stuckOverlay.remove();
+async function applyEarlyTheme() {
+  updateLoadingText("Loading theme...");
+  await initializeEarlyTheme();
+}
 
-        NotificationUtils.showNotificationPing(
-          "Initialization timed out. Please refresh! 🔄",
-          "error"
-        );
+async function detectEnvironment() {
+  updateLoadingText("Requesting permissions...");
+  await requestNotificationPermission();
+}
+
+async function resolveAuthState() {
+  updateLoadingText("Loading authentication...");
+  const { authManager } = await import("./managers/auth-manager.js");
+  logger.info("🔐 Initializing Auth Manager...");
+  window.authManager = authManager;
+
+  updateLoadingText("Connecting to services...");
+  await authManager.init();
+
+  // Initialize Update Manager early (needed by UpdateNotification)
+  updateLoadingText("Initializing update system...");
+  logger.info("🔄 Initializing Update Manager...");
+  window.updateManager = new window.UpdateManagerV2();
+  window.updateManagerInstance = window.updateManager; // Alias for compatibility
+  if (window.updateManager.loadPreferences) {
+    window.updateManager.loadPreferences();
+  }
+
+  logger.info("🔔 Initializing Update Notification...");
+  const updateNotification = new UpdateNotification();
+  window.updateNotification = updateNotification;
+
+  if (authManager.isFirstRun()) {
+    logger.info("👋 First run detected, proceeding as guest...");
+    authManager.continueAsGuest();
+  }
+
+  await updateUserAvatarUI();
+}
+
+async function instantiateManagers() {
+  // Initialize settings manager first (other modules depend on it)
+  logger.info("📋 Initializing Settings Manager...");
+  settingsManager = new SettingsManager();
+  window.settingsManager = settingsManager;
+  await settingsManager.init();
+
+  logger.info("⏱️ Initializing Pomodoro Timer...");
+  timer = new PomodoroTimer();
+  window.pomodoroTimer = timer;
+
+  if (settingsManager.settings) {
+    await timer.applySettings(settingsManager.settings);
+  }
+
+  logger.info("🧭 Initializing Navigation Manager...");
+  navigation = new NavigationManager();
+  window.navigationManager = navigation;
+  await navigation.init();
+
+  logger.info("📊 Initializing Session Manager...");
+  sessionManager = new SessionManager(navigation);
+  window.sessionManager = sessionManager;
+
+  logger.info("👥 Initializing Team Manager...");
+  teamManager = new TeamManager();
+  window.teamManager = teamManager;
+
+  // Update Manager already initialized in resolveAuthState
+}
+
+/** @returns {ReturnType<typeof setTimeout>} */
+function wireShutdownGuards() {
+  return setTimeout(() => {
+    const stuckOverlay = document.getElementById("app-loading");
+    if (stuckOverlay) {
+      logger.error("⚠️ Initialization timeout - removing loading overlay");
+      stuckOverlay.remove();
+
+      NotificationUtils.showNotificationPing(
+        "Initialization timed out. Please refresh! 🔄",
+        "error"
+      );
+    }
+  }, 15000); // 15 seconds timeout
+}
+
+// Initialize the application
+//
+function initializeApplication() {
+  if (_initPromise) {
+    return _initPromise;
+  }
+
+  async function _doInitialize() {
+    // Declared in outer scope so the catch handler can clear it.
+    /** @type {any} */
+    let safetyTimeout = null;
+
+    try {
+      logger.info("🚀 Initializing Presto application...");
+
+      createLoadingOverlay();
+      safetyTimeout = wireShutdownGuards();
+
+      try {
+        await applyEarlyTheme();
+      } catch (e) {
+        throw new Error(`[applyEarlyTheme] ${toError(e).message}`);
       }
-    }, 15000); // 15 seconds timeout
 
-    const updateLoadingText = (/** @type {any} */ text) => {
-      const overlay = document.getElementById("app-loading");
-      if (overlay) {
-        const textElement = overlay.querySelector("div:last-child");
-        if (textElement) {
-          textElement.textContent = text;
-        }
+      try {
+        await detectEnvironment();
+      } catch (e) {
+        throw new Error(`[detectEnvironment] ${toError(e).message}`);
       }
-    };
 
-    updateLoadingText("Loading theme...");
-    await initializeEarlyTheme();
+      try {
+        await resolveAuthState();
+      } catch (e) {
+        throw new Error(`[resolveAuthState] ${toError(e).message}`);
+      }
 
-    updateLoadingText("Requesting permissions...");
-    await requestNotificationPermission();
+      try {
+        await instantiateManagers();
+      } catch (e) {
+        throw new Error(`[instantiateManagers] ${toError(e).message}`);
+      }
 
-    updateLoadingText("Loading authentication...");
-    const { authManager } = await import("./managers/auth-manager.js");
-    logger.info("🔐 Initializing Auth Manager...");
-    window.authManager = authManager;
+      setupGlobalEventListeners();
+      setupUserAvatarEventListeners();
+      setupUpdateManagement();
 
-    updateLoadingText("Connecting to services...");
-    await authManager.init();
+      logger.info("✅ Application initialized successfully!");
 
-    // Initialize Update Manager early (needed by UpdateNotification)
-    updateLoadingText("Initializing update system...");
-    logger.info("🔄 Initializing Update Manager...");
-    window.updateManager = new window.UpdateManagerV2();
-    window.updateManagerInstance = window.updateManager; // Alias for compatibility
-    if (window.updateManager.loadPreferences) {
-      window.updateManager.loadPreferences();
-    }
+      clearTimeout(safetyTimeout);
 
-    logger.info("🔔 Initializing Update Notification...");
-    const updateNotification = new UpdateNotification();
-    window.updateNotification = updateNotification;
+      const loadingOverlaySuccess = document.getElementById("app-loading");
+      if (loadingOverlaySuccess) {
+        loadingOverlaySuccess.remove();
+      }
 
-    if (authManager.isFirstRun()) {
-      logger.info("👋 First run detected, proceeding as guest...");
-      authManager.continueAsGuest();
-    }
+      NotificationUtils.showNotificationPing("Welcome to Presto! 🍅", null, "focus");
+    } catch (error) {
+      logger.error("❌ Failed to initialize application:", error);
 
-    await updateUserAvatarUI();
+      clearTimeout(safetyTimeout);
+      const loadingOverlayError = document.getElementById("app-loading");
+      if (loadingOverlayError) {
+        loadingOverlayError.remove();
+      }
 
-    // Initialize settings manager first (other modules depend on it)
-    logger.info("📋 Initializing Settings Manager...");
-    settingsManager = new SettingsManager();
-    window.settingsManager = settingsManager;
-    await settingsManager.init();
+      NotificationUtils.showNotificationPing(
+        "Failed to initialize app. Please refresh! 🔄",
+        "error"
+      );
 
-    logger.info("⏱️ Initializing Pomodoro Timer...");
-    timer = new PomodoroTimer();
-    window.pomodoroTimer = timer;
-
-    if (settingsManager.settings) {
-      await timer.applySettings(settingsManager.settings);
-    }
-
-    logger.info("🧭 Initializing Navigation Manager...");
-    navigation = new NavigationManager();
-    window.navigationManager = navigation;
-    await navigation.init();
-
-    logger.info("📊 Initializing Session Manager...");
-    sessionManager = new SessionManager(navigation);
-    window.sessionManager = sessionManager;
-
-    logger.info("👥 Initializing Team Manager...");
-    teamManager = new TeamManager();
-    window.teamManager = teamManager;
-
-    // Update Manager already initialized earlier
-
-    setupGlobalEventListeners();
-    setupUserAvatarEventListeners();
-    setupUpdateManagement();
-
-    logger.info("✅ Application initialized successfully!");
-
-    clearTimeout(safetyTimeout);
-
-    _appFullyInitialized = true;
-    _appInitializing = false;
-
-    const loadingOverlaySuccess = document.getElementById("app-loading");
-    if (loadingOverlaySuccess) {
-      loadingOverlaySuccess.remove();
-    }
-
-    NotificationUtils.showNotificationPing("Welcome to Presto! 🍅", null, "focus");
-  } catch (error) {
-    logger.error("❌ Failed to initialize application:", error);
-
-    clearTimeout(safetyTimeout);
-    const loadingOverlayError = document.getElementById("app-loading");
-    if (loadingOverlayError) {
-      loadingOverlayError.remove();
-    }
-
-    NotificationUtils.showNotificationPing("Failed to initialize app. Please refresh! 🔄", "error");
-
-    // Reset initialization flags on error so user can retry
-    _appInitializing = false;
-    _appFullyInitialized = false;
-
-    // Show error screen instead of leaving user with blank screen
-    const errorScreen = document.createElement("div");
-    errorScreen.id = "app-error";
-    errorScreen.style.cssText = `
+      // Show error screen instead of leaving user with blank screen
+      const errorScreen = document.createElement("div");
+      errorScreen.id = "app-error";
+      errorScreen.style.cssText = `
       position: fixed;
       top: 0;
       left: 0;
@@ -1142,7 +1194,7 @@ async function initializeApplication() {
       color: white;
       font-family: system-ui, -apple-system, sans-serif;
     `;
-    errorScreen.innerHTML = `
+      errorScreen.innerHTML = `
       <div style="text-align: center; max-width: 500px; padding: 40px;">
         <div style="font-size: 64px; margin-bottom: 20px;">⚠️</div>
         <h1 style="margin-bottom: 20px; color: #e74c3c;">Initialization Failed</h1>
@@ -1175,10 +1227,15 @@ async function initializeApplication() {
         ">🗑️ Reset & Retry</button>
       </div>
     `;
-    document.body.appendChild(errorScreen);
+      document.body.appendChild(errorScreen);
+      _initPromise = null;
+      throw error;
+    }
   }
+
+  _initPromise = _doInitialize();
+  return _initPromise;
 }
-/* eslint-enable require-atomic-updates */
 
 function setupGlobalEventListeners() {
   const resetButton = document.getElementById("reset-all-data-btn");
@@ -1223,6 +1280,107 @@ function setupGlobalEventListeners() {
   });
 }
 
+// --- Hoisted helpers for setupUpdateManagement (cq-005) ---
+
+/**
+ * @param {HTMLElement | null} currentVersionElement
+ * @param {HTMLElement | null} currentVersionDisplay
+ */
+async function setCurrentVersion(currentVersionElement, currentVersionDisplay) {
+  try {
+    const currentVersion = await window.updateManager.getCurrentVersion();
+    if (currentVersionElement) {
+      currentVersionElement.textContent = currentVersion;
+    }
+    if (currentVersionDisplay) {
+      currentVersionDisplay.textContent = currentVersion;
+    }
+    logger.info("📋 Current version set:", currentVersion);
+  } catch (error) {
+    logger.error("❌ Error retrieving current version:", error);
+    if (currentVersionElement) {
+      currentVersionElement.textContent = "0.1.0";
+    }
+    if (currentVersionDisplay) {
+      currentVersionDisplay.textContent = "0.1.0";
+    }
+  }
+}
+
+/**
+ * @param {HTMLElement | null} progressFill
+ * @param {HTMLElement | null} progressText
+ * @param {number} progress
+ */
+function updateProgressBar(progressFill, progressText, progress) {
+  if (progressFill) {
+    progressFill.style.width = `${progress}%`;
+  }
+  if (progressText) {
+    progressText.textContent = `${progress}%`;
+  }
+}
+
+/**
+ * @param {HTMLElement | null} updateProgress
+ * @param {HTMLElement | null} progressTitle
+ * @param {HTMLElement | null} progressDescription
+ * @param {HTMLElement | null} progressFill
+ * @param {HTMLElement | null} progressText
+ * @param {string} title
+ * @param {string} description
+ */
+function showUpdateProgress(
+  updateProgress,
+  progressTitle,
+  progressDescription,
+  progressFill,
+  progressText,
+  title,
+  description
+) {
+  if (updateProgress) {
+    updateProgress.style.display = "block";
+  }
+  if (progressTitle) {
+    progressTitle.textContent = title;
+  }
+  if (progressDescription) {
+    progressDescription.textContent = description;
+  }
+  updateProgressBar(progressFill, progressText, 0);
+}
+
+/**
+ * @param {HTMLElement | null} updateProgress
+ */
+function hideUpdateProgress(updateProgress) {
+  if (updateProgress) {
+    updateProgress.style.display = "none";
+  }
+}
+
+/**
+ * @param {HTMLElement | null} updateInfo
+ * @param {HTMLElement | null} latestVersionDisplay
+ * @param {any} update
+ */
+function showUpdateInfo(updateInfo, latestVersionDisplay, update) {
+  if (updateInfo && latestVersionDisplay) {
+    latestVersionDisplay.textContent = update.version;
+    updateInfo.style.display = "block";
+  }
+}
+
+/**
+ * @param {HTMLElement | null} updateInfo
+ */
+function hideUpdateInfo(updateInfo) {
+  if (updateInfo) {
+    updateInfo.style.display = "none";
+  }
+}
+
 function setupUpdateManagement() {
   logger.info("🔄 Setting up update management...");
 
@@ -1253,28 +1411,7 @@ function setupUpdateManagement() {
   );
   const skipUpdateBtn = document.getElementById("skip-update-btn");
 
-  async function setCurrentVersion() {
-    try {
-      const currentVersion = await window.updateManager.getCurrentVersion();
-      if (currentVersionElement) {
-        currentVersionElement.textContent = currentVersion;
-      }
-      if (currentVersionDisplay) {
-        currentVersionDisplay.textContent = currentVersion;
-      }
-      logger.info("📋 Current version set:", currentVersion);
-    } catch (error) {
-      logger.error("❌ Error retrieving current version:", error);
-      if (currentVersionElement) {
-        currentVersionElement.textContent = "0.1.0";
-      }
-      if (currentVersionDisplay) {
-        currentVersionDisplay.textContent = "0.1.0";
-      }
-    }
-  }
-
-  setCurrentVersion();
+  setCurrentVersion(currentVersionElement, currentVersionDisplay);
 
   if (viewReleasesLink) {
     viewReleasesLink.href = "https://github.com/murdercode/presto/releases";
@@ -1294,6 +1431,11 @@ function setupUpdateManagement() {
     checkUpdatesBtn.addEventListener("click", async () => {
       checkUpdatesBtn.disabled = true;
       showUpdateProgress(
+        updateProgress,
+        progressTitle,
+        progressDescription,
+        progressFill,
+        progressText,
         "Checking for updates...",
         "Please wait while we check for the latest version."
       );
@@ -1307,10 +1449,10 @@ function setupUpdateManagement() {
       try {
         const hasUpdate = await window.updateManager.checkForUpdates(false);
         window.updateManager.off("checkError", onCheckError);
-        hideUpdateProgress();
+        hideUpdateProgress(updateProgress);
 
         if (hasUpdate) {
-          showUpdateInfo(window.updateManager.currentUpdate);
+          showUpdateInfo(updateInfo, latestVersionDisplay, window.updateManager.currentUpdate);
           if (updateStatus) {
             updateStatus.innerHTML =
               '<span class="status-text update-available">Update available!</span>';
@@ -1327,7 +1469,7 @@ function setupUpdateManagement() {
         }
       } catch (error) {
         window.updateManager.off("checkError", onCheckError);
-        hideUpdateProgress();
+        hideUpdateProgress(updateProgress);
         if (updateStatus) {
           updateStatus.innerHTML = '<span class="status-text error">Check failed</span>';
         }
@@ -1348,8 +1490,13 @@ function setupUpdateManagement() {
   if (downloadUpdateBtn) {
     downloadUpdateBtn.addEventListener("click", async () => {
       downloadUpdateBtn.disabled = true;
-      hideUpdateInfo();
+      hideUpdateInfo(updateInfo);
       showUpdateProgress(
+        updateProgress,
+        progressTitle,
+        progressDescription,
+        progressFill,
+        progressText,
         "Downloading update...",
         "Please wait while the update is downloaded and installed."
       );
@@ -1358,7 +1505,7 @@ function setupUpdateManagement() {
         await window.updateManager.downloadAndInstall();
       } catch (error) {
         logger.error("Download/install failed:", error);
-        hideUpdateProgress();
+        hideUpdateProgress(updateProgress);
         downloadUpdateBtn.disabled = false;
       }
     });
@@ -1366,7 +1513,7 @@ function setupUpdateManagement() {
 
   if (skipUpdateBtn) {
     skipUpdateBtn.addEventListener("click", () => {
-      hideUpdateInfo();
+      hideUpdateInfo(updateInfo);
       if (updateStatus) {
         updateStatus.innerHTML = '<span class="status-text">Update skipped</span>';
       }
@@ -1401,7 +1548,7 @@ function setupUpdateManagement() {
       updateStatus.innerHTML =
         '<span class="status-text update-available">Update available!</span>';
     }
-    showUpdateInfo(update);
+    showUpdateInfo(updateInfo, latestVersionDisplay, update);
   });
 
   window.updateManager.on("updateNotAvailable", () => {
@@ -1423,16 +1570,24 @@ function setupUpdateManagement() {
 
   window.updateManager.on("downloadProgress", (/** @type {any} */ event) => {
     const { progress } = event.detail;
-    updateProgressBar(progress);
+    updateProgressBar(progressFill, progressText, progress);
   });
 
   window.updateManager.on("downloadFinished", () => {
-    showUpdateProgress("Installing...", "The update will be applied when the app restarts.");
-    updateProgressBar(100);
+    showUpdateProgress(
+      updateProgress,
+      progressTitle,
+      progressDescription,
+      progressFill,
+      progressText,
+      "Installing...",
+      "The update will be applied when the app restarts."
+    );
+    updateProgressBar(progressFill, progressText, 100);
   });
 
   window.updateManager.on("manualDownloadRequired", () => {
-    hideUpdateProgress();
+    hideUpdateProgress(updateProgress);
     if (downloadUpdateBtn) {
       downloadUpdateBtn.disabled = false;
     }
@@ -1440,53 +1595,6 @@ function setupUpdateManagement() {
       updateStatus.innerHTML = '<span class="status-text">Manual download opened</span>';
     }
   });
-
-  /**
-   * @param {any} title
-   * @param {any} description
-   */
-  function showUpdateProgress(title, description) {
-    if (updateProgress) {
-      updateProgress.style.display = "block";
-    }
-    if (progressTitle) {
-      progressTitle.textContent = title;
-    }
-    if (progressDescription) {
-      progressDescription.textContent = description;
-    }
-    updateProgressBar(0);
-  }
-
-  function hideUpdateProgress() {
-    if (updateProgress) {
-      updateProgress.style.display = "none";
-    }
-  }
-
-  /** @param {any} progress */
-  function updateProgressBar(progress) {
-    if (progressFill) {
-      progressFill.style.width = `${progress}%`;
-    }
-    if (progressText) {
-      progressText.textContent = `${progress}%`;
-    }
-  }
-
-  /** @param {any} update */
-  function showUpdateInfo(update) {
-    if (updateInfo && latestVersionDisplay) {
-      latestVersionDisplay.textContent = update.version;
-      updateInfo.style.display = "block";
-    }
-  }
-
-  function hideUpdateInfo() {
-    if (updateInfo) {
-      updateInfo.style.display = "none";
-    }
-  }
 
   if (updateStatus) {
     updateStatus.innerHTML = '<span class="status-text">Ready to check for updates</span>';
@@ -1527,7 +1635,7 @@ function initializeWhenReady() {
 
 // Also add a backup initialization in case DOMContentLoaded doesn't fire
 window.addEventListener("load", () => {
-  if (!_appFullyInitialized && !_appInitializing) {
+  if (!_initPromise) {
     logger.info("🚀 Backup initialization triggered by window.load");
     initializeApplication();
   }

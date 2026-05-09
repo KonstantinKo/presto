@@ -1,4 +1,4 @@
-import { TimeUtils } from "../utils/common-utils.js";
+import { NotificationUtils, TimeUtils } from "../utils/common-utils.js";
 import { TagStatistics } from "../utils/tag-statistics.js";
 import { logger } from "../utils/logger.js";
 
@@ -12,6 +12,8 @@ export class NavigationManager {
     /** @type {Map<string, any>} */
     this.focusSummaryCache = new Map();
     this.focusSummaryCacheDirty = true;
+    // Stable bound reference so removeEventListener can match the same function object.
+    this._handleNavClick = this.handleNavClick.bind(this);
 
     // Apply timer-active class on initial load since default view is timer
     document.body.classList.add("timer-active");
@@ -36,8 +38,8 @@ export class NavigationManager {
 
     const navButtons = document.querySelectorAll(".sidebar-icon, .sidebar-icon-large");
     navButtons.forEach((btn) => {
-      btn.removeEventListener("click", this.handleNavClick);
-      btn.addEventListener("click", this.handleNavClick.bind(this));
+      btn.removeEventListener("click", this._handleNavClick);
+      btn.addEventListener("click", this._handleNavClick);
     });
 
     await this.initCalendar();
@@ -1810,7 +1812,10 @@ export class NavigationManager {
       }
     } catch (error) {
       logger.error("Error deleting session:", error);
-      alert("Failed to delete session. Please try again.");
+      await NotificationUtils.showMessage("Failed to delete session. Please try again.", {
+        title: "Error",
+        kind: "error",
+      });
     }
   }
 
@@ -1841,7 +1846,10 @@ export class NavigationManager {
       window.sessionManager.openEditSessionModal(sessionToEdit, sessionDate);
     } catch (error) {
       logger.error("Error opening edit session modal:", error);
-      alert("Failed to open edit session. Please try again.");
+      await NotificationUtils.showMessage("Failed to open edit session. Please try again.", {
+        title: "Error",
+        kind: "error",
+      });
     }
   }
 
@@ -1851,7 +1859,10 @@ export class NavigationManager {
       const sessions = window.sessionManager.getSessionsForDate(currentDate);
 
       if (sessions.length === 0) {
-        alert("No sessions to export for the selected period.");
+        NotificationUtils.showNotificationPing(
+          "No sessions to export for the selected period.",
+          "info"
+        );
         return;
       }
 
@@ -1920,7 +1931,10 @@ export class NavigationManager {
             });
 
             logger.info(`Exported ${sessions.length} sessions to ${filePath}`);
-            alert(`Sessions exported successfully to:\n${filePath}`);
+            NotificationUtils.showNotificationPing(
+              `Sessions exported successfully to: ${filePath}`,
+              "success"
+            );
           } else {
             logger.info("Export cancelled by user");
           }
@@ -1928,7 +1942,10 @@ export class NavigationManager {
           logger.error("Tauri save error:", tauriError);
           XLSX.writeFile(wb, defaultFilename);
           logger.warn(`Tauri save failed, using fallback download: ${defaultFilename}`);
-          alert(`File saved to Downloads folder as: ${defaultFilename}`);
+          NotificationUtils.showNotificationPing(
+            `Export started: ${defaultFilename} (browser will prompt for save location)`,
+            "info"
+          );
         }
       } else {
         XLSX.writeFile(wb, defaultFilename);
@@ -1936,7 +1953,10 @@ export class NavigationManager {
       }
     } catch (error) {
       logger.error("Error exporting sessions:", error);
-      alert("Failed to export sessions. Please try again.");
+      await NotificationUtils.showMessage("Failed to export sessions. Please try again.", {
+        title: "Error",
+        kind: "error",
+      });
     }
   }
 }

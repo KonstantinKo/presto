@@ -17,6 +17,39 @@ import {
 } from "../utils/timer-themes.js";
 import { initializeAutoThemeLoader } from "../utils/theme-loader.js";
 
+/**
+ * @param {string} id
+ * @returns {HTMLInputElement}
+ */
+function getInputById(id) {
+  const el = document.getElementById(id);
+  if (!el) {
+    throw new Error(`Missing element: ${id}`);
+  }
+  if (!(el instanceof HTMLInputElement)) {
+    throw new Error(`Element with id ${id} is not an HTMLInputElement`);
+  }
+  return el;
+}
+
+/**
+ * @param {string} id
+ * @returns {HTMLInputElement}
+ */
+function getCheckboxById(id) {
+  const el = document.getElementById(id);
+  if (!el) {
+    throw new Error(`Missing element: ${id}`);
+  }
+  if (!(el instanceof HTMLInputElement)) {
+    throw new Error(`Element with id ${id} is not an HTMLInputElement`);
+  }
+  if (el.type !== "checkbox") {
+    throw new Error(`Element with id ${id} is not an input[type=checkbox]`);
+  }
+  return el;
+}
+
 export class SettingsManager {
   constructor() {
     /** @type {any} */
@@ -152,33 +185,32 @@ export class SettingsManager {
 
   populateSettingsUI() {
     logger.debug("🔧 Populating shortcuts UI with:", this.settings.shortcuts);
-    /** @type {any} */ (document.getElementById("start-stop-shortcut")).value =
-      this.settings.shortcuts.start_stop || "";
-    /** @type {any} */ (document.getElementById("reset-shortcut")).value =
-      this.settings.shortcuts.reset || "";
-    /** @type {any} */ (document.getElementById("skip-shortcut")).value =
-      this.settings.shortcuts.skip || "";
+    getInputById("start-stop-shortcut").value = this.settings.shortcuts.start_stop || "";
+    getInputById("reset-shortcut").value = this.settings.shortcuts.reset || "";
+    getInputById("skip-shortcut").value = this.settings.shortcuts.skip || "";
 
-    /** @type {any} */ (document.getElementById("focus-duration")).value =
-      this.settings.timer.focus_duration;
-    /** @type {any} */ (document.getElementById("break-duration")).value =
-      this.settings.timer.break_duration;
-    /** @type {any} */ (document.getElementById("long-break-duration")).value =
-      this.settings.timer.long_break_duration;
-    /** @type {any} */ (document.getElementById("total-sessions")).value =
-      this.settings.timer.total_sessions;
+    getInputById("focus-duration").value = String(this.settings.timer.focus_duration);
+    getInputById("break-duration").value = String(this.settings.timer.break_duration);
+    getInputById("long-break-duration").value = String(this.settings.timer.long_break_duration);
+    getInputById("total-sessions").value = String(this.settings.timer.total_sessions);
 
-    const maxSessionTimeField = /** @type {any} */ (document.getElementById("max-session-time"));
+    const maxSessionTimeField = /** @type {HTMLInputElement | null} */ (
+      document.getElementById("max-session-time")
+    );
     if (maxSessionTimeField) {
-      maxSessionTimeField.value = this.settings.timer.max_session_time || 120;
+      maxSessionTimeField.value = String(this.settings.timer.max_session_time || 120);
     }
 
-    const weeklyGoalField = /** @type {any} */ (document.getElementById("weekly-goal-minutes"));
+    const weeklyGoalField = /** @type {HTMLInputElement | null} */ (
+      document.getElementById("weekly-goal-minutes")
+    );
     if (weeklyGoalField) {
-      weeklyGoalField.value = this.settings.timer.weekly_goal_minutes || 125;
+      weeklyGoalField.value = String(this.settings.timer.weekly_goal_minutes || 125);
     }
 
-    const themeSelect = /** @type {any} */ (document.getElementById("theme-select"));
+    const themeSelect = /** @type {HTMLSelectElement | null} */ (
+      document.getElementById("theme-select")
+    );
     if (themeSelect) {
       themeSelect.value = this.settings.appearance?.theme || "auto";
     }
@@ -187,12 +219,11 @@ export class SettingsManager {
     this.initializeTimerThemeSelector();
 
     // Always show the user's setting preference, regardless of system permission
-    /** @type {any} */ (document.getElementById("desktop-notifications")).checked =
+    getCheckboxById("desktop-notifications").checked =
       this.settings.notifications.desktop_notifications;
-    /** @type {any} */ (document.getElementById("sound-notifications")).checked =
+    getCheckboxById("sound-notifications").checked =
       this.settings.notifications.sound_notifications;
-    /** @type {any} */ (document.getElementById("auto-start-timer")).checked =
-      this.settings.notifications.auto_start_timer;
+    getCheckboxById("auto-start-timer").checked = this.settings.notifications.auto_start_timer;
 
     logger.debug(
       "🔧 PopulateUI - Raw continuous sessions value:",
@@ -201,14 +232,15 @@ export class SettingsManager {
     const continuousValue = this.settings.notifications.allow_continuous_sessions || false;
     logger.debug("🔧 PopulateUI - Final continuous sessions value:", continuousValue);
 
-    /** @type {any} */ (document.getElementById("allow-continuous-sessions")).checked =
-      continuousValue;
-    /** @type {any} */ (document.getElementById("smart-pause")).checked =
-      this.settings.notifications.smart_pause;
+    getCheckboxById("allow-continuous-sessions").checked = continuousValue;
+    getCheckboxById("smart-pause").checked = this.settings.notifications.smart_pause;
 
     const timeoutValue = this.settings.notifications.smart_pause_timeout || 30;
-    /** @type {any} */ (document.getElementById("smart-pause-timeout")).value = timeoutValue;
-    /** @type {any} */ (document.getElementById("timeout-value")).textContent = timeoutValue;
+    getInputById("smart-pause-timeout").value = String(timeoutValue);
+    const timeoutDisplay = document.getElementById("timeout-value");
+    if (timeoutDisplay) {
+      timeoutDisplay.textContent = String(timeoutValue);
+    }
 
     this.toggleTimeoutSetting(this.settings.notifications.smart_pause);
     this.setupSliderEventListener();
@@ -464,83 +496,89 @@ export class SettingsManager {
     return Number.isFinite(n) ? n : fallback;
   }
 
+  collectSettingsFromUI() {
+    this.settings.shortcuts.start_stop = getInputById("start-stop-shortcut").value || null;
+    this.settings.shortcuts.reset = getInputById("reset-shortcut").value || null;
+    this.settings.shortcuts.skip = getInputById("skip-shortcut").value || null;
+
+    this.settings.timer.focus_duration = this.parseNumberOrDefault(
+      getInputById("focus-duration").value,
+      this.settings.timer.focus_duration
+    );
+    this.settings.timer.break_duration = this.parseNumberOrDefault(
+      getInputById("break-duration").value,
+      this.settings.timer.break_duration
+    );
+    this.settings.timer.long_break_duration = this.parseNumberOrDefault(
+      getInputById("long-break-duration").value,
+      this.settings.timer.long_break_duration
+    );
+    this.settings.timer.total_sessions = this.parseNumberOrDefault(
+      getInputById("total-sessions").value,
+      this.settings.timer.total_sessions
+    );
+
+    const maxSessionTimeField = /** @type {HTMLInputElement | null} */ (
+      document.getElementById("max-session-time")
+    );
+    if (maxSessionTimeField) {
+      this.settings.timer.max_session_time = this.parseNumberOrDefault(
+        maxSessionTimeField.value,
+        this.settings.timer.max_session_time
+      );
+    }
+
+    const weeklyGoalField = /** @type {HTMLInputElement | null} */ (
+      document.getElementById("weekly-goal-minutes")
+    );
+    if (weeklyGoalField) {
+      this.settings.timer.weekly_goal_minutes = this.parseNumberOrDefault(
+        weeklyGoalField.value,
+        this.settings.timer.weekly_goal_minutes
+      );
+    }
+
+    const themeSelect = /** @type {HTMLSelectElement | null} */ (
+      document.getElementById("theme-select")
+    );
+    if (themeSelect) {
+      this.settings.appearance.theme = themeSelect.value;
+    }
+
+    this.settings.notifications.desktop_notifications =
+      getCheckboxById("desktop-notifications").checked;
+    this.settings.notifications.sound_notifications =
+      getCheckboxById("sound-notifications").checked;
+    this.settings.notifications.auto_start_timer = getCheckboxById("auto-start-timer").checked;
+    this.settings.notifications.allow_continuous_sessions = getCheckboxById(
+      "allow-continuous-sessions"
+    ).checked;
+    this.settings.notifications.smart_pause = getCheckboxById("smart-pause").checked;
+    this.settings.notifications.smart_pause_timeout = this.parseNumberOrDefault(
+      getInputById("smart-pause-timeout").value,
+      30
+    );
+
+    const debugModeCheckbox = /** @type {HTMLInputElement | null} */ (
+      document.getElementById("debug-mode")
+    );
+    if (debugModeCheckbox) {
+      if (!this.settings.advanced) {
+        this.settings.advanced = {};
+      }
+      this.settings.advanced.debug_mode = debugModeCheckbox.checked;
+    }
+  }
+
   async saveSettings() {
     try {
-      this.settings.shortcuts.start_stop =
-        /** @type {any} */ (document.getElementById("start-stop-shortcut")).value || null;
-      this.settings.shortcuts.reset =
-        /** @type {any} */ (document.getElementById("reset-shortcut")).value || null;
-      this.settings.shortcuts.skip =
-        /** @type {any} */ (document.getElementById("skip-shortcut")).value || null;
+      this.collectSettingsFromUI();
 
-      this.settings.timer.focus_duration = this.parseNumberOrDefault(
-        /** @type {any} */ (document.getElementById("focus-duration")).value,
-        this.settings.timer.focus_duration
-      );
-      this.settings.timer.break_duration = this.parseNumberOrDefault(
-        /** @type {any} */ (document.getElementById("break-duration")).value,
-        this.settings.timer.break_duration
-      );
-      this.settings.timer.long_break_duration = this.parseNumberOrDefault(
-        /** @type {any} */ (document.getElementById("long-break-duration")).value,
-        this.settings.timer.long_break_duration
-      );
-      this.settings.timer.total_sessions = this.parseNumberOrDefault(
-        /** @type {any} */ (document.getElementById("total-sessions")).value,
-        this.settings.timer.total_sessions
-      );
-
-      const maxSessionTimeField = /** @type {any} */ (document.getElementById("max-session-time"));
-      if (maxSessionTimeField) {
-        this.settings.timer.max_session_time = this.parseNumberOrDefault(
-          maxSessionTimeField.value,
-          this.settings.timer.max_session_time
-        );
-      }
-
-      const weeklyGoalField = /** @type {any} */ (document.getElementById("weekly-goal-minutes"));
-      if (weeklyGoalField) {
-        this.settings.timer.weekly_goal_minutes = this.parseNumberOrDefault(
-          weeklyGoalField.value,
-          this.settings.timer.weekly_goal_minutes
-        );
-      }
-
-      const themeSelect = /** @type {any} */ (document.getElementById("theme-select"));
-      if (themeSelect) {
-        this.settings.appearance.theme = themeSelect.value;
-        await this.applyTheme(themeSelect.value);
+      if (document.getElementById("theme-select")) {
+        await this.applyTheme(this.settings.appearance.theme);
       }
 
       await this.applyTimerTheme(this.settings.appearance.timer_theme);
-
-      this.settings.notifications.desktop_notifications = /** @type {any} */ (
-        document.getElementById("desktop-notifications")
-      ).checked;
-      this.settings.notifications.sound_notifications = /** @type {any} */ (
-        document.getElementById("sound-notifications")
-      ).checked;
-      this.settings.notifications.auto_start_timer = /** @type {any} */ (
-        document.getElementById("auto-start-timer")
-      ).checked;
-      this.settings.notifications.allow_continuous_sessions = /** @type {any} */ (
-        document.getElementById("allow-continuous-sessions")
-      ).checked;
-      this.settings.notifications.smart_pause = /** @type {any} */ (
-        document.getElementById("smart-pause")
-      ).checked;
-      this.settings.notifications.smart_pause_timeout = this.parseNumberOrDefault(
-        /** @type {any} */ (document.getElementById("smart-pause-timeout")).value,
-        30
-      );
-
-      const debugModeCheckbox = /** @type {any} */ (document.getElementById("debug-mode"));
-      if (debugModeCheckbox) {
-        if (!this.settings.advanced) {
-          this.settings.advanced = {};
-        }
-        this.settings.advanced.debug_mode = debugModeCheckbox.checked;
-      }
 
       await invoke("save_settings", { settings: this.settings });
       await this.registerGlobalShortcuts();
@@ -592,7 +630,7 @@ export class SettingsManager {
   /** @param {any} shortcutType */
   clearShortcut(shortcutType) {
     const inputId = `${shortcutType}-shortcut`;
-    const input = /** @type {any} */ (document.getElementById(inputId));
+    const input = /** @type {HTMLInputElement | null} */ (document.getElementById(inputId));
     if (input) {
       input.value = "";
       this.scheduleAutoSave();
@@ -633,7 +671,7 @@ export class SettingsManager {
     });
 
     appearanceFields.forEach((fieldId) => {
-      const field = /** @type {any} */ (document.getElementById(fieldId));
+      const field = /** @type {HTMLSelectElement | null} */ (document.getElementById(fieldId));
       if (field) {
         if (fieldId === "theme-select") {
           // Handle theme changes specially to apply theme immediately
@@ -718,93 +756,15 @@ export class SettingsManager {
 
   async autoSaveSettings() {
     try {
-      this.settings.shortcuts.start_stop =
-        /** @type {any} */ (document.getElementById("start-stop-shortcut")).value || null;
-      this.settings.shortcuts.reset =
-        /** @type {any} */ (document.getElementById("reset-shortcut")).value || null;
-      this.settings.shortcuts.skip =
-        /** @type {any} */ (document.getElementById("skip-shortcut")).value || null;
-
-      this.settings.timer.focus_duration = this.parseNumberOrDefault(
-        /** @type {any} */ (document.getElementById("focus-duration")).value,
-        this.settings.timer.focus_duration
-      );
-      this.settings.timer.break_duration = this.parseNumberOrDefault(
-        /** @type {any} */ (document.getElementById("break-duration")).value,
-        this.settings.timer.break_duration
-      );
-      this.settings.timer.long_break_duration = this.parseNumberOrDefault(
-        /** @type {any} */ (document.getElementById("long-break-duration")).value,
-        this.settings.timer.long_break_duration
-      );
-      this.settings.timer.total_sessions = this.parseNumberOrDefault(
-        /** @type {any} */ (document.getElementById("total-sessions")).value,
-        this.settings.timer.total_sessions
-      );
-
-      const maxSessionTimeField = /** @type {any} */ (document.getElementById("max-session-time"));
-      if (maxSessionTimeField) {
-        this.settings.timer.max_session_time = this.parseNumberOrDefault(
-          maxSessionTimeField.value,
-          this.settings.timer.max_session_time
-        );
-      }
-
-      const weeklyGoalField = /** @type {any} */ (document.getElementById("weekly-goal-minutes"));
-      if (weeklyGoalField) {
-        this.settings.timer.weekly_goal_minutes = this.parseNumberOrDefault(
-          weeklyGoalField.value,
-          this.settings.timer.weekly_goal_minutes
-        );
-      }
-
-      const themeSelect = /** @type {any} */ (document.getElementById("theme-select"));
-      if (themeSelect) {
-        this.settings.appearance.theme = themeSelect.value;
-        // Note: Don't call applyTheme here to avoid duplicate saves
-      }
-
-      this.settings.notifications.desktop_notifications = /** @type {any} */ (
-        document.getElementById("desktop-notifications")
-      ).checked;
-      this.settings.notifications.sound_notifications = /** @type {any} */ (
-        document.getElementById("sound-notifications")
-      ).checked;
-      this.settings.notifications.auto_start_timer = /** @type {any} */ (
-        document.getElementById("auto-start-timer")
-      ).checked;
-      this.settings.notifications.allow_continuous_sessions = /** @type {any} */ (
-        document.getElementById("allow-continuous-sessions")
-      ).checked;
-      this.settings.notifications.smart_pause = /** @type {any} */ (
-        document.getElementById("smart-pause")
-      ).checked;
-      this.settings.notifications.smart_pause_timeout = this.parseNumberOrDefault(
-        /** @type {any} */ (document.getElementById("smart-pause-timeout")).value,
-        30
-      );
-
-      const debugModeCheckbox = /** @type {any} */ (document.getElementById("debug-mode"));
-      if (debugModeCheckbox) {
-        if (!this.settings.advanced) {
-          this.settings.advanced = {};
-        }
-        this.settings.advanced.debug_mode = debugModeCheckbox.checked;
-      }
+      this.collectSettingsFromUI();
 
       logger.debug("🔧 AutoSave - Reading checkbox values:");
-      logger.debug(
-        "auto_start_timer checkbox:",
-        /** @type {any} */ (document.getElementById("auto-start-timer")).checked
-      );
+      logger.debug("auto_start_timer checkbox:", getCheckboxById("auto-start-timer").checked);
       logger.debug(
         "allow_continuous_sessions checkbox:",
-        /** @type {any} */ (document.getElementById("allow-continuous-sessions")).checked
+        getCheckboxById("allow-continuous-sessions").checked
       );
-      logger.debug(
-        "smart_pause checkbox:",
-        /** @type {any} */ (document.getElementById("smart-pause")).checked
-      );
+      logger.debug("smart_pause checkbox:", getCheckboxById("smart-pause").checked);
       logger.debug("🔧 AutoSave - Full settings object being saved:", this.settings);
 
       await invoke("save_settings", { settings: this.settings });
@@ -900,7 +860,9 @@ export class SettingsManager {
       logger.error("Failed to toggle autostart:", error);
       NotificationUtils.showNotificationPing(`❌ Failed to toggle autostart: ${error}`, "error");
 
-      const checkbox = /** @type {any} */ (document.getElementById("autostart-enabled"));
+      const checkbox = /** @type {HTMLInputElement | null} */ (
+        document.getElementById("autostart-enabled")
+      );
       if (checkbox) {
         checkbox.checked = !enabled;
       }
@@ -946,7 +908,9 @@ export class SettingsManager {
       logger.error("Failed to toggle analytics:", error);
       NotificationUtils.showNotificationPing(`❌ Failed to toggle analytics: ${error}`, "error");
 
-      const checkbox = /** @type {any} */ (document.getElementById("analytics-enabled"));
+      const checkbox = /** @type {HTMLInputElement | null} */ (
+        document.getElementById("analytics-enabled")
+      );
       if (checkbox) {
         checkbox.checked = !enabled;
       }
@@ -995,7 +959,9 @@ export class SettingsManager {
         "error"
       );
 
-      const checkbox = /** @type {any} */ (document.getElementById("hide-icon-on-close"));
+      const checkbox = /** @type {HTMLInputElement | null} */ (
+        document.getElementById("hide-icon-on-close")
+      );
       if (checkbox) {
         checkbox.checked = !enabled;
       }
@@ -1042,7 +1008,9 @@ export class SettingsManager {
         "error"
       );
 
-      const select = /** @type {any} */ (document.getElementById("status-bar-display"));
+      const select = /** @type {HTMLSelectElement | null} */ (
+        document.getElementById("status-bar-display")
+      );
       if (select) {
         select.value = this.settings.status_bar_display || "default";
       }
@@ -1099,7 +1067,8 @@ export class SettingsManager {
       const isDevMode = window.location.protocol === "tauri:" ? false : true;
 
       const isEnabledInSettings =
-        /** @type {any} */ (document.getElementById("desktop-notifications"))?.checked || false;
+        /** @type {HTMLInputElement | null} */ (document.getElementById("desktop-notifications"))
+          ?.checked || false;
 
       if (!isEnabledInSettings) {
         status = "🔕 Disabled in settings";
@@ -1268,7 +1237,9 @@ export class SettingsManager {
 
   initializeThemeSelector() {
     const themeSelector = document.getElementById("theme-selector");
-    const themeSelect = /** @type {any} */ (document.getElementById("theme-select"));
+    const themeSelect = /** @type {HTMLSelectElement | null} */ (
+      document.getElementById("theme-select")
+    );
 
     if (!themeSelector) {
       return;
@@ -1284,6 +1255,10 @@ export class SettingsManager {
     themeButtons.forEach((button) => {
       button.addEventListener("click", async (_e) => {
         const selectedTheme = button.getAttribute("data-theme");
+        if (!selectedTheme) {
+          logger.error("Theme option is missing data-theme");
+          return;
+        }
 
         // Update visual state
         this.updateThemeSelector(selectedTheme);

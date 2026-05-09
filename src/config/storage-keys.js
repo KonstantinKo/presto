@@ -16,5 +16,4 @@ const STORAGE_KEYS = Object.freeze({
   TIMER_THEME_PREFERENCE: "timer-theme-preference",
 });
 
-export default STORAGE_KEYS;
 export { STORAGE_KEYS };

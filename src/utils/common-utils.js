@@ -19,6 +19,34 @@ export class NotificationUtils {
   static lastNotificationTimes = new Map(); // Track last notification times to prevent spam
 
   /**
+   * Shows a blocking dialog using Tauri's native dialog API with a fallback to alert().
+   * Use for critical/blocking messages that require user acknowledgment.
+   * @param {string} content
+   * @param {{ title?: string, kind?: string }} [options]
+   */
+  static async showMessage(content, options = {}) {
+    const opts = { title: "Presto", kind: "info", ...options };
+    try {
+      if (window.__TAURI__?.dialog?.message) {
+        await window.__TAURI__.dialog.message(content, opts);
+        return;
+      }
+      if (window.__TAURI__?.core?.invoke) {
+        await window.__TAURI__.core.invoke("plugin:dialog|message", {
+          message: content,
+          title: opts.title,
+          kind: opts.kind,
+        });
+        return;
+      }
+      alert(`${opts.title}\n\n${content}`);
+    } catch (error) {
+      logger.error("Error showing message:", error);
+      alert(`${opts.title}\n\n${content}`);
+    }
+  }
+
+  /**
    * @param {string} message
    * @param {string | null} [type]
    * @param {string | null} [timerState]

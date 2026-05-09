@@ -8,7 +8,7 @@ class ThemeLoader {
 
   async loadAllThemes() {
     try {
-      const themeFiles = await this.discoverThemeFiles();
+      const themeFiles = this.discoverThemeFiles();
 
       logger.debug(`🎨 Discovered ${themeFiles.length} theme files:`, themeFiles);
 
@@ -24,7 +24,7 @@ class ThemeLoader {
     }
   }
 
-  async discoverThemeFiles() {
+  discoverThemeFiles() {
     // Since we can't directly read the filesystem, we'll use a predefined list
     // that gets updated by the build process or manually maintained
     const knownThemes = ["espresso.css", "pipboy.css", "pommodore64.css"];

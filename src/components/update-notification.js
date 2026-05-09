@@ -6,6 +6,7 @@
 
 // Use the global updateManager instead of an import to stay in sync with main.js
 const getUpdateManager = () => window.updateManager || window.updateManagerInstance;
+import { NotificationUtils } from "../utils/common-utils.js";
 import { logger } from "../utils/logger.js";
 
 export class UpdateNotification {
@@ -458,14 +459,10 @@ export class UpdateNotification {
 
     const message = `To update Presto, run this command in your terminal:\n\n${brewCommand}\n\n${copySucceeded ? "The command has been copied to your clipboard." : "Please copy this command manually."}`;
 
-    if (window.__TAURI__ && window.__TAURI__.dialog) {
-      await window.__TAURI__.dialog.message(message, {
-        title: "Update Presto via Homebrew",
-        type: "info",
-      });
-    } else {
-      alert(message);
-    }
+    await NotificationUtils.showMessage(message, {
+      title: "Update Presto via Homebrew",
+      kind: "info",
+    });
 
     this.hide();
   }

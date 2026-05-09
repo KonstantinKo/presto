@@ -57,7 +57,7 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
 
   async getTauriUpdaterAPI() {
     if (!window.__TAURI__) {
-      throw new Error("Ambiente Tauri non disponibile");
+      throw new Error("Tauri environment not available");
     }
 
     if (window.__TAURI__.updater) {
@@ -90,10 +90,10 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
         return await window.__TAURI__.core.invoke("plugin:app|version");
       }
 
-      throw new Error("API versione non disponibile");
+      throw new Error("Version API not available");
     } catch (error) {
       logger.error("❌ Could not retrieve app version:", error);
-      throw new Error("Impossibile determinare la versione corrente dell'applicazione");
+      throw new Error("Unable to determine current application version");
     }
   }
 
@@ -109,12 +109,12 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
         return;
       }
 
-      throw new Error("API riavvio non disponibile");
+      throw new Error("Restart API not available");
     } catch (error) {
       logger.error("❌ Restart error:", error);
       await this.showMessage(
-        "L'aggiornamento è stato installato ma il riavvio automatico non è disponibile.\n\nRiavvia manualmente l'applicazione.",
-        { title: "Riavvio Manuale", kind: "warning" }
+        "The update was installed but automatic restart is not available.\n\nPlease restart the application manually.",
+        { title: "Manual Restart", kind: "warning" }
       );
     }
   }
@@ -127,7 +127,7 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
       this.startAutoCheck();
     }
 
-    return "Modalità test attivata! Usa checkForUpdates() per testare.";
+    return "Test mode activated! Use checkForUpdates() to test.";
   }
 
   disableTestMode() {
@@ -174,8 +174,8 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
   /** @param {string} content @param {any} [options] */
   async askConfirmation(content, options = {}) {
     const defaultOptions = {
-      title: "Conferma",
-      okLabel: "Sì",
+      title: "Confirm",
+      okLabel: "Yes",
       cancelLabel: "No",
     };
     const opts = { ...defaultOptions, ...options };
@@ -187,8 +187,8 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
 
       if (window.__TAURI__?.core?.invoke) {
         return await window.__TAURI__.core.invoke("plugin:dialog|ask", {
+          ...opts,
           message: content,
-          ...options,
         });
       }
 
@@ -201,9 +201,9 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
 
   async showDevelopmentMessage() {
     await this.showMessage(
-      "Update check not available in development mode.\n\nGli aggiornamenti funzioneranno solo nell'applicazione compilata.",
+      "Update check not available in development mode.\n\nUpdates will only work in the compiled application.",
       {
-        title: "Modalità Sviluppo",
+        title: "Development Mode",
         kind: "info",
       }
     );
@@ -262,6 +262,17 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
     return 0;
   }
 
+  /** @param {string} url @param {number} [timeoutMs] */
+  async fetchWithTimeout(url, timeoutMs = 10000) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      return await fetch(url, { signal: controller.signal });
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
   /** @param {boolean} [showDialog] */
   async checkVersionFromGitHub(showDialog = true) {
     try {
@@ -271,14 +282,21 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
         logger.debug(`Current version: ${currentVersion}`);
       } catch (error) {
         logger.error("❌ Error retrieving current version:", error);
-        this.emit("checkError", { message: "Impossibile determinare la versione corrente" });
+        this.updateAvailable = false;
+        this.currentUpdate = null;
+        this.emit("checkError", { message: "Unable to determine current version" });
         if (showDialog) {
-          alert("Impossibile verificare gli aggiornamenti: versione corrente non determinabile");
+          await this.showMessage(
+            "Unable to check for updates: current version could not be determined",
+            { title: "Error", kind: "error" }
+          );
         }
         return false;
       }
 
-      const response = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/releases/latest`);
+      const response = await this.fetchWithTimeout(
+        `https://api.github.com/repos/${GITHUB_REPO}/releases/latest`
+      );
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}`);
       }
@@ -295,8 +313,9 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
         this.emit("updateNotAvailable");
 
         if (showDialog) {
-          alert(
-            `No updates available.\n\nCurrent version: ${currentVersion}\nUltima versione: ${latestVersion}`
+          await this.showMessage(
+            `No updates available.\n\nCurrent version: ${currentVersion}\nLatest version: ${latestVersion}`,
+            { title: "No Updates", kind: "info" }
           );
         }
         return false;
@@ -316,17 +335,22 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
         const message =
           `🎉 Update available!\n\n` +
           `Current version: ${currentVersion}\n` +
-          `Nuova versione: ${latestVersion}\n\n` +
-          `Nota: In modalità sviluppo, scarica manualmente da GitHub.`;
-        alert(message);
+          `New version: ${latestVersion}\n\n` +
+          `Note: In development mode, download manually from GitHub.`;
+        await this.showMessage(message, { title: "Update Available", kind: "info" });
       }
 
       return true;
     } catch (error) {
       logger.error("❌ Error checking GitHub version:", error);
-      this.emit("checkError", { message: `Errore di rete: ${toError(error).message}` });
+      this.updateAvailable = false;
+      this.currentUpdate = null;
+      this.emit("checkError", { message: `Network error: ${toError(error).message}` });
       if (showDialog) {
-        alert(`Errore nel controllo degli aggiornamenti:\n${toError(error).message}`);
+        await this.showMessage(`Error checking for updates:\n${toError(error).message}`, {
+          title: "Error",
+          kind: "error",
+        });
       }
       return false;
     } finally {
@@ -368,21 +392,19 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
         logger.error("❌ Could not retrieve current version:", toError(versionError).message);
         this.updateAvailable = false;
         this.currentUpdate = null;
-        this.eventTarget?.dispatchEvent(
-          new CustomEvent("checkError", {
-            detail: { message: "Impossibile verificare la versione corrente dell'applicazione" },
-          })
-        );
+        this.emit("checkError", { message: "Unable to determine current application version" });
         if (showDialog) {
-          await this.showMessage("Impossibile verificare la versione corrente dell'applicazione", {
-            title: "Errore",
+          await this.showMessage("Unable to determine current application version", {
+            title: "Error",
             kind: "error",
           });
         }
         return false;
       }
 
-      const response = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/releases/latest`);
+      const response = await this.fetchWithTimeout(
+        `https://api.github.com/repos/${GITHUB_REPO}/releases/latest`
+      );
       if (!response.ok) {
         throw new Error(`GitHub API error: ${response.status}`);
       }
@@ -432,7 +454,7 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
       const manualUpdate = {
         version: latestVersion,
         date: githubRelease.published_at,
-        body: githubRelease.body || "Nessuna descrizione disponibile",
+        body: githubRelease.body || "No description available",
         downloadUrl: githubRelease.html_url,
         isAutoDownloadable: false,
         source: "github-manual",
@@ -449,10 +471,10 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
       this.emit("checkError", { message: toError(error).message || String(error) });
 
       if (showDialog) {
-        await this.showMessage(
-          "Errore durante il controllo degli aggiornamenti.\n\nRiprova più tardi.",
-          { title: "Errore", kind: "error" }
-        );
+        await this.showMessage("Error checking for updates.\n\nPlease try again later.", {
+          title: "Error",
+          kind: "error",
+        });
       }
       return false;
     } finally {
@@ -470,7 +492,7 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
     const update = {
       version: simulatedNewVersion,
       date: new Date().toISOString(),
-      body: `🧪 **Aggiornamento Simulato per Test**\n\nVersione: ${simulatedNewVersion}\n\n**Novità simulate:**\n- Miglioramenti delle prestazioni\n- Correzioni di bug\n- Nuove funzionalità\n\n*Questo è un aggiornamento di test. Non verranno effettuati download reali.*`,
+      body: `🧪 **Simulated Update for Test**\n\nVersion: ${simulatedNewVersion}\n\n**Simulated changes:**\n- Performance improvements\n- Bug fixes\n- New features\n\n*This is a test update. No real downloads will occur.*`,
       downloadUrl: `https://github.com/${GITHUB_REPO}/releases`,
       isAutoDownloadable: true,
       source: "test-simulation",
@@ -528,18 +550,43 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
 
     try {
       if (this.currentUpdate.isAutoDownloadable && this.currentUpdate.source === "tauri-api") {
-        logger.info("📥 Download automatico via Tauri...");
+        logger.info("📥 Automatic download via Tauri...");
 
         const tauriAPI = await this.getTauriUpdaterAPI();
         if (tauriAPI && tauriAPI.downloadAndInstall) {
+          let downloaded = 0;
+          let contentLength = 0;
           await tauriAPI.downloadAndInstall((/** @type {any} */ progress) => {
-            logger.debug(`📥 Progresso download: ${progress}%`);
-            this.downloadProgress = progress;
-            this.emit("downloadProgress", {
-              progress,
-              chunkLength: progress,
-              contentLength: 100,
-            });
+            if (typeof progress === "number") {
+              this.downloadProgress = progress;
+              this.emit("downloadProgress", {
+                progress,
+                chunkLength: progress,
+                contentLength: 100,
+              });
+              return;
+            }
+
+            switch (progress?.event) {
+              case "Started":
+                downloaded = 0;
+                contentLength = progress.data?.contentLength ?? 0;
+                break;
+              case "Progress": {
+                const chunkLength = progress.data?.chunkLength ?? 0;
+                downloaded += chunkLength;
+                const pct = contentLength > 0 ? Math.round((downloaded / contentLength) * 100) : 0;
+                logger.debug(`📥 Download progress: ${pct}%`);
+                this.downloadProgress = pct;
+                if (contentLength > 0) {
+                  this.emit("downloadProgress", { progress: pct, chunkLength, contentLength });
+                }
+                break;
+              }
+              case "Finished":
+                this.downloadProgress = 100;
+                break;
+            }
           });
 
           this.downloadProgress = 100;
@@ -553,8 +600,8 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
           this.emit("installFinished");
 
           const shouldRestart = await this.askConfirmation(
-            "Aggiornamento scaricato e installato con successo!\n\nVuoi riavviare ora l'applicazione?",
-            { title: "Aggiornamento Completato" }
+            "Update downloaded and installed successfully!\n\nWould you like to restart the application now?",
+            { title: "Update Complete" }
           );
 
           if (shouldRestart) {
@@ -562,7 +609,7 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
           }
         }
       } else {
-        logger.info("🌐 Reindirizzamento a download manuale...");
+        logger.info("🌐 Redirecting to manual download...");
         await this.openDownloadUrl(this.currentUpdate.downloadUrl);
 
         this.emit("manualDownloadRequired", { url: this.currentUpdate.downloadUrl });
@@ -601,8 +648,8 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
     logger.info("🧪 Simulated install complete");
 
     await this.showMessage(
-      "🧪 **Test Completato**\n\nL'aggiornamento è stato simulato con successo!\n\nIn un ambiente reale, l'applicazione si riavvierebbe ora.",
-      { title: "Test Aggiornamento", kind: "info" }
+      "🧪 **Test Complete**\n\nThe update was simulated successfully!\n\nIn a real environment, the application would restart now.",
+      { title: "Update Test", kind: "info" }
     );
   }
 
@@ -673,7 +720,7 @@ if (_isDevMode) {
     enableTestMode: () => {
       localStorage.setItem("presto_force_update_test", "true");
       logger.warn("⚠️ UPDATE TEST MODE ACTIVATED");
-      return "Modalità test attivata! Usa window.updateManager.checkForUpdates() per testare.";
+      return "Test mode activated! Use window.updateManager.checkForUpdates() to test.";
     },
     disableTestMode: () => {
       localStorage.removeItem("presto_force_update_test");
@@ -684,7 +731,7 @@ if (_isDevMode) {
       const mgr = window.updateManager || window.updateManagerInstance;
       if (!mgr) {
         logger.error("UpdateManager not initialized");
-        return Promise.reject("UpdateManager non trovato");
+        return Promise.reject(new Error("UpdateManager not found"));
       }
       return mgr.simulateUpdate();
     },
@@ -692,7 +739,7 @@ if (_isDevMode) {
       const mgr = window.updateManager || window.updateManagerInstance;
       if (!mgr) {
         logger.error("UpdateManager not initialized");
-        return Promise.reject("UpdateManager non trovato");
+        return Promise.reject(new Error("UpdateManager not found"));
       }
       return mgr.checkForUpdates();
     },
