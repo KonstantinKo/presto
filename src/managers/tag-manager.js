@@ -121,7 +121,22 @@ class TagManager {
         if (!Array.isArray(parsed)) {
           throw new TypeError("presto-tags must be an array");
         }
-        this.tags = parsed;
+        const valid = parsed.filter(
+          (t) =>
+            t !== null &&
+            typeof t === "object" &&
+            typeof t.id === "string" &&
+            t.id.length > 0 &&
+            typeof t.name === "string" &&
+            t.name.length > 0
+        );
+        if (valid.length !== parsed.length) {
+          logger.error("TagManager: invalid tag entries detected, discarding corrupted data");
+          localStorage.removeItem("presto-tags");
+          this.tags = [];
+        } else {
+          this.tags = valid;
+        }
       } catch (_parseError) {
         logger.error("TagManager: corrupted tags in localStorage, resetting");
         localStorage.removeItem("presto-tags");
@@ -302,6 +317,9 @@ class TagManager {
 
       if (this.currentTags.length === 0 && this.tags.length > 0) {
         this.currentTags = [this.tags[0]];
+        if (window.pomodoroTimer && window.pomodoroTimer.isRunning) {
+          this.startTagTracking(this.currentTags[0].id);
+        }
       }
 
       this.updateStatusDisplay();

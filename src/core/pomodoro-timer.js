@@ -1,5 +1,5 @@
 const { invoke } = /** @type {{ invoke: (cmd: string, args?: any) => Promise<any> }} */ (
-  window.__TAURI__ ? window.__TAURI__.core : { invoke: null }
+  window.__TAURI__?.core ?? { invoke: null }
 );
 import { NotificationUtils, KeyboardUtils } from "../utils/common-utils.js";
 import { logger } from "../utils/logger.js";
@@ -433,6 +433,11 @@ export class PomodoroTimer {
       logger.info("Global activity listeners setup complete");
     } catch (error) {
       logger.error("Failed to setup global activity monitoring:", error);
+      try {
+        await invoke("stop_activity_monitoring");
+      } catch (stopError) {
+        logger.debug("Failed to stop activity monitoring after setup error:", stopError);
+      }
       for (const unlisten of this.activityUnlistenFns) {
         unlisten();
       }
@@ -2890,6 +2895,15 @@ export class PomodoroTimer {
       this.activityTimeout = null;
     }
     this.stopSmartPauseCountdown();
+    for (const unlisten of this.activityUnlistenFns) {
+      if (unlisten) {
+        unlisten();
+      }
+    }
+    this.activityUnlistenFns = [];
+    invoke("stop_activity_monitoring").catch((err) => {
+      logger.debug("stop_activity_monitoring on reset:", err);
+    });
     this.smartPauseEnabled = false;
     this.inactivityThreshold = 30000; // Reset to default 30 seconds
 
