@@ -25,7 +25,7 @@ pub enum TimerMode {
 }
 ```
 
-**Scope**: shared. The Tauri side currently uses `String` (e.g., `"focus"`, `"break"`, `"longBreak"`) — see `update_tray_icon` in `src-tauri/src/lib.rs:432`. Cutover-period parity: the Leptos side serialises as the same camelCase strings via `#[serde(rename_all = "camelCase")]`. The Tauri side may follow up to use the enum locally, but is out of scope for this feature (per FR-019 / A2).
+**Scope**: shared. The Tauri side currently uses `String` (e.g., `"focus"`, `"break"`, `"longBreak"`) — see `update_tray_icon` in `src-tauri/src/lib.rs:432`. The cutover commit tightens both sides: `update_tray_menu`'s `current_mode` arg and `update_tray_icon`'s `session_mode` arg both become `TimerMode` (see [contracts/tauri-bridge.md](./contracts/tauri-bridge.md) §Error handling, "stringly-typed boundary args, tightened"). The wire format remains the same camelCase strings via `#[serde(rename_all = "camelCase")]`, so no on-disk or in-flight payload shapes change.
 
 **Current JS**: `src/core/pomodoro-timer.js` uses string constants `"focus" | "break" | "longBreak"`.
 
@@ -40,13 +40,15 @@ pub struct Session {
     pub completed_pomodoros: u32,
     pub total_focus_time: u32,  // seconds
     pub current_session: u32,
-    pub date: String,           // "Mon Jan 01 2024" — current JS Date.toDateString() format
+    pub date: String,           // chrono format `%a %b %d %Y` — exact-byte match for JS Date.toDateString()
 }
 ```
 
 **Scope**: shared. Mirrors `PomodoroSession` at `src-tauri/src/lib.rs:39-45`. **Do not** redesign the schema (FR-005).
 
 **Wire format**: snake_case to match the existing Rust serde derivation (no `rename_all` on the Tauri side).
+
+**`date` format pinning**: the chrono format string is `"%a %b %d %Y"`. JS `Date.prototype.toDateString()` per ECMA-262 produces a zero-padded day; chrono's `%d` is also zero-padded, so the formats currently match byte-for-byte. The Leptos crate ships a Rust unit test (`engine::date_format::tests::matches_js_to_date_string`) that iterates 366 dates and asserts `chrono_format(date) == known_js_format(date)` for a representative sample, pinning the format so a future chrono change that breaks parity fails loud at CI time rather than silently corrupting on-disk dates.
 
 ---
 
@@ -129,7 +131,7 @@ pub struct SessionTag {
 
 ### `Settings` / `AppSettings`
 
-Mirrors the full nested shape from `src-tauri/src/lib.rs:90-202`. The Leptos side defines the same nested types (`ShortcutSettings`, `TimerSettings`, `NotificationSettings`, `AdvancedSettings`) with the same `#[serde(default = "...")]` markers so settings JSON files written by any released `0.4.x` build deserialise without manual migration (FR-005 idempotent migration path is "fall back to default for missing fields, write back on save").
+Mirrors the full nested shape from `src-tauri/src/lib.rs:90-202`, with one shape change in this feature: the legacy `hide_status_bar: bool` field is replaced by a typed `status_bar_display: StatusBarDisplay` enum. The Leptos side defines the same nested types (`ShortcutSettings`, `TimerSettings`, `NotificationSettings`, `AdvancedSettings`) with the same `#[serde(default = "...")]` markers so settings JSON files written by any released `0.4.x` build deserialise without manual migration (FR-005 idempotent migration path: fall back to default for missing fields, write back on save).
 
 ```rust
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -145,12 +147,34 @@ pub struct Settings {
     pub analytics_enabled: bool,
     #[serde(default)]
     pub hide_icon_on_close: bool,
-    #[serde(default)]
-    pub hide_status_bar: bool,
+    #[serde(default, deserialize_with = "deserialize_status_bar_display_with_legacy_fallback")]
+    pub status_bar_display: StatusBarDisplay,
+    // NOTE: `hide_status_bar` is intentionally absent from this struct. It is consumed only by the
+    // legacy fallback deserializer above; once a settings file is read with this struct and re-saved,
+    // the on-disk shape carries `status_bar_display` and the legacy field is gone.
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum StatusBarDisplay {
+    #[default]
+    Default,
+    IconOnly,
 }
 ```
 
 **Scope**: shared. Field defaults match `src-tauri/src/lib.rs:122-202`.
+
+#### Settings legacy migration
+
+Existing on-disk JSON written by any released `0.4.x` build carries `hide_status_bar: bool`. The custom deserializer `deserialize_status_bar_display_with_legacy_fallback` reads the JSON object once and resolves `status_bar_display`:
+
+1. If `status_bar_display` is present, use it.
+2. Else if `hide_status_bar: true` is present, use `StatusBarDisplay::IconOnly`.
+3. Else if `hide_status_bar: false` is present, use `StatusBarDisplay::Default`.
+4. Else, use `StatusBarDisplay::default()` (i.e., `Default`).
+
+On the next save, the file is rewritten with `status_bar_display` only — `hide_status_bar` is not emitted (it has no field in the struct). This mirrors the JS-side migration logic at `src/managers/settings-manager.js:109-119` ported to Rust, and is exercised by `managers/settings::tests::migrates_hide_status_bar_to_status_bar_display`.
 
 ---
 
@@ -203,6 +227,61 @@ pub struct AuthUser {
 ```
 
 **Scope**: shared. Replaces the JS Supabase SDK's session/user types. Persisted Rust-side per Decision §6 (research.md).
+
+---
+
+### `SupabaseSessionPayload` (transition-only — Supabase localStorage import)
+
+The on-the-wire shape of the JS-era Supabase auth token persisted at `window.localStorage.getItem("sb-<project-ref>-auth-token")`. Deserialised by the Leptos crate on first post-cutover launch and handed to the Tauri-side adapter via `import_legacy_supabase_session(payload)` for re-persistence in the Rust-managed app-data store.
+
+```rust
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SupabaseSessionPayload {
+    pub access_token: String,
+    pub refresh_token: String,
+    pub expires_at: u64,            // Unix epoch seconds, per supabase-js
+    pub user: AuthUser,
+}
+```
+
+**Scope**: bridge boundary, transition-only. Slated for removal one minor version after cutover, alongside the `import_legacy_supabase_session` command. Entry point: `bridge::storage::migrate_legacy_localstorage()` calls into `managers/auth.rs` for the Supabase slice.
+
+---
+
+### `BridgeError` (Tauri command error variant)
+
+Every Tauri command returns `Result<T, BridgeError>`. This replaces today's untyped `Result<T, String>` and makes spec FR-008's compile-time-mismatch promise load-bearing — a `String` error channel cannot deliver structured error discrimination across the bridge.
+
+```rust
+#[derive(Debug, Clone, Serialize, Deserialize, thiserror::Error)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum BridgeError {
+    /// `window.__TAURI_INTERNALS__` is absent (per FR-009 / AGENTS.md §Bridge availability). Leptos-side only — never produced by the Tauri handler.
+    #[error("bridge unavailable")]
+    BridgeUnavailable,
+    /// The caller is in a state where this command is invalid (e.g., a Supabase command without an active session).
+    #[error("not authenticated")]
+    NotAuthenticated,
+    /// An argument failed validation at the boundary.
+    #[error("invalid argument {field}: {reason}")]
+    InvalidArgument { field: String, reason: String },
+    /// The requested resource (file, key, row) does not exist.
+    #[error("not found: {resource}")]
+    NotFound { resource: String },
+    /// `serde-wasm-bindgen` failed to deserialise the return on the Leptos side.
+    #[error("serde roundtrip failed in {command}: {error}")]
+    SerdeRoundtrip { command: &'static str, error: String },
+    /// Catch-all for unexpected Tauri-side failures (filesystem errors, plugin errors, etc.).
+    #[error("internal: {msg}")]
+    Internal { msg: String },
+}
+```
+
+**Scope**: shared. The Leptos crate mirrors the same enum (or imports a shared crate-level type if a cross-workspace `bridge-types` crate is added; Phase 1 chooses). Wire shape is externally-tagged JSON: `{"kind":"invalid_argument","field":"email","reason":"empty"}`.
+
+**Mapping strategy** (Tauri-side, applied in the cutover commit): every existing `.map_err(|e| e.to_string())` call site in `src-tauri/src/lib.rs` is rewritten to map into a `BridgeError` variant — defaulting to `BridgeError::Internal { msg: e.to_string() }` where the call site has no semantic context, and to `NotFound` / `InvalidArgument` / `NotAuthenticated` where it does. Coverage: a `bridge::error::tests::*` suite exercises every variant's serde round-trip.
+
+**Constitutional anchor**: III (Type Safety Over Defensive Code) — closed sum type; FR-008 compile-time-mismatch promise is now backed.
 
 ---
 
@@ -325,11 +404,38 @@ pub enum BridgeAvailable {
 
 Per FR-005, the on-disk shape of every persisted record is unchanged. The Tauri-side helpers in `src-tauri/src/helpers.rs` already produce and consume the JSON shapes shown above. The Leptos side serialises with the same field names + serde defaults, so a settings JSON written by any `0.4.x` build round-trips cleanly:
 
-1. `Settings`: missing `serde(default)`-marked fields fall back to defaults; on next save, the file is rewritten with the full shape.
+1. `Settings`: missing `serde(default)`-marked fields fall back to defaults; on next save, the file is rewritten with the full shape. The `hide_status_bar` legacy field migrates to `status_bar_display` per §"Settings legacy migration" above.
 2. `Session`: shape is closed; no missing-field migration is anticipated.
 3. `Task`, `Tag`, `SessionTag`, `ManualSession`: same.
 
-Migration test coverage: the existing `app_settings_missing_serde_default_fields_use_defaults` test at `src-tauri/src/lib.rs:1241-1278` already covers the harshest case (an old settings JSON with several missing fields). The Leptos-side `managers/settings.rs` test mirrors this case for round-trip parity.
+Migration test coverage: the existing `app_settings_missing_serde_default_fields_use_defaults` test at `src-tauri/src/lib.rs:1241-1278` already covers the harshest case (an old settings JSON with several missing fields). The Leptos-side `managers/settings.rs` test mirrors this case for round-trip parity, plus the named test `migrates_hide_status_bar_to_status_bar_display`.
+
+---
+
+## Legacy localStorage migration
+
+The JS era persists 14 keys in `window.localStorage` (enumerated at `src/config/storage-keys.js:1-19`). The cutover migrates the preserved subset to the Rust-side authoritative stores via a single one-shot entry point `bridge::storage::migrate_legacy_localstorage()`, called once on first post-cutover launch from `app.rs` startup. The entry point reads each preserved key via `web-sys::window().local_storage()`, parses the legacy shape, hands the payload to the matching `import_legacy_*` Tauri command (see [contracts/tauri-bridge.md](./contracts/tauri-bridge.md) §"Transition-only commands"), and clears the localStorage key on successful import. Idempotent: if the corresponding Rust-side store already has data, the import is skipped (and the localStorage key is still cleared best-effort).
+
+Per-key disposition:
+
+| Key | Class | Disposition |
+|---|---|---|
+| `presto-guest-mode` | user-state flag | Preserve. Migrated via `import_legacy_user_state` into the Rust-side user-state slice of `AppSettings`. |
+| `presto-auth-seen` | user-state flag | Preserve. Same. |
+| `theme-preference` | user preference | Preserve. Migrated via `import_legacy_settings` into `AppSettings`. |
+| `timer-theme-preference` | user preference | Preserve. Same. |
+| `presto-skipped-versions` | user-state | Preserve (used by the updater logic). Migrated via `import_legacy_user_state`. |
+| `presto_auto_check_updates` | user preference | Preserve. Migrated via `import_legacy_settings`. |
+| `pomodoro-session` | active session snapshot | Preserve (cross-launch resume). Migrated via `import_legacy_user_state`. |
+| `pomodoro-tasks` | active task list | Preserve. Migrated via `import_legacy_tasks`. |
+| `pomodoro-settings` | full settings JSON | Preserve. Merged with the Rust-side `AppSettings` via `import_legacy_settings`; the `hide_status_bar` → `status_bar_display` resolution from §"Settings legacy migration" carries over here. |
+| `pomodoro-history` | session history | Preserve. Migrated via `import_legacy_history`. |
+| `presto-tags` | tags | Preserve. Migrated via `import_legacy_tags`. |
+| `presto_manual_sessions` | manual session entries | Preserve. Migrated via `import_legacy_manual_sessions`. |
+| `pomodoro-stats` | vestigial accumulator | Drop. Only ever cleared on reset by `src/main.js:247`; never read or written elsewhere. |
+| `presto_force_update_test` | test-only flag | Drop. No production code path. |
+
+Sunset: the migration entry point and all `import_legacy_*` commands are slated for removal one minor version after cutover. Coverage: per-import wasm-bindgen-test exercises the migration with a mocked localStorage and asserts the matching Tauri command receives the expected payload (see plan.md §Testing strategy and test-first markers).
 
 ---
 
@@ -337,15 +443,17 @@ Migration test coverage: the existing `app_settings_missing_serde_default_fields
 
 | Type | Defined where | Used by |
 |---|---|---|
-| `TimerMode` | `src/src/bridge/types.rs` (mirror in `src-tauri/`) | `engine/timer.rs`, `bridge/commands.rs` `update_tray_icon` |
+| `TimerMode` | `src/src/bridge/types.rs` (mirror in `src-tauri/`) | `engine/timer.rs`, `bridge/commands.rs` `update_tray_icon`, `update_tray_menu` |
 | `Session` | `src/src/bridge/types.rs` | `bridge/commands.rs::save_session_data` etc. |
 | `ManualSession` | `src/src/bridge/types.rs` | `managers/session.rs` |
 | `Task` | `src/src/bridge/types.rs` | `managers/session.rs` (the JS today couples tasks to session manager) |
 | `Tag`, `SessionTag` | `src/src/bridge/types.rs` | `managers/tag.rs`, `managers/session.rs` |
-| `Settings` | `src/src/bridge/types.rs` | `managers/settings.rs` |
+| `Settings`, `StatusBarDisplay` | `src/src/bridge/types.rs` | `managers/settings.rs` |
 | `UpdateInfo` | `src/src/bridge/types.rs` | `managers/update.rs` |
 | `OAuthCallback` | `src/src/bridge/types.rs` | `managers/auth.rs` (OAuth flow) |
 | `AuthSession`, `AuthUser` | `src/src/bridge/types.rs` (auth namespace) | `managers/auth.rs` |
+| `SupabaseSessionPayload` | `src/src/bridge/types.rs` (auth namespace; transition-only) | `managers/auth.rs` (one-shot localStorage migration entry point) |
+| `BridgeError` | `src/src/bridge/types.rs` (mirror in `src-tauri/`) | every `bridge/commands.rs` wrapper, every `#[tauri::command]` handler |
 | `AuthState` | `src/src/managers/auth.rs` | `app.rs`, `components/auth_modal.rs` |
 | `NavView`, `SettingsTab` | `src/src/managers/navigation.rs` | `app.rs`, `components/*` |
 | `ActivitySignal` | `src/src/engine/activity_signal.rs` | `engine/timer.rs` |

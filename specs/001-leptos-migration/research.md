@@ -13,22 +13,36 @@ This file resolves every `[NEEDS CLARIFICATION]` and `[BEST-GUESS PM DECISION]` 
 
 ```text
 Cargo.toml                # NEW: workspace root with members = ["src", "src-tauri", "tools/build-themes"]
-src/                      # Leptos crate (workspace member)
-├── Cargo.toml            # NEW: Leptos crate manifest
+src/                      # Leptos crate (workspace member); [package].name = "presto-web"
+├── Cargo.toml            # NEW: Leptos crate manifest, [package].name = "presto-web"
+├── Trunk.toml            # NEW: Trunk config; dist-dir is the default ("dist", resolves to src/dist/)
 ├── index.html            # EXISTS today; Trunk's entry HTML
 ├── style/                # CSS source, relocated from current src/styles/
 ├── assets/               # Static (icon font + brand)
 ├── public/               # If Trunk needs it for static-copy assets
 └── src/                  # Rust source (main.rs, app.rs, modules)
-src-tauri/                # UNCHANGED
-tools/build-themes/       # NEW: workspace member for theme code-gen binary
+src-tauri/                # UNCHANGED tree; [package].name = "presto" (bin) / "presto_lib" (lib) preserved
+tools/build-themes/       # NEW: workspace member for theme code-gen binary; [package].name = "presto-build-themes"
 tests/                    # E2E + visual regression unchanged
 ```
 
-**Rationale**: Lowest churn for `tauri.conf.json`'s `frontendDist` (currently points at `../src` via Vite's `root: "src"` per `vite.config.js`) and for `playwright.config.js`'s `baseURL: "http://127.0.0.1:1420"`. Both already expect the served entry to live under `src/`. The `src/src/` Rust-source nesting is awkward but is the standard Tauri+Leptos convention (Trunk reads `src/index.html`, the Rust source must live in `src/src/` to satisfy Cargo's default `[lib]`/`[bin]` layout). Renaming to a sibling `web/` or a workspace member `crates/web/` would force changes to `tauri.conf.json`, `playwright.config.js`, the visual-regression-baseline path expectations, and the e2e fixtures' Vite-server URL — all for cosmetic gain.
+**Crate naming**: the Leptos crate is `presto-web` (avoids collision with `presto` the Tauri bin and `presto_lib` the Tauri lib). The theme code-gen binary is `presto-build-themes`. Workspace `[workspace.members] = ["src", "src-tauri", "tools/build-themes"]`.
+
+**`Trunk.toml`**: `dist-dir` is left at Trunk's default — `dist/` next to `Trunk.toml` ⇒ resolves to `src/dist/`. No override needed; we cite this here so the `tauri.conf.json` paths below are unambiguous.
+
+**`tauri.conf.json` post-migration changes** — the previous "lowest churn" framing was about *layout familiarity* (the served entry continues to live under `src/`), not about the config staying byte-identical. The config necessarily changes for any build-tool swap. Concretely:
+
+| Field | Today (Vite) | Post-migration (Trunk) |
+|---|---|---|
+| `frontendDist` | `"../src"` | `"../src/dist"` |
+| `beforeDevCommand` | empty (or vite) | `"cd src && trunk serve --port 1420"` |
+| `beforeBuildCommand` | empty (or vite build) | `"cd src && trunk build --release"` |
+| `devUrl` | `"http://127.0.0.1:1420"` | `"http://127.0.0.1:1420"` (unchanged — Trunk dev server pinned to 1420) |
+
+**Rationale**: Lowest churn for `playwright.config.js`'s `baseURL: "http://127.0.0.1:1420"` (unchanged — we pin Trunk's dev port to match Vite's). The `src/src/` Rust-source nesting is awkward but is the standard Tauri+Leptos convention (Trunk reads `src/index.html`, the Rust source must live in `src/src/` to satisfy Cargo's default `[lib]`/`[bin]` layout). Renaming to a sibling `web/` or a workspace member `crates/web/` would force additional changes to `playwright.config.js`, the visual-regression-baseline path expectations, and the e2e fixtures — beyond the `tauri.conf.json` edits already required by the build-tool swap, which is unavoidable.
 
 **Alternatives considered**:
-- **Sibling `web/` directory**: cleaner separation from `src-tauri/`. Rejected: forces simultaneous edits to `tauri.conf.json`, `playwright.config.js`, the e2e setup scripts, and the asset path in `index.html` — increasing the cutover diff's churn for no functional gain.
+- **Sibling `web/` directory**: cleaner separation from `src-tauri/`. Rejected: forces additional edits to `playwright.config.js`, the e2e setup scripts, and the asset path in `index.html` — beyond the `tauri.conf.json` edits already required by the build-tool swap.
 - **Workspace member at `crates/web/`**: most idiomatic for a multi-crate Cargo repo. Rejected for the same reason as above plus higher learning curve for new contributors who already know `src-tauri/` is the backend.
 
 **Constitutional anchors**: VII (No Upstream Compatibility Burden) — we can rename freely; choice is operational, not principled. IX (Lock Files Are First-Class) — workspace `Cargo.lock` is single source of truth post-cutover.
@@ -109,21 +123,39 @@ Trunk is the right tool when (a) you have a single CSR WASM frontend, (b) you wa
 
 ## 6. Supabase auth SDK replacement (resolves spec edge case)
 
-**Decision**: A Rust-side adapter using direct REST + JWT in a thin module under `src-tauri/src/auth/` (or alongside `helpers.rs`). Leptos calls Tauri commands `supabase_sign_in_with_password`, `supabase_sign_out`, `supabase_get_session`, `supabase_sign_in_with_oauth_callback`. The JS Supabase SDK is removed entirely.
+**Decision**: A Rust-side adapter using direct REST + JWT in a thin module under `src-tauri/src/auth/` (or alongside `helpers.rs`). Leptos calls Tauri commands `supabase_sign_in_with_password`, `supabase_sign_out`, `supabase_get_session`, `supabase_refresh_session`. The JS Supabase SDK is removed entirely. A one-shot transition migration moves any in-flight JS-era Supabase token from `localStorage` into the Rust-managed app-data store on first post-cutover launch.
 
-**Rationale**: Avoids dragging supabase-js (and its websocket realtime client) into a WASM bundle. The Tauri host already has HTTP capability; using the plugin's `tauri::http` (or a small `reqwest` dep) for the four auth REST endpoints is straightforward. Token storage uses the existing app-data directory (the JS shim writes to localStorage; we move it Rust-side for symmetry). Guest mode — first-class per Principle II — is unaffected because it's a localStorage flag, not a Supabase concept.
+**Rationale**: Avoids dragging supabase-js (and its websocket realtime client) into a WASM bundle. The Tauri host already has HTTP capability; using the plugin's `tauri::http` (or a small `reqwest` dep) for the four auth REST endpoints is straightforward. Token storage uses the app-data directory (Rust-managed, on-disk JSON). Guest mode — first-class per Principle II — is unaffected because it's a localStorage flag, not a Supabase concept.
 
 **Auth surface kept narrow**:
-- `sign_in_with_password(email, password) → Result<Session, AuthError>`
-- `sign_out() → Result<(), AuthError>`
-- `get_session() → Result<Option<Session>, AuthError>`
-- `sign_in_with_oauth_callback(provider) → Result<u16, AuthError>` (returns OAuth port; existing `start_oauth_server` stays)
+- `supabase_sign_in_with_password(email, password) → Result<AuthSession, BridgeError>`
+- `supabase_sign_out(refresh_token) → Result<(), BridgeError>`
+- `supabase_get_session() → Result<Option<AuthSession>, BridgeError>`
+- `supabase_refresh_session(refresh_token) → Result<AuthSession, BridgeError>`
+
+The OAuth flow keeps the existing `start_oauth_server` Tauri command (returns the OAuth port; unchanged from today).
+
+### One-shot Supabase token migration (cutover-PR scope)
+
+The existing JS SDK persists the active session at `window.localStorage.getItem("sb-<project-ref>-auth-token")` as a JSON object containing `access_token`, `refresh_token`, `expires_at`, and `user`. The cutover build cannot rely on the user re-authenticating — that would break FR-007's auto-updater promise for any signed-in user.
+
+End-to-end transition design:
+
+1. On first launch of the post-cutover build, `bridge::storage::migrate_legacy_localstorage()` runs from `app.rs` startup.
+2. For the Supabase slice: it reads `window.localStorage.getItem("sb-<project-ref>-auth-token")` via `web-sys::window().local_storage()`. If absent, short-circuit.
+3. If present, parse into `SupabaseSessionPayload` (see [data-model.md](./data-model.md)).
+4. Idempotency gate: short-circuit and clear the localStorage key if the Rust-side store already has a session (`supabase_get_session` returns `Some`).
+5. Otherwise, hand the payload to the new Tauri command `import_legacy_supabase_session(payload: SupabaseSessionPayload) -> Result<(), BridgeError>`. The Rust-side adapter validates the payload (well-formed JWT? `expires_at` parses?) and persists it to the app-data dir using the same shape `supabase_get_session` returns.
+6. On successful persist, clear the localStorage key (best-effort; leave it on failure so a follow-up launch can retry).
+
+Steady state: one minor version after cutover, the migration code path is dead-on-arrival (any user who has launched the cutover build has already had their token migrated). The migration entry point and the `import_legacy_supabase_session` command are removed in a follow-up cleanup release. Coverage during the cutover-PR window: a `wasm-bindgen-test` (`managers/auth.rs::tests::imports_legacy_supabase_session_from_localstorage`) exercises the migration path with a mocked `localStorage` and asserts the Rust-side adapter receives the expected payload.
 
 **Alternatives considered**:
 - **Rust supabase-rs official SDK**: rejected — limited coverage of auth flows (per spec edge case); REST + JWT is more direct and doesn't add a heavy dependency for our narrow surface.
 - **Keep supabase-js as a JS shim under WASM**: rejected — defeats the point of the migration and creates two SDKs to maintain.
+- **Force re-authentication on first post-cutover launch**: rejected — breaks FR-007's auto-updater promise for signed-in users.
 
-**Constitutional anchors**: II — guest mode preserved; auth is opt-in. VI — JS↔Rust boundary stays small (4 commands).
+**Constitutional anchors**: II — guest mode preserved; auth is opt-in. VI — JS↔Rust boundary stays narrow (4 permanent commands + 1 transition-only command, the latter with a defined sunset).
 
 ---
 
@@ -144,7 +176,7 @@ Trunk is the right tool when (a) you have a single CSR WASM frontend, (b) you wa
 
 ## 8. `xlsx` replacement for export (resolves spec edge case)
 
-**Decision**: Replace JS `xlsx` with `rust_xlsxwriter` (write-only, lean — sufficient for export). Wrap in a Tauri command `export_sessions_xlsx(path: String, sessions: Vec<ExportSession>) → Result<(), String>`. JS `xlsx` package removed.
+**Decision**: Replace JS `xlsx` with `rust_xlsxwriter` (write-only, lean — sufficient for export). Wrap in a Tauri command `export_sessions_xlsx(path: String, sessions: Vec<ExportSession>) → Result<(), BridgeError>`. JS `xlsx` package removed.
 
 **Rationale**: We only ever write `.xlsx` files (export); we never read them. `rust_xlsxwriter` is write-only, well-maintained, and several MB lighter than the read+write alternative `umya-spreadsheet`. The existing `write_excel_file` command (`lib.rs:1102`) currently takes a base64-encoded blob from the JS `xlsx` library and writes it to disk; under the new design, the Tauri command builds the workbook itself and writes it directly. Same user-visible behaviour; less data crossing the bridge.
 
@@ -187,9 +219,9 @@ Trunk is the right tool when (a) you have a single CSR WASM frontend, (b) you wa
 
 ## 11. Sub-pixel rendering drift policy (resolves spec edge case "Sub-pixel rendering drift")
 
-**Decision**: 2% tolerance (per `playwright.config.js`) absorbs minor diffs. If a *specific* baseline genuinely needs a recapture due to font/AA differences not absorbed by tolerance, update it once with a one-line PR justification in the same commit. **Re-capturing all 14 baselines is forbidden** — that defeats Principle IV (Visual Regression as UI Contract). At most **2 baselines** may be re-captured without escalation; **>2 baselines** requires escalating to the PM.
+**Decision**: The 2% pixel-ratio tolerance in `playwright.config.js` is a **CI-flake budget** for cross-platform AA noise (e.g., font hinting on chromium-linux), not a drift allowance for migration changes. The cutover's expected baseline diff is 0% — same fonts, same DOM structure, same CSS, served by the same WebView. **Re-captures during the cutover PR are 0 by default; up to 2 with explicit per-PR justification.** A baseline that fails the visual-regression suite is either a regression (fix the code) or a doc-flagged intentional change (re-capture + one-line PR note + reviewer ratification). Re-capturing >2 baselines escalates to a constitution-amendment-or-spec-revision discussion.
 
-**Rationale**: A migration that mass-recaptures baselines has lost its safety net. Two baselines is an empirical "small enough to be a real font/AA difference, not a quiet UI rewrite". Three or more is a signal that something systemic shifted and needs human judgement.
+**Rationale**: Conflating the tolerance and the re-capture allowance turns the safety net into a soft-cap. Distinguishing them keeps the gate sharp: tolerance absorbs platform-dependent AA noise that's not a code change, while the re-capture ceiling enforces that the migration is a no-op visually.
 
 **Alternatives considered**:
 - **Loosen tolerance to 5%**: rejected — that's a constitution amendment per Principle IV's tolerance rule, not a per-feature decision.
@@ -213,21 +245,66 @@ Trunk is the right tool when (a) you have a single CSR WASM frontend, (b) you wa
 
 ---
 
+## 13. Error handling — typed `BridgeError` enum
+
+**Decision**: Replace today's `Result<T, String>` shape on every Tauri command with `Result<T, BridgeError>`, where `BridgeError` is a serde-tagged Rust enum with variants `BridgeUnavailable`, `NotAuthenticated`, `InvalidArgument { field, reason }`, `NotFound { resource }`, `SerdeRoundtrip { command, error }`, and `Internal { msg }`. The full type definition lives in [data-model.md](./data-model.md) §`BridgeError`; the per-command error column in [contracts/tauri-bridge.md](./contracts/tauri-bridge.md) reflects the typed shape.
+
+**Rationale**: Spec FR-008 promises that a Leptos call site mismatching the Rust handler's signature is a compile error. A `String` error channel can't deliver that — every error becomes a free-form string that the call site must parse to discriminate. A typed enum with externally-tagged JSON makes the discrimination structural, the way FR-008 implies. This is a scope addition vs. the original plan, which marked typed errors out of scope; the rationale is that FR-008 is load-bearing and the original deferral effectively kicked the type-safety story out of this feature, undermining the motivating principle.
+
+**Serde shape**: externally-tagged (`#[serde(tag = "kind", rename_all = "snake_case")]`). Wire example: `{"kind":"invalid_argument","field":"email","reason":"empty"}`. The simplest cross-language shape — every error JSON object carries a discriminator and the variant fields alongside.
+
+**Mapping strategy** (Tauri-side, applied in the cutover commit, mechanical search-and-replace in `src-tauri/src/lib.rs`): every `.map_err(|e| e.to_string())` call site is rewritten to map into a `BridgeError` variant. Default mapping is `BridgeError::Internal { msg: e.to_string() }`. Where the existing handler already discriminates (e.g., a missing-row branch), the rewrite uses `NotFound`. Where it validates an argument and returns a `String` error, the rewrite uses `InvalidArgument`. The Supabase commands use `NotAuthenticated` for the no-active-session path. Coverage: a `bridge::error::tests::*` suite exercises every variant's serde round-trip (Tauri-side serialise → Leptos-side deserialise, and back).
+
+**Stringly-typed boundary args, tightened in the same pass**: `update_tray_menu`'s `current_mode: String` becomes `current_mode: TimerMode`; `update_tray_icon`'s `session_mode: String` likewise tightens. Other arguments in the surviving handler set are scanned once during the cutover; any other stringly-typed enum-shaped argument is tightened to mirror the Leptos-side wrapper (no asymmetric types across the bridge).
+
+**Alternatives considered**:
+- **Keep `Result<T, String>` for cutover; tighten in a follow-up**: rejected — leaves FR-008 unfulfilled at merge time and creates a wider follow-up than the cutover-PR cost would have been.
+- **Internally-tagged `#[serde(tag = "kind", content = "data")]`**: rejected — a unit variant like `NotAuthenticated` becomes `{"kind":"not_authenticated","data":null}`, which is noisier than the externally-tagged `{"kind":"not_authenticated"}`.
+
+**Constitutional anchors**: III (Type Safety Over Defensive Code) — typed sum type closes the error domain. VI (The Tauri Boundary Is Stable) — a one-time, mechanical tightening of the existing surface, not a redesign.
+
+---
+
+## 14. One-shot legacy localStorage migration
+
+**Decision**: A single Leptos-side entry point `bridge::storage::migrate_legacy_localstorage()` runs on first post-cutover launch, reads each preserved JS-era localStorage key, and hands the parsed payload to a per-domain Tauri command (`import_legacy_settings`, `import_legacy_history`, `import_legacy_tasks`, `import_legacy_tags`, `import_legacy_manual_sessions`, `import_legacy_user_state`, `import_legacy_supabase_session`). Each command is idempotent: if the corresponding Rust-side store has data, the import is skipped. After successful migration, the localStorage key is cleared (best-effort).
+
+**Rationale**: The JS era persists 14 keys via `src/config/storage-keys.js`. The cutover replaces every consumer of those keys with Rust-managed app-data persistence. Without a migration, every released-`0.4.x` user would lose their tasks, history, tags, manual sessions, and settings on the first post-cutover launch — breaking FR-007's auto-updater promise. A one-shot migration with a defined sunset (one minor version) preserves user data while keeping the surviving steady-state Tauri surface clean.
+
+**Per-key disposition**: see [data-model.md](./data-model.md) §"Legacy localStorage migration" for the full table. Two of the 14 keys are dropped: `pomodoro-stats` (vestigial — only ever cleared on reset, never read elsewhere) and `presto_force_update_test` (test-only; no production code path). The remaining 12 are migrated.
+
+**Idempotency story**: every `import_legacy_*` Tauri command checks the corresponding Rust-side store before importing. If data exists, it returns `Ok(())` without writing. The Leptos entry point clears the localStorage key whether or not the import wrote — clearing is best-effort. A second-launch of the cutover build is a no-op: every key is already gone or skipped. Any partial-failure state (e.g., import failed mid-way) preserves the localStorage key, so the next launch retries.
+
+**Sunset**: the migration entry point and all `import_legacy_*` commands are slated for removal one minor version after cutover. The follow-up cleanup release deletes the entry point, the per-domain commands, and the corresponding mock entries from `tauriMock.js`. By that minor's ship date, every active user has had their data migrated on at least one prior launch.
+
+**Coverage**: per-import wasm-bindgen-test exercises the migration with mocked `localStorage` and asserts the matching Tauri command receives the expected payload (named in plan.md §Testing strategy).
+
+**Alternatives considered**:
+- **No migration; require user to re-create state**: rejected — breaks FR-007.
+- **Persist the legacy localStorage keys forever**: rejected — leaves a 14-key migration burden in every future build, defeating the point of moving to Rust-managed storage.
+- **Bundle the migration with an explicit user prompt**: rejected — a silent, idempotent migration is the smallest UX change that preserves data.
+
+**Constitutional anchors**: II — guest mode flag preserved across the migration. VII — sunset window means no permanent compatibility burden.
+
+---
+
 ## Cross-cutting summary
 
 | Topic | Decision (one line) |
 |---|---|
-| Crate location | `src/` repurposed; workspace root |
-| Build tool | Trunk (CSR-only) |
+| Crate location | `src/` repurposed as `presto-web`; workspace root |
+| Build tool | Trunk (CSR-only); `Trunk.toml` dist-dir at default (`src/dist/`); `tauri.conf.json` `frontendDist`/`beforeDevCommand`/`beforeBuildCommand` updated |
 | Testing | `cargo test` + `wasm-bindgen-test` + Playwright; no Vitest |
 | Playwright npm | Scoped `tests/e2e/package.json`, `@playwright/test` only |
 | Aptabase | Rust adapter + new `track_event` Tauri command |
-| Supabase | Rust REST adapter + four `supabase_*` Tauri commands |
+| Supabase | Rust REST adapter + four `supabase_*` Tauri commands; one-shot localStorage token migration via `import_legacy_supabase_session` (transition-only) |
 | Theme code-gen | Trunk hook → `tools/build-themes/` binary → `themes.rs` |
 | Xlsx | `rust_xlsxwriter` + new `export_sessions_xlsx` Tauri command |
 | Remixicon | Vendored under `src/assets/icons/` |
 | Activity monitoring | Same Rust-side architecture; Leptos folds events into `ActivitySignal` |
-| Baseline re-capture | ≤2 with justification; >2 escalates |
+| Baseline re-capture | 0 default; ≤2 with justification; >2 escalates. Tolerance is a flake budget, not a drift allowance |
 | Rollback | Patch release via auto-updater; no dual-build |
+| Error handling | Typed `BridgeError` enum on every command; serde-tagged JSON; FR-008 promise backed |
+| Legacy localStorage migration | One-shot entry point + per-domain `import_legacy_*` Tauri commands; idempotent; transition-only (sunset one minor after cutover) |
 
-All 12 spec markers are resolved; the plan proceeds to Phase 1.
+All spec markers are resolved; the plan proceeds to Phase 1.

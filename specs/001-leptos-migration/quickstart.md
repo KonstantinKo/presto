@@ -170,7 +170,13 @@ Per AGENTS.md §Test-first commit ordering, `--no-verify` is used **only** in ge
 
 ---
 
-## 7. Where to look when stuck
+## 7. Pre-release validation
+
+Before merging the cutover PR (and once per major-version release thereafter), the maintainer runs the auto-updater validation checklist documented in [`plan.md`](./plan.md) §"Pre-release validation checklist". Briefly: install the prior release on a clean profile, populate it with test data + non-default settings, build the post-cutover bundle, run the auto-update path, and confirm auth state, sessions, tasks, tags, manual sessions, and settings (including theme and `status_bar_display`) all survive — and that the localStorage migration is idempotent on a second launch. The full step list is in the plan.
+
+---
+
+## 8. Where to look when stuck
 
 - **Constitution**: `.specify/memory/constitution.md` — the 9 principles. Re-read for non-trivial work.
 - **AGENTS.md**: operational rules for AI / human contributors.
