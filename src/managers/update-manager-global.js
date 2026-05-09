@@ -262,6 +262,17 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
     return 0;
   }
 
+  /** @param {string} url @param {number} [timeoutMs] */
+  async fetchWithTimeout(url, timeoutMs = 10000) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      return await fetch(url, { signal: controller.signal });
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
   /** @param {boolean} [showDialog] */
   async checkVersionFromGitHub(showDialog = true) {
     try {
@@ -281,7 +292,9 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
         return false;
       }
 
-      const response = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/releases/latest`);
+      const response = await this.fetchWithTimeout(
+        `https://api.github.com/repos/${GITHUB_REPO}/releases/latest`
+      );
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}`);
       }
@@ -375,11 +388,7 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
         logger.error("❌ Could not retrieve current version:", toError(versionError).message);
         this.updateAvailable = false;
         this.currentUpdate = null;
-        this.eventTarget?.dispatchEvent(
-          new CustomEvent("checkError", {
-            detail: { message: "Unable to determine current application version" },
-          })
-        );
+        this.emit("checkError", { message: "Unable to determine current application version" });
         if (showDialog) {
           await this.showMessage("Unable to determine current application version", {
             title: "Error",
@@ -389,7 +398,9 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
         return false;
       }
 
-      const response = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/releases/latest`);
+      const response = await this.fetchWithTimeout(
+        `https://api.github.com/repos/${GITHUB_REPO}/releases/latest`
+      );
       if (!response.ok) {
         throw new Error(`GitHub API error: ${response.status}`);
       }
