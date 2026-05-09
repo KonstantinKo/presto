@@ -298,8 +298,9 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
         this.emit("updateNotAvailable");
 
         if (showDialog) {
-          alert(
-            `No updates available.\n\nCurrent version: ${currentVersion}\nLatest version: ${latestVersion}`
+          await this.showMessage(
+            `No updates available.\n\nCurrent version: ${currentVersion}\nLatest version: ${latestVersion}`,
+            { title: "No Updates", kind: "info" }
           );
         }
         return false;
@@ -321,7 +322,7 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
           `Current version: ${currentVersion}\n` +
           `New version: ${latestVersion}\n\n` +
           `Note: In development mode, download manually from GitHub.`;
-        alert(message);
+        await this.showMessage(message, { title: "Update Available", kind: "info" });
       }
 
       return true;
