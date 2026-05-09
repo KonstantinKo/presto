@@ -127,7 +127,7 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
       this.startAutoCheck();
     }
 
-    return "Modalità test attivata! Usa checkForUpdates() per testare.";
+    return "Test mode activated! Use checkForUpdates() to test.";
   }
 
   disableTestMode() {
@@ -492,7 +492,7 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
     const update = {
       version: simulatedNewVersion,
       date: new Date().toISOString(),
-      body: `🧪 **Aggiornamento Simulato per Test**\n\nVersione: ${simulatedNewVersion}\n\n**Novità simulate:**\n- Miglioramenti delle prestazioni\n- Correzioni di bug\n- Nuove funzionalità\n\n*Questo è un aggiornamento di test. Non verranno effettuati download reali.*`,
+      body: `🧪 **Simulated Update for Test**\n\nVersion: ${simulatedNewVersion}\n\n**Simulated changes:**\n- Performance improvements\n- Bug fixes\n- New features\n\n*This is a test update. No real downloads will occur.*`,
       downloadUrl: `https://github.com/${GITHUB_REPO}/releases`,
       isAutoDownloadable: true,
       source: "test-simulation",
@@ -550,12 +550,12 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
 
     try {
       if (this.currentUpdate.isAutoDownloadable && this.currentUpdate.source === "tauri-api") {
-        logger.info("📥 Download automatico via Tauri...");
+        logger.info("📥 Automatic download via Tauri...");
 
         const tauriAPI = await this.getTauriUpdaterAPI();
         if (tauriAPI && tauriAPI.downloadAndInstall) {
           await tauriAPI.downloadAndInstall((/** @type {any} */ progress) => {
-            logger.debug(`📥 Progresso download: ${progress}%`);
+            logger.debug(`📥 Download progress: ${progress}%`);
             this.downloadProgress = progress;
             this.emit("downloadProgress", {
               progress,
@@ -575,8 +575,8 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
           this.emit("installFinished");
 
           const shouldRestart = await this.askConfirmation(
-            "Aggiornamento scaricato e installato con successo!\n\nVuoi riavviare ora l'applicazione?",
-            { title: "Aggiornamento Completato" }
+            "Update downloaded and installed successfully!\n\nWould you like to restart the application now?",
+            { title: "Update Complete" }
           );
 
           if (shouldRestart) {
@@ -584,7 +584,7 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
           }
         }
       } else {
-        logger.info("🌐 Reindirizzamento a download manuale...");
+        logger.info("🌐 Redirecting to manual download...");
         await this.openDownloadUrl(this.currentUpdate.downloadUrl);
 
         this.emit("manualDownloadRequired", { url: this.currentUpdate.downloadUrl });
@@ -623,8 +623,8 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
     logger.info("🧪 Simulated install complete");
 
     await this.showMessage(
-      "🧪 **Test Completato**\n\nL'aggiornamento è stato simulato con successo!\n\nIn un ambiente reale, l'applicazione si riavvierebbe ora.",
-      { title: "Test Aggiornamento", kind: "info" }
+      "🧪 **Test Complete**\n\nThe update was simulated successfully!\n\nIn a real environment, the application would restart now.",
+      { title: "Update Test", kind: "info" }
     );
   }
 
@@ -695,7 +695,7 @@ if (_isDevMode) {
     enableTestMode: () => {
       localStorage.setItem("presto_force_update_test", "true");
       logger.warn("⚠️ UPDATE TEST MODE ACTIVATED");
-      return "Modalità test attivata! Usa window.updateManager.checkForUpdates() per testare.";
+      return "Test mode activated! Use window.updateManager.checkForUpdates() to test.";
     },
     disableTestMode: () => {
       localStorage.removeItem("presto_force_update_test");
@@ -706,7 +706,7 @@ if (_isDevMode) {
       const mgr = window.updateManager || window.updateManagerInstance;
       if (!mgr) {
         logger.error("UpdateManager not initialized");
-        return Promise.reject("UpdateManager non trovato");
+        return Promise.reject("UpdateManager not found");
       }
       return mgr.simulateUpdate();
     },
@@ -714,7 +714,7 @@ if (_isDevMode) {
       const mgr = window.updateManager || window.updateManagerInstance;
       if (!mgr) {
         logger.error("UpdateManager not initialized");
-        return Promise.reject("UpdateManager non trovato");
+        return Promise.reject("UpdateManager not found");
       }
       return mgr.checkForUpdates();
     },
