@@ -585,12 +585,16 @@ async fn update_tray_icon(
 #[tauri::command]
 async fn show_window(app: AppHandle) -> Result<(), String> {
     if let Some(window) = app.get_webview_window("main") {
-        if let Ok(settings) = load_settings(app.clone()).await {
-            if settings.hide_icon_on_close {
-                #[cfg(target_os = "macos")]
-                {
-                    let _ = set_dock_visibility(app.clone(), true).await;
-                }
+        let settings = app
+            .state::<SettingsState>()
+            .0
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone();
+        if settings.hide_icon_on_close {
+            #[cfg(target_os = "macos")]
+            {
+                let _ = set_dock_visibility(app.clone(), true).await;
             }
         }
 
@@ -989,39 +993,24 @@ pub fn run() {
                         if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                             api.prevent_close();
 
+                            let settings = app_handle_for_close
+                                .state::<SettingsState>()
+                                .0
+                                .lock()
+                                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                                .clone();
                             let app_handle_clone = app_handle_for_close.clone();
                             tauri::async_runtime::spawn(async move {
-                                match load_settings(app_handle_clone.clone()).await {
-                                    Ok(settings) => {
-                                        if settings.hide_icon_on_close {
-                                            if let Some(window) =
-                                                app_handle_clone.get_webview_window("main")
-                                            {
-                                                let _ = window.hide();
-                                                #[cfg(target_os = "macos")]
-                                                {
-                                                    let _ = set_dock_visibility(
-                                                        app_handle_clone.clone(),
-                                                        false,
-                                                    )
-                                                    .await;
-                                                }
-                                            }
-                                        } else {
-                                            // Just hide the window without hiding from dock
-                                            if let Some(window) =
-                                                app_handle_clone.get_webview_window("main")
-                                            {
-                                                let _ = window.hide();
-                                            }
-                                        }
-                                    }
-                                    Err(_) => {
-                                        // Default behavior: just hide the window
-                                        if let Some(window) =
-                                            app_handle_clone.get_webview_window("main")
+                                if let Some(window) = app_handle_clone.get_webview_window("main") {
+                                    let _ = window.hide();
+                                    if settings.hide_icon_on_close {
+                                        #[cfg(target_os = "macos")]
                                         {
-                                            let _ = window.hide();
+                                            let _ = set_dock_visibility(
+                                                app_handle_clone.clone(),
+                                                false,
+                                            )
+                                            .await;
                                         }
                                     }
                                 }
