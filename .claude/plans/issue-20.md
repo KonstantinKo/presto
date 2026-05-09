@@ -8,7 +8,7 @@
 
 I have enough context. Producing the complete plan now.
 
-```md
+````md
 # Feature: Full-coverage E2E test suite — all screens + major flows
 
 ## Feature Description
@@ -75,7 +75,7 @@ Use these files to understand patterns and to extend during implementation:
 - `package.json` — needs `test:e2e` script + `@playwright/test` + `vite` dev-dependencies.
 - `.github/workflows/ci.yml` — needs a new `e2e` job.
 - `.gitignore` — needs to ignore `tests/e2e/playwright-report/`, `tests/e2e/test-results/`, and Playwright's browser cache.
-- `tests/setup/tauri-mock.js` — Vitest-side Tauri mock; reuse the *shape* (handler dispatch by command name) but **not** the implementation; the E2E variant runs in the page context via `addInitScript`, not in node.
+- `tests/setup/tauri-mock.js` — Vitest-side Tauri mock; reuse the _shape_ (handler dispatch by command name) but **not** the implementation; the E2E variant runs in the page context via `addInitScript`, not in node.
 
 ### New Files
 
@@ -142,6 +142,8 @@ IMPORTANT: Execute every step in order, top to bottom.
     publicDir: false,
   });
   ```
+````
+
 - Verify by running `npx vite --port 1420 --host 127.0.0.1` and curl-ing `http://127.0.0.1:1420/index.html` in another terminal — must return 200 and contain `<title>Presto</title>`.
 - Quit the server.
 
@@ -230,11 +232,17 @@ IMPORTANT: Execute every step in order, top to bottom.
   import { applyTauriMock } from "./tauriMock.js";
   export const test = base.extend({
     _blockExternal: [
-      async ({ page }, use) => { await applyBlockExternal(page); await use(); },
+      async ({ page }, use) => {
+        await applyBlockExternal(page);
+        await use();
+      },
       { auto: true },
     ],
     tauriMock: [
-      async ({ page }, use) => { const harness = await applyTauriMock(page); await use(harness); },
+      async ({ page }, use) => {
+        const harness = await applyTauriMock(page);
+        await use(harness);
+      },
       { auto: true },
     ],
   });
@@ -251,7 +259,7 @@ IMPORTANT: Execute every step in order, top to bottom.
   - `selectSettingsCategory(page, name)` — clicks the matching `.settings-nav-item` by visible text.
   - `enableDebugTimers(page)` — opens settings → advanced → checks `#debug-mode`. Used by `sessions-history.spec.js`.
   - `setNotificationPermission(harness, state)` — fixture-level; sets the mock's permission state before the spec navigates.
-  - `enableTeamButton(page)` — uses the harness to remove the `disabled` attribute from `#team-nav` *before initial navigation* via init-script seeding (not mid-flow). Required because the button is hard-disabled in HTML today; treat this as an environment-condition fixture, akin to "feature flag on", per the "no JS injection" exception clause.
+  - `enableTeamButton(page)` — uses the harness to remove the `disabled` attribute from `#team-nav` _before initial navigation_ via init-script seeding (not mid-flow). Required because the button is hard-disabled in HTML today; treat this as an environment-condition fixture, akin to "feature flag on", per the "no JS injection" exception clause.
 
 ### Step 10: Stand up a smoke spec
 
@@ -261,7 +269,9 @@ IMPORTANT: Execute every step in order, top to bottom.
   test("page loads, timer view is default, no console errors", async ({ page }) => {
     const errors = [];
     page.on("pageerror", (e) => errors.push(String(e)));
-    page.on("console", (msg) => { if (msg.type() === "error") errors.push(msg.text()); });
+    page.on("console", (msg) => {
+      if (msg.type() === "error") errors.push(msg.text());
+    });
     await page.goto("/index.html");
     await expect(page.locator("#timer-minutes")).toHaveText("25");
     await expect(page.locator("#timer-seconds")).toHaveText("00");
@@ -347,7 +357,7 @@ IMPORTANT: Execute every step in order, top to bottom.
   1. Set the mock's `notificationPermission` to `granted` via the fixture (before navigation).
   2. `gotoTimer(page)`; `openSettings(page)`; `selectSettingsCategory(page, 'Notifications')`.
   3. Toggle `#desktop-notifications` off then on; assert UI state in `#notification-status` updates.
-  4. Click `#test-notifications-btn`; assert a toast/notification UI appears (look for a generic notification rendered into the DOM by `NotificationUtils.show*`). The mock's `sendNotification` records the call so a follow-up assertion can verify it was invoked, but the *primary* assertion is the visible toast.
+  4. Click `#test-notifications-btn`; assert a toast/notification UI appears (look for a generic notification rendered into the DOM by `NotificationUtils.show*`). The mock's `sendNotification` records the call so a follow-up assertion can verify it was invoked, but the _primary_ assertion is the visible toast.
   5. Toggle `#sound-notifications` off; assert it persists (re-open settings tab).
 
 ### Step 18: Author `settings-theme.spec.js`
@@ -373,7 +383,7 @@ IMPORTANT: Execute every step in order, top to bottom.
   1. `gotoTimer(page)`; `openSettings(page)`; `selectSettingsCategory(page, 'Goals')`.
   2. Set `#weekly-goal-minutes` to `50`; blur to auto-save.
   3. `tapTab(page, 'Calendar')`.
-  4. Assert the focus-summary card (`#total-focus-week`, `#avg-focus-day`, etc.) reflects a smaller goal (the *progress* indicator within the card should show a higher % toward goal compared to the default).
+  4. Assert the focus-summary card (`#total-focus-week`, `#avg-focus-day`, etc.) reflects a smaller goal (the _progress_ indicator within the card should show a higher % toward goal compared to the default).
   5. Run one debug session via the harness's seeded sessions (or via `enableDebugTimers` + run flow) and re-assert the progress percentage moved.
 
 ### Step 21: Author `settings-advanced.spec.js`
@@ -412,7 +422,7 @@ IMPORTANT: Execute every step in order, top to bottom.
 ### Step 24: Author `team.spec.js`
 
 - One test, multi-step:
-  1. Use `enableTeamButton` fixture *before* `goto` (removes the `disabled` attribute from `#team-nav` via `addInitScript` — environment setup, not mid-flow injection — and is the documented exception to rule #1.2 because the button is gated in HTML today).
+  1. Use `enableTeamButton` fixture _before_ `goto` (removes the `disabled` attribute from `#team-nav` via `addInitScript` — environment setup, not mid-flow injection — and is the documented exception to rule #1.2 because the button is gated in HTML today).
   2. `gotoTimer(page)`; `tapTab(page, 'Team')`.
   3. Assert `#team-view` is visible.
   4. Assert team-stat cards (`#team-focusing`, `#team-on-break`, `#team-privacy`, `#team-offline`) have numeric content.
@@ -433,34 +443,34 @@ IMPORTANT: Execute every step in order, top to bottom.
 
 - Edit `.github/workflows/ci.yml`. Add a new job `e2e`:
   ```yaml
-    e2e:
-      runs-on: ubuntu-latest
-      steps:
-        - name: Checkout repository
-          uses: actions/checkout@v4
-        - name: Setup Node.js
-          uses: actions/setup-node@v4
-          with:
-            node-version: "20"
-            cache: "npm"
-        - name: Install frontend dependencies
-          run: npm ci
-        - name: Cache Playwright browsers
-          uses: actions/cache@v4
-          with:
-            path: ~/.cache/ms-playwright
-            key: ${{ runner.os }}-playwright-${{ hashFiles('package-lock.json') }}
-        - name: Install Playwright browsers
-          run: npx playwright install --with-deps chromium
-        - name: Run E2E tests
-          run: npm run test:e2e
-        - name: Upload Playwright report on failure
-          if: failure()
-          uses: actions/upload-artifact@v4
-          with:
-            name: playwright-report
-            path: playwright-report/
-            retention-days: 7
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+      - name: Install frontend dependencies
+        run: npm ci
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ hashFiles('package-lock.json') }}
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+      - name: Run E2E tests
+        run: npm run test:e2e
+      - name: Upload Playwright report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7
   ```
 - Confirm the job runs in parallel with `frontend` and `backend`. Failures in any job block PR merge per the existing `pull_request` trigger.
 
@@ -483,7 +493,7 @@ IMPORTANT: Execute every step in order, top to bottom.
 
 ### Unit Tests
 
-This feature *is* a test suite. There are no new unit tests; existing unit tests (Vitest, cargo test) remain green and unmodified.
+This feature _is_ a test suite. There are no new unit tests; existing unit tests (Vitest, cargo test) remain green and unmodified.
 
 ### Integration Tests
 
@@ -491,12 +501,12 @@ The 15 E2E spec files are themselves the integration tests. Each spec is a multi
 
 Coverage matrix:
 
-| Layer | Tested by |
-|---|---|
-| Pure helpers (Rust) | Cargo unit tests (#4) |
-| Pure helpers (JS) | Vitest unit tests (#4) |
-| Manager logic (JS, mocked Tauri) | Vitest manager tests (#8) |
-| Tauri command surface (Rust IPC) | Cargo MockRuntime tests (#9) |
+| Layer                                        | Tested by                         |
+| -------------------------------------------- | --------------------------------- |
+| Pure helpers (Rust)                          | Cargo unit tests (#4)             |
+| Pure helpers (JS)                            | Vitest unit tests (#4)            |
+| Manager logic (JS, mocked Tauri)             | Vitest manager tests (#8)         |
+| Tauri command surface (Rust IPC)             | Cargo MockRuntime tests (#9)      |
 | **Rendered UI + screen interplay (browser)** | **Playwright E2E (this feature)** |
 
 ### Edge Cases
@@ -509,7 +519,7 @@ Coverage matrix:
 - **OS global shortcuts**: cannot be triggered from a browser; the shortcuts spec uses the in-app `Space` fallback and annotates the limitation.
 - **CSP differences**: production-built Tauri uses CSP that limits external scripts. The Vite dev server has no such CSP — but `_blockExternal` enforces the same boundary at the network layer, so behavior parity is preserved.
 - **Headless rendering**: visual elements that depend on layout (calendar grid, theme switcher) are asserted via state, not pixel-perfect screenshots. Visual regression is out of scope for this PR.
-- **Reset all data**: spec must *not* accept the reset confirmation, only verify the prompt UI works. Accidentally accepting would wipe the in-memory mock state mid-spec.
+- **Reset all data**: spec must _not_ accept the reset confirmation, only verify the prompt UI works. Accidentally accepting would wipe the in-memory mock state mid-spec.
 
 ## Acceptance Criteria
 
@@ -564,11 +574,11 @@ npm ci && npx playwright install --with-deps chromium && npm run test:e2e
 
 ## Notes
 
-- **Why Playwright over WebdriverIO**: Playwright has first-class Node TS/JS APIs, a built-in `webServer` runner, automatic browser binary management, parallel workers, and the `auto: true` fixture pattern that fits the issue's "every test inherits `_blockExternal`" requirement cleanly. WebdriverIO is more flexible for native automation (`tauri-driver` integration), but we explicitly do *not* drive Tauri's native webview here — the suite runs in Chromium against Vite-served `src/`, which keeps CI minimal and matches the issue's "acceptable to drop the suite on `tauri dev` if vite-only is impractical" — the inverse, which is exactly the simpler choice.
+- **Why Playwright over WebdriverIO**: Playwright has first-class Node TS/JS APIs, a built-in `webServer` runner, automatic browser binary management, parallel workers, and the `auto: true` fixture pattern that fits the issue's "every test inherits `_blockExternal`" requirement cleanly. WebdriverIO is more flexible for native automation (`tauri-driver` integration), but we explicitly do _not_ drive Tauri's native webview here — the suite runs in Chromium against Vite-served `src/`, which keeps CI minimal and matches the issue's "acceptable to drop the suite on `tauri dev` if vite-only is impractical" — the inverse, which is exactly the simpler choice.
 
-- **Why mock the Tauri bridge instead of running real Tauri**: ground rule #2 (no internet calls) plus the abandoned-upstream/handoff context plus the swap context plus CI cost together favor a fully-isolated harness. Real Tauri integration is already covered by Phase 3 cargo MockRuntime tests (#9). The E2E suite's job is *user-visible behavior*, not the Tauri IPC contract.
+- **Why mock the Tauri bridge instead of running real Tauri**: ground rule #2 (no internet calls) plus the abandoned-upstream/handoff context plus the swap context plus CI cost together favor a fully-isolated harness. Real Tauri integration is already covered by Phase 3 cargo MockRuntime tests (#9). The E2E suite's job is _user-visible behavior_, not the Tauri IPC contract.
 
-- **Selector stability for the swap**: the suite leans on element IDs that already exist in `src/index.html` and on accessible roles/text. Authors of the Leptos rewrite are encouraged to preserve these IDs (`#play-pause-btn`, `#timer-minutes`, `#calendar-nav`, `#focus-duration`, etc.) — a one-page migration table lives in the post-swap commit's PR description rather than as a maintained doc here. If a Leptos component needs to drop an ID, the corresponding spec selector should be updated in the same PR; this is acceptable because the *flow* is preserved, only the *handle* changes.
+- **Selector stability for the swap**: the suite leans on element IDs that already exist in `src/index.html` and on accessible roles/text. Authors of the Leptos rewrite are encouraged to preserve these IDs (`#play-pause-btn`, `#timer-minutes`, `#calendar-nav`, `#focus-duration`, etc.) — a one-page migration table lives in the post-swap commit's PR description rather than as a maintained doc here. If a Leptos component needs to drop an ID, the corresponding spec selector should be updated in the same PR; this is acceptable because the _flow_ is preserved, only the _handle_ changes.
 
 - **What deliberately is not tested by this suite** (out of scope, tracked in follow-ups):
   - Visual regression / pixel-diff (worth investing in only after the swap settles).
@@ -578,12 +588,14 @@ npm ci && npx playwright install --with-deps chromium && npm run test:e2e
   - Real Tauri updater download/install.
   - Tray, autostart, native window management — Tauri-specific, no browser-driven path.
 
-- **Annotation policy for stack-swap**: the Tauri-mock fixture is the *single* file with implementation-detail coupling that needs to be revisited on swap. Spec files contain only ARIA/role/visible-text/stable-ID selectors. The shortcut spec carries one `TODO(stack-swap):` comment regarding the in-app `Space` fallback path. The update-notification spec carries one regarding the harness re-emit helper. No other spec needs `TODO(stack-swap):` markers.
+- **Annotation policy for stack-swap**: the Tauri-mock fixture is the _single_ file with implementation-detail coupling that needs to be revisited on swap. Spec files contain only ARIA/role/visible-text/stable-ID selectors. The shortcut spec carries one `TODO(stack-swap):` comment regarding the in-app `Space` fallback path. The update-notification spec carries one regarding the harness re-emit helper. No other spec needs `TODO(stack-swap):` markers.
 
-- **Why include `team.spec.js` even though `#team-nav` is disabled**: the `TeamManager` already exists, the team view DOM already exists, and the demo data is exercised; the disabled state is a UX feature-flag, not a structural absence. Enabling it via fixture is justified — we are testing the team feature's *behavior*, not its current product gating.
+- **Why include `team.spec.js` even though `#team-nav` is disabled**: the `TeamManager` already exists, the team view DOM already exists, and the demo data is exercised; the disabled state is a UX feature-flag, not a structural absence. Enabling it via fixture is justified — we are testing the team feature's _behavior_, not its current product gating.
 
 - **Why no `goto`-mid-flow even though Playwright supports it**: rule #1.1 is the single most important guarantee for swap-survivability. If the URL routing scheme changes (e.g. Leptos uses fragment routing or its own route guards), every `goto`-using spec breaks. UI-driven nav survives.
+
 ```
 
 ---
 *Generated by Agentex*
+```

@@ -223,6 +223,7 @@ The Pomodoro Technique is a time management method developed by Francesco Cirill
 - `npm run tauri build` - Build production app
 - `npm test` - Run JavaScript unit tests (Vitest)
 - `npm run typecheck` - TypeScript type-check all JS sources (`tsc --noEmit`)
+- `npm run test:e2e` - Run Playwright E2E suite (UI-driven, browser-level)
 - `cargo check` - Check Rust code (in src-tauri/)
 - `cargo test` - Run Rust tests (in src-tauri/)
 
