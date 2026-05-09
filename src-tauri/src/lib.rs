@@ -135,7 +135,7 @@ fn load_settings_sync(app: &AppHandle) -> AppSettings {
             ..AppSettings::default()
         };
     };
-    helpers::read_settings_from(&app_data_dir)
+    helpers::read_settings_from(&app_data_dir).unwrap_or_default()
 }
 
 fn are_analytics_enabled(app: &AppHandle) -> bool {
@@ -537,7 +537,7 @@ async fn load_settings(app: AppHandle) -> Result<AppSettings, String> {
         .path()
         .app_data_dir()
         .map_err(|e| format!("Failed to get app data directory: {e}"))?;
-    Ok(helpers::read_settings_from(&app_data_dir))
+    helpers::read_settings_from(&app_data_dir).map_err(|e| format!("Failed to read settings: {e}"))
 }
 
 #[tauri::command]

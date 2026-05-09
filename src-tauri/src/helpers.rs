@@ -67,19 +67,22 @@ pub(super) fn is_debounced(
 
 // ── Settings ─────────────────────────────────────────────────────────────────
 
-/// Reads `settings.json` from `dir`, returning `AppSettings::default()` when
-/// the file is absent or cannot be parsed. Used by both the command layer and
-/// the synchronous startup path.
+/// Reads `settings.json` from `dir`.
+///
+/// Returns `Ok(AppSettings::default())` when the file is absent or contains
+/// malformed JSON. Returns `Err` for any other I/O error (e.g. permission
+/// denied) so callers can surface unexpected failures.
 #[allow(clippy::redundant_pub_crate)]
-pub(super) fn read_settings_from(dir: &Path) -> super::AppSettings {
+pub(super) fn read_settings_from(dir: &Path) -> Result<super::AppSettings, std::io::Error> {
     let file_path = dir.join("settings.json");
     if !file_path.exists() {
-        return super::AppSettings::default();
+        return Ok(super::AppSettings::default());
     }
-    let Ok(contents) = fs::read_to_string(file_path) else {
-        return super::AppSettings::default();
-    };
-    serde_json::from_str(&contents).unwrap_or_default()
+    match fs::read_to_string(&file_path) {
+        Ok(contents) => Ok(serde_json::from_str(&contents).unwrap_or_default()),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(super::AppSettings::default()),
+        Err(e) => Err(e),
+    }
 }
 
 /// Creates `dir` if necessary, then atomically writes `settings` to
@@ -481,7 +484,7 @@ mod tests {
     #[test]
     fn settings_missing_file_returns_defaults() {
         let dir = tempfile::tempdir().expect("tempdir");
-        let result = read_settings_from(dir.path());
+        let result = read_settings_from(dir.path()).expect("read");
         let defaults = AppSettings::default();
         assert_eq!(result.analytics_enabled, defaults.analytics_enabled);
         assert_eq!(result.timer.focus_duration, defaults.timer.focus_duration);
@@ -494,7 +497,7 @@ mod tests {
         settings.timer.focus_duration = 42;
         settings.autostart = true;
         write_settings_to(dir.path(), &settings).expect("write");
-        let loaded = read_settings_from(dir.path());
+        let loaded = read_settings_from(dir.path()).expect("read");
         assert_eq!(loaded.timer.focus_duration, 42);
         assert!(loaded.autostart);
     }
@@ -504,7 +507,7 @@ mod tests {
         let dir = tempfile::tempdir().expect("tempdir");
         std::fs::write(dir.path().join("settings.json"), b"not json")
             .expect("write malformed file");
-        let result = read_settings_from(dir.path());
+        let result = read_settings_from(dir.path()).expect("read");
         let defaults = AppSettings::default();
         assert_eq!(result.timer.focus_duration, defaults.timer.focus_duration);
     }
@@ -614,15 +617,15 @@ mod tests {
                 completed_pomodoros: i,
                 total_focus_time: 0,
                 current_session: 1,
-                date: format!("2024-01-{i:02}"),
+                date: format!("2024-01-{:02}", i + 1),
             };
             append_daily_stats_to(dir.path(), &session).expect("append");
         }
         let history = read_history_from(dir.path()).expect("read");
         assert_eq!(history.len(), 30);
-        // Entry for day 0 is pruned; day 1 is the oldest survivor.
-        assert_eq!(history[0].date, "2024-01-01");
-        assert_eq!(history[29].date, "2024-01-30");
+        // Entry for day 01 is pruned; day 02 is the oldest survivor.
+        assert_eq!(history[0].date, "2024-01-02");
+        assert_eq!(history[29].date, "2024-01-31");
     }
 
     #[test]
