@@ -10,6 +10,7 @@ export default [
     languageOptions: {
       globals: {
         ...globals.node,
+        ...globals.browser,
         vi: "readonly",
         describe: "readonly",
         it: "readonly",

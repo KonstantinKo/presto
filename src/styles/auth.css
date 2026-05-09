@@ -159,11 +159,11 @@
   margin-bottom: 24px;
 }
 
-.form-group {
+.auth-overlay .form-group {
   margin-bottom: 16px;
 }
 
-.form-group input {
+.auth-overlay .form-group input {
   width: 100%;
   padding: 12px 16px;
   border: 1px solid #e2e8f0;
@@ -173,7 +173,7 @@
   box-sizing: border-box;
 }
 
-.form-group input:focus {
+.auth-overlay .form-group input:focus {
   outline: none;
   border-color: #4299e1;
   box-shadow: 0 0 0 3px rgba(66, 153, 225, 0.1);
@@ -216,6 +216,7 @@
 .auth-loading {
   opacity: 0.7;
   pointer-events: none;
+  position: relative;
 }
 
 .auth-loading::after {

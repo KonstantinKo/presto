@@ -681,30 +681,33 @@ if (_isDevMode) {
       return "Test mode disabled!";
     },
     testUpdate: () => {
-      if (!window.updateManager) {
+      const mgr = window.updateManager || window.updateManagerInstance;
+      if (!mgr) {
         logger.error("UpdateManager not initialized");
         return Promise.reject("UpdateManager non trovato");
       }
-      return window.updateManager.simulateUpdate();
+      return mgr.simulateUpdate();
     },
     checkRealUpdate: () => {
-      if (!window.updateManager) {
+      const mgr = window.updateManager || window.updateManagerInstance;
+      if (!mgr) {
         logger.error("UpdateManager not initialized");
         return Promise.reject("UpdateManager non trovato");
       }
-      return window.updateManager.checkForUpdates();
+      return mgr.checkForUpdates();
     },
     getStatus: () => {
-      if (!window.updateManager) {
+      const mgr = window.updateManager || window.updateManagerInstance;
+      if (!mgr) {
         return { error: "UpdateManager not initialized" };
       }
       return {
-        updateAvailable: window.updateManager.updateAvailable,
-        currentUpdate: window.updateManager.currentUpdate,
-        isChecking: window.updateManager.isChecking,
-        isDownloading: window.updateManager.isDownloading,
-        autoCheck: window.updateManager.autoCheck,
-        isDevelopmentMode: window.updateManager.isDevelopmentMode(),
+        updateAvailable: mgr.updateAvailable,
+        currentUpdate: mgr.currentUpdate,
+        isChecking: mgr.isChecking,
+        isDownloading: mgr.isDownloading,
+        autoCheck: mgr.autoCheck,
+        isDevelopmentMode: mgr.isDevelopmentMode(),
       };
     },
     checkEnvironment: () => {

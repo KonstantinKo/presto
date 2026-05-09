@@ -491,7 +491,10 @@ async fn save_daily_stats(session: PomodoroSession, app: AppHandle) -> Result<()
     let mut history: Vec<PomodoroSession> = if history_path.exists() {
         let content = fs::read_to_string(&history_path)
             .map_err(|e| format!("Failed to read history: {e}"))?;
-        serde_json::from_str(&content).unwrap_or_default()
+        serde_json::from_str(&content).unwrap_or_else(|e| {
+            log::warn!("Failed to parse history.json, starting fresh: {e}");
+            Vec::new()
+        })
     } else {
         Vec::new()
     };

@@ -13,16 +13,23 @@ fi
 
 # Check if --force option was passed
 FORCE_OPTION=""
-if [[ "$@" == *"--force"* ]]; then
-    FORCE_OPTION="--force"
-    echo "⚠️ Force option detected. Will overwrite existing keys."
+for arg in "$@"; do
+    if [ "$arg" = "--force" ]; then
+        FORCE_OPTION="--force"
+        echo "⚠️ Force option detected. Will overwrite existing keys."
+        break
+    fi
+done
+
+# Ensure npx is available
+if ! command -v npx &> /dev/null; then
+    echo "❌ npx not found. Please install Node.js first."
+    exit 1
 fi
 
 # Generate signing keys
 echo "📝 Generating signing keypair..."
-npx tauri signer generate -w ~/.tauri/presto_signing_key $FORCE_OPTION
-
-if [ $? -eq 0 ]; then
+if npx tauri signer generate -w ~/.tauri/presto_signing_key ${FORCE_OPTION:+"$FORCE_OPTION"}; then
     echo "✅ Keys generated successfully!"
     echo ""
     echo "🔑 Your public key is:"

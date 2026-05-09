@@ -4,7 +4,7 @@ import { logger } from "./logger.js";
 class Analytics {
   static isEnabled() {
     const settings = window.settingsManager?.settings;
-    return settings ? settings.analytics_enabled !== false : true;
+    return !!settings && settings.analytics_enabled === true;
   }
 
   /** @param {string} eventName @param {Record<string, string | number>} [properties] */

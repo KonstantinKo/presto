@@ -1424,49 +1424,79 @@ export class SettingsManager {
       option.classList.add("disabled");
     }
 
-    const supportsBadges = theme.supports
-      .map(
-        (/** @type {any} */ mode) => `
-        <span class="compatibility-badge ${mode}">
-            <i class="ri-${mode === "light" ? "sun" : "moon"}-line"></i>
-        </span>
-    `
-      )
-      .join("");
+    const header = document.createElement("div");
+    header.className = "timer-theme-header";
 
-    option.innerHTML = `
-            <div class="timer-theme-header">
-                <h4 class="timer-theme-name"></h4>
-                <div class="timer-theme-compatibility">
-                    ${supportsBadges}
-                </div>
-            </div>
-            <p class="timer-theme-description"></p>
-            <div class="timer-theme-preview">
-                <div class="timer-preview-display" data-preview-theme="${theme.id}">
-                    <div class="timer-preview-time">25:00</div>
-                    <div class="timer-preview-status">Focus Session</div>
-                </div>
-                <div class="color-preview-strip">
-                    <div class="preview-color" style="background-color: ${theme.preview.focus}">
-                    </div>
-                    <div class="preview-color" style="background-color: ${theme.preview.break}">
-                    </div>
-                    <div class="preview-color" style="background-color: ${theme.preview.longBreak}">
-                    </div>
-                </div>
-            </div>
-        `;
+    const nameEl = document.createElement("h4");
+    nameEl.className = "timer-theme-name";
+    nameEl.textContent = theme.name;
 
-    // Use textContent for user/API-controlled strings to prevent XSS
-    const nameEl = option.querySelector(".timer-theme-name");
-    const descEl = option.querySelector(".timer-theme-description");
-    if (nameEl) {
-      nameEl.textContent = theme.name;
+    const compatibility = document.createElement("div");
+    compatibility.className = "timer-theme-compatibility";
+
+    const allowedModes = ["light", "dark"];
+    for (const mode of theme.supports) {
+      if (!allowedModes.includes(mode)) {
+        continue;
+      }
+      const badge = document.createElement("span");
+      badge.className = `compatibility-badge ${mode}`;
+      const icon = document.createElement("i");
+      icon.className = `ri-${mode === "light" ? "sun" : "moon"}-line`;
+      badge.appendChild(icon);
+      compatibility.appendChild(badge);
     }
-    if (descEl) {
-      descEl.textContent = theme.description;
-    }
+
+    header.appendChild(nameEl);
+    header.appendChild(compatibility);
+
+    const descEl = document.createElement("p");
+    descEl.className = "timer-theme-description";
+    descEl.textContent = theme.description;
+
+    const preview = document.createElement("div");
+    preview.className = "timer-theme-preview";
+
+    const previewDisplay = document.createElement("div");
+    previewDisplay.className = "timer-preview-display";
+    previewDisplay.setAttribute("data-preview-theme", theme.id);
+
+    const previewTime = document.createElement("div");
+    previewTime.className = "timer-preview-time";
+    previewTime.textContent = "25:00";
+
+    const previewStatus = document.createElement("div");
+    previewStatus.className = "timer-preview-status";
+    previewStatus.textContent = "Focus Session";
+
+    previewDisplay.appendChild(previewTime);
+    previewDisplay.appendChild(previewStatus);
+
+    const colorStrip = document.createElement("div");
+    colorStrip.className = "color-preview-strip";
+
+    const focusColor = document.createElement("div");
+    focusColor.className = "preview-color";
+    focusColor.style.backgroundColor = theme.preview.focus;
+
+    const breakColor = document.createElement("div");
+    breakColor.className = "preview-color";
+    breakColor.style.backgroundColor = theme.preview.break;
+
+    const longBreakColor = document.createElement("div");
+    longBreakColor.className = "preview-color";
+    longBreakColor.style.backgroundColor = theme.preview.longBreak;
+
+    colorStrip.appendChild(focusColor);
+    colorStrip.appendChild(breakColor);
+    colorStrip.appendChild(longBreakColor);
+
+    preview.appendChild(previewDisplay);
+    preview.appendChild(colorStrip);
+
+    option.appendChild(header);
+    option.appendChild(descEl);
+    option.appendChild(preview);
 
     this.applyThemePreviewStyles(option, theme);
 

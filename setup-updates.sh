@@ -22,7 +22,7 @@ read_input() {
         read -p "$prompt: " input
     fi
     
-    eval "$variable_name='$input'"
+    printf -v "$variable_name" '%s' "$input"
 }
 
 # Gather information

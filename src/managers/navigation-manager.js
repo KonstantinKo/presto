@@ -876,12 +876,10 @@ export class NavigationManager {
     if (totalSessions === 0) {
       timelineTrack.style.height = `${minHeight}px`;
     } else {
-      // Calculate: top padding + (all session heights) + (spacing between sessions) + bottom padding
-      const totalSessionHeights = totalSessions * sessionHeight;
-      const totalSpacing = (totalSessions - 1) * rowHeight;
-      const requiredHeight = topPadding + totalSessionHeights + totalSpacing + bottomPadding;
+      const lastRowBottom = (totalSessions - 1) * rowHeight + sessionHeight;
+      const requiredHeight = topPadding + lastRowBottom + bottomPadding;
       logger.debug(
-        `Timeline height calculation: ${topPadding} + ${totalSessionHeights} + ${totalSpacing} + ${bottomPadding} = ${requiredHeight}px for ${totalSessions} sessions`
+        `Timeline height calculation: ${topPadding} + ${lastRowBottom} + ${bottomPadding} = ${requiredHeight}px for ${totalSessions} sessions`
       );
       timelineTrack.style.height = `${requiredHeight}px`;
     }
@@ -1539,13 +1537,25 @@ export class NavigationManager {
     const tooltip = document.createElement("div");
     tooltip.className = "session-hover-tooltip";
 
-    tooltip.innerHTML = `
-            <div class="tooltip-content">
-                <div class="tooltip-type">Focus Session</div>
-                <div class="tooltip-time">${session.start_time} - ${session.end_time}</div>
-                <div class="tooltip-duration">${session.duration} minutes</div>
-            </div>
-        `;
+    const content = document.createElement("div");
+    content.className = "tooltip-content";
+
+    const typeEl = document.createElement("div");
+    typeEl.className = "tooltip-type";
+    typeEl.textContent = "Focus Session";
+
+    const timeEl = document.createElement("div");
+    timeEl.className = "tooltip-time";
+    timeEl.textContent = `${session.start_time} - ${session.end_time}`;
+
+    const durationEl = document.createElement("div");
+    durationEl.className = "tooltip-duration";
+    durationEl.textContent = `${session.duration} minutes`;
+
+    content.appendChild(typeEl);
+    content.appendChild(timeEl);
+    content.appendChild(durationEl);
+    tooltip.appendChild(content);
 
     tooltip.style.position = "fixed";
     tooltip.style.zIndex = "1000";
