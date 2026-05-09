@@ -495,7 +495,7 @@ class TagManager {
 
     try {
       if (typeof window.__TAURI__?.core?.invoke === "function") {
-        await window.__TAURI__.core.invoke("add_session_tag", sessionTag);
+        await window.__TAURI__.core.invoke("add_session_tag", { session_tag: sessionTag });
       }
     } catch (error) {
       logger.error("Failed to save session tag:", error);

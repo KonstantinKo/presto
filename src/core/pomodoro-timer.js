@@ -375,7 +375,8 @@ export class PomodoroTimer {
   }
 
   updateKeyboardShortcuts(/** @type {any} */ shortcuts) {
-    this.customShortcuts = { ...shortcuts };
+    const filtered = Object.fromEntries(Object.entries(shortcuts).filter(([, v]) => v != null));
+    this.customShortcuts = { ...this.customShortcuts, ...filtered };
     logger.debug("Updated keyboard shortcuts:", this.customShortcuts);
   }
 
@@ -443,15 +444,14 @@ export class PomodoroTimer {
 
   setupLocalActivityListeners() {
     logger.info("Falling back to local activity monitoring");
-    // List of events that indicate user activity
     const activityEvents = ["mousemove", "mousedown", "keydown", "scroll", "click"];
 
-    // Setup activity listeners
     activityEvents.forEach((event) => {
-      document.addEventListener(event, () => this.handleUserActivity(), { passive: true });
+      const handler = () => this.handleUserActivity();
+      document.addEventListener(event, handler, { passive: true });
+      this.activityUnlistenFns.push(() => document.removeEventListener(event, handler));
     });
 
-    // Start initial timeout
     this.handleUserActivity();
   }
 

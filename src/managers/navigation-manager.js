@@ -1316,7 +1316,7 @@ export class NavigationManager {
     const startMinutes = timelineStartMinutes + (leftPercent / 100) * timelineRangeMinutes;
     const endMinutes = timelineStartMinutes + (rightPercent / 100) * timelineRangeMinutes;
 
-    const roundedStartMinutes = Math.max(0, Math.min(23 * 60 + 59, Math.round(startMinutes)));
+    const roundedStartMinutes = Math.max(0, Math.min(23 * 60 + 58, Math.round(startMinutes)));
     const roundedEndMinutes = Math.max(
       roundedStartMinutes + 1,
       Math.min(23 * 60 + 59, Math.round(endMinutes))

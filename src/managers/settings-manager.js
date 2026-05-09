@@ -548,9 +548,9 @@ export class SettingsManager {
       this.settings.notifications.smart_pause = /** @type {any} */ (
         document.getElementById("smart-pause")
       ).checked;
-      this.settings.notifications.smart_pause_timeout = parseInt(
+      this.settings.notifications.smart_pause_timeout = this.parseNumberOrDefault(
         /** @type {any} */ (document.getElementById("smart-pause-timeout")).value,
-        10
+        30
       );
 
       const debugModeCheckbox = /** @type {any} */ (document.getElementById("debug-mode"));
@@ -752,21 +752,21 @@ export class SettingsManager {
       this.settings.shortcuts.skip =
         /** @type {any} */ (document.getElementById("skip-shortcut")).value || null;
 
-      this.settings.timer.focus_duration = parseInt(
+      this.settings.timer.focus_duration = this.parseNumberOrDefault(
         /** @type {any} */ (document.getElementById("focus-duration")).value,
-        10
+        this.settings.timer.focus_duration
       );
-      this.settings.timer.break_duration = parseInt(
+      this.settings.timer.break_duration = this.parseNumberOrDefault(
         /** @type {any} */ (document.getElementById("break-duration")).value,
-        10
+        this.settings.timer.break_duration
       );
-      this.settings.timer.long_break_duration = parseInt(
+      this.settings.timer.long_break_duration = this.parseNumberOrDefault(
         /** @type {any} */ (document.getElementById("long-break-duration")).value,
-        10
+        this.settings.timer.long_break_duration
       );
-      this.settings.timer.total_sessions = parseInt(
+      this.settings.timer.total_sessions = this.parseNumberOrDefault(
         /** @type {any} */ (document.getElementById("total-sessions")).value,
-        10
+        this.settings.timer.total_sessions
       );
 
       const maxSessionTimeField = /** @type {any} */ (document.getElementById("max-session-time"));
@@ -800,9 +800,9 @@ export class SettingsManager {
       this.settings.notifications.smart_pause = /** @type {any} */ (
         document.getElementById("smart-pause")
       ).checked;
-      this.settings.notifications.smart_pause_timeout = parseInt(
+      this.settings.notifications.smart_pause_timeout = this.parseNumberOrDefault(
         /** @type {any} */ (document.getElementById("smart-pause-timeout")).value,
-        10
+        30
       );
 
       const debugModeCheckbox = /** @type {any} */ (document.getElementById("debug-mode"));
@@ -939,9 +939,12 @@ export class SettingsManager {
       if (checkbox) {
         checkbox.checked = analyticsEnabled;
 
-        checkbox.addEventListener("change", async (/** @type {any} */ e) => {
-          await this.toggleAnalytics(e.target.checked);
-        });
+        if (!checkbox._analyticsHandlerBound) {
+          checkbox._analyticsHandlerBound = true;
+          checkbox.addEventListener("change", async (/** @type {any} */ e) => {
+            await this.toggleAnalytics(e.target.checked);
+          });
+        }
       }
     } catch (error) {
       logger.error("Failed to load analytics setting:", error);
@@ -949,9 +952,12 @@ export class SettingsManager {
       const checkbox = /** @type {any} */ (document.getElementById("analytics-enabled"));
       if (checkbox) {
         checkbox.checked = true;
-        checkbox.addEventListener("change", async (/** @type {any} */ e) => {
-          await this.toggleAnalytics(e.target.checked);
-        });
+        if (!checkbox._analyticsHandlerBound) {
+          checkbox._analyticsHandlerBound = true;
+          checkbox.addEventListener("change", async (/** @type {any} */ e) => {
+            await this.toggleAnalytics(e.target.checked);
+          });
+        }
       }
     }
   }
@@ -995,18 +1001,24 @@ export class SettingsManager {
       if (checkbox) {
         checkbox.checked = hideIconOnClose;
 
-        checkbox.addEventListener("change", async (/** @type {any} */ e) => {
-          await this.toggleHideIconOnClose(e.target.checked);
-        });
+        if (!checkbox._hideIconHandlerBound) {
+          checkbox._hideIconHandlerBound = true;
+          checkbox.addEventListener("change", async (/** @type {any} */ e) => {
+            await this.toggleHideIconOnClose(e.target.checked);
+          });
+        }
       }
     } catch (error) {
       logger.error("Failed to load hide icon on close setting:", error);
       const checkbox = /** @type {any} */ (document.getElementById("hide-icon-on-close"));
       if (checkbox) {
         checkbox.checked = false;
-        checkbox.addEventListener("change", async (/** @type {any} */ e) => {
-          await this.toggleHideIconOnClose(e.target.checked);
-        });
+        if (!checkbox._hideIconHandlerBound) {
+          checkbox._hideIconHandlerBound = true;
+          checkbox.addEventListener("change", async (/** @type {any} */ e) => {
+            await this.toggleHideIconOnClose(e.target.checked);
+          });
+        }
       }
     }
   }
@@ -1053,18 +1065,24 @@ export class SettingsManager {
       if (select) {
         select.value = statusBarDisplay;
 
-        select.addEventListener("change", async (/** @type {any} */ e) => {
-          await this.updateStatusBarDisplay(e.target.value);
-        });
+        if (!select._statusBarHandlerBound) {
+          select._statusBarHandlerBound = true;
+          select.addEventListener("change", async (/** @type {any} */ e) => {
+            await this.updateStatusBarDisplay(e.target.value);
+          });
+        }
       }
     } catch (error) {
       logger.error("Failed to load status bar display setting:", error);
       const select = /** @type {any} */ (document.getElementById("status-bar-display"));
       if (select) {
         select.value = "default";
-        select.addEventListener("change", async (/** @type {any} */ e) => {
-          await this.updateStatusBarDisplay(e.target.value);
-        });
+        if (!select._statusBarHandlerBound) {
+          select._statusBarHandlerBound = true;
+          select.addEventListener("change", async (/** @type {any} */ e) => {
+            await this.updateStatusBarDisplay(e.target.value);
+          });
+        }
       }
     }
   }
