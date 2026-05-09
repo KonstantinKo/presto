@@ -12,9 +12,16 @@ test("setting weekly goal updates focus summary metrics on calendar view", async
   const defaultGoal = await page.locator("#weekly-goal-minutes").inputValue();
   expect(parseInt(defaultGoal, 10)).toBeGreaterThan(0);
 
-  // Set a low goal (50 minutes) and blur to trigger auto-save
+  // Set a low goal (50 minutes) and blur to trigger auto-save (debounced ~1s)
   await page.locator("#weekly-goal-minutes").fill("50");
   await page.locator("#weekly-goal-minutes").press("Tab");
+
+  // Wait for the auto-save to complete; the "✓ Settings saved" notification ping
+  // is the visible success signal. Filter by text to avoid colliding with the
+  // welcome ping that may still be on screen.
+  await expect(
+    page.locator(".notification-ping").filter({ hasText: "Settings saved" })
+  ).toBeVisible({ timeout: 5000 });
 
   // Navigate to Calendar view — focus summary card should be visible
   await tapTab(page, "Calendar");

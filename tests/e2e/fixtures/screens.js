@@ -75,6 +75,12 @@ export async function selectSettingsCategory(page, name) {
 /**
  * Opens Settings → Advanced and enables debug mode (3-second timers).
  * Leaves the user on the Settings → Advanced view.
+ *
+ * Settings auto-save is debounced ~1 s, so we wait for the visible "✓ Settings
+ * saved" notification ping as the success signal. We filter for that exact text
+ * because the welcome notification ("Welcome to Presto! 🍅") shown on initial
+ * boot may still be on screen, which would otherwise cause a strict-mode
+ * violation against `.notification-ping`.
  * @param {import('@playwright/test').Page} page
  */
 export async function enableDebugTimers(page) {
@@ -84,8 +90,8 @@ export async function enableDebugTimers(page) {
   const isChecked = await debugCheckbox.isChecked();
   if (!isChecked) {
     await debugCheckbox.click();
-    await expect(page.locator(".notification-ping")).toContainText("Settings saved", {
-      timeout: 3000,
-    });
+    await expect(
+      page.locator(".notification-ping").filter({ hasText: "Settings saved" })
+    ).toBeVisible({ timeout: 5000 });
   }
 }

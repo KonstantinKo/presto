@@ -373,6 +373,13 @@ localStorage.setItem('presto_force_update_test', 'true');
      * Call sequence: call #1 → null, call #2 → null, call #3+ → provided update.
      * (The update is returned on the 3rd+ invocation because the handler checks
      * ucfg.updaterCallCount > 2, i.e. strictly greater than 2.)
+     *
+     * Also enables `presto_force_update_test` so `UpdateManagerV2.checkForUpdates()`
+     * routes through `simulateUpdate()` rather than `checkVersionFromGitHub()`. The
+     * latter requires a non-blocked network fetch to api.github.com, which the
+     * `_blockExternal` fixture forbids. `simulateUpdate()` reads the same
+     * `__E2E_CONFIG__.updaterCallCount`/`updaterSecondCallUpdate` keys consumed by
+     * the `plugin:updater|check` mock handler to produce a deterministic sequence.
      * @param {{ version: string }} secondCallUpdate
      */
     async configureUpdaterCalls(secondCallUpdate) {
@@ -381,6 +388,7 @@ localStorage.setItem('presto_force_update_test', 'true');
 if (!window.__E2E_CONFIG__) window.__E2E_CONFIG__ = {};
 window.__E2E_CONFIG__.updaterCallCount = 0;
 window.__E2E_CONFIG__.updaterSecondCallUpdate = ${JSON.stringify(secondCallUpdate)};
+localStorage.setItem('presto_force_update_test', 'true');
 `,
       });
     },

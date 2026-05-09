@@ -14,7 +14,9 @@ test("run debug-mode focus session to completion and verify it appears in calend
   await page.locator("#timer-status").click();
   await expect(page.locator("#tag-dropdown-menu")).toBeVisible();
   await page.locator("#tag-list .tag-item").first().click();
-  await page.keyboard.press("Escape");
+  // Toggle the dropdown closed by clicking the trigger again (clicking the
+  // timer-status label re-invokes toggleDropdown(), which closes the open menu).
+  await page.locator("#timer-status").click();
   await expect(page.locator("#tag-dropdown-menu")).toBeHidden({ timeout: 2000 });
 
   // Start the timer
