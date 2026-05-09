@@ -268,35 +268,16 @@ impl ActivityMonitor {
     }
 
     #[cfg(target_os = "macos")]
+    #[allow(unsafe_code)]
     fn get_system_idle_time() -> f64 {
-        use std::process::Command;
-
-        // Use ioreg to get HID idle time - most reliable method on macOS
-        let output = Command::new("ioreg").args(&["-c", "IOHIDSystem"]).output();
-
-        if let Ok(output) = output {
-            let output_str = String::from_utf8_lossy(&output.stdout);
-
-            for line in output_str.lines() {
-                if line.contains("HIDIdleTime") {
-                    // Line format: "HIDIdleTime" = 1234567890
-                    if let Some(equals_pos) = line.find('=') {
-                        let value_part = &line[equals_pos + 1..];
-                        let cleaned = value_part
-                            .trim()
-                            .trim_end_matches(|c: char| !c.is_ascii_digit());
-
-                        if let Ok(idle_ns) = cleaned.parse::<u64>() {
-                            // Convert nanoseconds to seconds
-                            return idle_ns as f64 / 1_000_000_000.0;
-                        }
-                    }
-                }
-            }
+        #[link(name = "CoreGraphics", kind = "framework")]
+        extern "C" {
+            fn CGEventSourceSecondsSinceLastEventType(state_id: u32, event_type: u32) -> f64;
         }
 
-        // If ioreg fails, assume no idle time (active)
-        0.0
+        // SAFETY: CGEventSourceSecondsSinceLastEventType is a pure read-only CoreGraphics
+        // function. kCGEventSourceStateCombinedSessionState=0, kCGAnyInputEventType=0xFFFF_FFFF.
+        unsafe { CGEventSourceSecondsSinceLastEventType(0, 0xFFFF_FFFF) }
     }
 
     fn stop_monitoring(&self) {

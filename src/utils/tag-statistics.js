@@ -35,6 +35,7 @@ export class TagStatistics {
       return sessionDate >= startDate && sessionDate <= endDate;
     });
 
+    const tagMap = new Map(tags.map((t) => [t.id, t]));
     const tagUsage = new Map();
     let totalDuration = 0;
 
@@ -68,7 +69,7 @@ export class TagStatistics {
             // Handle both tag objects and tag IDs
             const tagId = typeof sessionTag === "string" ? sessionTag : sessionTag.id;
             const tag =
-              typeof sessionTag === "object" ? sessionTag : tags.find((t) => t.id === tagId);
+                typeof sessionTag === "object" ? sessionTag : tagMap.get(tagId);
 
             if (tag) {
               const current = tagUsage.get(tagId) || { duration: 0, sessions: 0 };
