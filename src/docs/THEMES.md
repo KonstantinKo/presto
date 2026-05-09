@@ -1,6 +1,6 @@
-# 🎨 Automatic Theme Management System
+# 🎨 Theme Management System
 
-This system allows you to add new themes to the Pomodoro timer **without manually modifying the code**. Themes are automatically discovered and loaded.
+This system allows you to add new themes to the Pomodoro timer. Themes are loaded from a predefined list that must be kept in sync with the CSS files present in `src/styles/themes/`.
 
 ## 🚀 How to Add a New Theme
 
@@ -60,14 +60,19 @@ Create a new CSS file in the `src/styles/themes/` folder with the following form
 - **`pommodore64.css`** - Retro theme inspired by Commodore 64
 - **`pipboy.css`** - Theme inspired by Fallout (PipBoy)
 
-### 3. The System Does the Rest!
+### 3. Register the Theme
 
-Once you create the CSS file:
+After creating the CSS file, add its filename to the `knownThemes` array in `src/utils/theme-loader.js`:
 
-1. **Automatic Discovery**: The system automatically discovers the new theme
-2. **Dynamic Loading**: CSS is loaded dynamically
-3. **Registration**: The theme is automatically registered
-4. **Availability**: Appears immediately in the theme selector
+```js
+// src/utils/theme-loader.js — discoverThemeFiles()
+const knownThemes = ["espresso.css", "pipboy.css", "pommodore64.css", "my-theme.css"];
+```
+
+Once registered:
+1. **Dynamic Loading**: CSS is loaded dynamically at runtime
+2. **Registration**: The theme is registered automatically
+3. **Availability**: Appears in the theme selector
 
 ## 🛠️ Technical System
 
@@ -83,7 +88,7 @@ The `build-themes.js` file automatically scans the `src/styles/themes/` folder a
 ### Theme Loader
 
 The `src/utils/theme-loader.js` handles:
-- Automatic discovery of CSS files
+- Theme discovery from the hardcoded `knownThemes` list (manually maintained)
 - Dynamic theme loading
 - Automatic metadata extraction
 - System registration
@@ -116,8 +121,7 @@ Metadata is extracted from CSS comments:
 ## 🎯 System Benefits
 
 ### ✅ For Developers
-- **Zero configuration** - add a CSS file and it works
-- **No code changes** - no manual imports
+- **Minimal configuration** - add a CSS file and register it in one place
 - **Automatic metadata** - extracted from CSS comments
 - **Hot reload** - works with dev server
 
@@ -135,9 +139,10 @@ Metadata is extracted from CSS comments:
 ## 🔄 Development Workflow
 
 1. **Create** `src/styles/themes/my-theme.css`
-2. **Develop** using existing examples
-3. **Test** with `npm run dev` (auto-reload)
-4. **Share** - the theme is ready!
+2. **Register** the filename in the `knownThemes` array in `src/utils/theme-loader.js`
+3. **Develop** using existing examples
+4. **Test** with `npm run dev` (auto-reload)
+5. **Share** - the theme is ready!
 
 ## 🎨 Quick Theme Template
 

@@ -36,10 +36,11 @@ A modern, cross-platform Pomodoro timer application built with Tauri (Rust + HTM
 
 ### ⌨️ Keyboard Shortcuts
 
-- **Space**: Start/Pause timer
-- **Cmd/Ctrl + R**: Reset current session
-- **Cmd/Ctrl + S**: Skip current session
+- **Cmd/Ctrl + Alt + Space**: Start/Pause timer
+- **Cmd/Ctrl + Alt + R**: Reset current session
+- **Cmd/Ctrl + Alt + S**: Skip current session
 - **Cmd/Ctrl + H**: Show/hide history modal
+- **Space**: Start/Pause timer (fallback when no custom shortcut is active)
 
 ### 🎨 Modern UI
 
@@ -132,17 +133,42 @@ The Tauri CLI is pulled in automatically via `npm install` (`@tauri-apps/cli`); 
 
 ```
 presto/
-├── src/                    # Frontend source files
-│   ├── index.html         # Main HTML interface
-│   ├── styles.css         # CSS styles and animations
-│   └── main.js           # JavaScript application logic
-├── src-tauri/             # Rust backend
+├── src/                         # Frontend source files
+│   ├── index.html               # Main HTML interface
+│   ├── main.js                  # Application entry point
+│   ├── version.js               # Version constants
+│   ├── globals.d.ts             # Global TypeScript declarations
+│   ├── assets/                  # Static assets (icons, images)
+│   ├── components/              # Reusable UI components
+│   │   └── update-notification.js
+│   ├── config/                  # Configuration constants
+│   │   └── storage-keys.js
+│   ├── core/                    # Core application logic
+│   │   └── pomodoro-timer.js    # Timer state machine and controls
+│   ├── docs/                    # Developer documentation
+│   ├── managers/                # Feature-area managers
+│   │   ├── auth-manager.js
+│   │   ├── navigation-manager.js
+│   │   ├── session-manager.js
+│   │   ├── settings-manager.js
+│   │   ├── tag-manager.js
+│   │   ├── team-manager.js
+│   │   └── update-manager-global.js
+│   ├── styles/                  # CSS stylesheets
+│   │   ├── themes/              # Pluggable timer themes
+│   │   └── *.css                # Feature-scoped stylesheets
+│   └── utils/                   # Shared utilities
+│       ├── analytics.js
+│       ├── theme-loader.js
+│       ├── timer-themes.js
+│       └── ...
+├── src-tauri/                   # Rust backend
 │   ├── src/
-│   │   └── lib.rs        # Tauri commands and data persistence
-│   ├── Cargo.toml       # Rust dependencies
-│   └── tauri.conf.json  # Tauri configuration
-├── package.json          # Node.js dependencies and scripts
-└── README.md            # This file
+│   │   └── lib.rs               # Tauri commands and data persistence
+│   ├── Cargo.toml               # Rust dependencies
+│   └── tauri.conf.json          # Tauri configuration
+├── package.json                 # Node.js dependencies and scripts
+└── README.md                    # This file
 ```
 
 ## 🔧 Technical Details

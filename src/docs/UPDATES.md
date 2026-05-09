@@ -17,16 +17,20 @@ This script will generate:
 
 ## 🔧 Step 2: Configure tauri.conf.json
 
+> **Note for contributors to the main repository**: `src-tauri/tauri.conf.json` already contains a real public key and points to the `murdercode/presto` release endpoint. No changes are needed unless you are setting up your own fork.
+
+If you are configuring a fork:
+
 1. Copy the public key generated in the previous step
 2. Open `src-tauri/tauri.conf.json`
-3. Replace the placeholders in the `plugins.updater` section:
+3. Update the `plugins.updater` section with your own values:
 
 ```json
 {
   "plugins": {
     "updater": {
       "endpoints": [
-        "https://api.github.com/repos/YOUR_USERNAME/YOUR_REPOSITORY/releases/latest"
+        "https://github.com/YOUR_USERNAME/YOUR_REPOSITORY/releases/latest/download/latest-{target}.json"
       ],
       "pubkey": "YOUR_PUBLIC_KEY_HERE"
     }
@@ -51,10 +55,12 @@ In your GitHub repository, go to **Settings** → **Secrets and variables** → 
 ### Verify the Workflow
 
 The `.github/workflows/release.yml` file is already configured to:
-- Build the app for all platforms (macOS, Windows, Linux)
+- Build the app for macOS (both Apple Silicon and Intel)
 - Sign files with your private key
 - Create a release on GitHub
 - Automatically publish assets
+
+> **Note**: Windows and Linux builds are not currently included in the release workflow.
 
 ## 📦 Step 4: Create a Release
 
