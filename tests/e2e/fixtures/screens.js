@@ -75,7 +75,8 @@ export async function enableDebugTimers(page) {
   const isChecked = await debugCheckbox.isChecked();
   if (!isChecked) {
     await debugCheckbox.click();
-    // Wait for auto-save (settings are saved automatically)
-    await page.waitForTimeout(1200);
+    await expect(page.locator(".notification-ping")).toContainText("Settings saved", {
+      timeout: 3000,
+    });
   }
 }

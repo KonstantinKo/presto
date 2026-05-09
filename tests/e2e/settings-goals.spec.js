@@ -25,9 +25,11 @@ test("setting weekly goal updates focus summary metrics on calendar view", async
   await expect(page.locator("#avg-focus-day")).toBeVisible();
   await expect(page.locator("#weekly-sessions")).toBeVisible();
 
-  // Revert goal to default
+  // Verify the goal was persisted before reverting
   await openSettings(page);
   await selectSettingsCategory(page, "Goals");
+  await expect(page.locator("#weekly-goal-minutes")).toHaveValue("50");
+  // Now revert
   await page.locator("#weekly-goal-minutes").fill(defaultGoal);
   await page.locator("#weekly-goal-minutes").press("Tab");
 });

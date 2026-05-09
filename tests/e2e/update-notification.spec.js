@@ -4,7 +4,7 @@
 import { test, expect } from "./fixtures/index.js";
 import { gotoTimer, tapTab } from "./fixtures/screens.js";
 
-test("update notification banner: appears with version, close hides it, dismiss persists skip", async ({
+test("update notification banner: appears with version and close hides it", async ({
   page,
   tauriMock,
 }) => {
