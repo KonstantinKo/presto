@@ -1,11 +1,16 @@
 import { logger } from "./logger.js";
 
+/**
+ * @typedef {{ name: string; description: string; supports: ('light'|'dark')[]; isDefault: boolean; preview: { focus: string; break: string; longBreak: string } }} ThemeConfig
+ */
+
 const DEFAULT_PREVIEW = {
   focus: "#e74c3c",
   break: "#2ecc71",
   longBreak: "#3498db",
 };
 
+/** @type {Record<string, ThemeConfig>} */
 export const TIMER_THEMES = {
   espresso: {
     name: "Espresso",
@@ -39,6 +44,11 @@ export const TIMER_THEMES = {
   },
 };
 
+/**
+ * @param {string} themeId
+ * @param {Partial<ThemeConfig>} themeConfig
+ * @returns {ThemeConfig}
+ */
 export function registerTheme(themeId, themeConfig) {
   const existingTheme = TIMER_THEMES[themeId];
 
@@ -58,6 +68,7 @@ export function registerTheme(themeId, themeConfig) {
   return TIMER_THEMES[themeId];
 }
 
+/** @param {string} themeId @returns {boolean} */
 export function unregisterTheme(themeId) {
   if (TIMER_THEMES[themeId] && !TIMER_THEMES[themeId].isDefault) {
     delete TIMER_THEMES[themeId];
@@ -67,6 +78,7 @@ export function unregisterTheme(themeId) {
   return false;
 }
 
+/** @param {string} themeId @returns {ThemeConfig} */
 export function getThemeById(themeId) {
   return TIMER_THEMES[themeId] || TIMER_THEMES.espresso;
 }
@@ -78,13 +90,21 @@ export function getAllThemes() {
   }));
 }
 
+/** @param {string} [colorMode] @returns {(ThemeConfig & { id: string })[]} */
 export function getCompatibleThemes(colorMode = "light") {
-  return getAllThemes().filter((theme) => theme.supports.includes(colorMode));
+  return getAllThemes().filter((theme) =>
+    theme.supports.includes(/** @type {'light'|'dark'} */ (colorMode))
+  );
 }
 
+/**
+ * @param {string} themeId
+ * @param {string} [colorMode]
+ * @returns {boolean}
+ */
 export function isThemeCompatible(themeId, colorMode = "light") {
   const theme = getThemeById(themeId);
-  return theme.supports.includes(colorMode);
+  return theme.supports.includes(/** @type {'light'|'dark'} */ (colorMode));
 }
 
 export function getDefaultTheme() {

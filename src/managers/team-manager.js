@@ -3,7 +3,7 @@ import { logger } from "../utils/logger.js";
 
 export class TeamManager {
   constructor() {
-    this.teams = [];
+    this.teams = /** @type {any[]} */ ([]);
     this.initialized = false;
   }
 
@@ -146,8 +146,8 @@ export class TeamManager {
 
   updateDemoData() {
     // Simulate status changes for demo
-    this.teams.forEach((team) => {
-      team.members.forEach((member) => {
+    this.teams.forEach((/** @type {any} */ team) => {
+      team.members.forEach((/** @type {any} */ member) => {
         if (
           member.status === "focus" ||
           member.status === "break" ||
@@ -156,8 +156,6 @@ export class TeamManager {
           // Update timer
           if (member.currentSessionStart) {
             const elapsed = Math.floor((Date.now() - member.currentSessionStart.getTime()) / 1000);
-            const _minutes = Math.floor(elapsed / 60);
-            const _seconds = elapsed % 60;
 
             if (member.status === "focus") {
               // Focus sessions are 25 minutes, count down
@@ -264,9 +262,10 @@ export class TeamManager {
     });
   }
 
+  /** @param {any[]} members */
   sortMembersByStatus(members) {
     return [...members].sort((a, b) => {
-      const getPriority = (status) => {
+      const getPriority = (/** @type {string} */ status) => {
         switch (status) {
           case "focus":
             return 0;
@@ -285,6 +284,7 @@ export class TeamManager {
     });
   }
 
+  /** @param {any} team @param {any[]} members */
   createTeamSection(team, members) {
     const section = document.createElement("div");
     section.className = "team-section base-card-compact";
@@ -310,6 +310,7 @@ export class TeamManager {
     return section;
   }
 
+  /** @param {any} member */
   createMemberRow(member) {
     const row = document.createElement("div");
     row.className = `member-row row-base row-three-col status-${member.status}`;
@@ -347,20 +348,22 @@ export class TeamManager {
     return row;
   }
 
+  /** @param {string} status @returns {{ icon: string; label: string }} */
   getStatusInfo(status) {
-    const statusMap = {
+    const statusMap = /** @type {Record<string, { icon: string; label: string }>} */ ({
       focus: { icon: "ri-brain-line", label: "Deep Focus" },
       break: { icon: "ri-cup-line", label: "Short Break" },
       "long-break": { icon: "ri-moon-line", label: "Long Break" },
       offline: { icon: "ri-checkbox-blank-circle-fill", label: "Offline" },
       privacy: { icon: "ri-lock-line", label: "Privacy Mode" },
-    };
+    });
     return statusMap[status] || { icon: "ri-question-line", label: "Unknown" };
   }
 
+  /** @param {any} member @returns {string} */
   getOnlineStatus(member) {
     const now = new Date();
-    const lastSeenMinutes = (now - member.lastSeen) / (1000 * 60);
+    const lastSeenMinutes = (now.getTime() - member.lastSeen.getTime()) / (1000 * 60);
 
     if (member.status === "offline") {
       return "offline";
@@ -377,10 +380,22 @@ export class TeamManager {
   updateTeamStats() {
     const stats = this.calculateTeamStats();
 
-    document.getElementById("team-focusing").textContent = stats.focusing;
-    document.getElementById("team-on-break").textContent = stats.onBreak;
-    document.getElementById("team-privacy").textContent = stats.privacy;
-    document.getElementById("team-offline").textContent = stats.offline;
+    const focusing = document.getElementById("team-focusing");
+    const onBreak = document.getElementById("team-on-break");
+    const privacy = document.getElementById("team-privacy");
+    const offline = document.getElementById("team-offline");
+    if (focusing) {
+      focusing.textContent = String(stats.focusing);
+    }
+    if (onBreak) {
+      onBreak.textContent = String(stats.onBreak);
+    }
+    if (privacy) {
+      privacy.textContent = String(stats.privacy);
+    }
+    if (offline) {
+      offline.textContent = String(stats.offline);
+    }
   }
 
   calculateTeamStats() {
@@ -391,8 +406,8 @@ export class TeamManager {
       offline: 0,
     };
 
-    this.teams.forEach((team) => {
-      team.members.forEach((member) => {
+    this.teams.forEach((/** @type {any} */ team) => {
+      team.members.forEach((/** @type {any} */ member) => {
         switch (member.status) {
           case "focus":
             stats.focusing++;

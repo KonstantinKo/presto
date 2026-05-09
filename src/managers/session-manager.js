@@ -1,15 +1,19 @@
 import { NotificationUtils } from "../utils/common-utils.js";
 import { logger } from "../utils/logger.js";
 
-const { invoke } = window.__TAURI__ ? window.__TAURI__.core : { invoke: null };
+const { invoke } = /** @type {{ invoke: ((cmd: string, args?: any) => Promise<any>) | null }} */ (
+  window.__TAURI__?.core ?? { invoke: null }
+);
 
 export class SessionManager {
+  /** @param {any} navigationManager */
   constructor(navigationManager) {
     this.navManager = navigationManager;
     this.currentEditingSession = null;
     this.selectedDate = null;
-    this.sessions = []; // Local session storage for backward compatibility
-    this.isUsingTauri = !!invoke; // Check if Tauri is available
+    /** @type {any} */
+    this.sessions = [];
+    this.isUsingTauri = !!invoke;
     this.init();
   }
 
@@ -21,11 +25,12 @@ export class SessionManager {
   async loadSessionsFromStorage() {
     try {
       if (this.isUsingTauri) {
-        const sessions = await invoke("load_manual_sessions");
+        const sessions = await /** @type {NonNullable<typeof invoke>} */ (invoke)(
+          "load_manual_sessions"
+        );
 
-        // Convert array to date-keyed object for backward compatibility
         this.sessions = {};
-        sessions.forEach((session) => {
+        sessions.forEach((/** @type {any} */ session) => {
           if (!this.sessions[session.date]) {
             this.sessions[session.date] = [];
           }
@@ -49,18 +54,19 @@ export class SessionManager {
   async saveSessionsToStorage() {
     try {
       if (this.isUsingTauri) {
-        // Convert date-keyed object to array for Tauri backend
-        const sessionsArray = [];
+        const sessionsArray = /** @type {any[]} */ ([]);
         Object.keys(this.sessions).forEach((date) => {
-          this.sessions[date].forEach((session) => {
+          this.sessions[date].forEach((/** @type {any} */ session) => {
             sessionsArray.push({
               ...session,
-              date, // Ensure date is included
+              date,
             });
           });
         });
 
-        await invoke("save_manual_sessions", { sessions: sessionsArray });
+        await /** @type {NonNullable<typeof invoke>} */ (invoke)("save_manual_sessions", {
+          sessions: sessionsArray,
+        });
         logger.info("Saved", sessionsArray.length, "manual sessions to Tauri backend");
       } else {
         localStorage.setItem("presto_manual_sessions", JSON.stringify(this.sessions));
@@ -119,14 +125,15 @@ export class SessionManager {
     });
   }
 
+  /** @param {Date | null} [date] */
   openAddSessionModal(date = null) {
     this.selectedDate = date || this.navManager.currentDate || new Date();
     this.currentEditingSession = null;
 
-    const modal = document.getElementById("session-modal-overlay");
-    const modalTitle = document.getElementById("session-modal-title");
-    const deleteBtn = document.getElementById("delete-session-btn");
-    const saveBtn = document.getElementById("save-session-btn");
+    const modal = /** @type {HTMLElement} */ (document.getElementById("session-modal-overlay"));
+    const modalTitle = /** @type {HTMLElement} */ (document.getElementById("session-modal-title"));
+    const deleteBtn = /** @type {HTMLElement} */ (document.getElementById("delete-session-btn"));
+    const saveBtn = /** @type {HTMLElement} */ (document.getElementById("save-session-btn"));
 
     modalTitle.textContent = "Add Session";
     deleteBtn.style.display = "none";
@@ -138,39 +145,48 @@ export class SessionManager {
     const endTime = this.calculateEndTime(startTime, 25);
     const actualDuration = Math.max(1, this.timeToMinutes(endTime) - startMinutes);
 
-    document.getElementById("session-form").reset();
-    document.getElementById("session-duration").value = actualDuration;
-    document.getElementById("session-start-time").value = startTime;
-    document.getElementById("session-end-time").value = endTime;
+    /** @type {HTMLFormElement} */ (document.getElementById("session-form")).reset();
+    /** @type {HTMLInputElement} */ (document.getElementById("session-duration")).value =
+      String(actualDuration);
+    /** @type {HTMLInputElement} */ (document.getElementById("session-start-time")).value =
+      startTime;
+    /** @type {HTMLInputElement} */ (document.getElementById("session-end-time")).value = endTime;
 
     modal.classList.add("show");
-    document.getElementById("session-start-time").focus();
+    /** @type {HTMLInputElement} */ (document.getElementById("session-start-time")).focus();
   }
 
+  /** @param {any} session @param {any} date */
   openEditSessionModal(session, date) {
     this.selectedDate = new Date(date);
     this.currentEditingSession = session;
 
-    const modal = document.getElementById("session-modal-overlay");
-    const modalTitle = document.getElementById("session-modal-title");
-    const deleteBtn = document.getElementById("delete-session-btn");
-    const saveBtn = document.getElementById("save-session-btn");
+    const modal = /** @type {HTMLElement} */ (document.getElementById("session-modal-overlay"));
+    const modalTitle = /** @type {HTMLElement} */ (document.getElementById("session-modal-title"));
+    const deleteBtn = /** @type {HTMLElement} */ (document.getElementById("delete-session-btn"));
+    const saveBtn = /** @type {HTMLElement} */ (document.getElementById("save-session-btn"));
 
     modalTitle.textContent = "Edit Session";
     deleteBtn.style.display = "block";
     saveBtn.textContent = "Update Session";
 
-    document.getElementById("session-duration").value = session.duration;
-    document.getElementById("session-start-time").value = session.start_time;
-    document.getElementById("session-end-time").value = session.end_time;
+    /** @type {HTMLInputElement} */ (document.getElementById("session-duration")).value = String(
+      session.duration
+    );
+    /** @type {HTMLInputElement} */ (document.getElementById("session-start-time")).value =
+      session.start_time;
+    /** @type {HTMLInputElement} */ (document.getElementById("session-end-time")).value =
+      session.end_time;
 
     modal.classList.add("show");
-    document.getElementById("session-start-time").focus();
+    /** @type {HTMLInputElement} */ (document.getElementById("session-start-time")).focus();
   }
 
   closeModal() {
     const modal = document.getElementById("session-modal-overlay");
-    modal.classList.remove("show");
+    if (modal) {
+      modal.classList.remove("show");
+    }
     this.currentEditingSession = null;
     this.selectedDate = null;
   }
@@ -181,11 +197,20 @@ export class SessionManager {
   }
 
   setupTimeCalculation() {
-    const startTimeInput = document.getElementById("session-start-time");
-    const endTimeInput = document.getElementById("session-end-time");
-    const durationInput = document.getElementById("session-duration");
+    const startTimeInput = /** @type {HTMLInputElement | null} */ (
+      document.getElementById("session-start-time")
+    );
+    const endTimeInput = /** @type {HTMLInputElement | null} */ (
+      document.getElementById("session-end-time")
+    );
+    const durationInput = /** @type {HTMLInputElement | null} */ (
+      document.getElementById("session-duration")
+    );
 
     const calculateDuration = () => {
+      if (!startTimeInput || !endTimeInput || !durationInput) {
+        return;
+      }
       const startTime = startTimeInput.value;
       const endTime = endTimeInput.value;
 
@@ -194,25 +219,26 @@ export class SessionManager {
         const endMinutes = this.timeToMinutes(endTime);
         let duration = endMinutes - startMinutes;
 
-        // Handle case where end time is next day
         if (duration < 0) {
-          duration += 24 * 60; // Add 24 hours
+          duration += 24 * 60;
         }
 
-        durationInput.value = duration;
+        durationInput.value = String(duration);
       }
     };
 
     const calculateEndTime = () => {
+      if (!startTimeInput || !endTimeInput || !durationInput) {
+        return;
+      }
       const startTime = startTimeInput.value;
       const duration = parseInt(durationInput.value, 10);
 
       if (startTime && Number.isInteger(duration) && duration >= 0) {
         const endTime = this.calculateEndTime(startTime, duration);
         endTimeInput.value = endTime;
-        durationInput.value = Math.max(
-          0,
-          this.timeToMinutes(endTime) - this.timeToMinutes(startTime)
+        durationInput.value = String(
+          Math.max(0, this.timeToMinutes(endTime) - this.timeToMinutes(startTime))
         );
       }
     };
@@ -224,13 +250,14 @@ export class SessionManager {
     }
   }
 
+  /** @param {string} timeString @returns {number} */
   timeToMinutes(timeString) {
     const [hours, minutes] = timeString.split(":").map(Number);
     return hours * 60 + minutes;
   }
 
+  /** @param {number} minutes @returns {string} */
   minutesToTime(minutes) {
-    // Handle overflow to next day
     const totalMinutes = minutes % (24 * 60);
     const hours = Math.floor(totalMinutes / 60);
     const mins = totalMinutes % 60;
@@ -238,19 +265,21 @@ export class SessionManager {
   }
 
   async saveSession() {
-    const formData = new FormData(document.getElementById("session-form"));
-    const startTime = formData.get("startTime");
-    const endTime = formData.get("endTime");
-    const duration = parseInt(formData.get("duration"), 10);
+    const formData = new FormData(
+      /** @type {HTMLFormElement} */ (document.getElementById("session-form"))
+    );
+    const startTime = /** @type {string | null} */ (formData.get("startTime"));
+    const endTime = /** @type {string | null} */ (formData.get("endTime"));
+    const duration = parseInt(/** @type {string} */ (formData.get("duration")), 10);
 
     const sessionData = {
       id: this.currentEditingSession?.id || this.generateSessionId(),
-      session_type: "focus", // All sessions are focus sessions now
+      session_type: "focus",
       duration,
       start_time: startTime,
       end_time: endTime,
       created_at: this.currentEditingSession?.created_at || new Date().toISOString(),
-      tags: this.currentEditingSession?.tags || [], // Preserve existing tags
+      tags: this.currentEditingSession?.tags || [],
     };
 
     if (!sessionData.start_time) {
@@ -264,13 +293,17 @@ export class SessionManager {
     }
 
     if (isNaN(sessionData.duration) || sessionData.duration <= 0) {
-      alert("Please enter a valid duration");
-      return;
-    }
-
-    if (sessionData.end_time <= sessionData.start_time) {
-      alert("End time must be after start time");
-      return;
+      const startMinutes = this.timeToMinutes(/** @type {string} */ (sessionData.start_time));
+      let endMinutes = this.timeToMinutes(/** @type {string} */ (sessionData.end_time));
+      if (endMinutes < startMinutes) {
+        endMinutes += 24 * 60;
+      }
+      const computedDuration = endMinutes - startMinutes;
+      if (isNaN(computedDuration) || computedDuration <= 0) {
+        alert("Please enter a valid duration");
+        return;
+      }
+      sessionData.duration = computedDuration;
     }
 
     try {
@@ -282,7 +315,6 @@ export class SessionManager {
         NotificationUtils.showNotificationPing("Session added successfully", "success");
       }
 
-      // Store the selected date before closing modal (as closeModal sets it to null)
       const dateForRefresh = this.selectedDate;
       this.closeModal();
 
@@ -298,6 +330,7 @@ export class SessionManager {
     }
   }
 
+  /** @param {any} sessionData */
   async addSession(sessionData) {
     const targetDate = this.selectedDate || new Date();
     const dateString = targetDate.toDateString();
@@ -317,11 +350,14 @@ export class SessionManager {
     );
   }
 
+  /** @param {any} sessionData */
   async updateSession(sessionData) {
     const dateString = this.selectedDate.toDateString();
 
     if (this.sessions[dateString]) {
-      const index = this.sessions[dateString].findIndex((s) => s.id === sessionData.id);
+      const index = this.sessions[dateString].findIndex(
+        (/** @type {any} */ s) => s.id === sessionData.id
+      );
       if (index !== -1) {
         this.sessions[dateString][index] = sessionData;
       }
@@ -346,7 +382,7 @@ export class SessionManager {
 
       if (this.sessions[dateString]) {
         this.sessions[dateString] = this.sessions[dateString].filter(
-          (s) => s.id !== this.currentEditingSession.id
+          (/** @type {any} */ s) => s.id !== this.currentEditingSession.id
         );
       }
 
@@ -358,7 +394,6 @@ export class SessionManager {
         })
       );
 
-      // Store the selected date before closing modal (as closeModal sets it to null)
       const dateForRefresh = this.selectedDate;
       this.closeModal();
       NotificationUtils.showNotificationPing("Session deleted successfully", "success");
@@ -375,15 +410,18 @@ export class SessionManager {
     }
   }
 
+  /** @param {Date} date @returns {any[]} */
   getSessionsForDate(date) {
     const dateString = date.toDateString();
     return this.sessions[dateString] || [];
   }
 
+  /** @returns {string} */
   generateSessionId() {
     return Date.now().toString() + Math.random().toString(36).substring(2, 11);
   }
 
+  /** @param {string} startTime @param {number} durationMinutes @returns {string} */
   calculateEndTime(startTime, durationMinutes) {
     const startMinutes = this.timeToMinutes(startTime);
     const endMinutes = startMinutes + durationMinutes;

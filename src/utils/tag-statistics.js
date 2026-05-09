@@ -23,11 +23,11 @@ export class TagStatistics {
 
   /**
    * Get tag usage statistics for a specific time period
-   * @param {Array} sessions - Array of session objects
-   * @param {Array} tags - Array of available tags
+   * @param {any[]} sessions - Array of session objects
+   * @param {any[]} tags - Array of available tags
    * @param {Date} startDate - Start date for filtering
    * @param {Date} endDate - End date for filtering
-   * @returns {Object} Tag statistics with percentages and durations
+   * @returns {{ stats: any[]; totalDuration: number; totalSessions: number }}
    */
   getTagUsageStatistics(sessions, tags, startDate, endDate) {
     // Filter sessions within the date range
@@ -67,7 +67,7 @@ export class TagStatistics {
         } else {
           // Distribute session duration equally among all tags
           const durationPerTag = session.duration / sessionTags.length;
-          sessionTags.forEach((sessionTag) => {
+          sessionTags.forEach((/** @type {any} */ sessionTag) => {
             // Handle both tag objects and tag IDs
             const tagId = typeof sessionTag === "string" ? sessionTag : sessionTag.id;
             const tag =
@@ -109,9 +109,9 @@ export class TagStatistics {
 
   /**
    * Get current week tag statistics
-   * @param {Array} sessions - Array of session objects
-   * @param {Array} tags - Array of available tags
-   * @returns {Object} Tag statistics for current week
+   * @param {any[]} sessions - Array of session objects
+   * @param {any[]} tags - Array of available tags
+   * @returns {{ stats: any[]; totalDuration: number; totalSessions: number }}
    */
   getCurrentWeekTagStats(sessions, tags) {
     const now = new Date();
@@ -152,7 +152,7 @@ export class TagStatistics {
 
   /**
    * Generate CSS conic-gradient for pie chart
-   * @param {Array} tagStats - Array of tag statistics
+   * @param {any[]} tagStats - Array of tag statistics
    * @returns {string} CSS conic-gradient string
    */
   generatePieChartGradient(tagStats) {
@@ -161,7 +161,7 @@ export class TagStatistics {
     }
 
     let currentAngle = 0;
-    const gradientStops = [];
+    const gradientStops = /** @type {string[]} */ ([]);
 
     tagStats.forEach((stat, _index) => {
       const angle = (stat.percentage / 100) * 360;
@@ -179,7 +179,7 @@ export class TagStatistics {
    * Render pie chart and legend
    * @param {string} chartContainerId - ID of the chart container element
    * @param {string} legendContainerId - ID of the legend container element
-   * @param {Object} tagStatsData - Tag statistics data
+   * @param {{ stats: any[]; totalDuration: number }} tagStatsData - Tag statistics data
    */
   renderTagPieChart(chartContainerId, legendContainerId, tagStatsData) {
     const chartContainer = document.getElementById(chartContainerId);

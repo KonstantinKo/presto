@@ -31,8 +31,6 @@ qa:
   lint:
     - cd src-tauri && cargo clippy --all-targets -- -D warnings
     - npx eslint src
-    # tsc currently runs with checkJs disabled. Files opt in via `// @ts-check`;
-    # once enough are annotated, flip checkJs to true in tsconfig.json.
     - npx tsc --noEmit -p .
 
   format:

@@ -34,6 +34,7 @@ class ThemeLoader {
     return knownThemes;
   }
 
+  /** @param {string} filename */
   async loadThemeFile(filename) {
     const themeId = filename.replace(".css", "");
 
@@ -55,6 +56,7 @@ class ThemeLoader {
     }
   }
 
+  /** @param {string} themeId */
   async extractThemeMetadata(themeId) {
     try {
       // Fetch the CSS file to read metadata from comments
@@ -72,7 +74,7 @@ class ThemeLoader {
           TIMER_THEMES[themeId] = {
             name: metadata.name || this.capitalizeFirst(themeId),
             description: metadata.description || `Auto-discovered theme: ${themeId}`,
-            supports: metadata.supports || ["light", "dark"],
+            supports: metadata.supports || /** @type {('light'|'dark')[]} */ (["light", "dark"]),
             isDefault: false,
             preview: metadata.preview || {
               focus: "#e74c3c",
@@ -89,6 +91,7 @@ class ThemeLoader {
     }
   }
 
+  /** @param {string} cssContent */
   parseThemeMetadata(cssContent) {
     try {
       // Look for theme metadata in CSS comments
@@ -100,12 +103,13 @@ class ThemeLoader {
         const [, name, author, description, supports] = match;
 
         // Parse supports field
-        const supportsModes =
+        const supportsModes = /** @type {('light'|'dark')[]} */ (
           supports.toLowerCase().includes("light") && supports.toLowerCase().includes("dark")
             ? ["light", "dark"]
             : supports.toLowerCase().includes("dark")
               ? ["dark"]
-              : ["light"];
+              : ["light"]
+        );
 
         // Try to extract color values for preview
         const preview = this.extractPreviewColors(cssContent);
@@ -125,6 +129,7 @@ class ThemeLoader {
     return null;
   }
 
+  /** @param {string} cssContent @returns {{ focus: string; break: string; longBreak: string }} */
   extractPreviewColors(cssContent) {
     const colors = {
       focus: "#e74c3c",
@@ -154,10 +159,12 @@ class ThemeLoader {
     return colors;
   }
 
+  /** @param {string} str @returns {string} */
   capitalizeFirst(str) {
     return str.charAt(0).toUpperCase() + str.slice(1);
   }
 
+  /** @param {string} themeId */
   unloadTheme(themeId) {
     const linkElement = this.themeStyles.get(themeId);
     if (linkElement) {
@@ -172,6 +179,7 @@ class ThemeLoader {
     return Array.from(this.loadedThemes);
   }
 
+  /** @param {string} themeId @returns {boolean} */
   isThemeLoaded(themeId) {
     return this.loadedThemes.has(themeId);
   }

@@ -2,17 +2,20 @@ import { logger } from "../utils/logger.js";
 
 class TagManager {
   constructor() {
+    /** @type {any[]} */
     this.tags = [];
-    this.currentTags = []; // Tags currently selected for the session
-    this.activeSessionTags = new Map(); // Map of tag_id -> start_time for tracking
+    /** @type {any[]} */
+    this.currentTags = [];
+    this.activeSessionTags = new Map();
     this.isDropdownOpen = false;
     this.selectedIcon = "ri-brain-line";
+    this._loadTagsRequestId = 0;
+    this._degraded = false;
 
     this.initializeElements();
     this.bindEvents();
     this.loadTags();
 
-    // Initialize icon selection
     this.resetIconSelection();
   }
 
@@ -23,13 +26,16 @@ class TagManager {
     this.dropdownArrow = document.getElementById("tag-dropdown-arrow");
     this.dropdownMenu = document.getElementById("tag-dropdown-menu");
     this.tagList = document.getElementById("tag-list");
-    this.newTagName = document.getElementById("new-tag-name");
+    this.newTagName = /** @type {HTMLInputElement | null} */ (
+      document.getElementById("new-tag-name")
+    );
     this.iconSelector = document.getElementById("icon-selector-dropdown");
     this.selectedIconBtn = document.getElementById("selected-icon-btn");
     this.selectedIconDisplay = document.getElementById("selected-icon-display");
-    this.createTagBtn = document.getElementById("create-tag-btn");
+    this.createTagBtn = /** @type {HTMLButtonElement | null} */ (
+      document.getElementById("create-tag-btn")
+    );
 
-    // Debug: check if all elements are found
     logger.debug("TagManager elements:", {
       timerStatus: !!this.timerStatus,
       dropdownMenu: !!this.dropdownMenu,
@@ -49,31 +55,43 @@ class TagManager {
 
   bindEvents() {
     if (this.timerStatus && this.dropdownMenu) {
-      this.timerStatus.addEventListener("click", () => {
+      const timerStatus = this.timerStatus;
+      const dropdownMenu = this.dropdownMenu;
+
+      timerStatus.addEventListener("click", () => {
         this.toggleDropdown();
       });
 
       document.addEventListener("click", (e) => {
-        if (!this.timerStatus.contains(e.target) && !this.dropdownMenu.contains(e.target)) {
+        if (
+          !timerStatus.contains(/** @type {Node | null} */ (e.target)) &&
+          !dropdownMenu.contains(/** @type {Node | null} */ (e.target))
+        ) {
           this.closeDropdown();
         }
       });
     }
 
     if (this.selectedIconBtn && this.iconSelector) {
-      this.selectedIconBtn.addEventListener("click", () => {
+      const selectedIconBtn = this.selectedIconBtn;
+      const iconSelector = this.iconSelector;
+
+      selectedIconBtn.addEventListener("click", () => {
         this.toggleIconSelector();
       });
 
-      this.iconSelector.addEventListener("click", (e) => {
-        const iconOption = e.target.closest(".icon-option, .emoji-option");
+      iconSelector.addEventListener("click", (e) => {
+        const iconOption = /** @type {Element} */ (e.target).closest(".icon-option, .emoji-option");
         if (iconOption) {
           this.selectIcon(iconOption);
         }
       });
 
       document.addEventListener("click", (e) => {
-        if (!this.selectedIconBtn.contains(e.target) && !this.iconSelector.contains(e.target)) {
+        if (
+          !selectedIconBtn.contains(/** @type {Node | null} */ (e.target)) &&
+          !iconSelector.contains(/** @type {Node | null} */ (e.target))
+        ) {
           this.closeIconSelector();
         }
       });
@@ -96,106 +114,99 @@ class TagManager {
     }
   }
 
+  /** @private */
+  _loadTagsFromLocalStorage() {
+    const savedTags = localStorage.getItem("presto-tags");
+    if (savedTags) {
+      try {
+        const parsed = JSON.parse(savedTags);
+        if (!Array.isArray(parsed)) {
+          throw new TypeError("presto-tags must be an array");
+        }
+        const valid = parsed.filter(
+          (t) =>
+            t !== null &&
+            typeof t === "object" &&
+            typeof t.id === "string" &&
+            t.id.length > 0 &&
+            typeof t.name === "string" &&
+            t.name.length > 0
+        );
+        if (valid.length !== parsed.length) {
+          logger.error("TagManager: invalid tag entries detected, discarding corrupted data");
+          localStorage.removeItem("presto-tags");
+          this.tags = [];
+        } else {
+          this.tags = valid;
+        }
+      } catch (_parseError) {
+        logger.error("TagManager: corrupted tags in localStorage, resetting");
+        localStorage.removeItem("presto-tags");
+        this.tags = [];
+      }
+    }
+    if (this.tags.length === 0) {
+      this.tags = [
+        {
+          id: "default-focus",
+          name: "Focus",
+          icon: "ri-brain-line",
+          color: "#4CAF50",
+          created_at: new Date().toISOString(),
+        },
+      ];
+      this.saveTagsToLocalStorage();
+    }
+    this.currentTags = this.currentTags.filter((ct) => this.tags.some((t) => t.id === ct.id));
+    if (this.currentTags.length === 0) {
+      this.currentTags = [this.tags[0]];
+    }
+    this.updateStatusDisplay();
+    this.renderTagList();
+  }
+
   async loadTags() {
+    const requestId = ++this._loadTagsRequestId;
     try {
-      // Check if Tauri is available
-      if (
-        typeof window.__TAURI__ === "undefined" ||
-        typeof window.__TAURI__.invoke !== "function"
-      ) {
+      if (typeof window.__TAURI__?.core?.invoke !== "function") {
         logger.warn("Tauri is not available, using localStorage fallback");
-        // Load from localStorage
-        const savedTags = localStorage.getItem("presto-tags");
-        if (savedTags) {
-          try {
-            const parsed = JSON.parse(savedTags);
-            if (!Array.isArray(parsed)) {
-              throw new TypeError("presto-tags must be an array");
-            }
-            this.tags = parsed;
-          } catch (_parseError) {
-            logger.error("TagManager: corrupted tags in localStorage, resetting");
-            localStorage.removeItem("presto-tags");
-            this.tags = [];
-          }
-        }
-        if (this.tags.length === 0) {
-          this.tags = [
-            {
-              id: "default-focus",
-              name: "Focus",
-              icon: "ri-brain-line",
-              color: "#4CAF50",
-              created_at: new Date().toISOString(),
-            },
-          ];
-          this.saveTagsToLocalStorage();
-        }
-        this.renderTagList();
-        if (this.currentTags.length === 0) {
-          this.currentTags = [this.tags[0]];
-          this.updateStatusDisplay();
-        }
+        this._loadTagsFromLocalStorage();
         return;
       }
 
-      this.tags = await window.__TAURI__.invoke("load_tags");
-      this.renderTagList();
+      const tags = /** @type {any[]} */ (await window.__TAURI__.core.invoke("load_tags"));
 
-      // Set default tag if no current tags selected
+      // Discard result if a newer load has started
+      if (requestId !== this._loadTagsRequestId) {
+        return;
+      }
+
+      this.tags = tags;
+      this.currentTags = this.currentTags.filter((ct) => this.tags.some((t) => t.id === ct.id));
       if (this.currentTags.length === 0 && this.tags.length > 0) {
         this.currentTags = [this.tags[0]];
-        this.updateStatusDisplay();
       }
+      this.updateStatusDisplay();
+      this.renderTagList();
     } catch (error) {
       logger.error("Failed to load tags:", error);
-      // Fallback to localStorage or default tag
-      const savedTags = localStorage.getItem("presto-tags");
-      if (savedTags) {
-        try {
-          const parsed = JSON.parse(savedTags);
-          if (!Array.isArray(parsed)) {
-            throw new TypeError("presto-tags must be an array");
-          }
-          this.tags = parsed;
-        } catch (_parseError) {
-          logger.error("TagManager: corrupted tags in localStorage, resetting");
-          localStorage.removeItem("presto-tags");
-          this.tags = [];
-        }
-      }
-      if (this.tags.length === 0) {
-        this.tags = [
-          {
-            id: "default-focus",
-            name: "Focus",
-            icon: "ri-brain-line",
-            color: "#4CAF50",
-            created_at: new Date().toISOString(),
-          },
-        ];
-        this.saveTagsToLocalStorage();
-      }
-      this.renderTagList();
-      if (this.currentTags.length === 0) {
-        this.currentTags = [this.tags[0]];
-        this.updateStatusDisplay();
-      }
+      this._degraded = true;
+      this._loadTagsFromLocalStorage();
     }
   }
 
   renderTagList() {
-    if (!this.tagList) {
+    const tagList = this.tagList;
+    if (!tagList) {
       return;
     }
-    this.tagList.innerHTML = "";
+    tagList.innerHTML = "";
 
-    this.tags.forEach((tag) => {
+    this.tags.forEach((/** @type {any} */ tag) => {
       const tagItem = document.createElement("div");
       tagItem.className = "tag-item";
       tagItem.dataset.tagId = tag.id;
 
-      // Check if tag is currently selected
       const isSelected = this.currentTags.some((t) => t.id === tag.id);
       if (isSelected) {
         tagItem.classList.add("selected");
@@ -221,34 +232,33 @@ class TagManager {
 
       tagItem.append(iconWrap, nameEl, deleteEl);
 
-      // Tag selection event
       tagItem.addEventListener("click", (e) => {
-        if (!e.target.classList.contains("tag-item-delete")) {
-          e.stopPropagation(); // Prevent event bubbling
+        if (!(/** @type {Element} */ (e.target).classList.contains("tag-item-delete"))) {
+          e.stopPropagation();
           this.toggleTag(tag);
         }
       });
 
-      // Tag deletion event
       const deleteBtn = tagItem.querySelector(".tag-item-delete");
-      deleteBtn.addEventListener("click", (e) => {
-        e.stopPropagation();
-        this.deleteTag(tag.id);
-      });
+      if (deleteBtn) {
+        deleteBtn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          this.deleteTag(tag.id);
+        });
+      }
 
-      this.tagList.appendChild(tagItem);
+      tagList.appendChild(tagItem);
     });
   }
 
+  /** @param {any} tag */
   toggleTag(tag) {
     const existingIndex = this.currentTags.findIndex((t) => t.id === tag.id);
 
     if (existingIndex !== -1) {
-      // Remove tag and stop tracking
       this.currentTags.splice(existingIndex, 1);
       this.stopTagTracking(tag.id);
     } else {
-      // Add tag and start tracking if timer is running
       this.currentTags.push(tag);
       if (window.pomodoroTimer && window.pomodoroTimer.isRunning) {
         this.startTagTracking(tag.id);
@@ -260,6 +270,9 @@ class TagManager {
   }
 
   async createNewTag() {
+    if (!this.newTagName) {
+      return;
+    }
     const name = this.newTagName.value.trim();
     if (!name) {
       return;
@@ -269,31 +282,37 @@ class TagManager {
       id: `tag-${crypto.randomUUID()}`,
       name,
       icon: this.selectedIcon,
-      color: "#4CAF50", // Default color
+      color: "#4CAF50",
       created_at: new Date().toISOString(),
     };
 
     try {
       this.tags.push(newTag);
 
-      if (window.__TAURI__ && typeof window.__TAURI__.invoke === "function") {
-        await window.__TAURI__.invoke("save_tag", newTag);
+      if (!this._degraded && typeof window.__TAURI__?.core?.invoke === "function") {
+        await window.__TAURI__.core.invoke("save_tag", { tag: newTag });
       } else {
         this.saveTagsToLocalStorage();
       }
 
       this.renderTagList();
 
-      // Clear form
       this.newTagName.value = "";
       this.resetIconSelection();
       this.updateCreateButtonState();
     } catch (error) {
-      this.tags = this.tags.filter((t) => t !== newTag);
-      logger.error("Failed to create tag:", error);
+      // Backend failed — fall back to localStorage so the tag is not lost
+      this._degraded = true;
+      this.saveTagsToLocalStorage();
+      this.renderTagList();
+      this.newTagName.value = "";
+      this.resetIconSelection();
+      this.updateCreateButtonState();
+      logger.error("Failed to create tag via backend, saved locally:", error);
     }
   }
 
+  /** @param {any} tagId */
   async deleteTag(tagId) {
     if (this.tags.length <= 1) {
       alert("You cannot delete the last tag.");
@@ -301,38 +320,48 @@ class TagManager {
     }
 
     try {
-      if (window.__TAURI__ && typeof window.__TAURI__.invoke === "function") {
-        await window.__TAURI__.invoke("delete_tag", tagId);
+      if (!this._degraded && typeof window.__TAURI__?.core?.invoke === "function") {
+        await window.__TAURI__.core.invoke("delete_tag", { tag_id: tagId });
       }
 
-      // Remove from local arrays
       this.tags = this.tags.filter((t) => t.id !== tagId);
       this.currentTags = this.currentTags.filter((t) => t.id !== tagId);
 
-      // If using localStorage, save the updated tags
-      if (
-        typeof window.__TAURI__ === "undefined" ||
-        typeof window.__TAURI__.invoke !== "function"
-      ) {
+      if (this._degraded || typeof window.__TAURI__?.core?.invoke !== "function") {
         this.saveTagsToLocalStorage();
       }
 
-      // Stop tracking if active
       this.stopTagTracking(tagId);
 
-      // If no tags selected, select the first available
       if (this.currentTags.length === 0 && this.tags.length > 0) {
         this.currentTags = [this.tags[0]];
+        if (window.pomodoroTimer && window.pomodoroTimer.isRunning) {
+          this.startTagTracking(this.currentTags[0].id);
+        }
       }
 
       this.updateStatusDisplay();
       this.renderTagList();
     } catch (error) {
-      logger.error("Failed to delete tag:", error);
+      // Backend failed — fall back to localStorage so the deletion is durable
+      this._degraded = true;
+      this.tags = this.tags.filter((t) => t.id !== tagId);
+      this.currentTags = this.currentTags.filter((t) => t.id !== tagId);
+      this.saveTagsToLocalStorage();
+      this.stopTagTracking(tagId);
+      if (this.currentTags.length === 0 && this.tags.length > 0) {
+        this.currentTags = [this.tags[0]];
+      }
+      this.updateStatusDisplay();
+      this.renderTagList();
+      logger.error("Failed to delete tag via backend, saved locally:", error);
     }
   }
 
   toggleIconSelector() {
+    if (!this.iconSelector) {
+      return;
+    }
     const isOpen = this.iconSelector.classList.contains("active");
     if (isOpen) {
       this.closeIconSelector();
@@ -342,38 +371,47 @@ class TagManager {
   }
 
   openIconSelector() {
+    if (!this.iconSelector || !this.selectedIconBtn) {
+      return;
+    }
     this.iconSelector.classList.add("active");
     this.selectedIconBtn.classList.add("active");
   }
 
   closeIconSelector() {
+    if (!this.iconSelector || !this.selectedIconBtn) {
+      return;
+    }
     this.iconSelector.classList.remove("active");
     this.selectedIconBtn.classList.remove("active");
   }
 
+  /** @param {Element} iconOption */
   selectIcon(iconOption) {
-    // Remove previous selection
+    if (!this.iconSelector) {
+      return;
+    }
     this.iconSelector.querySelectorAll(".selected").forEach((el) => {
       el.classList.remove("selected");
     });
 
-    // Select new icon
     iconOption.classList.add("selected");
-    this.selectedIcon = iconOption.dataset.icon;
+    this.selectedIcon = /** @type {HTMLElement} */ (iconOption).dataset.icon ?? "";
 
-    // Update the display button
     this.updateSelectedIconDisplay();
     this.updateCreateButtonState();
   }
 
   updateSelectedIconDisplay() {
     const iconDisplay = this.selectedIconDisplay;
+    if (!iconDisplay) {
+      return;
+    }
     if (this.selectedIcon.startsWith("ri-")) {
       iconDisplay.className = this.selectedIcon;
       iconDisplay.textContent = "";
       iconDisplay.style.fontFamily = "remixicon";
     } else {
-      // For emoji
       iconDisplay.className = "";
       iconDisplay.textContent = this.selectedIcon;
       iconDisplay.style.fontFamily = "inherit";
@@ -388,7 +426,6 @@ class TagManager {
       el.classList.remove("selected");
     });
 
-    // Select default icon
     const defaultIcon = this.iconSelector.querySelector('[data-icon="ri-brain-line"]');
     if (defaultIcon) {
       defaultIcon.classList.add("selected");
@@ -398,6 +435,9 @@ class TagManager {
   }
 
   updateCreateButtonState() {
+    if (!this.newTagName || !this.createTagBtn) {
+      return;
+    }
     const hasName = this.newTagName.value.trim().length > 0;
     this.createTagBtn.disabled = !hasName;
   }
@@ -421,19 +461,19 @@ class TagManager {
   openDropdown() {
     logger.debug("Opening dropdown...");
     this.isDropdownOpen = true;
-    this.timerStatus.classList.add("active");
-    this.dropdownMenu.classList.add("active");
+    this.timerStatus?.classList.add("active");
+    this.dropdownMenu?.classList.add("active");
     logger.debug(
       "Dropdown classes added, menu visible:",
-      this.dropdownMenu.classList.contains("active")
+      this.dropdownMenu?.classList.contains("active")
     );
-    this.loadTags(); // Refresh tags when opening
+    this.loadTags();
   }
 
   closeDropdown() {
     this.isDropdownOpen = false;
-    this.timerStatus.classList.remove("active");
-    this.dropdownMenu.classList.remove("active");
+    this.timerStatus?.classList.remove("active");
+    this.dropdownMenu?.classList.remove("active");
   }
 
   updateStatusDisplay() {
@@ -452,18 +492,16 @@ class TagManager {
       const tag = this.currentTags[0];
       this.statusText.textContent = tag.name;
 
-      if (tag.icon.startsWith("ri-")) {
+      if (typeof tag.icon === "string" && tag.icon.startsWith("ri-")) {
         this.statusIcon.className = tag.icon;
         this.statusIcon.style.fontFamily = "remixicon";
         this.statusIcon.textContent = "";
       } else {
-        // For emoji, we need to handle differently
         this.statusIcon.style.fontFamily = "inherit";
-        this.statusIcon.textContent = tag.icon;
+        this.statusIcon.textContent = String(tag.icon ?? "");
         this.statusIcon.className = "";
       }
     } else {
-      // Multiple tags selected
       this.statusText.textContent = `${this.currentTags.length} Tags`;
       this.statusIcon.className = "ri-price-tag-3-line";
       this.statusIcon.style.fontFamily = "remixicon";
@@ -471,55 +509,53 @@ class TagManager {
     }
   }
 
-  // Tag tracking methods for time measurement
+  /** @param {any} tagId */
   startTagTracking(tagId) {
     if (!this.activeSessionTags.has(tagId)) {
       this.activeSessionTags.set(tagId, Date.now());
     }
   }
 
+  /** @param {any} tagId */
   stopTagTracking(tagId) {
     if (this.activeSessionTags.has(tagId)) {
       const startTime = this.activeSessionTags.get(tagId);
-      const duration = Math.floor((Date.now() - startTime) / 1000); // Duration in seconds
+      const duration = Math.floor((Date.now() - startTime) / 1000);
 
-      // Save session tag record
       this.saveSessionTag(tagId, duration);
       this.activeSessionTags.delete(tagId);
     }
   }
 
+  /** @param {any} tagId @param {number} duration */
   async saveSessionTag(tagId, duration) {
     if (duration < 10) {
       return;
-    } // Don't save very short durations
+    }
 
     const sessionTag = {
-      session_id: `session-${Date.now()}`, // This should be the actual session ID
+      session_id: `session-${Date.now()}`,
       tag_id: tagId,
       duration,
       created_at: new Date().toISOString(),
     };
 
     try {
-      if (window.__TAURI__ && typeof window.__TAURI__.invoke === "function") {
-        await window.__TAURI__.invoke("add_session_tag", sessionTag);
+      if (typeof window.__TAURI__?.core?.invoke === "function") {
+        await window.__TAURI__.core.invoke("add_session_tag", { session_tag: sessionTag });
       }
     } catch (error) {
       logger.error("Failed to save session tag:", error);
     }
   }
 
-  // Methods to be called by PomodoroTimer
   onTimerStart() {
-    // Start tracking all current tags
     this.currentTags.forEach((tag) => {
       this.startTagTracking(tag.id);
     });
   }
 
   onTimerPause() {
-    // Stop tracking but keep the active session tags for resume
     this.activeSessionTags.forEach((startTime, tagId) => {
       const duration = Math.floor((Date.now() - startTime) / 1000);
       this.saveSessionTag(tagId, duration);
@@ -528,14 +564,12 @@ class TagManager {
   }
 
   onTimerResume() {
-    // Resume tracking all current tags
     this.currentTags.forEach((tag) => {
       this.startTagTracking(tag.id);
     });
   }
 
   onTimerStop() {
-    // Stop tracking all tags and save durations
     this.activeSessionTags.forEach((startTime, tagId) => {
       const duration = Math.floor((Date.now() - startTime) / 1000);
       this.saveSessionTag(tagId, duration);
@@ -544,16 +578,15 @@ class TagManager {
   }
 
   onTimerComplete() {
-    // Same as stop but for completed sessions
     this.onTimerStop();
   }
 
-  // Get current tags for external use
+  /** @returns {any[]} */
   getCurrentTags() {
     return [...this.currentTags];
   }
 
-  // Set current tags programmatically
+  /** @param {any[]} tags */
   setCurrentTags(tags) {
     this.currentTags = [...tags];
     this.updateStatusDisplay();
@@ -561,9 +594,7 @@ class TagManager {
   }
 }
 
-// Initialize tag manager when DOM is loaded and Tauri is ready
 function initializeTagManager() {
-  // Wait a bit for Tauri to be available in development mode
   setTimeout(() => {
     window.tagManager = new TagManager();
   }, 100);

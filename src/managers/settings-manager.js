@@ -1,6 +1,14 @@
-const invoke = (...args) => window.__TAURI__?.core?.invoke(...args);
+/** @param {string} cmd @param {any} [args] @returns {Promise<any>} */
+const invoke = (cmd, args) => {
+  const tauriInvoke = window.__TAURI__?.core?.invoke;
+  if (!tauriInvoke) {
+    return Promise.reject(new Error("Tauri bridge not available"));
+  }
+  return tauriInvoke(cmd, args);
+};
 import { NotificationUtils } from "../utils/common-utils.js";
 import { logger } from "../utils/logger.js";
+import { toError } from "../utils/to-error.js";
 import {
   getThemeById,
   getAllThemes,
@@ -11,9 +19,11 @@ import { initializeAutoThemeLoader } from "../utils/theme-loader.js";
 
 export class SettingsManager {
   constructor() {
+    /** @type {any} */
     this.settings = null;
     this.isRecordingShortcut = false;
     this.currentRecordingField = null;
+    /** @type {string[]} */
     this.recordedKeys = [];
     this.autoSaveTimeout = null;
     this.autoSaveDelay = 1000; // 1 second delay for auto-save
@@ -59,7 +69,7 @@ export class SettingsManager {
 
   async loadSettings() {
     try {
-      const loadedSettings = await invoke("load_settings");
+      const loadedSettings = /** @type {any} */ (await invoke("load_settings"));
       logger.debug("📋 Raw loaded settings:", loadedSettings);
       this.settings = this.mergeWithDefaults(loadedSettings);
 
@@ -83,9 +93,11 @@ export class SettingsManager {
     } catch (error) {
       logger.error("Failed to load settings:", error);
       this.settings = this.getDefaultSettings();
+      this.populateSettingsUI();
     }
   }
 
+  /** @param {any} loadedSettings */
   mergeWithDefaults(loadedSettings) {
     const defaultSettings = this.getDefaultSettings();
 
@@ -153,26 +165,33 @@ export class SettingsManager {
 
   populateSettingsUI() {
     logger.debug("🔧 Populating shortcuts UI with:", this.settings.shortcuts);
-    document.getElementById("start-stop-shortcut").value = this.settings.shortcuts.start_stop || "";
-    document.getElementById("reset-shortcut").value = this.settings.shortcuts.reset || "";
-    document.getElementById("skip-shortcut").value = this.settings.shortcuts.skip || "";
+    /** @type {any} */ (document.getElementById("start-stop-shortcut")).value =
+      this.settings.shortcuts.start_stop || "";
+    /** @type {any} */ (document.getElementById("reset-shortcut")).value =
+      this.settings.shortcuts.reset || "";
+    /** @type {any} */ (document.getElementById("skip-shortcut")).value =
+      this.settings.shortcuts.skip || "";
 
-    document.getElementById("focus-duration").value = this.settings.timer.focus_duration;
-    document.getElementById("break-duration").value = this.settings.timer.break_duration;
-    document.getElementById("long-break-duration").value = this.settings.timer.long_break_duration;
-    document.getElementById("total-sessions").value = this.settings.timer.total_sessions;
+    /** @type {any} */ (document.getElementById("focus-duration")).value =
+      this.settings.timer.focus_duration;
+    /** @type {any} */ (document.getElementById("break-duration")).value =
+      this.settings.timer.break_duration;
+    /** @type {any} */ (document.getElementById("long-break-duration")).value =
+      this.settings.timer.long_break_duration;
+    /** @type {any} */ (document.getElementById("total-sessions")).value =
+      this.settings.timer.total_sessions;
 
-    const maxSessionTimeField = document.getElementById("max-session-time");
+    const maxSessionTimeField = /** @type {any} */ (document.getElementById("max-session-time"));
     if (maxSessionTimeField) {
       maxSessionTimeField.value = this.settings.timer.max_session_time || 120;
     }
 
-    const weeklyGoalField = document.getElementById("weekly-goal-minutes");
+    const weeklyGoalField = /** @type {any} */ (document.getElementById("weekly-goal-minutes"));
     if (weeklyGoalField) {
       weeklyGoalField.value = this.settings.timer.weekly_goal_minutes || 125;
     }
 
-    const themeSelect = document.getElementById("theme-select");
+    const themeSelect = /** @type {any} */ (document.getElementById("theme-select"));
     if (themeSelect) {
       themeSelect.value = this.settings.appearance?.theme || "auto";
     }
@@ -181,11 +200,11 @@ export class SettingsManager {
     this.initializeTimerThemeSelector();
 
     // Always show the user's setting preference, regardless of system permission
-    document.getElementById("desktop-notifications").checked =
+    /** @type {any} */ (document.getElementById("desktop-notifications")).checked =
       this.settings.notifications.desktop_notifications;
-    document.getElementById("sound-notifications").checked =
+    /** @type {any} */ (document.getElementById("sound-notifications")).checked =
       this.settings.notifications.sound_notifications;
-    document.getElementById("auto-start-timer").checked =
+    /** @type {any} */ (document.getElementById("auto-start-timer")).checked =
       this.settings.notifications.auto_start_timer;
 
     // Debug log for continuous sessions
@@ -196,17 +215,21 @@ export class SettingsManager {
     const continuousValue = this.settings.notifications.allow_continuous_sessions || false;
     logger.debug("🔧 PopulateUI - Final continuous sessions value:", continuousValue);
 
-    document.getElementById("allow-continuous-sessions").checked = continuousValue;
-    document.getElementById("smart-pause").checked = this.settings.notifications.smart_pause;
+    /** @type {any} */ (document.getElementById("allow-continuous-sessions")).checked =
+      continuousValue;
+    /** @type {any} */ (document.getElementById("smart-pause")).checked =
+      this.settings.notifications.smart_pause;
 
     const timeoutValue = this.settings.notifications.smart_pause_timeout || 30;
-    document.getElementById("smart-pause-timeout").value = timeoutValue;
-    document.getElementById("timeout-value").textContent = timeoutValue;
+    /** @type {any} */ (document.getElementById("smart-pause-timeout")).value = timeoutValue;
+    /** @type {any} */ (document.getElementById("timeout-value")).textContent = timeoutValue;
 
     this.toggleTimeoutSetting(this.settings.notifications.smart_pause);
     this.setupSliderEventListener();
 
-    const debugModeCheckbox = document.getElementById("debug-mode");
+    const debugModeCheckbox = /** @type {HTMLInputElement | null} */ (
+      document.getElementById("debug-mode")
+    );
     if (debugModeCheckbox) {
       debugModeCheckbox.checked = this.settings.advanced?.debug_mode || false;
     }
@@ -233,20 +256,22 @@ export class SettingsManager {
 
     const smartPauseCheckbox = document.getElementById("smart-pause");
     if (smartPauseCheckbox) {
-      smartPauseCheckbox.addEventListener("change", (e) => {
-        this.toggleTimeoutSetting(e.target.checked);
+      smartPauseCheckbox.addEventListener("change", async (e) => {
+        const checkbox = /** @type {HTMLInputElement} */ (e.target);
+        const checked = checkbox.checked;
+        this.toggleTimeoutSetting(checked);
 
-        // Call the timer's enableSmartPause method directly to ensure consistency
         if (window.pomodoroTimer) {
-          // Use enableSmartPause instead of toggleSmartPause to avoid toggling twice
-          window.pomodoroTimer.enableSmartPause(e.target.checked).then(() => {
-            // Update the indicator to reflect the new state
+          try {
+            await window.pomodoroTimer.enableSmartPause(checked);
             window.pomodoroTimer.updateSettingIndicators();
-            // Schedule auto-save after the smart pause state is updated
             this.scheduleAutoSave();
-          });
+          } catch (error) {
+            logger.error("Failed to apply smart pause setting:", error);
+            checkbox.checked = !checked;
+            this.toggleTimeoutSetting(!checked);
+          }
         } else {
-          // If timer is not available, just save the setting
           this.scheduleAutoSave();
         }
       });
@@ -254,18 +279,20 @@ export class SettingsManager {
 
     const continuousSessionsCheckbox = document.getElementById("allow-continuous-sessions");
     if (continuousSessionsCheckbox) {
-      continuousSessionsCheckbox.addEventListener("change", (e) => {
-        // Call the timer's enableContinuousSessions method directly to ensure consistency
+      continuousSessionsCheckbox.addEventListener("change", async (e) => {
+        const checkbox = /** @type {HTMLInputElement} */ (e.target);
+        const checked = checkbox.checked;
+
         if (window.pomodoroTimer) {
-          // Use enableContinuousSessions instead of toggleContinuousSessions to avoid toggling twice
-          window.pomodoroTimer.enableContinuousSessions(e.target.checked).then(() => {
-            // Update the indicator to reflect the new state
+          try {
+            await window.pomodoroTimer.enableContinuousSessions(checked);
             window.pomodoroTimer.updateSettingIndicators();
-            // Schedule auto-save after the continuous sessions state is updated
             this.scheduleAutoSave();
-          });
+          } catch (error) {
+            logger.error("Failed to apply continuous sessions setting:", error);
+            checkbox.checked = !checked;
+          }
         } else {
-          // If timer is not available, just save the setting
           this.scheduleAutoSave();
         }
       });
@@ -273,18 +300,20 @@ export class SettingsManager {
 
     const autoStartCheckbox = document.getElementById("auto-start-timer");
     if (autoStartCheckbox) {
-      autoStartCheckbox.addEventListener("change", (e) => {
-        // Call the timer's enableAutoStart method directly to ensure consistency
+      autoStartCheckbox.addEventListener("change", async (e) => {
+        const checkbox = /** @type {HTMLInputElement} */ (e.target);
+        const checked = checkbox.checked;
+
         if (window.pomodoroTimer) {
-          // Use enableAutoStart instead of toggleAutoStart to avoid toggling twice
-          window.pomodoroTimer.enableAutoStart(e.target.checked).then(() => {
-            // Update the indicator to reflect the new state
+          try {
+            await window.pomodoroTimer.enableAutoStart(checked);
             window.pomodoroTimer.updateSettingIndicators();
-            // Schedule auto-save after the auto-start state is updated
             this.scheduleAutoSave();
-          });
+          } catch (error) {
+            logger.error("Failed to apply auto-start setting:", error);
+            checkbox.checked = !checked;
+          }
         } else {
-          // If timer is not available, just save the setting
           this.scheduleAutoSave();
         }
       });
@@ -293,6 +322,7 @@ export class SettingsManager {
     this.setupAutoSaveListeners();
   }
 
+  /** @param {boolean} enabled */
   toggleTimeoutSetting(enabled) {
     const timeoutSetting = document.getElementById("smart-pause-timeout-setting");
     if (timeoutSetting) {
@@ -306,11 +336,11 @@ export class SettingsManager {
 
   setupGlobalShortcutHandlers() {
     // Debounce mechanism to prevent repeated triggering
-    const lastShortcutTime = {};
+    const lastShortcutTime = /** @type {Record<string, any>} */ ({});
     const debounceDelay = 500; // 500ms debounce
 
     // Listen for global shortcut events from Rust
-    window.__TAURI__.event.listen("global-shortcut", (event) => {
+    window.__TAURI__?.event?.listen("global-shortcut", (event) => {
       const action = event.payload;
       const now = Date.now();
 
@@ -355,7 +385,7 @@ export class SettingsManager {
     });
 
     // Listen for shortcuts update events
-    window.__TAURI__.event.listen("shortcuts-updated", (event) => {
+    window.__TAURI__?.event?.listen("shortcuts-updated", (event) => {
       logger.info("Shortcuts updated:", event.payload);
       this.settings.shortcuts = event.payload;
 
@@ -366,6 +396,7 @@ export class SettingsManager {
     });
   }
 
+  /** @param {any} input */
   startRecordingShortcut(input) {
     if (this.isRecordingShortcut) {
       return;
@@ -402,6 +433,7 @@ export class SettingsManager {
     this.recordedKeys = [];
   }
 
+  /** @param {any} e */
   handleShortcutKeydown(e) {
     if (!this.isRecordingShortcut) {
       return;
@@ -442,40 +474,64 @@ export class SettingsManager {
     }, 500);
   }
 
+  /** @param {any} keys */
   formatShortcut(keys) {
     return keys.join("+");
+  }
+
+  /**
+   * @param {string} value
+   * @param {number} fallback
+   * @returns {number}
+   */
+  parseNumberOrDefault(value, fallback) {
+    const n = parseInt(value, 10);
+    return Number.isFinite(n) ? n : fallback;
   }
 
   async saveSettings() {
     try {
       this.settings.shortcuts.start_stop =
-        document.getElementById("start-stop-shortcut").value || null;
-      this.settings.shortcuts.reset = document.getElementById("reset-shortcut").value || null;
-      this.settings.shortcuts.skip = document.getElementById("skip-shortcut").value || null;
+        /** @type {any} */ (document.getElementById("start-stop-shortcut")).value || null;
+      this.settings.shortcuts.reset =
+        /** @type {any} */ (document.getElementById("reset-shortcut")).value || null;
+      this.settings.shortcuts.skip =
+        /** @type {any} */ (document.getElementById("skip-shortcut")).value || null;
 
-      this.settings.timer.focus_duration = parseInt(
-        document.getElementById("focus-duration").value,
-        10
+      this.settings.timer.focus_duration = this.parseNumberOrDefault(
+        /** @type {any} */ (document.getElementById("focus-duration")).value,
+        this.settings.timer.focus_duration
       );
-      this.settings.timer.break_duration = parseInt(
-        document.getElementById("break-duration").value,
-        10
+      this.settings.timer.break_duration = this.parseNumberOrDefault(
+        /** @type {any} */ (document.getElementById("break-duration")).value,
+        this.settings.timer.break_duration
       );
-      this.settings.timer.long_break_duration = parseInt(
-        document.getElementById("long-break-duration").value,
-        10
+      this.settings.timer.long_break_duration = this.parseNumberOrDefault(
+        /** @type {any} */ (document.getElementById("long-break-duration")).value,
+        this.settings.timer.long_break_duration
       );
-      this.settings.timer.total_sessions = parseInt(
-        document.getElementById("total-sessions").value,
-        10
+      this.settings.timer.total_sessions = this.parseNumberOrDefault(
+        /** @type {any} */ (document.getElementById("total-sessions")).value,
+        this.settings.timer.total_sessions
       );
 
-      const maxSessionTimeField = document.getElementById("max-session-time");
+      const maxSessionTimeField = /** @type {any} */ (document.getElementById("max-session-time"));
       if (maxSessionTimeField) {
-        this.settings.timer.max_session_time = parseInt(maxSessionTimeField.value, 10) || 120;
+        this.settings.timer.max_session_time = this.parseNumberOrDefault(
+          maxSessionTimeField.value,
+          this.settings.timer.max_session_time
+        );
       }
 
-      const themeSelect = document.getElementById("theme-select");
+      const weeklyGoalField = /** @type {any} */ (document.getElementById("weekly-goal-minutes"));
+      if (weeklyGoalField) {
+        this.settings.timer.weekly_goal_minutes = this.parseNumberOrDefault(
+          weeklyGoalField.value,
+          this.settings.timer.weekly_goal_minutes
+        );
+      }
+
+      const themeSelect = /** @type {any} */ (document.getElementById("theme-select"));
       if (themeSelect) {
         this.settings.appearance.theme = themeSelect.value;
         await this.applyTheme(themeSelect.value);
@@ -483,22 +539,27 @@ export class SettingsManager {
 
       await this.applyTimerTheme(this.settings.appearance.timer_theme);
 
-      this.settings.notifications.desktop_notifications =
-        document.getElementById("desktop-notifications").checked;
-      this.settings.notifications.sound_notifications =
-        document.getElementById("sound-notifications").checked;
-      this.settings.notifications.auto_start_timer =
-        document.getElementById("auto-start-timer").checked;
-      this.settings.notifications.allow_continuous_sessions = document.getElementById(
-        "allow-continuous-sessions"
+      this.settings.notifications.desktop_notifications = /** @type {any} */ (
+        document.getElementById("desktop-notifications")
       ).checked;
-      this.settings.notifications.smart_pause = document.getElementById("smart-pause").checked;
-      this.settings.notifications.smart_pause_timeout = parseInt(
-        document.getElementById("smart-pause-timeout").value,
-        10
+      this.settings.notifications.sound_notifications = /** @type {any} */ (
+        document.getElementById("sound-notifications")
+      ).checked;
+      this.settings.notifications.auto_start_timer = /** @type {any} */ (
+        document.getElementById("auto-start-timer")
+      ).checked;
+      this.settings.notifications.allow_continuous_sessions = /** @type {any} */ (
+        document.getElementById("allow-continuous-sessions")
+      ).checked;
+      this.settings.notifications.smart_pause = /** @type {any} */ (
+        document.getElementById("smart-pause")
+      ).checked;
+      this.settings.notifications.smart_pause_timeout = this.parseNumberOrDefault(
+        /** @type {any} */ (document.getElementById("smart-pause-timeout")).value,
+        30
       );
 
-      const debugModeCheckbox = document.getElementById("debug-mode");
+      const debugModeCheckbox = /** @type {any} */ (document.getElementById("debug-mode"));
       if (debugModeCheckbox) {
         if (!this.settings.advanced) {
           this.settings.advanced = {};
@@ -554,9 +615,10 @@ export class SettingsManager {
     // Don't save here since we're doing a complete reset
   }
 
+  /** @param {any} shortcutType */
   clearShortcut(shortcutType) {
     const inputId = `${shortcutType}-shortcut`;
-    const input = document.getElementById(inputId);
+    const input = /** @type {any} */ (document.getElementById(inputId));
     if (input) {
       input.value = "";
       // Schedule auto-save after clearing shortcut
@@ -565,12 +627,12 @@ export class SettingsManager {
   }
 
   setupSliderEventListener() {
-    const slider = document.getElementById("smart-pause-timeout");
+    const slider = /** @type {any} */ (document.getElementById("smart-pause-timeout"));
     const valueDisplay = document.getElementById("timeout-value");
 
     if (slider && valueDisplay && !slider._sliderListenerAttached) {
       slider._sliderListenerAttached = true;
-      slider.addEventListener("input", (e) => {
+      slider.addEventListener("input", (/** @type {any} */ e) => {
         valueDisplay.textContent = e.target.value;
         this.scheduleAutoSave();
       });
@@ -598,7 +660,7 @@ export class SettingsManager {
     });
 
     appearanceFields.forEach((fieldId) => {
-      const field = document.getElementById(fieldId);
+      const field = /** @type {any} */ (document.getElementById(fieldId));
       if (field) {
         if (fieldId === "theme-select") {
           // Handle theme changes specially to apply theme immediately
@@ -616,7 +678,7 @@ export class SettingsManager {
     const desktopNotificationsCheckbox = document.getElementById("desktop-notifications");
     if (desktopNotificationsCheckbox) {
       desktopNotificationsCheckbox.addEventListener("change", async (e) => {
-        if (e.target.checked) {
+        if (/** @type {any} */ (e.target).checked) {
           try {
             // Request notification permission when enabling
             logger.info("🔔 Desktop notifications enabled, requesting permission...");
@@ -690,59 +752,72 @@ export class SettingsManager {
   async autoSaveSettings() {
     try {
       this.settings.shortcuts.start_stop =
-        document.getElementById("start-stop-shortcut").value || null;
-      this.settings.shortcuts.reset = document.getElementById("reset-shortcut").value || null;
-      this.settings.shortcuts.skip = document.getElementById("skip-shortcut").value || null;
+        /** @type {any} */ (document.getElementById("start-stop-shortcut")).value || null;
+      this.settings.shortcuts.reset =
+        /** @type {any} */ (document.getElementById("reset-shortcut")).value || null;
+      this.settings.shortcuts.skip =
+        /** @type {any} */ (document.getElementById("skip-shortcut")).value || null;
 
-      this.settings.timer.focus_duration = parseInt(
-        document.getElementById("focus-duration").value,
-        10
+      this.settings.timer.focus_duration = this.parseNumberOrDefault(
+        /** @type {any} */ (document.getElementById("focus-duration")).value,
+        this.settings.timer.focus_duration
       );
-      this.settings.timer.break_duration = parseInt(
-        document.getElementById("break-duration").value,
-        10
+      this.settings.timer.break_duration = this.parseNumberOrDefault(
+        /** @type {any} */ (document.getElementById("break-duration")).value,
+        this.settings.timer.break_duration
       );
-      this.settings.timer.long_break_duration = parseInt(
-        document.getElementById("long-break-duration").value,
-        10
+      this.settings.timer.long_break_duration = this.parseNumberOrDefault(
+        /** @type {any} */ (document.getElementById("long-break-duration")).value,
+        this.settings.timer.long_break_duration
       );
-      this.settings.timer.total_sessions = parseInt(
-        document.getElementById("total-sessions").value,
-        10
+      this.settings.timer.total_sessions = this.parseNumberOrDefault(
+        /** @type {any} */ (document.getElementById("total-sessions")).value,
+        this.settings.timer.total_sessions
       );
 
-      const maxSessionTimeField = document.getElementById("max-session-time");
+      const maxSessionTimeField = /** @type {any} */ (document.getElementById("max-session-time"));
       if (maxSessionTimeField) {
-        this.settings.timer.max_session_time = parseInt(maxSessionTimeField.value, 10) || 120;
+        this.settings.timer.max_session_time = this.parseNumberOrDefault(
+          maxSessionTimeField.value,
+          this.settings.timer.max_session_time
+        );
       }
 
-      const weeklyGoalField = document.getElementById("weekly-goal-minutes");
+      const weeklyGoalField = /** @type {any} */ (document.getElementById("weekly-goal-minutes"));
       if (weeklyGoalField) {
-        this.settings.timer.weekly_goal_minutes = parseInt(weeklyGoalField.value, 10) || 125;
+        this.settings.timer.weekly_goal_minutes = this.parseNumberOrDefault(
+          weeklyGoalField.value,
+          this.settings.timer.weekly_goal_minutes
+        );
       }
 
-      const themeSelect = document.getElementById("theme-select");
+      const themeSelect = /** @type {any} */ (document.getElementById("theme-select"));
       if (themeSelect) {
         this.settings.appearance.theme = themeSelect.value;
         // Note: Don't call applyTheme here to avoid duplicate saves
       }
 
-      this.settings.notifications.desktop_notifications =
-        document.getElementById("desktop-notifications").checked;
-      this.settings.notifications.sound_notifications =
-        document.getElementById("sound-notifications").checked;
-      this.settings.notifications.auto_start_timer =
-        document.getElementById("auto-start-timer").checked;
-      this.settings.notifications.allow_continuous_sessions = document.getElementById(
-        "allow-continuous-sessions"
+      this.settings.notifications.desktop_notifications = /** @type {any} */ (
+        document.getElementById("desktop-notifications")
       ).checked;
-      this.settings.notifications.smart_pause = document.getElementById("smart-pause").checked;
-      this.settings.notifications.smart_pause_timeout = parseInt(
-        document.getElementById("smart-pause-timeout").value,
-        10
+      this.settings.notifications.sound_notifications = /** @type {any} */ (
+        document.getElementById("sound-notifications")
+      ).checked;
+      this.settings.notifications.auto_start_timer = /** @type {any} */ (
+        document.getElementById("auto-start-timer")
+      ).checked;
+      this.settings.notifications.allow_continuous_sessions = /** @type {any} */ (
+        document.getElementById("allow-continuous-sessions")
+      ).checked;
+      this.settings.notifications.smart_pause = /** @type {any} */ (
+        document.getElementById("smart-pause")
+      ).checked;
+      this.settings.notifications.smart_pause_timeout = this.parseNumberOrDefault(
+        /** @type {any} */ (document.getElementById("smart-pause-timeout")).value,
+        30
       );
 
-      const debugModeCheckbox = document.getElementById("debug-mode");
+      const debugModeCheckbox = /** @type {any} */ (document.getElementById("debug-mode"));
       if (debugModeCheckbox) {
         if (!this.settings.advanced) {
           this.settings.advanced = {};
@@ -753,13 +828,16 @@ export class SettingsManager {
       logger.debug("🔧 AutoSave - Reading checkbox values:");
       logger.debug(
         "auto_start_timer checkbox:",
-        document.getElementById("auto-start-timer").checked
+        /** @type {any} */ (document.getElementById("auto-start-timer")).checked
       );
       logger.debug(
         "allow_continuous_sessions checkbox:",
-        document.getElementById("allow-continuous-sessions").checked
+        /** @type {any} */ (document.getElementById("allow-continuous-sessions")).checked
       );
-      logger.debug("smart_pause checkbox:", document.getElementById("smart-pause").checked);
+      logger.debug(
+        "smart_pause checkbox:",
+        /** @type {any} */ (document.getElementById("smart-pause")).checked
+      );
       logger.debug("🔧 AutoSave - Full settings object being saved:", this.settings);
 
       await invoke("save_settings", { settings: this.settings });
@@ -796,7 +874,7 @@ export class SettingsManager {
 
     navItems.forEach((item) => {
       item.addEventListener("click", () => {
-        const targetCategory = item.dataset.category;
+        const targetCategory = /** @type {HTMLElement} */ (item).dataset.category;
 
         // Remove active class from all nav items and categories
         navItems.forEach((nav) => nav.classList.remove("active"));
@@ -813,30 +891,30 @@ export class SettingsManager {
   }
 
   async loadAutostartSetting() {
+    const checkbox = /** @type {any} */ (document.getElementById("autostart-enabled"));
+
+    if (checkbox && !checkbox._autostartHandlerBound) {
+      checkbox._autostartHandlerBound = true;
+      checkbox.addEventListener("change", async (/** @type {any} */ e) => {
+        await this.toggleAutostart(e.target.checked);
+      });
+    }
+
     try {
       const isEnabled = await invoke("is_autostart_enabled");
-
       this.settings.autostart = isEnabled;
-      const checkbox = document.getElementById("autostart-enabled");
       if (checkbox) {
         checkbox.checked = isEnabled;
-
-        checkbox.addEventListener("change", async (e) => {
-          await this.toggleAutostart(e.target.checked);
-        });
       }
     } catch (error) {
       logger.error("Failed to check autostart status:", error);
-      const checkbox = document.getElementById("autostart-enabled");
       if (checkbox) {
         checkbox.checked = false;
-        checkbox.addEventListener("change", async (e) => {
-          await this.toggleAutostart(e.target.checked);
-        });
       }
     }
   }
 
+  /** @param {any} enabled */
   async toggleAutostart(enabled) {
     try {
       if (enabled) {
@@ -858,7 +936,7 @@ export class SettingsManager {
       logger.error("Failed to toggle autostart:", error);
       NotificationUtils.showNotificationPing(`❌ Failed to toggle autostart: ${error}`, "error");
 
-      const checkbox = document.getElementById("autostart-enabled");
+      const checkbox = /** @type {any} */ (document.getElementById("autostart-enabled"));
       if (checkbox) {
         checkbox.checked = !enabled;
       }
@@ -869,27 +947,34 @@ export class SettingsManager {
     try {
       const analyticsEnabled = this.settings.analytics_enabled;
 
-      const checkbox = document.getElementById("analytics-enabled");
+      const checkbox = /** @type {any} */ (document.getElementById("analytics-enabled"));
       if (checkbox) {
         checkbox.checked = analyticsEnabled;
 
-        checkbox.addEventListener("change", async (e) => {
-          await this.toggleAnalytics(e.target.checked);
-        });
+        if (!checkbox._analyticsHandlerBound) {
+          checkbox._analyticsHandlerBound = true;
+          checkbox.addEventListener("change", async (/** @type {any} */ e) => {
+            await this.toggleAnalytics(e.target.checked);
+          });
+        }
       }
     } catch (error) {
       logger.error("Failed to load analytics setting:", error);
       // Default to enabled if we can't check the status
-      const checkbox = document.getElementById("analytics-enabled");
+      const checkbox = /** @type {any} */ (document.getElementById("analytics-enabled"));
       if (checkbox) {
         checkbox.checked = true;
-        checkbox.addEventListener("change", async (e) => {
-          await this.toggleAnalytics(e.target.checked);
-        });
+        if (!checkbox._analyticsHandlerBound) {
+          checkbox._analyticsHandlerBound = true;
+          checkbox.addEventListener("change", async (/** @type {any} */ e) => {
+            await this.toggleAnalytics(e.target.checked);
+          });
+        }
       }
     }
   }
 
+  /** @param {any} enabled */
   async toggleAnalytics(enabled) {
     try {
       this.settings.analytics_enabled = enabled;
@@ -913,7 +998,7 @@ export class SettingsManager {
       logger.error("Failed to toggle analytics:", error);
       NotificationUtils.showNotificationPing(`❌ Failed to toggle analytics: ${error}`, "error");
 
-      const checkbox = document.getElementById("analytics-enabled");
+      const checkbox = /** @type {any} */ (document.getElementById("analytics-enabled"));
       if (checkbox) {
         checkbox.checked = !enabled;
       }
@@ -924,26 +1009,33 @@ export class SettingsManager {
     try {
       const hideIconOnClose = this.settings.hide_icon_on_close;
 
-      const checkbox = document.getElementById("hide-icon-on-close");
+      const checkbox = /** @type {any} */ (document.getElementById("hide-icon-on-close"));
       if (checkbox) {
         checkbox.checked = hideIconOnClose;
 
-        checkbox.addEventListener("change", async (e) => {
-          await this.toggleHideIconOnClose(e.target.checked);
-        });
+        if (!checkbox._hideIconHandlerBound) {
+          checkbox._hideIconHandlerBound = true;
+          checkbox.addEventListener("change", async (/** @type {any} */ e) => {
+            await this.toggleHideIconOnClose(e.target.checked);
+          });
+        }
       }
     } catch (error) {
       logger.error("Failed to load hide icon on close setting:", error);
-      const checkbox = document.getElementById("hide-icon-on-close");
+      const checkbox = /** @type {any} */ (document.getElementById("hide-icon-on-close"));
       if (checkbox) {
         checkbox.checked = false;
-        checkbox.addEventListener("change", async (e) => {
-          await this.toggleHideIconOnClose(e.target.checked);
-        });
+        if (!checkbox._hideIconHandlerBound) {
+          checkbox._hideIconHandlerBound = true;
+          checkbox.addEventListener("change", async (/** @type {any} */ e) => {
+            await this.toggleHideIconOnClose(e.target.checked);
+          });
+        }
       }
     }
   }
 
+  /** @param {any} enabled */
   async toggleHideIconOnClose(enabled) {
     try {
       this.settings.hide_icon_on_close = enabled;
@@ -970,7 +1062,7 @@ export class SettingsManager {
         "error"
       );
 
-      const checkbox = document.getElementById("hide-icon-on-close");
+      const checkbox = /** @type {any} */ (document.getElementById("hide-icon-on-close"));
       if (checkbox) {
         checkbox.checked = !enabled;
       }
@@ -981,26 +1073,33 @@ export class SettingsManager {
     try {
       const statusBarDisplay = this.settings.status_bar_display || "default";
 
-      const select = document.getElementById("status-bar-display");
+      const select = /** @type {any} */ (document.getElementById("status-bar-display"));
       if (select) {
         select.value = statusBarDisplay;
 
-        select.addEventListener("change", async (e) => {
-          await this.updateStatusBarDisplay(e.target.value);
-        });
+        if (!select._statusBarHandlerBound) {
+          select._statusBarHandlerBound = true;
+          select.addEventListener("change", async (/** @type {any} */ e) => {
+            await this.updateStatusBarDisplay(e.target.value);
+          });
+        }
       }
     } catch (error) {
       logger.error("Failed to load status bar display setting:", error);
-      const select = document.getElementById("status-bar-display");
+      const select = /** @type {any} */ (document.getElementById("status-bar-display"));
       if (select) {
         select.value = "default";
-        select.addEventListener("change", async (e) => {
-          await this.updateStatusBarDisplay(e.target.value);
-        });
+        if (!select._statusBarHandlerBound) {
+          select._statusBarHandlerBound = true;
+          select.addEventListener("change", async (/** @type {any} */ e) => {
+            await this.updateStatusBarDisplay(e.target.value);
+          });
+        }
       }
     }
   }
 
+  /** @param {any} displayMode */
   async updateStatusBarDisplay(displayMode) {
     try {
       this.settings.status_bar_display = displayMode;
@@ -1025,7 +1124,7 @@ export class SettingsManager {
         "error"
       );
 
-      const select = document.getElementById("status-bar-display");
+      const select = /** @type {any} */ (document.getElementById("status-bar-display"));
       if (select) {
         select.value = this.settings.status_bar_display || "default";
       }
@@ -1082,7 +1181,7 @@ export class SettingsManager {
       const isDevMode = window.location.protocol === "tauri:" ? false : true;
 
       const isEnabledInSettings =
-        document.getElementById("desktop-notifications")?.checked || false;
+        /** @type {any} */ (document.getElementById("desktop-notifications"))?.checked || false;
 
       if (!isEnabledInSettings) {
         status = "🔕 Disabled in settings";
@@ -1106,7 +1205,7 @@ export class SettingsManager {
               className = "status-warning";
             }
           } catch (error) {
-            status = `❌ Tauri error: ${error.message}`;
+            status = `❌ Tauri error: ${toError(error).message}`;
             className = "status-error";
           }
         } else {
@@ -1139,6 +1238,7 @@ export class SettingsManager {
     statusDiv.className = `notification-status ${className}`;
   }
 
+  /** @param {any} theme */
   async applyTheme(theme) {
     const html = document.documentElement;
 
@@ -1183,7 +1283,7 @@ export class SettingsManager {
 
     // Create new listener
     this.systemThemeMediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
-    this.systemThemeListener = (e) => {
+    this.systemThemeListener = (/** @type {any} */ e) => {
       const newSystemTheme = e.matches ? "dark" : "light";
       logger.debug(`🎨 System theme changed: ${newSystemTheme}`);
 
@@ -1250,7 +1350,7 @@ export class SettingsManager {
 
   initializeThemeSelector() {
     const themeSelector = document.getElementById("theme-selector");
-    const themeSelect = document.getElementById("theme-select");
+    const themeSelect = /** @type {any} */ (document.getElementById("theme-select"));
 
     if (!themeSelector) {
       return;
@@ -1290,6 +1390,7 @@ export class SettingsManager {
     });
   }
 
+  /** @param {any} theme */
   updateThemeSelector(theme) {
     const themeSelector = document.getElementById("theme-selector");
     if (!themeSelector) {
@@ -1342,6 +1443,7 @@ export class SettingsManager {
     await this.applyTimerTheme(timerTheme);
   }
 
+  /** @param {any} themeId */
   async applyTimerTheme(themeId) {
     const html = document.documentElement;
 
@@ -1391,6 +1493,7 @@ export class SettingsManager {
     });
   }
 
+  /** @param {any} theme @param {any} currentTimerTheme @param {any} currentColorMode */
   createTimerThemeOption(theme, currentTimerTheme, currentColorMode) {
     const option = document.createElement("div");
     option.className = "timer-theme-option";
@@ -1412,7 +1515,7 @@ export class SettingsManager {
                 <div class="timer-theme-compatibility">
                     ${theme.supports
                       .map(
-                        (mode) => `
+                        (/** @type {any} */ mode) => `
                         <span class="compatibility-badge ${mode}">
                             <i class="ri-${mode === "light" ? "sun" : "moon"}-line"></i>
                         </span>
@@ -1449,6 +1552,7 @@ export class SettingsManager {
     return option;
   }
 
+  /** @param {any} optionElement @param {any} theme */
   applyThemePreviewStyles(optionElement, theme) {
     const previewDisplay = optionElement.querySelector(".timer-preview-display");
     const previewTime = optionElement.querySelector(".timer-preview-time");
@@ -1483,6 +1587,7 @@ export class SettingsManager {
     }
   }
 
+  /** @param {any} themeId */
   async selectTimerTheme(themeId) {
     this.updateTimerThemeSelector(themeId);
     await this.applyTimerTheme(themeId);
@@ -1503,6 +1608,7 @@ export class SettingsManager {
     }
   }
 
+  /** @param {any} themeId */
   updateTimerThemeSelector(themeId) {
     const timerThemeGrid = document.getElementById("timer-theme-grid");
     if (!timerThemeGrid) {

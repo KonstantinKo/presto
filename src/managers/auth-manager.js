@@ -1,11 +1,12 @@
 import { initSupabase, getSupabase, getAuthHelpers } from "../utils/supabase.js";
 import { logger } from "../utils/logger.js";
+import { toError } from "../utils/to-error.js";
 
 class AuthManager {
   constructor() {
     this.currentUser = null;
     this.isGuest = false;
-    this.authListeners = [];
+    this.authListeners = /** @type {Function[]} */ ([]);
     this.supabase = null;
     this.authHelpers = null;
     this.initialized = false;
@@ -44,19 +45,21 @@ class AuthManager {
           }
         }
 
-        this.supabase.auth.onAuthStateChange((event, session) => {
-          if (event === "SIGNED_IN" && session) {
-            this.currentUser = session.user;
-            this.isGuest = false;
-            localStorage.removeItem("presto-guest-mode");
-            this.notifyAuthListeners("authenticated", this.currentUser);
-          } else if (event === "SIGNED_OUT") {
-            this.currentUser = null;
-            this.isGuest = false;
-            localStorage.removeItem("presto-guest-mode");
-            this.notifyAuthListeners("unauthenticated", null);
+        this.supabase.auth.onAuthStateChange(
+          (/** @type {any} */ event, /** @type {any} */ session) => {
+            if (event === "SIGNED_IN" && session) {
+              this.currentUser = session.user;
+              this.isGuest = false;
+              localStorage.removeItem("presto-guest-mode");
+              this.notifyAuthListeners("authenticated", this.currentUser);
+            } else if (event === "SIGNED_OUT") {
+              this.currentUser = null;
+              this.isGuest = false;
+              localStorage.removeItem("presto-guest-mode");
+              this.notifyAuthListeners("unauthenticated", null);
+            }
           }
-        });
+        );
 
         this.initialized = true;
         logger.info("✅ AuthManager initialized with Supabase");
@@ -102,6 +105,7 @@ class AuthManager {
     return this.currentUser;
   }
 
+  /** @param {string} email @param {string} password */
   async signInWithEmail(email, password) {
     try {
       if (!this.initialized) {
@@ -115,10 +119,11 @@ class AuthManager {
       this.markAuthSeen();
       return { success: true, data };
     } catch (error) {
-      return { success: false, error: error.message };
+      return { success: false, error: toError(error).message };
     }
   }
 
+  /** @param {string} email @param {string} password */
   async signUpWithEmail(email, password) {
     try {
       if (!this.initialized) {
@@ -132,10 +137,11 @@ class AuthManager {
       this.markAuthSeen();
       return { success: true, data };
     } catch (error) {
-      return { success: false, error: error.message };
+      return { success: false, error: toError(error).message };
     }
   }
 
+  /** @param {string} provider */
   async signInWithProvider(provider) {
     try {
       if (!this.initialized) {
@@ -149,7 +155,7 @@ class AuthManager {
       this.markAuthSeen();
       return { success: true, data };
     } catch (error) {
-      return { success: false, error: error.message };
+      return { success: false, error: toError(error).message };
     }
   }
 
@@ -165,7 +171,7 @@ class AuthManager {
 
       return { success: true };
     } catch (error) {
-      return { success: false, error: error.message };
+      return { success: false, error: toError(error).message };
     }
   }
 
@@ -194,6 +200,7 @@ class AuthManager {
     return null;
   }
 
+  /** @param {string} email @returns {Promise<boolean>} */
   async checkGravatarExists(email) {
     if (!email) {
       return false;
@@ -224,7 +231,9 @@ class AuthManager {
     return name;
   }
 
+  /** @param {string} string @returns {string} */
   md5(string) {
+    /** @param {number[]} x @param {number[]} k */
     function md5cycle(x, k) {
       let a = x[0],
         b = x[1],
@@ -305,27 +314,30 @@ class AuthManager {
       x[3] = add32(d, x[3]);
     }
 
+    /** @param {number} q @param {number} a @param {number} b @param {number} x @param {number} s @param {number} t @returns {number} */
     function cmn(q, a, b, x, s, t) {
       a = add32(add32(a, q), add32(x, t));
       return add32((a << s) | (a >>> (32 - s)), b);
     }
 
+    /** @param {number} a @param {number} b @param {number} c @param {number} d @param {number} x @param {number} s @param {number} t @returns {number} */
     function ff(a, b, c, d, x, s, t) {
       return cmn((b & c) | (~b & d), a, b, x, s, t);
     }
-
+    /** @param {number} a @param {number} b @param {number} c @param {number} d @param {number} x @param {number} s @param {number} t @returns {number} */
     function gg(a, b, c, d, x, s, t) {
       return cmn((b & d) | (c & ~d), a, b, x, s, t);
     }
-
+    /** @param {number} a @param {number} b @param {number} c @param {number} d @param {number} x @param {number} s @param {number} t @returns {number} */
     function hh(a, b, c, d, x, s, t) {
       return cmn(b ^ c ^ d, a, b, x, s, t);
     }
-
+    /** @param {number} a @param {number} b @param {number} c @param {number} d @param {number} x @param {number} s @param {number} t @returns {number} */
     function ii(a, b, c, d, x, s, t) {
       return cmn(c ^ (b | ~d), a, b, x, s, t);
     }
 
+    /** @param {string} s @returns {number[]} */
     function md51(s) {
       const n = s.length;
       const state = [1732584193, -271733879, -1732584194, 271733878];
@@ -356,6 +368,7 @@ class AuthManager {
       return state;
     }
 
+    /** @param {string} s @returns {number[]} */
     function md5blk(s) {
       const md5blks = [];
       for (let i = 0; i < 64; i += 4) {
@@ -368,6 +381,7 @@ class AuthManager {
       return md5blks;
     }
 
+    /** @param {number} n @returns {string} */
     function rhex(n) {
       let s = "",
         j = 0;
@@ -378,6 +392,7 @@ class AuthManager {
       return s;
     }
 
+    /** @param {any[]} x @returns {string} */
     function hex(x) {
       for (let i = 0; i < x.length; i++) {
         x[i] = rhex(x[i]);
@@ -385,6 +400,7 @@ class AuthManager {
       return x.join("");
     }
 
+    /** @param {number} a @param {number} b @returns {number} */
     function add32(a, b) {
       return (a + b) & 0xffffffff;
     }
@@ -392,14 +408,17 @@ class AuthManager {
     return hex(md51(string));
   }
 
+  /** @param {Function} callback */
   onAuthChange(callback) {
     this.authListeners.push(callback);
   }
 
+  /** @param {Function} callback */
   removeAuthListener(callback) {
     this.authListeners = this.authListeners.filter((listener) => listener !== callback);
   }
 
+  /** @param {string} status @param {any} user */
   notifyAuthListeners(status, user) {
     this.authListeners.forEach((callback) => {
       callback(status, user);

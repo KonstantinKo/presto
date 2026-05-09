@@ -10,7 +10,8 @@ import { logger } from "../utils/logger.js";
 
 export class UpdateNotification {
   constructor() {
-    this.container = null;
+    /** @type {HTMLDivElement} */
+    this.container = /** @type {any} */ (null);
     this.isVisible = false;
     this.animationDuration = 300;
     this.currentVersion = null;
@@ -358,10 +359,11 @@ export class UpdateNotification {
     const buttons = this.container.querySelectorAll("[data-action]");
     logger.debug("🔔 [UpdateNotification] Found", buttons.length, "buttons with data-action");
     buttons.forEach((button) => {
-      logger.debug("🔔 [UpdateNotification] Binding evento per pulsante:", button.dataset.action);
-      button.addEventListener("click", (e) => {
+      const btn = /** @type {HTMLElement} */ (button);
+      logger.debug("🔔 [UpdateNotification] Binding evento per pulsante:", btn.dataset.action);
+      btn.addEventListener("click", (e) => {
         // Trova il pulsante con data-action, anche se si clicca su un elemento figlio (come l'icona SVG)
-        let target = e.target;
+        let target = /** @type {HTMLElement | null} */ (e.target);
         while (target && !target.dataset.action) {
           target = target.parentElement;
         }
@@ -380,6 +382,7 @@ export class UpdateNotification {
   /**
    * Handles button actions
    */
+  /** @param {string} action */
   handleAction(action) {
     logger.debug("🔔 [UpdateNotification] Azione pulsante:", action);
     switch (action) {
@@ -430,6 +433,7 @@ export class UpdateNotification {
   /**
    * Checks if a version has been skipped
    */
+  /** @param {string} version @returns {boolean} */
   isVersionSkipped(version) {
     const skippedVersions = this.getSkippedVersions();
     return skippedVersions.includes(version);
@@ -471,8 +475,12 @@ export class UpdateNotification {
    * Shows the progress container, hiding the default content area
    */
   showProgressContainer() {
-    const content = this.container.querySelector(".update-content");
-    const progressContainer = this.container.querySelector(".update-progress-container");
+    const content = /** @type {HTMLElement | null} */ (
+      this.container.querySelector(".update-content")
+    );
+    const progressContainer = /** @type {HTMLElement | null} */ (
+      this.container.querySelector(".update-progress-container")
+    );
     if (content) {
       content.style.display = "none";
     }
@@ -487,8 +495,11 @@ export class UpdateNotification {
   /**
    * Updates download progress
    */
+  /** @param {number} progress */
   updateProgress(progress) {
-    const progressFill = this.container.querySelector(".update-progress-fill");
+    const progressFill = /** @type {HTMLElement | null} */ (
+      this.container.querySelector(".update-progress-fill")
+    );
     const progressText = this.container.querySelector(".update-progress-text");
 
     if (progressFill && progressText) {
@@ -520,7 +531,7 @@ export class UpdateNotification {
       testMode: localStorage.getItem("presto_force_update_test"),
     });
 
-    this._onUpdateAvailable = (event) => {
+    this._onUpdateAvailable = (/** @type {any} */ event) => {
       logger.debug("🔔 [UpdateNotification] Evento updateAvailable ricevuto:", event.detail);
       this.showUpdateAvailable(event.detail);
     };
@@ -535,7 +546,7 @@ export class UpdateNotification {
       this.hide();
     };
 
-    this._onDownloadProgress = (event) => {
+    this._onDownloadProgress = (/** @type {any} */ event) => {
       const { progress } = event.detail;
       this.showProgressContainer();
       this.updateProgress(progress);
@@ -546,7 +557,7 @@ export class UpdateNotification {
       this.showInstalling();
     };
 
-    this._onDownloadError = (event) => {
+    this._onDownloadError = (/** @type {any} */ event) => {
       this.showProgressContainer();
       this.showError(event.detail);
     };
@@ -567,6 +578,7 @@ export class UpdateNotification {
   /**
    * Shows update available notification
    */
+  /** @param {any} updateInfo */
   showUpdateAvailable(updateInfo) {
     logger.debug("🔔 [UpdateNotification] Show update notification requested:", updateInfo);
 
@@ -620,7 +632,8 @@ export class UpdateNotification {
   /**
    * Shows an error
    */
-  showError() {
+  /** @param {any} [_detail] */
+  showError(_detail) {
     const message = this.container.querySelector(".update-progress-message");
 
     if (message) {
@@ -689,8 +702,10 @@ export class UpdateNotification {
    * Resets notification to initial state
    */
   resetToInitialState() {
-    const content = this.container.querySelector(".update-content");
-    const progressContainer = this.container.querySelector(".update-progress-container");
+    const content = /** @type {HTMLElement} */ (this.container.querySelector(".update-content"));
+    const progressContainer = /** @type {HTMLElement} */ (
+      this.container.querySelector(".update-progress-container")
+    );
 
     content.style.display = "flex";
     progressContainer.style.display = "none";
@@ -720,7 +735,7 @@ export class UpdateNotification {
     if (this.container && this.container.parentNode) {
       this.container.parentNode.removeChild(this.container);
     }
-    this.container = null;
+    this.container = /** @type {any} */ (null);
     this.isVisible = false;
   }
 }
