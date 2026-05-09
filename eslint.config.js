@@ -20,6 +20,16 @@ export default [
       },
     },
   },
+  {
+    files: ["*.js", "*.mjs", "*.cjs"],
+    languageOptions: {
+      ecmaVersion: 2024,
+      sourceType: "module",
+      globals: {
+        ...globals.node,
+      },
+    },
+  },
   js.configs.recommended,
   {
     files: ["src/**/*.js", "src/**/*.mjs"],
