@@ -57,7 +57,7 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
 
   async getTauriUpdaterAPI() {
     if (!window.__TAURI__) {
-      throw new Error("Ambiente Tauri non disponibile");
+      throw new Error("Tauri environment not available");
     }
 
     if (window.__TAURI__.updater) {
@@ -90,10 +90,10 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
         return await window.__TAURI__.core.invoke("plugin:app|version");
       }
 
-      throw new Error("API versione non disponibile");
+      throw new Error("Version API not available");
     } catch (error) {
       logger.error("❌ Could not retrieve app version:", error);
-      throw new Error("Impossibile determinare la versione corrente dell'applicazione");
+      throw new Error("Unable to determine current application version");
     }
   }
 
@@ -109,12 +109,12 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
         return;
       }
 
-      throw new Error("API riavvio non disponibile");
+      throw new Error("Restart API not available");
     } catch (error) {
       logger.error("❌ Restart error:", error);
       await this.showMessage(
-        "L'aggiornamento è stato installato ma il riavvio automatico non è disponibile.\n\nRiavvia manualmente l'applicazione.",
-        { title: "Riavvio Manuale", kind: "warning" }
+        "The update was installed but automatic restart is not available.\n\nPlease restart the application manually.",
+        { title: "Manual Restart", kind: "warning" }
       );
     }
   }
@@ -174,8 +174,8 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
   /** @param {string} content @param {any} [options] */
   async askConfirmation(content, options = {}) {
     const defaultOptions = {
-      title: "Conferma",
-      okLabel: "Sì",
+      title: "Confirm",
+      okLabel: "Yes",
       cancelLabel: "No",
     };
     const opts = { ...defaultOptions, ...options };
@@ -201,9 +201,9 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
 
   async showDevelopmentMessage() {
     await this.showMessage(
-      "Update check not available in development mode.\n\nGli aggiornamenti funzioneranno solo nell'applicazione compilata.",
+      "Update check not available in development mode.\n\nUpdates will only work in the compiled application.",
       {
-        title: "Modalità Sviluppo",
+        title: "Development Mode",
         kind: "info",
       }
     );
@@ -271,9 +271,12 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
         logger.debug(`Current version: ${currentVersion}`);
       } catch (error) {
         logger.error("❌ Error retrieving current version:", error);
-        this.emit("checkError", { message: "Impossibile determinare la versione corrente" });
+        this.emit("checkError", { message: "Unable to determine current version" });
         if (showDialog) {
-          alert("Impossibile verificare gli aggiornamenti: versione corrente non determinabile");
+          await this.showMessage(
+            "Unable to check for updates: current version could not be determined",
+            { title: "Error", kind: "error" }
+          );
         }
         return false;
       }
@@ -326,7 +329,10 @@ window.UpdateManagerV2 = class UpdateManagerV2 {
       logger.error("❌ Error checking GitHub version:", error);
       this.emit("checkError", { message: `Errore di rete: ${toError(error).message}` });
       if (showDialog) {
-        alert(`Errore nel controllo degli aggiornamenti:\n${toError(error).message}`);
+        await this.showMessage(`Error checking for updates:\n${toError(error).message}`, {
+          title: "Error",
+          kind: "error",
+        });
       }
       return false;
     } finally {

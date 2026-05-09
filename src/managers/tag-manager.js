@@ -1,3 +1,4 @@
+import { NotificationUtils } from "../utils/common-utils.js";
 import { logger } from "../utils/logger.js";
 
 class TagManager {
@@ -315,7 +316,7 @@ class TagManager {
   /** @param {any} tagId */
   async deleteTag(tagId) {
     if (this.tags.length <= 1) {
-      alert("You cannot delete the last tag.");
+      await NotificationUtils.showMessage("You cannot delete the last tag.", { kind: "warning" });
       return;
     }
 

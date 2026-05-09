@@ -286,7 +286,10 @@ window.performTotalReset = async function () {
       errorMessage += `Error: ${toError(error).message}`;
     }
 
-    alert(`❌ ${errorMessage}`);
+    await NotificationUtils.showMessage(`❌ ${errorMessage}`, {
+      title: "Reset Failed",
+      kind: "error",
+    });
 
     const resetButton = /** @type {HTMLButtonElement | null} */ (
       document.querySelector(".btn-danger")
@@ -553,7 +556,9 @@ function setupAuthEventListeners() {
           .value;
 
         if (!email || !password) {
-          alert("Please enter both email and password");
+          await NotificationUtils.showMessage("Please enter both email and password", {
+            kind: "warning",
+          });
           return;
         }
 
@@ -599,11 +604,17 @@ async function handleOAuthSignIn(provider, button) {
   try {
     const result = await window.authManager.signInWithProvider(provider);
     if (!result.success) {
-      alert(`Sign-in failed: ${result.error}`);
+      await NotificationUtils.showMessage(`Sign-in failed: ${result.error}`, {
+        title: "Sign In Failed",
+        kind: "error",
+      });
     }
   } catch (error) {
     logger.error("OAuth sign-in error:", error);
-    alert(`Sign-in failed: ${toError(error).message}`);
+    await NotificationUtils.showMessage(`Sign-in failed: ${toError(error).message}`, {
+      title: "Sign In Failed",
+      kind: "error",
+    });
   } finally {
     setButtonLoading(button, false);
   }
@@ -617,7 +628,9 @@ async function handleOAuthSignIn(provider, button) {
  */
 async function handleEmailAuth(email, password, action, button) {
   if (!email || !password) {
-    alert("Please enter both email and password");
+    await NotificationUtils.showMessage("Please enter both email and password", {
+      kind: "warning",
+    });
     return;
   }
 
@@ -632,11 +645,17 @@ async function handleEmailAuth(email, password, action, button) {
     }
 
     if (!result.success) {
-      alert(`${action === "signin" ? "Sign-in" : "Sign-up"} failed: ${result.error}`);
+      await NotificationUtils.showMessage(
+        `${action === "signin" ? "Sign-in" : "Sign-up"} failed: ${result.error}`,
+        { title: "Authentication Failed", kind: "error" }
+      );
     }
   } catch (error) {
     logger.error("Email auth error:", error);
-    alert(`${action === "signin" ? "Sign-in" : "Sign-up"} failed: ${toError(error).message}`);
+    await NotificationUtils.showMessage(
+      `${action === "signin" ? "Sign-in" : "Sign-up"} failed: ${toError(error).message}`,
+      { title: "Authentication Failed", kind: "error" }
+    );
   } finally {
     setButtonLoading(button, false);
   }
@@ -925,7 +944,10 @@ function setupUserAvatarEventListeners() {
         await updateUserAvatarUI();
         NotificationUtils.showNotificationPing("Signed out successfully! 👋", null, "focus");
       } else {
-        alert(`Sign out failed: ${result.error}`);
+        await NotificationUtils.showMessage(`Sign out failed: ${result.error}`, {
+          title: "Sign Out Failed",
+          kind: "error",
+        });
       }
     });
   }

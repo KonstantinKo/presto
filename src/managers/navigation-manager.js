@@ -1,4 +1,4 @@
-import { TimeUtils } from "../utils/common-utils.js";
+import { NotificationUtils, TimeUtils } from "../utils/common-utils.js";
 import { TagStatistics } from "../utils/tag-statistics.js";
 import { logger } from "../utils/logger.js";
 
@@ -1812,7 +1812,10 @@ export class NavigationManager {
       }
     } catch (error) {
       logger.error("Error deleting session:", error);
-      alert("Failed to delete session. Please try again.");
+      await NotificationUtils.showMessage("Failed to delete session. Please try again.", {
+        title: "Error",
+        kind: "error",
+      });
     }
   }
 
@@ -1843,7 +1846,10 @@ export class NavigationManager {
       window.sessionManager.openEditSessionModal(sessionToEdit, sessionDate);
     } catch (error) {
       logger.error("Error opening edit session modal:", error);
-      alert("Failed to open edit session. Please try again.");
+      await NotificationUtils.showMessage("Failed to open edit session. Please try again.", {
+        title: "Error",
+        kind: "error",
+      });
     }
   }
 
@@ -1853,7 +1859,10 @@ export class NavigationManager {
       const sessions = window.sessionManager.getSessionsForDate(currentDate);
 
       if (sessions.length === 0) {
-        alert("No sessions to export for the selected period.");
+        NotificationUtils.showNotificationPing(
+          "No sessions to export for the selected period.",
+          "info"
+        );
         return;
       }
 
@@ -1922,7 +1931,10 @@ export class NavigationManager {
             });
 
             logger.info(`Exported ${sessions.length} sessions to ${filePath}`);
-            alert(`Sessions exported successfully to:\n${filePath}`);
+            NotificationUtils.showNotificationPing(
+              `Sessions exported successfully to: ${filePath}`,
+              "success"
+            );
           } else {
             logger.info("Export cancelled by user");
           }
@@ -1930,7 +1942,10 @@ export class NavigationManager {
           logger.error("Tauri save error:", tauriError);
           XLSX.writeFile(wb, defaultFilename);
           logger.warn(`Tauri save failed, using fallback download: ${defaultFilename}`);
-          alert(`File saved to Downloads folder as: ${defaultFilename}`);
+          NotificationUtils.showNotificationPing(
+            `File saved to Downloads folder as: ${defaultFilename}`,
+            "info"
+          );
         }
       } else {
         XLSX.writeFile(wb, defaultFilename);
@@ -1938,7 +1953,10 @@ export class NavigationManager {
       }
     } catch (error) {
       logger.error("Error exporting sessions:", error);
-      alert("Failed to export sessions. Please try again.");
+      await NotificationUtils.showMessage("Failed to export sessions. Please try again.", {
+        title: "Error",
+        kind: "error",
+      });
     }
   }
 }
