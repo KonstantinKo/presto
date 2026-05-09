@@ -8,30 +8,36 @@
 
 I have enough context. Outputting the plan below.
 
-```md
+````md
 # Feature: Phase 3 Integration Tests via Tauri MockRuntime
 
 ## Feature Description
+
 Add backend integration tests that exercise the `#[tauri::command]` surface of Presto end-to-end using Tauri 2's `MockRuntime`, plus tempdir-isolated round-trip tests for the I/O helpers those commands delegate to. These tests validate the Rust command contract — the stable boundary between any frontend (current vanilla JS, future Leptos/WASM) and the persistence layer — and run in CI under the existing `cargo test` step.
 
 This is **Phase 3** of the test pyramid started in #4 (Phase 1 — runners + pure unit tests) and #8 (Phase 2 — manager unit tests with mocked Tauri). Phase 3 goes one level deeper: instead of mocking `window.__TAURI__.invoke()` from JS, it constructs a real Tauri app with `MockRuntime` and dispatches IPC requests through Tauri's actual invoke pipeline.
 
 ## User Story
+
 As a maintainer of Presto preparing for a frontend stack swap (vanilla JS → likely Leptos/WASM)
 I want backend integration tests that exercise `#[tauri::command]` functions through the real Tauri IPC machinery and tempdir-isolated I/O helper tests
 So that the persistence and command contract — which is the stable seam between any frontend and the Rust backend — is verified by tests that survive the swap unchanged, without paying the cost of a full Playwright/WebDriver E2E rig.
 
 ## Problem Statement
+
 After Phase 2, Presto has unit-test coverage at two levels:
+
 1. **Pure-helper Rust tests** in `src-tauri/src/helpers.rs` (debounce, atomic write).
 2. **Frontend manager tests** that drive `SessionManager` / `SettingsManager` / `NavigationManager` against a mocked `window.__TAURI__`.
 
 What's missing — and what issue #9 calls out — is coverage that crosses the IPC boundary:
+
 - The frontend manager tests **trust** that `invoke("save_manual_sessions", { sessions })` does the right thing on the Rust side. Nothing actually validates the Rust commands' behavior end-to-end.
 - The thirty-plus `#[tauri::command]` functions in `src-tauri/src/lib.rs` are wholly untested. The current `cargo test` in `src-tauri` runs only the four pure-helper tests in `helpers.rs`.
 - After the upcoming frontend stack swap, the Phase 2 JS manager tests die (they import `src/managers/*.js` and mock `window.__TAURI__`). The only artifacts that survive are pure Rust tests and any tests that exercise the command surface or visible UI — neither of which exists today.
 
 ## Solution Statement
+
 Take the **MockRuntime path** from issue #9's two acceptance options. Concretely:
 
 1. **Extract pure I/O helpers into `helpers.rs`** (or a new `storage` submodule) that accept a `&Path` for the data directory. Existing `#[tauri::command]` functions become thin glue that resolves `app.path().app_data_dir()` and delegates to the helper. This is a refactor with no behavior change; the command names, argument names, and return shapes stay identical.
@@ -43,9 +49,10 @@ Take the **MockRuntime path** from issue #9's two acceptance options. Concretely
 4. **Wire it into CI**. The existing `.github/workflows/ci.yml` already runs `cd src-tauri && cargo test`, which automatically picks up both `src/` unit tests and the new `tests/` integration tests. No CI changes needed beyond verifying the new dev-dependencies build.
 
 **Why MockRuntime over Playwright/WebdriverIO**:
+
 - Lower CI cost (no `tauri dev`, no WebKit2GTK browser harness, no extra container deps).
-- The Rust command surface is what *actually* persists across the Leptos swap; testing it directly tests the contract that matters most.
-- Acceptance only requires *one* of the two paths.
+- The Rust command surface is what _actually_ persists across the Leptos swap; testing it directly tests the contract that matters most.
+- Acceptance only requires _one_ of the two paths.
 - README states the upstream project is abandoned; this fork is in maintenance/handoff mode and a heavyweight E2E rig is hard to justify.
 - Helper extraction also benefits readability and matches the pattern set by `helpers.rs::is_debounced` (called out approvingly in issue #4 as the right way to structure testable Rust).
 
@@ -65,17 +72,20 @@ Take the **MockRuntime path** from issue #9's two acceptance options. Concretely
 ### New Files
 
 - `src-tauri/tests/commands.rs` — new integration-test target. Uses `tauri::test::mock_builder` + `get_ipc_response` to drive `write_excel_file` (and any other practically-isolatable commands) through real IPC against `MockRuntime`.
-- *(Optional, deferred)* `src-tauri/src/storage.rs` — only if `helpers.rs` grows past ~300 lines after the helper extractions. Default is to keep everything in `helpers.rs`.
+- _(Optional, deferred)_ `src-tauri/src/storage.rs` — only if `helpers.rs` grows past ~300 lines after the helper extractions. Default is to keep everything in `helpers.rs`.
 
 ## Implementation Plan
 
 ### Phase 1: Foundation
+
 Add the dev-dependencies and the helper-extraction scaffolding without changing public command behavior. This is a refactor that should leave `cargo test` and the existing manager tests passing unchanged.
 
 ### Phase 2: Core Implementation
+
 Write the helper-level tempdir tests covering each storage operation's round-trip + edge cases (date-rollover, missing files, malformed JSON, history pruning, default-tag bootstrap). These are the bulk of the actual coverage.
 
 ### Phase 3: Integration
+
 Add the MockRuntime IPC test that drives `write_excel_file` end-to-end through `tauri::test::get_ipc_response`. Verify CI green, document in `.claude/docs/` if conventions exist.
 
 ## Step by Step Tasks
@@ -83,16 +93,20 @@ Add the MockRuntime IPC test that drives `write_excel_file` end-to-end through `
 IMPORTANT: Execute every step in order, top to bottom.
 
 ### Step 1: Add dev-dependencies
+
 - Edit `src-tauri/Cargo.toml`. Add a `[dev-dependencies]` section (or extend if present):
   ```toml
   [dev-dependencies]
   tempfile = "3"
   tauri = { version = "2", features = ["test"] }
   ```
+````
+
 - Run `cd src-tauri && cargo build --tests` to verify the dev-deps resolve and the `tauri::test` module is available. (The `test` feature unlocks `tauri::test::{mock_builder, mock_app, mock_context, get_ipc_response, MockRuntime, INVOKE_KEY}`.)
 - Commit `Cargo.lock` updates.
 
 ### Step 2: Extract a settings I/O helper pair
+
 - In `src-tauri/src/helpers.rs`, add:
   ```rust
   pub(super) fn read_settings_from(dir: &Path) -> Result<AppSettings, String> { ... }
@@ -104,6 +118,7 @@ IMPORTANT: Execute every step in order, top to bottom.
 - Run `cargo test` and `cargo clippy --all-targets -- -D warnings` to confirm no regression.
 
 ### Step 3: Extract session/tasks/history/manual-sessions/tags I/O helpers
+
 - Repeat the Step 2 pattern for the rest of the file-touching commands. Group by domain:
   - `read_session_from(dir) -> Result<Option<PomodoroSession>, String>` (preserves the date-rollover branch from `load_session_data`)
   - `write_session_to(dir, &PomodoroSession) -> Result<(), String>`
@@ -117,6 +132,7 @@ IMPORTANT: Execute every step in order, top to bottom.
 - Run `cargo test`, `cargo clippy --all-targets -- -D warnings`, and `npm test` (frontend manager tests should still pass — they don't care about Rust internals).
 
 ### Step 4: Add helper-level tempdir round-trip tests
+
 - Inside `helpers.rs`'s existing `#[cfg(test)] mod tests`, add tests using `tempfile::TempDir`. Cover:
   - **Settings**: round-trip default → write → read returns equal; missing-file returns defaults; malformed JSON returns defaults (matches the `unwrap_or_else` branch in `load_settings_sync`).
   - **Session**: write → read returns `Some(session)` with same fields; missing file returns `None`; date-rollover: stored session with stale `date` field returns `Some` with `completed_pomodoros = 0` and updated date.
@@ -129,8 +145,10 @@ IMPORTANT: Execute every step in order, top to bottom.
 - Aim for ~15–20 helper-level tests total.
 
 ### Step 5: Create the MockRuntime integration test crate
+
 - Create `src-tauri/tests/commands.rs`. (Cargo automatically picks up integration tests under `tests/`.)
 - Set up the harness:
+
   ```rust
   use tauri::test::{mock_builder, mock_context, noop_assets, get_ipc_response, INVOKE_KEY};
   use tauri::WebviewUrl;
@@ -146,9 +164,11 @@ IMPORTANT: Execute every step in order, top to bottom.
           .expect("failed to build mock app")
   }
   ```
+
   Note: `presto_lib::write_excel_file` requires the function to be `pub` (or `pub(crate)` re-exported). Adjust visibility accordingly.
 
 ### Step 6: Write the first end-to-end MockRuntime test
+
 - Test name: `write_excel_file_writes_decoded_bytes_to_provided_path`.
 - Body:
   - Build the mock app via `make_app()`.
@@ -166,13 +186,15 @@ IMPORTANT: Execute every step in order, top to bottom.
 - Run `cd src-tauri && cargo test --test commands` to verify it passes in isolation, then `cargo test` to verify nothing regressed.
 
 ### Step 7: (Stretch) Add a second MockRuntime test for a settings round-trip
-- *Only attempt if `app.path().app_data_dir()` under `MockRuntime` resolves to a path we can override or sandbox without invasive lib.rs changes.* Try one of:
+
+- _Only attempt if `app.path().app_data_dir()` under `MockRuntime` resolves to a path we can override or sandbox without invasive lib.rs changes._ Try one of:
   - **Approach A (preferred if it works)**: configure the mock context with a unique `bundle.identifier` per test (e.g. `format!("com.presto.test-{}", uuid)`) and clean up the resulting OS-specific app-data directory in a teardown.
   - **Approach B**: skip — helper-level tests already cover the behavior, and the acceptance gate requires only one IPC integration test.
 - If Approach A works, add `save_settings_then_load_settings_round_trips` that invokes both commands through IPC and asserts equality.
 - If Approach A does not work cleanly, document why in a comment in `commands.rs` and stop. Do not refactor commands to take a path-injection parameter purely to unlock this test — it's not required for acceptance.
 
 ### Step 8: Run the full QA suite
+
 - `cd src-tauri && cargo build --all-targets` — ensures all targets including new tests compile.
 - `cd src-tauri && cargo test` — runs unit + helper + integration tests.
 - `cd src-tauri && cargo clippy --all-targets -- -D warnings` — lint must be clean (note: the project enables `clippy::pedantic` and `clippy::nursery` as `deny`; the new test code must conform).
@@ -181,18 +203,22 @@ IMPORTANT: Execute every step in order, top to bottom.
 - `npm run typecheck`, `npm run lint`, `npx prettier --check .` — no frontend regressions.
 
 ### Step 9: Verify CI integration
+
 - Read `.github/workflows/ci.yml`. Confirm the `backend` job runs `cd src-tauri && cargo test`. New integration tests are automatically included by Cargo's default test discovery.
 - If `tauri/test` requires extra system libraries on Ubuntu beyond what's already installed (`libwebkit2gtk-4.1-dev`, etc.), document the addition. Most likely none are needed because `MockRuntime` does not spawn a real webview.
-- *Do not* push commits until Step 8 is fully green locally.
+- _Do not_ push commits until Step 8 is fully green locally.
 
 ### Step 10: Document the test layout
+
 - Add a brief comment at the top of `src-tauri/tests/commands.rs` explaining the harness pattern (one paragraph, what `MockRuntime` does, why `write_excel_file` is the entrypoint).
-- *Do not* create new top-level docs; keep the explanation in the file. Conform to project rule "default to writing no comments — only when WHY is non-obvious"; here, "why MockRuntime + why this specific command" is non-obvious.
+- _Do not_ create new top-level docs; keep the explanation in the file. Conform to project rule "default to writing no comments — only when WHY is non-obvious"; here, "why MockRuntime + why this specific command" is non-obvious.
 
 ## Testing Strategy
 
 ### Unit Tests
+
 Helper-level tests in `src-tauri/src/helpers.rs` `#[cfg(test)] mod tests`:
+
 - **Settings helpers**: read-default-on-missing-file, write-then-read round-trip, read-default-on-malformed-JSON, write creates parent dir if absent, atomic write resilience (write_json_atomic already covered indirectly).
 - **Session helpers**: write-then-read round-trip, missing-file returns `None`, stale-date triggers reset to fresh-day defaults, same-day with legacy date format normalizes to today.
 - **Tasks helpers**: empty-vec round-trip, multi-element round-trip, missing-file returns empty vec.
@@ -202,11 +228,14 @@ Helper-level tests in `src-tauri/src/helpers.rs` `#[cfg(test)] mod tests`:
 - **Reset helper**: removes all listed files when present, no error when files absent.
 
 ### Integration Tests
+
 At `src-tauri/tests/commands.rs`:
+
 - **`write_excel_file_writes_decoded_bytes_to_provided_path`** — drives `write_excel_file` end-to-end through `tauri::test::get_ipc_response` against `MockRuntime`; asserts the file is written with correctly base64-decoded bytes. **This is the test that satisfies issue #9's acceptance criterion.**
-- *(Optional)* `save_settings_then_load_settings_round_trips` if a clean tempdir-isolation approach materializes for `app_data_dir()`.
+- _(Optional)_ `save_settings_then_load_settings_round_trips` if a clean tempdir-isolation approach materializes for `app_data_dir()`.
 
 ### Edge Cases
+
 - Helper called with a non-existent directory: writers must create it; readers must return defaults/empty/None as appropriate.
 - Malformed JSON on disk: readers do not panic; settings reader returns defaults (matching current `unwrap_or_else` behavior).
 - Concurrent writers: not introducing new locking; relying on the existing `write_json_atomic` (rename is atomic on the same filesystem).
@@ -215,6 +244,7 @@ At `src-tauri/tests/commands.rs`:
 - `write_excel_file` to a path whose parent does not exist: command returns `Err("Failed to write Excel file to ...")` — assert error propagation.
 
 ## Acceptance Criteria
+
 - [ ] At least one integration test (`src-tauri/tests/commands.rs`) drives a `#[tauri::command]` end-to-end through `tauri::test::get_ipc_response` against `MockRuntime` and asserts a user-visible outcome (a file was written with the correct bytes).
 - [ ] The chosen runner (`cargo test`) is wired into CI; the `backend` job in `.github/workflows/ci.yml` exercises the new tests on every push and pull request.
 - [ ] At least 10 new helper-level tempdir round-trip tests exist in `src-tauri/src/helpers.rs` covering settings, session, tasks, history, manual sessions, tags, and reset.
@@ -224,6 +254,7 @@ At `src-tauri/tests/commands.rs`:
 - [ ] Each test that retains coupling to a specific command-name string (e.g. asserts `"write_excel_file"` literally) carries a `// TODO(stack-swap):` comment naming what would need updating on stack swap, per the issue's stated convention. (Note: the IPC integration test by definition references the command name; this is acceptable because it's testing the Rust contract that survives the swap.)
 
 ## Validation Commands
+
 Execute every command to validate the feature works correctly with zero regressions.
 
 ```bash
@@ -251,12 +282,14 @@ npx prettier --check .
 cd src-tauri && cargo build --all-targets && cargo test && cd .. && npm test
 ```
 
-For verifying the *integration* test specifically (so a reviewer can see it in isolation):
+For verifying the _integration_ test specifically (so a reviewer can see it in isolation):
+
 ```bash
 cd src-tauri && cargo test --test commands -- --nocapture
 ```
 
 For verifying CI parity locally (matches `.github/workflows/ci.yml` backend job):
+
 ```bash
 cd src-tauri && cargo test && cargo clippy --all-targets -- -D warnings
 ```
@@ -270,9 +303,11 @@ cd src-tauri && cargo test && cargo clippy --all-targets -- -D warnings
   - A second integration test covering `save_settings`/`load_settings` round-trip if a clean `app_data_dir` override pattern emerges (e.g. Tauri exposes a path-resolver injection point in a later 2.x release).
   - Visual regression / Playwright suite — if Leptos lands and the team wants UI-level coverage, that becomes worth the investment then; revisit once the new stack is in place.
   - Coverage for tray, global-shortcut, autostart, and macOS-only commands — each requires runtime-specific scaffolding beyond what `MockRuntime` provides; tracked in follow-up issues if desired.
-- **Stack-swap annotation policy** (from issue #9): the IPC test references the command name `"write_excel_file"` as the IPC entry — this is *correct*, because it is testing the Rust IPC contract that survives the swap. The `// TODO(stack-swap):` annotations in this PR's helper tests are unnecessary because the tests don't reference any frontend module path or DOM detail. The annotation rule applies only to JS-side tests.
+- **Stack-swap annotation policy** (from issue #9): the IPC test references the command name `"write_excel_file"` as the IPC entry — this is _correct_, because it is testing the Rust IPC contract that survives the swap. The `// TODO(stack-swap):` annotations in this PR's helper tests are unnecessary because the tests don't reference any frontend module path or DOM detail. The annotation rule applies only to JS-side tests.
 - **Rust toolchain**: project pins `rust 1.89.0` via `.tool-versions`. `tempfile` 3.x and `tauri/test` are both compatible.
+
 ```
 
 ---
 *Generated by Agentex*
+```

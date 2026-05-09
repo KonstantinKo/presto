@@ -135,20 +135,7 @@ fn load_settings_sync(app: &AppHandle) -> AppSettings {
             ..AppSettings::default()
         };
     };
-    let file_path = app_data_dir.join("settings.json");
-    if !file_path.exists() {
-        return AppSettings::default();
-    }
-    let Ok(contents) = fs::read_to_string(file_path) else {
-        return AppSettings {
-            analytics_enabled: false,
-            ..AppSettings::default()
-        };
-    };
-    serde_json::from_str(&contents).unwrap_or_else(|_| AppSettings {
-        analytics_enabled: false,
-        ..AppSettings::default()
-    })
+    helpers::read_settings_from(&app_data_dir)
 }
 
 fn are_analytics_enabled(app: &AppHandle) -> bool {
@@ -371,10 +358,7 @@ async fn save_session_data(session: PomodoroSession, app: AppHandle) -> Result<(
         .app_data_dir()
         .map_err(|e| format!("Failed to get app data directory: {e}"))?;
 
-    fs::create_dir_all(&app_data_dir).map_err(|e| format!("Failed to create directory: {e}"))?;
-
-    let file_path = app_data_dir.join("session.json");
-    helpers::write_json_atomic(&file_path, &session)?;
+    helpers::write_session_to(&app_data_dir, &session)?;
 
     if are_analytics_enabled(&app) {
         let properties = Some(serde_json::json!({
@@ -394,37 +378,7 @@ async fn load_session_data(app: AppHandle) -> Result<Option<PomodoroSession>, St
         .path()
         .app_data_dir()
         .map_err(|e| format!("Failed to get app data directory: {e}"))?;
-    let file_path = app_data_dir.join("session.json");
-
-    if !file_path.exists() {
-        return Ok(None);
-    }
-
-    let content =
-        fs::read_to_string(&file_path).map_err(|e| format!("Failed to read session file: {e}"))?;
-    let mut session: PomodoroSession =
-        serde_json::from_str(&content).map_err(|e| format!("Failed to parse session: {e}"))?;
-
-    let today_legacy = chrono::Local::now().format("%a %b %d %Y").to_string();
-    let today_iso = chrono::Local::now().format("%Y-%m-%d").to_string();
-
-    let is_same_day = session.date == today_legacy
-        || session.date == today_iso
-        || chrono::NaiveDate::parse_from_str(&session.date, "%a %b %d %Y")
-            .is_ok_and(|d| d.format("%Y-%m-%d").to_string() == today_iso);
-
-    if is_same_day && session.date != today_legacy {
-        session.date.clone_from(&today_legacy);
-        helpers::write_json_atomic(&file_path, &session)?;
-    } else if !is_same_day {
-        session.completed_pomodoros = 0;
-        session.total_focus_time = 0;
-        session.current_session = 1;
-        session.date.clone_from(&today_legacy);
-        helpers::write_json_atomic(&file_path, &session)?;
-    }
-
-    Ok(Some(session))
+    helpers::read_session_from(&app_data_dir)
 }
 
 #[tauri::command]
@@ -434,10 +388,7 @@ async fn save_tasks(tasks: Vec<Task>, app: AppHandle) -> Result<(), String> {
         .app_data_dir()
         .map_err(|e| format!("Failed to get app data directory: {e}"))?;
 
-    fs::create_dir_all(&app_data_dir).map_err(|e| format!("Failed to create directory: {e}"))?;
-
-    let file_path = app_data_dir.join("tasks.json");
-    helpers::write_json_atomic(&file_path, &tasks)?;
+    helpers::write_tasks_to(&app_data_dir, &tasks)?;
 
     if are_analytics_enabled(&app) {
         let _ = app.track_event("tasks_saved", None);
@@ -452,18 +403,7 @@ async fn load_tasks(app: AppHandle) -> Result<Vec<Task>, String> {
         .path()
         .app_data_dir()
         .map_err(|e| format!("Failed to get app data directory: {e}"))?;
-    let file_path = app_data_dir.join("tasks.json");
-
-    if !file_path.exists() {
-        return Ok(Vec::new());
-    }
-
-    let content =
-        fs::read_to_string(file_path).map_err(|e| format!("Failed to read tasks file: {e}"))?;
-    let tasks: Vec<Task> =
-        serde_json::from_str(&content).map_err(|e| format!("Failed to parse tasks: {e}"))?;
-
-    Ok(tasks)
+    helpers::read_tasks_from(&app_data_dir)
 }
 
 #[tauri::command]
@@ -472,18 +412,7 @@ async fn get_stats_history(app: AppHandle) -> Result<Vec<PomodoroSession>, Strin
         .path()
         .app_data_dir()
         .map_err(|e| format!("Failed to get app data directory: {e}"))?;
-    let history_path = app_data_dir.join("history.json");
-
-    if !history_path.exists() {
-        return Ok(Vec::new());
-    }
-
-    let content = fs::read_to_string(history_path)
-        .map_err(|e| format!("Failed to read history file: {e}"))?;
-    let history: Vec<PomodoroSession> =
-        serde_json::from_str(&content).map_err(|e| format!("Failed to parse history: {e}"))?;
-
-    Ok(history)
+    helpers::read_history_from(&app_data_dir)
 }
 
 #[tauri::command]
@@ -492,35 +421,7 @@ async fn save_daily_stats(session: PomodoroSession, app: AppHandle) -> Result<()
         .path()
         .app_data_dir()
         .map_err(|e| format!("Failed to get app data directory: {e}"))?;
-
-    fs::create_dir_all(&app_data_dir).map_err(|e| format!("Failed to create directory: {e}"))?;
-
-    let history_path = app_data_dir.join("history.json");
-
-    let mut history: Vec<PomodoroSession> = if history_path.exists() {
-        let content = fs::read_to_string(&history_path)
-            .map_err(|e| format!("Failed to read history: {e}"))?;
-        serde_json::from_str(&content).unwrap_or_else(|e| {
-            log::warn!("Failed to parse history.json, starting fresh: {e}");
-            Vec::new()
-        })
-    } else {
-        Vec::new()
-    };
-
-    history.retain(|s| s.date != session.date);
-    history.push(session);
-
-    // Keep only last 30 days
-    history.sort_by(|a, b| a.date.cmp(&b.date));
-    if history.len() > 30 {
-        let start_index = history.len() - 30;
-        history.drain(0..start_index);
-    }
-
-    helpers::write_json_atomic(&history_path, &history)?;
-
-    Ok(())
+    helpers::append_daily_stats_to(&app_data_dir, &session)
 }
 
 #[tauri::command]
@@ -620,10 +521,7 @@ async fn save_settings(settings: AppSettings, app: AppHandle) -> Result<(), Stri
         .app_data_dir()
         .map_err(|e| format!("Failed to get app data directory: {e}"))?;
 
-    fs::create_dir_all(&app_data_dir).map_err(|e| format!("Failed to create directory: {e}"))?;
-
-    let file_path = app_data_dir.join("settings.json");
-    helpers::write_json_atomic(&file_path, &settings)?;
+    helpers::write_settings_to(&app_data_dir, &settings)?;
 
     *app.state::<SettingsState>()
         .0
@@ -639,18 +537,7 @@ async fn load_settings(app: AppHandle) -> Result<AppSettings, String> {
         .path()
         .app_data_dir()
         .map_err(|e| format!("Failed to get app data directory: {e}"))?;
-    let file_path = app_data_dir.join("settings.json");
-
-    if !file_path.exists() {
-        return Ok(AppSettings::default());
-    }
-
-    let contents =
-        fs::read_to_string(file_path).map_err(|e| format!("Failed to read settings file: {e}"))?;
-    let settings: AppSettings =
-        serde_json::from_str(&contents).map_err(|e| format!("Failed to parse settings: {e}"))?;
-
-    Ok(settings)
+    Ok(helpers::read_settings_from(&app_data_dir))
 }
 
 #[tauri::command]
@@ -706,29 +593,12 @@ async fn reset_all_data(app: AppHandle) -> Result<(), String> {
         .app_data_dir()
         .map_err(|e| format!("Failed to get app data directory: {e}"))?;
 
-    let files_to_delete = [
-        "session.json",
-        "tasks.json",
-        "history.json",
-        "settings.json",
-        "manual_sessions.json",
-        "tags.json",
-        "session_tags.json",
-    ];
+    helpers::delete_all_data_in(&app_data_dir)?;
 
-    for file_name in &files_to_delete {
-        let file_path = app_data_dir.join(file_name);
-        if file_path.exists() {
-            fs::remove_file(&file_path)
-                .map_err(|e| format!("Failed to delete {file_name}: {e}"))?;
-            if *file_name == "settings.json" {
-                *app.state::<SettingsState>()
-                    .0
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner) = AppSettings::default();
-            }
-        }
-    }
+    *app.state::<SettingsState>()
+        .0
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner) = AppSettings::default();
 
     Ok(())
 }
@@ -761,10 +631,7 @@ async fn save_manual_sessions(sessions: Vec<ManualSession>, app: AppHandle) -> R
         .app_data_dir()
         .map_err(|e| format!("Failed to get app data directory: {e}"))?;
 
-    fs::create_dir_all(&app_data_dir).map_err(|e| format!("Failed to create directory: {e}"))?;
-
-    let file_path = app_data_dir.join("manual_sessions.json");
-    helpers::write_json_atomic(&file_path, &sessions)?;
+    helpers::write_manual_sessions_to(&app_data_dir, &sessions)?;
 
     if are_analytics_enabled(&app) {
         let properties = Some(serde_json::json!({
@@ -782,39 +649,25 @@ async fn load_manual_sessions(app: AppHandle) -> Result<Vec<ManualSession>, Stri
         .path()
         .app_data_dir()
         .map_err(|e| format!("Failed to get app data directory: {e}"))?;
-    let file_path = app_data_dir.join("manual_sessions.json");
-
-    if !file_path.exists() {
-        return Ok(Vec::new());
-    }
-
-    let content = fs::read_to_string(file_path)
-        .map_err(|e| format!("Failed to read manual sessions file: {e}"))?;
-    let sessions: Vec<ManualSession> = serde_json::from_str(&content)
-        .map_err(|e| format!("Failed to parse manual sessions: {e}"))?;
-
-    Ok(sessions)
+    helpers::read_manual_sessions_from(&app_data_dir)
 }
 
 #[tauri::command]
 async fn save_manual_session(session: ManualSession, app: AppHandle) -> Result<(), String> {
-    let mut sessions = load_manual_sessions(app.clone()).await?;
-
-    // Remove existing session with same ID if it exists (for updates)
-    sessions.retain(|s| s.id != session.id);
-
-    sessions.push(session);
-
-    save_manual_sessions(sessions, app).await
+    let app_data_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("Failed to get app data directory: {e}"))?;
+    helpers::upsert_manual_session_in(&app_data_dir, session)
 }
 
 #[tauri::command]
 async fn delete_manual_session(session_id: String, app: AppHandle) -> Result<(), String> {
-    let mut sessions = load_manual_sessions(app.clone()).await?;
-
-    sessions.retain(|s| s.id != session_id);
-
-    save_manual_sessions(sessions, app).await
+    let app_data_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("Failed to get app data directory: {e}"))?;
+    helpers::delete_manual_session_in(&app_data_dir, &session_id)
 }
 
 #[tauri::command]
@@ -822,7 +675,11 @@ async fn get_manual_sessions_for_date(
     date: String,
     app: AppHandle,
 ) -> Result<Vec<ManualSession>, String> {
-    let sessions = load_manual_sessions(app).await?;
+    let app_data_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("Failed to get app data directory: {e}"))?;
+    let sessions = helpers::read_manual_sessions_from(&app_data_dir)?;
     Ok(sessions.into_iter().filter(|s| s.date == date).collect())
 }
 
@@ -1096,36 +953,7 @@ async fn load_tags(app: AppHandle) -> Result<Vec<Tag>, String> {
         .path()
         .app_data_dir()
         .map_err(|e| format!("Failed to get app data directory: {e}"))?;
-
-    let file_path = app_data_dir.join("tags.json");
-
-    if file_path.exists() {
-        let content =
-            fs::read_to_string(&file_path).map_err(|e| format!("Failed to read tags: {e}"))?;
-        Ok(
-            serde_json::from_str(&content)
-                .map_err(|e| format!("Failed to parse tags.json: {e}"))?,
-        )
-    } else {
-        // Return default focus tag if no tags exist
-        let default_tag = Tag {
-            id: "default-focus".to_string(),
-            name: "Focus".to_string(),
-            icon: "ri-brain-line".to_string(),
-            color: "#4CAF50".to_string(),
-            created_at: std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap_or_default()
-                .as_secs()
-                .to_string(),
-        };
-        // Persist default tag so subsequent loads are consistent
-        let tags = vec![default_tag];
-        fs::create_dir_all(&app_data_dir)
-            .map_err(|e| format!("Failed to create directory: {e}"))?;
-        helpers::write_json_atomic(&file_path, &tags)?;
-        Ok(tags)
-    }
+    helpers::read_tags_from(&app_data_dir)
 }
 
 #[tauri::command]
@@ -1134,34 +962,25 @@ async fn save_tags(tags: Vec<Tag>, app: AppHandle) -> Result<(), String> {
         .path()
         .app_data_dir()
         .map_err(|e| format!("Failed to get app data directory: {e}"))?;
-
-    fs::create_dir_all(&app_data_dir).map_err(|e| format!("Failed to create directory: {e}"))?;
-
-    let file_path = app_data_dir.join("tags.json");
-    helpers::write_json_atomic(&file_path, &tags)?;
-
-    Ok(())
+    helpers::write_tags_to(&app_data_dir, &tags)
 }
 
 #[tauri::command]
 async fn save_tag(tag: Tag, app: AppHandle) -> Result<(), String> {
-    let mut tags = load_tags(app.clone()).await?;
-
-    // Remove existing tag with same ID if it exists (for updates)
-    tags.retain(|t| t.id != tag.id);
-
-    tags.push(tag);
-
-    save_tags(tags, app).await
+    let app_data_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("Failed to get app data directory: {e}"))?;
+    helpers::upsert_tag_in(&app_data_dir, tag)
 }
 
 #[tauri::command]
 async fn delete_tag(tag_id: String, app: AppHandle) -> Result<(), String> {
-    let mut tags = load_tags(app.clone()).await?;
-
-    tags.retain(|t| t.id != tag_id);
-
-    save_tags(tags, app).await
+    let app_data_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("Failed to get app data directory: {e}"))?;
+    helpers::delete_tag_in(&app_data_dir, &tag_id)
 }
 
 #[tauri::command]
@@ -1170,17 +989,7 @@ async fn load_session_tags(app: AppHandle) -> Result<Vec<SessionTag>, String> {
         .path()
         .app_data_dir()
         .map_err(|e| format!("Failed to get app data directory: {e}"))?;
-
-    let file_path = app_data_dir.join("session_tags.json");
-
-    if file_path.exists() {
-        let content = fs::read_to_string(&file_path)
-            .map_err(|e| format!("Failed to read session tags: {e}"))?;
-        Ok(serde_json::from_str(&content)
-            .map_err(|e| format!("Failed to parse session_tags.json: {e}"))?)
-    } else {
-        Ok(Vec::new())
-    }
+    helpers::read_session_tags_from(&app_data_dir)
 }
 
 #[tauri::command]
@@ -1189,20 +998,16 @@ async fn save_session_tags(session_tags: Vec<SessionTag>, app: AppHandle) -> Res
         .path()
         .app_data_dir()
         .map_err(|e| format!("Failed to get app data directory: {e}"))?;
-
-    fs::create_dir_all(&app_data_dir).map_err(|e| format!("Failed to create directory: {e}"))?;
-
-    let file_path = app_data_dir.join("session_tags.json");
-    helpers::write_json_atomic(&file_path, &session_tags)?;
-
-    Ok(())
+    helpers::write_session_tags_to(&app_data_dir, &session_tags)
 }
 
 #[tauri::command]
 async fn add_session_tag(session_tag: SessionTag, app: AppHandle) -> Result<(), String> {
-    let mut session_tags = load_session_tags(app.clone()).await?;
-    session_tags.push(session_tag);
-    save_session_tags(session_tags, app).await
+    let app_data_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("Failed to get app data directory: {e}"))?;
+    helpers::append_session_tag_in(&app_data_dir, session_tag)
 }
 
 #[tauri::command]
@@ -1274,16 +1079,29 @@ async fn update_tray_menu(
     Ok(())
 }
 
-#[tauri::command]
-async fn write_excel_file(path: String, data: String) -> Result<(), String> {
+/// Decodes `data` from standard base64 and writes the result to `path`.
+///
+/// Exposed as `pub` so `tests/commands.rs` can wire it into a `MockRuntime`
+/// app via a locally-defined `#[tauri::command]` wrapper (applying `pub`
+/// directly to a `#[tauri::command]` that also appears in `generate_handler!`
+/// causes a macro-namespace conflict due to `#[macro_export]`).
+///
+/// # Errors
+///
+/// Returns an error string if `data` is not valid base64 or if the file
+/// cannot be written to `path`.
+pub fn decode_and_write_file(path: &str, data: &str) -> Result<(), String> {
     let decoded_data = general_purpose::STANDARD
         .decode(data)
         .map_err(|e| format!("Failed to decode base64 data: {e}"))?;
-
-    fs::write(&path, decoded_data)
+    fs::write(path, decoded_data)
         .map_err(|e| format!("Failed to write Excel file to {path}: {e}"))?;
-
     Ok(())
+}
+
+#[tauri::command]
+async fn write_excel_file(path: String, data: String) -> Result<(), String> {
+    decode_and_write_file(&path, &data)
 }
 
 #[tauri::command]

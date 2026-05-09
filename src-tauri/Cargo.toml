@@ -62,6 +62,10 @@ serde_json = { version = "1", default-features = false }
 chrono = { version = "0.4", features = ["serde", "clock"], default-features = false }
 base64 = "0.21"
 
+[dev-dependencies]
+tempfile = "3"
+tauri = { version = "2", features = ["test"] }
+
 [target.'cfg(debug_assertions)'.dependencies]
 tauri = { version = "2", features = ["devtools"] }
 
