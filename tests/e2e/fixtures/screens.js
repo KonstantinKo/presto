@@ -78,9 +78,9 @@ export async function selectSettingsCategory(page, name) {
  * @param {import('@playwright/test').Page} page
  */
 export async function dismissWelcomePing(page) {
-  await expect(
-    page.locator(".notification-ping").filter({ hasText: "Welcome to Presto!" })
-  ).toHaveCount(0, { timeout: 8000 });
+  await expect(page.getByRole("alert").filter({ hasText: "Welcome to Presto!" })).toHaveCount(0, {
+    timeout: 8000,
+  });
 }
 
 /**
@@ -101,8 +101,8 @@ export async function enableDebugTimers(page) {
   const isChecked = await debugCheckbox.isChecked();
   if (!isChecked) {
     await debugCheckbox.click();
-    await expect(
-      page.locator(".notification-ping").filter({ hasText: "Settings saved" })
-    ).toBeVisible({ timeout: 5000 });
+    await expect(page.getByRole("alert").filter({ hasText: "Settings saved" })).toBeVisible({
+      timeout: 5000,
+    });
   }
 }
