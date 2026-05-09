@@ -12,6 +12,8 @@ export class NavigationManager {
     /** @type {Map<string, any>} */
     this.focusSummaryCache = new Map();
     this.focusSummaryCacheDirty = true;
+    // Stable bound reference so removeEventListener can match the same function object.
+    this._handleNavClick = this.handleNavClick.bind(this);
 
     // Apply timer-active class on initial load since default view is timer
     document.body.classList.add("timer-active");
@@ -36,8 +38,8 @@ export class NavigationManager {
 
     const navButtons = document.querySelectorAll(".sidebar-icon, .sidebar-icon-large");
     navButtons.forEach((btn) => {
-      btn.removeEventListener("click", this.handleNavClick);
-      btn.addEventListener("click", this.handleNavClick.bind(this));
+      btn.removeEventListener("click", this._handleNavClick);
+      btn.addEventListener("click", this._handleNavClick);
     });
 
     await this.initCalendar();

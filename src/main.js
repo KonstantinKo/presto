@@ -953,11 +953,6 @@ function setupUserAvatarEventListeners() {
 
 // Initialize the application
 //
-// require-atomic-updates: this function runs once at app boot — the early-out
-// guards above (`_appFullyInitialized` / `_appInitializing`) plus the fact
-// that nothing else writes these globals make the race condition warning a
-// false positive here.
-/* eslint-disable require-atomic-updates */
 async function initializeApplication() {
   // Prevent double initialization only if fully completed
   if (_appFullyInitialized) {
@@ -1067,11 +1062,13 @@ async function initializeApplication() {
     // Initialize settings manager first (other modules depend on it)
     logger.info("📋 Initializing Settings Manager...");
     settingsManager = new SettingsManager();
+    // eslint-disable-next-line require-atomic-updates -- _appInitializing guard at top prevents concurrent calls
     window.settingsManager = settingsManager;
     await settingsManager.init();
 
     logger.info("⏱️ Initializing Pomodoro Timer...");
     timer = new PomodoroTimer();
+    // eslint-disable-next-line require-atomic-updates -- _appInitializing guard at top prevents concurrent calls
     window.pomodoroTimer = timer;
 
     if (settingsManager.settings) {
@@ -1080,15 +1077,18 @@ async function initializeApplication() {
 
     logger.info("🧭 Initializing Navigation Manager...");
     navigation = new NavigationManager();
+    // eslint-disable-next-line require-atomic-updates -- _appInitializing guard at top prevents concurrent calls
     window.navigationManager = navigation;
     await navigation.init();
 
     logger.info("📊 Initializing Session Manager...");
     sessionManager = new SessionManager(navigation);
+    // eslint-disable-next-line require-atomic-updates -- _appInitializing guard at top prevents concurrent calls
     window.sessionManager = sessionManager;
 
     logger.info("👥 Initializing Team Manager...");
     teamManager = new TeamManager();
+    // eslint-disable-next-line require-atomic-updates -- _appInitializing guard at top prevents concurrent calls
     window.teamManager = teamManager;
 
     // Update Manager already initialized earlier
@@ -1101,7 +1101,9 @@ async function initializeApplication() {
 
     clearTimeout(safetyTimeout);
 
+    // eslint-disable-next-line require-atomic-updates -- only reachable after _appInitializing is set; no concurrent writer
     _appFullyInitialized = true;
+    // eslint-disable-next-line require-atomic-updates -- only reachable after _appInitializing is set; no concurrent writer
     _appInitializing = false;
 
     const loadingOverlaySuccess = document.getElementById("app-loading");
@@ -1122,7 +1124,9 @@ async function initializeApplication() {
     NotificationUtils.showNotificationPing("Failed to initialize app. Please refresh! 🔄", "error");
 
     // Reset initialization flags on error so user can retry
+    // eslint-disable-next-line require-atomic-updates -- only reachable after _appInitializing is set; no concurrent writer
     _appInitializing = false;
+    // eslint-disable-next-line require-atomic-updates -- only reachable after _appInitializing is set; no concurrent writer
     _appFullyInitialized = false;
 
     // Show error screen instead of leaving user with blank screen
@@ -1178,7 +1182,6 @@ async function initializeApplication() {
     document.body.appendChild(errorScreen);
   }
 }
-/* eslint-enable require-atomic-updates */
 
 function setupGlobalEventListeners() {
   const resetButton = document.getElementById("reset-all-data-btn");

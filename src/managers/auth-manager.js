@@ -160,7 +160,7 @@ class AuthManager {
 
   async init() {
     if (this.initialized) {
-      return;
+      return Promise.resolve();
     }
     if (this.initPromise) {
       return this.initPromise;
