@@ -517,6 +517,28 @@ pub async fn update_activity_timeout(timeout_seconds: u64) -> Result<(), BridgeE
     invoke_serde("update_activity_timeout", &Args { timeout_seconds }).await
 }
 
+// ---------------------------------------------------------------------------
+// Autostart
+// ---------------------------------------------------------------------------
+
+/// Enable launch-on-login for the app via the OS-native autolaunch
+/// mechanism. Tauri-side handler:
+/// `enable_autostart() -> Result<(), BridgeError>`
+/// at `src-tauri/src/lib.rs:715`.
+///
+/// No-arg setter that delegates to the `tauri-plugin-autostart` crate's
+/// `AutoLaunchManager::enable()` (which writes a Login Items entry on
+/// macOS, a Run-key registry entry on Windows, and a `.desktop`
+/// autostart file on XDG-conformant Linux desktops).
+///
+/// # Errors
+/// Returns `BridgeError::BridgeUnavailable` when the Tauri JS bridge is
+/// not present. Plugin failures (e.g., user has revoked the OS
+/// permission to manage Login Items) surface as `BridgeError::Internal`.
+pub async fn enable_autostart() -> Result<(), BridgeError> {
+    invoke_serde("enable_autostart", &serde_json::Value::Null).await
+}
+
 // Tests gated on `wasm32` because every wrapper-test is a
 // `#[wasm_bindgen_test]` — running them via `cargo test` on the host
 // target would produce dead-code lint failures (the host-side
