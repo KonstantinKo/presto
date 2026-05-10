@@ -539,6 +539,22 @@ pub async fn enable_autostart() -> Result<(), BridgeError> {
     invoke_serde("enable_autostart", &serde_json::Value::Null).await
 }
 
+/// Disable launch-on-login. Tauri-side handler:
+/// `disable_autostart() -> Result<(), BridgeError>`
+/// at `src-tauri/src/lib.rs:722`.
+///
+/// Counterpart to `enable_autostart`; delegates to
+/// `AutoLaunchManager::disable()`. Idempotent at the plugin layer —
+/// calling `disable` when autostart is already off is a successful
+/// no-op.
+///
+/// # Errors
+/// Returns `BridgeError::BridgeUnavailable` when the Tauri JS bridge is
+/// not present. Plugin failures surface as `BridgeError::Internal`.
+pub async fn disable_autostart() -> Result<(), BridgeError> {
+    invoke_serde("disable_autostart", &serde_json::Value::Null).await
+}
+
 // Tests gated on `wasm32` because every wrapper-test is a
 // `#[wasm_bindgen_test]` — running them via `cargo test` on the host
 // target would produce dead-code lint failures (the host-side
