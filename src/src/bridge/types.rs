@@ -102,9 +102,171 @@ pub struct ManualSession {
     pub tags: Option<Vec<serde_json::Value>>,
 }
 
+/// Keyboard-shortcut bindings bundle. Mirrors `ShortcutSettings` at
+/// `src-tauri/src/lib.rs:212-217`.
+///
+/// Each field is `Option<String>` because users can clear a binding
+/// (the JS era stores `null` for cleared bindings, which serde maps to
+/// `None`). Each string is a Tauri shortcut spec like
+/// `"CommandOrControl+Alt+Space"`; parsing happens Rust-side at
+/// `register_global_shortcuts` time.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ShortcutSettings {
+    pub start_stop: Option<String>,
+    pub reset: Option<String>,
+    pub skip: Option<String>,
+}
+
+impl Default for ShortcutSettings {
+    fn default() -> Self {
+        Self {
+            start_stop: Some("CommandOrControl+Alt+Space".to_string()),
+            reset: Some("CommandOrControl+Alt+R".to_string()),
+            skip: Some("CommandOrControl+Alt+S".to_string()),
+        }
+    }
+}
+
+/// Timer durations & session count. Mirrors `TimerSettings` at
+/// `src-tauri/src/lib.rs:219-227`.
+///
+/// `weekly_goal_minutes` carries a `#[serde(default = "...")]` because
+/// settings JSON written by pre-`weekly_goal` builds lacks the field.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TimerSettings {
+    /// Minutes.
+    pub focus_duration: u32,
+    /// Minutes.
+    pub break_duration: u32,
+    /// Minutes.
+    pub long_break_duration: u32,
+    pub total_sessions: u32,
+    #[serde(default = "default_weekly_goal")]
+    pub weekly_goal_minutes: u32,
+}
+
+impl Default for TimerSettings {
+    fn default() -> Self {
+        Self {
+            focus_duration: 25,
+            break_duration: 5,
+            long_break_duration: 20,
+            total_sessions: 10,
+            weekly_goal_minutes: default_weekly_goal(),
+        }
+    }
+}
+
+const fn default_weekly_goal() -> u32 {
+    125
+}
+
+const fn default_analytics_enabled() -> bool {
+    true
+}
+
+/// Notification preferences. Mirrors `NotificationSettings` at
+/// `src-tauri/src/lib.rs:259-270`.
+///
+/// `auto_start_focus` and `allow_continuous_sessions` carry
+/// `#[serde(default)]` because they were added after the `0.4.0`
+/// settings shape and may be missing from older settings JSONs.
+///
+/// `clippy::struct_excessive_bools` is allowed targeted-fashion: every
+/// bool here maps to an independent UI toggle (the same rationale the
+/// Tauri-side mirror at `src-tauri/src/lib.rs:258` uses), so collapsing
+/// them into a state-machine enum would not match either the JSON
+/// shape on disk (FR-005) or the settings UI grouping.
+#[allow(clippy::struct_excessive_bools)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NotificationSettings {
+    pub desktop_notifications: bool,
+    pub sound_notifications: bool,
+    pub auto_start_timer: bool,
+    #[serde(default)]
+    pub auto_start_focus: bool,
+    #[serde(default)]
+    pub allow_continuous_sessions: bool,
+    pub smart_pause: bool,
+    /// Seconds.
+    pub smart_pause_timeout: u32,
+}
+
+impl Default for NotificationSettings {
+    fn default() -> Self {
+        Self {
+            desktop_notifications: true,
+            sound_notifications: true,
+            auto_start_timer: true,
+            auto_start_focus: false,
+            allow_continuous_sessions: false,
+            smart_pause: false,
+            smart_pause_timeout: 30,
+        }
+    }
+}
+
+/// Advanced / debug toggles. Mirrors `AdvancedSettings` at
+/// `src-tauri/src/lib.rs:272-276`.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct AdvancedSettings {
+    #[serde(default)]
+    pub debug_mode: bool,
+}
+
+/// Full application settings record. Mirrors `AppSettings` at
+/// `src-tauri/src/lib.rs:196-210`.
+///
+/// **Wire shape note**: this matches the Tauri-side `AppSettings`
+/// exactly today, including `hide_status_bar: bool`. Spec
+/// data-model.md §`Settings / AppSettings` describes a planned
+/// migration to a typed `status_bar_display: StatusBarDisplay` enum
+/// with a custom deserializer that falls back to `hide_status_bar`
+/// for legacy JSONs; that migration is out of scope for Phase 1C and
+/// will be done in a later phase that touches both crates in lockstep.
+/// Today's wrapper round-trips the existing shape (FR-005 — no
+/// on-disk shape change in this phase).
+///
+/// `clippy::struct_excessive_bools` is allowed here for the same
+/// reason as on `NotificationSettings` and on the Tauri-side mirror
+/// at `src-tauri/src/lib.rs:195`: each bool is an independent
+/// settings toggle exposed in the UI; restructuring would not match
+/// either the on-disk JSON shape or the settings-page layout.
+#[allow(clippy::struct_excessive_bools)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Settings {
+    pub shortcuts: ShortcutSettings,
+    pub timer: TimerSettings,
+    pub notifications: NotificationSettings,
+    #[serde(default)]
+    pub advanced: AdvancedSettings,
+    pub autostart: bool,
+    #[serde(default = "default_analytics_enabled")]
+    pub analytics_enabled: bool,
+    #[serde(default)]
+    pub hide_icon_on_close: bool,
+    #[serde(default)]
+    pub hide_status_bar: bool,
+}
+
+impl Default for Settings {
+    fn default() -> Self {
+        Self {
+            shortcuts: ShortcutSettings::default(),
+            timer: TimerSettings::default(),
+            notifications: NotificationSettings::default(),
+            advanced: AdvancedSettings::default(),
+            autostart: false,
+            analytics_enabled: true,
+            hide_icon_on_close: false,
+            hide_status_bar: false,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{ManualSession, Session, Task};
+    use super::{ManualSession, Session, Settings, Task};
     use crate::bridge::session_type::SessionType;
 
     #[test]
@@ -142,6 +304,53 @@ mod tests {
         assert_eq!(decoded.text, "ship the wrapper");
         assert!(!decoded.completed);
         assert_eq!(decoded.completed_at, None);
+    }
+
+    #[test]
+    fn settings_round_trips_default_shape() {
+        // Pins today's Tauri-side AppSettings wire shape including the
+        // legacy `hide_status_bar` field. The forward migration to
+        // `status_bar_display` per data-model.md is a separate phase;
+        // this test documents the baseline so a future drift fails loud.
+        let s = Settings::default();
+        let json = serde_json::to_string(&s).unwrap();
+        let decoded: Settings = serde_json::from_str(&json).unwrap();
+        assert_eq!(decoded.timer.focus_duration, 25);
+        assert_eq!(decoded.timer.weekly_goal_minutes, 125);
+        assert!(decoded.notifications.desktop_notifications);
+        assert!(decoded.analytics_enabled);
+        assert!(!decoded.hide_status_bar);
+        assert_eq!(
+            decoded.shortcuts.start_stop.as_deref(),
+            Some("CommandOrControl+Alt+Space"),
+        );
+    }
+
+    #[test]
+    fn settings_deserialises_from_minimal_legacy_json() {
+        // Old `0.4.x` settings JSONs may lack `weekly_goal_minutes`,
+        // `auto_start_focus`, `allow_continuous_sessions`, `advanced`,
+        // `analytics_enabled`, `hide_icon_on_close`, and `hide_status_bar`.
+        // The serde defaults must fill those in (FR-005 — round-trip
+        // every released 0.4.x JSON without manual migration).
+        let legacy = r#"{
+            "shortcuts": {"start_stop": null, "reset": null, "skip": null},
+            "timer": {"focus_duration": 25, "break_duration": 5,
+                      "long_break_duration": 20, "total_sessions": 10},
+            "notifications": {"desktop_notifications": true,
+                              "sound_notifications": true,
+                              "auto_start_timer": true, "smart_pause": false,
+                              "smart_pause_timeout": 30},
+            "autostart": false
+        }"#;
+        let decoded: Settings = serde_json::from_str(legacy).unwrap();
+        assert_eq!(decoded.timer.weekly_goal_minutes, 125);
+        assert!(!decoded.notifications.auto_start_focus);
+        assert!(!decoded.notifications.allow_continuous_sessions);
+        assert!(!decoded.advanced.debug_mode);
+        assert!(decoded.analytics_enabled);
+        assert!(!decoded.hide_icon_on_close);
+        assert!(!decoded.hide_status_bar);
     }
 
     #[test]

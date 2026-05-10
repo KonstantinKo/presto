@@ -31,7 +31,7 @@ use wasm_bindgen_futures::JsFuture;
 
 use super::availability::bridge_available;
 use super::error::BridgeError;
-use super::types::{ManualSession, Session, SessionTag, Tag, Task};
+use super::types::{ManualSession, Session, SessionTag, Settings, Tag, Task};
 
 #[wasm_bindgen]
 extern "C" {
@@ -342,6 +342,31 @@ pub async fn add_session_tag(session_tag: SessionTag) -> Result<(), BridgeError>
         session_tag: SessionTag,
     }
     invoke_serde("add_session_tag", &Args { session_tag }).await
+}
+
+// ---------------------------------------------------------------------------
+// Settings & data lifecycle
+// ---------------------------------------------------------------------------
+
+/// Persist the user's full settings record. Tauri-side handler:
+/// `save_settings(settings: AppSettings) -> Result<(), BridgeError>`
+/// at `src-tauri/src/lib.rs:625`.
+///
+/// The handler also updates the in-process `SettingsState` mutex so
+/// `are_analytics_enabled()` and other Rust-side reads see the fresh
+/// value without an extra disk round-trip. The wrapper does not
+/// observe that side-effect; it surfaces only the IO outcome.
+///
+/// # Errors
+/// Returns `BridgeError::BridgeUnavailable` when the Tauri JS bridge is
+/// not present. Otherwise returns whatever variant the Tauri-side handler
+/// maps its filesystem failure to (typically `BridgeError::Internal`).
+pub async fn save_settings(settings: Settings) -> Result<(), BridgeError> {
+    #[derive(Serialize)]
+    struct Args {
+        settings: Settings,
+    }
+    invoke_serde("save_settings", &Args { settings }).await
 }
 
 // Tests gated on `wasm32` because every wrapper-test is a
