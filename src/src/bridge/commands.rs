@@ -268,12 +268,12 @@ pub async fn load_manual_sessions() -> Result<Vec<ManualSession>, BridgeError> {
 #[cfg(all(test, target_arch = "wasm32"))]
 mod tests {
     use super::{
-        get_stats_history, load_manual_sessions, load_session_data, load_tasks, save_daily_stats,
-        save_manual_sessions, save_session_data, save_tasks,
+        get_stats_history, load_manual_sessions, load_session_data, load_tags, load_tasks,
+        save_daily_stats, save_manual_sessions, save_session_data, save_tasks,
     };
     use crate::bridge::error::BridgeError;
     use crate::bridge::session_type::SessionType;
-    use crate::bridge::types::{ManualSession, Session, Task};
+    use crate::bridge::types::{ManualSession, Session, Tag, Task};
     use wasm_bindgen_test::wasm_bindgen_test;
 
     fn sample_session() -> Session {
@@ -489,6 +489,29 @@ mod tests {
     async fn load_manual_sessions_round_trip_signature_pinned() {
         async fn assert_signature() -> Result<Vec<ManualSession>, BridgeError> {
             load_manual_sessions().await
+        }
+        let _ = assert_signature().await;
+    }
+
+    #[wasm_bindgen_test]
+    async fn load_tags_round_trip_short_circuits_when_bridge_absent() {
+        let result = load_tags().await;
+        match result {
+            Err(BridgeError::BridgeUnavailable) => {}
+            other => panic!("expected BridgeUnavailable, got {other:?}"),
+        }
+    }
+
+    /// Compile-time signature pin per contracts/tauri-bridge.md row 9:
+    /// `load_tags() -> Result<Vec<Tag>, BridgeError>`.
+    /// Returns an empty `Vec` for the no-tags-file cold-start case (the
+    /// Tauri-side helper at `helpers::read_tags_from` treats `NotFound`
+    /// as empty — same cold-start convention as `load_tasks` /
+    /// `load_manual_sessions`).
+    #[wasm_bindgen_test]
+    async fn load_tags_round_trip_signature_pinned() {
+        async fn assert_signature() -> Result<Vec<Tag>, BridgeError> {
+            load_tags().await
         }
         let _ = assert_signature().await;
     }
