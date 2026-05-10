@@ -1,13 +1,64 @@
-// `BridgeAvailable` — one-time read of `window.__TAURI_INTERNALS__`.
+// `BridgeAvailable` — runtime check for `window.__TAURI_INTERNALS__`.
 //
 // Spec 001-leptos-migration §Phase 1B T030-T031; data-model.md §`BridgeAvailable`.
 //
 // AGENTS.md §Bridge availability and FR-009: every `invoke()` wrapper checks
 // this signal; when `Absent`, it short-circuits to a sentinel return value
 // (or `BridgeError::BridgeUnavailable`). The check is a single `Reflect::has`
-// call against `window`; the function is intentionally cheap so wrappers can
-// call it on every invocation rather than caching at process start (the cache
-// would then misbehave under hot-reload / dev-server tab reload patterns).
+// call against the global object; the function is intentionally cheap so
+// wrappers can call it on every invocation rather than caching at process
+// start (the cache would then misbehave under hot-reload / dev-server tab
+// reload patterns, and the cost is one Reflect lookup per command — orders
+// of magnitude under the IPC trip itself).
+//
+// The check probes `js_sys::global()` rather than only `web_sys::window()`
+// so it works under both browser (where `globalThis === window`) and the
+// `wasm-bindgen-test --node` runner (where `web_sys::window()` returns
+// `None` but `js_sys::global()` resolves to the node global object). This
+// keeps every command-wrapper test runnable under `wasm-pack test --node`.
+
+use wasm_bindgen::JsValue;
+
+/// Indicates whether the Tauri JS bridge (`window.__TAURI_INTERNALS__`) is
+/// reachable from the current execution context.
+///
+/// `Available` ⇒ `invoke()` may be called.
+/// `Absent` ⇒ wrappers short-circuit to `BridgeError::BridgeUnavailable`
+/// (or to a documented sentinel for read-only commands; see Phase 1G).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BridgeAvailable {
+    Available,
+    Absent,
+}
+
+impl BridgeAvailable {
+    /// `true` iff the bridge is *not* present. Lets call sites read as
+    /// `if bridge_available().is_absent() { ... }` without verbose match
+    /// arms at every wrapper.
+    #[must_use]
+    pub const fn is_absent(self) -> bool {
+        matches!(self, Self::Absent)
+    }
+}
+
+/// Read the global object for `__TAURI_INTERNALS__` and report whether the
+/// Tauri JS bridge is reachable.
+///
+/// The probe checks `js_sys::global()` (which resolves to `window` in browser
+/// contexts and to the node global in the wasm-bindgen-test `--node` runner)
+/// for a property named `__TAURI_INTERNALS__` whose value is neither
+/// `undefined` nor `null`. This matches the Tauri 2.x convention where the
+/// internals bag is installed during the webview bootstrap and absent from
+/// every other context (Trunk dev server, e2e mock harness, node tests).
+#[must_use]
+pub fn bridge_available() -> BridgeAvailable {
+    let global = js_sys::global();
+    let key = JsValue::from_str("__TAURI_INTERNALS__");
+    match js_sys::Reflect::get(&global, &key) {
+        Ok(value) if !value.is_undefined() && !value.is_null() => BridgeAvailable::Available,
+        _ => BridgeAvailable::Absent,
+    }
+}
 
 #[cfg(test)]
 mod tests {
@@ -27,9 +78,9 @@ mod tests {
     /// When `window.__TAURI_INTERNALS__` is set on the global object, the
     /// function MUST report `Available`. We install it ourselves via
     /// `Reflect::set` against the node global (since wasm-bindgen's node runner
-    /// exposes the global object; web_sys::window() still returns None there,
-    /// so this test ALSO pins that the implementation must call into js-sys
-    /// `global()` / `globalThis` rather than only `web_sys::window()`).
+    /// exposes the global object; `web_sys::window()` still returns `None`
+    /// there, so this test ALSO pins that the implementation must call into
+    /// `js_sys::global()` / `globalThis` rather than only `web_sys::window()`).
     ///
     /// NOTE for the RED phase: this test will fail because (a) the function
     /// doesn't exist yet, and (b) the implementation must read whichever
