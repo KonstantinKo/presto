@@ -142,7 +142,10 @@ fn main() -> io::Result<()> {
         // server output. No alternative logger exists in this binary.
     )]
     {
-        println!("presto-build-themes: emitted {count} theme(s) to {}", output_path.display());
+        println!(
+            "presto-build-themes: emitted {count} theme(s) to {}",
+            output_path.display()
+        );
     }
     Ok(())
 }
@@ -190,8 +193,7 @@ mod tests {
         let input_dir = target_tmp.join("themes");
         fs::create_dir_all(&input_dir).expect("create fixture themes dir");
         for name in ["espresso.css", "pipboy.css", "pommodore64.css"] {
-            fs::write(input_dir.join(name), "/* fixture */\n")
-                .expect("write fixture css");
+            fs::write(input_dir.join(name), "/* fixture */\n").expect("write fixture css");
         }
         // Hidden / non-CSS files must be filtered out.
         fs::write(input_dir.join(".DS_Store"), "junk").expect("hidden fixture");

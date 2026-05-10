@@ -51,23 +51,14 @@ fn parse_seconds(raw: &str, fallback: u32) -> u32 {
 
 /// Automation settings tab.
 #[component]
-pub fn AutomationSettings(
-    settings: RwSignal<Settings>,
-    toast: SettingsToast,
-) -> impl IntoView {
+pub fn AutomationSettings(settings: RwSignal<Settings>, toast: SettingsToast) -> impl IntoView {
     // Notifications-bound signals.
-    let auto_start = Signal::derive(move || {
-        settings.with(|s| s.notifications.auto_start_timer)
-    });
-    let continuous = Signal::derive(move || {
-        settings.with(|s| s.notifications.allow_continuous_sessions)
-    });
-    let smart_pause = Signal::derive(move || {
-        settings.with(|s| s.notifications.smart_pause)
-    });
-    let timeout_value = Signal::derive(move || {
-        settings.with(|s| s.notifications.smart_pause_timeout.to_string())
-    });
+    let auto_start = Signal::derive(move || settings.with(|s| s.notifications.auto_start_timer));
+    let continuous =
+        Signal::derive(move || settings.with(|s| s.notifications.allow_continuous_sessions));
+    let smart_pause = Signal::derive(move || settings.with(|s| s.notifications.smart_pause));
+    let timeout_value =
+        Signal::derive(move || settings.with(|s| s.notifications.smart_pause_timeout.to_string()));
 
     // Local UI state for the two toggles that don't yet have typed
     // backing in `Settings::notifications`. JS-era defaults: auto-save
@@ -83,8 +74,7 @@ pub fn AutomationSettings(
     };
     let on_continuous = move |_| {
         settings.update(|s| {
-            s.notifications.allow_continuous_sessions =
-                !s.notifications.allow_continuous_sessions;
+            s.notifications.allow_continuous_sessions = !s.notifications.allow_continuous_sessions;
         });
         toast.show("Settings saved");
     };

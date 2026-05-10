@@ -101,10 +101,7 @@ mod tests {
             resource: "settings.json".to_string(),
         };
         let json = serde_json::to_string(&err).unwrap();
-        assert_eq!(
-            json,
-            r#"{"kind":"not_found","resource":"settings.json"}"#
-        );
+        assert_eq!(json, r#"{"kind":"not_found","resource":"settings.json"}"#);
     }
 
     #[test]

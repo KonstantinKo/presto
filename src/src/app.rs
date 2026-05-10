@@ -169,14 +169,12 @@ pub fn App() -> impl IntoView {
         // `UpdateNotification` banner reads that signal.
         spawn_local(async move {
             let mut update_mgr = UpdateManager::new();
-            let listener = events::listen::<UpdateAvailablePayload>(
-                UPDATE_AVAILABLE,
-                move |payload| {
+            let listener =
+                events::listen::<UpdateAvailablePayload>(UPDATE_AVAILABLE, move |payload| {
                     update_mgr.handle_event(payload);
                     update_info.set(update_mgr.info().clone());
-                },
-            )
-            .await;
+                })
+                .await;
             // The Listener guard is intentionally leaked into the
             // closure so the subscription survives until the App
             // unmounts (which on the App root means until the WASM

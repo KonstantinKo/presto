@@ -882,9 +882,7 @@ pub async fn supabase_get_session() -> Result<Option<AuthSession>, BridgeError> 
 /// revoked — the consumer should fall back to the sign-in flow).
 /// Returns `BridgeError::Internal` for network failures or 5xx
 /// responses.
-pub async fn supabase_refresh_session(
-    refresh_token: String,
-) -> Result<AuthSession, BridgeError> {
+pub async fn supabase_refresh_session(refresh_token: String) -> Result<AuthSession, BridgeError> {
     #[derive(Serialize)]
     struct Args {
         refresh_token: String,
@@ -1067,9 +1065,7 @@ pub async fn import_legacy_manual_sessions(
 /// is not present. Returns `BridgeError::Internal` for filesystem
 /// errors writing the sentinel marker file or the active-session
 /// file.
-pub async fn import_legacy_user_state(
-    payload: LegacyUserStatePayload,
-) -> Result<(), BridgeError> {
+pub async fn import_legacy_user_state(payload: LegacyUserStatePayload) -> Result<(), BridgeError> {
     #[derive(Serialize)]
     struct Args {
         payload: LegacyUserStatePayload,
@@ -1824,11 +1820,8 @@ mod tests {
         // `clippy::implicit_hasher` pedantic lint at module scope; pin the
         // call-site hasher to the std default `RandomState` so the no-prop
         // case (`None`) doesn't leave `S` ambiguous.
-        let result = track_event::<std::collections::hash_map::RandomState>(
-            "session_started",
-            None,
-        )
-        .await;
+        let result =
+            track_event::<std::collections::hash_map::RandomState>("session_started", None).await;
         match result {
             Err(BridgeError::BridgeUnavailable) => {}
             other => panic!("expected BridgeUnavailable, got {other:?}"),
@@ -1888,11 +1881,9 @@ mod tests {
 
     #[wasm_bindgen_test]
     async fn supabase_sign_in_with_password_round_trip_short_circuits_when_bridge_absent() {
-        let result = supabase_sign_in_with_password(
-            "user@example.com".to_string(),
-            "hunter2".to_string(),
-        )
-        .await;
+        let result =
+            supabase_sign_in_with_password("user@example.com".to_string(), "hunter2".to_string())
+                .await;
         match result {
             Err(BridgeError::BridgeUnavailable) => {}
             other => panic!("expected BridgeUnavailable, got {other:?}"),
@@ -1997,9 +1988,7 @@ mod tests {
     /// non-`None` session, so the no-session path is not reachable.
     #[wasm_bindgen_test]
     async fn supabase_refresh_session_round_trip_signature_pinned() {
-        async fn assert_signature(
-            refresh_token: String,
-        ) -> Result<AuthSession, BridgeError> {
+        async fn assert_signature(refresh_token: String) -> Result<AuthSession, BridgeError> {
             supabase_refresh_session(refresh_token).await
         }
         let _ = assert_signature("rt-old".to_string()).await;
@@ -2014,11 +2003,8 @@ mod tests {
 
     #[wasm_bindgen_test]
     async fn export_sessions_xlsx_round_trip_short_circuits_when_bridge_absent() {
-        let result = export_sessions_xlsx(
-            "/tmp/export.xlsx".to_string(),
-            sample_manual_sessions(),
-        )
-        .await;
+        let result =
+            export_sessions_xlsx("/tmp/export.xlsx".to_string(), sample_manual_sessions()).await;
         match result {
             Err(BridgeError::BridgeUnavailable) => {}
             other => panic!("expected BridgeUnavailable, got {other:?}"),
@@ -2043,10 +2029,6 @@ mod tests {
         ) -> Result<(), BridgeError> {
             export_sessions_xlsx(path, sessions).await
         }
-        let _ = assert_signature(
-            "/tmp/export.xlsx".to_string(),
-            sample_manual_sessions(),
-        )
-        .await;
+        let _ = assert_signature("/tmp/export.xlsx".to_string(), sample_manual_sessions()).await;
     }
 }

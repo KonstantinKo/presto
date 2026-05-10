@@ -194,9 +194,7 @@ impl<S: GuestModeStore> AuthManager<S> {
     ///
     /// Spec 001-leptos-migration §Phase 3c T178.
     pub fn complete_sign_in(&mut self, session: crate::bridge::types::AuthSession) {
-        self.state = AuthState::SignedIn {
-            user: session.user,
-        };
+        self.state = AuthState::SignedIn { user: session.user };
         self.store.clear_guest();
     }
 

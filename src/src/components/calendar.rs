@@ -222,8 +222,8 @@ pub fn CalendarView() -> impl IntoView {
     // `sessions-history.spec.js:38-41` flow finds the just-
     // completed focus session row. Phase 4c routes the persistence
     // sink through `bridge::commands::save_manual_sessions`.
-    let sessions = use_context::<RwSignal<Vec<ManualSession>>>()
-        .unwrap_or_else(|| RwSignal::new(Vec::new()));
+    let sessions =
+        use_context::<RwSignal<Vec<ManualSession>>>().unwrap_or_else(|| RwSignal::new(Vec::new()));
     let session_modal_open = RwSignal::new(false);
     let modal_duration = RwSignal::new(0_u32);
     let on_open_modal = move |duration: u32| {
@@ -235,11 +235,9 @@ pub fn CalendarView() -> impl IntoView {
     // Settings drives the weekly-goal projection. Read via context
     // so `settings-goals.spec.js:38` (asserts `#weekly-goal-minutes`
     // value persists) sees the same source as the Goals tab.
-    let settings = use_context::<RwSignal<Settings>>()
-        .unwrap_or_else(|| RwSignal::new(Settings::default()));
-    let weekly_goal = Signal::derive(move || {
-        settings.with(|s| s.timer.weekly_goal_minutes)
-    });
+    let settings =
+        use_context::<RwSignal<Settings>>().unwrap_or_else(|| RwSignal::new(Settings::default()));
+    let weekly_goal = Signal::derive(move || settings.with(|s| s.timer.weekly_goal_minutes));
 
     let week_label = Signal::derive(move || format_week_range(cursor.get()));
     let month_label = Signal::derive(move || format_month_label(cursor.get()));

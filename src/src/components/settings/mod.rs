@@ -178,9 +178,7 @@ pub fn SettingsView(
 
     // Per-tab category-active flag. Each row reads this to decide
     // whether to apply `.active` on its `#category-<tab>` div.
-    let is_active = move |target: SettingsTab| {
-        Signal::derive(move || tab.get() == target)
-    };
+    let is_active = move |target: SettingsTab| Signal::derive(move || tab.get() == target);
 
     view! {
         <div class="view-container view-section" id="settings-view">

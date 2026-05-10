@@ -122,8 +122,10 @@ extern "C" {
         js_name = listen,
         catch
     )]
-    fn tauri_listen(event_name: &str, handler: &js_sys::Function)
-        -> Result<js_sys::Promise, JsValue>;
+    fn tauri_listen(
+        event_name: &str,
+        handler: &js_sys::Function,
+    ) -> Result<js_sys::Promise, JsValue>;
 }
 
 // ---------------------------------------------------------------------------
@@ -279,11 +281,10 @@ where
     // The resolved value is the JS unsubscribe function. If the Tauri
     // bridge ever returns a non-function shape here, that's a contract
     // violation — surface as Internal rather than silently leaking.
-    let unsubscribe: js_sys::Function = resolved.dyn_into().map_err(|raw| {
-        BridgeError::Internal {
+    let unsubscribe: js_sys::Function =
+        resolved.dyn_into().map_err(|raw| BridgeError::Internal {
             msg: format!("listen('{event_name}') returned non-function unsubscribe: {raw:?}"),
-        }
-    })?;
+        })?;
 
     Ok(Listener {
         _closure: closure,
@@ -372,7 +373,8 @@ mod tests {
     #[wasm_bindgen_test]
     async fn listen_signature_pinned_for_update_available_payload() {
         async fn assert_signature() -> Result<Listener, BridgeError> {
-            listen::<UpdateAvailablePayload>(UPDATE_AVAILABLE, |_p: UpdateAvailablePayload| {}).await
+            listen::<UpdateAvailablePayload>(UPDATE_AVAILABLE, |_p: UpdateAvailablePayload| {})
+                .await
         }
         let _ = assert_signature().await;
     }

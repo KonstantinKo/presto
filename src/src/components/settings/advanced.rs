@@ -58,10 +58,7 @@ const fn status_bar_to_str(value: StatusBarDisplay) -> &'static str {
 
 /// Advanced settings tab.
 #[component]
-pub fn AdvancedSettings(
-    settings: RwSignal<Settings>,
-    toast: SettingsToast,
-) -> impl IntoView {
+pub fn AdvancedSettings(settings: RwSignal<Settings>, toast: SettingsToast) -> impl IntoView {
     // Derived signals.
     let autostart = Signal::derive(move || settings.with(|s| s.autostart));
     let hide_icon = Signal::derive(move || settings.with(|s| s.hide_icon_on_close));

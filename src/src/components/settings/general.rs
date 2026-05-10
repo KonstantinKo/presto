@@ -49,25 +49,18 @@ fn parse_minutes(raw: &str, fallback: u32) -> u32 {
 /// General settings tab — five timer-duration / session-count
 /// numeric inputs, each bound to a slice of `settings.timer`.
 #[component]
-pub fn GeneralSettings(
-    settings: RwSignal<Settings>,
-    toast: SettingsToast,
-) -> impl IntoView {
+pub fn GeneralSettings(settings: RwSignal<Settings>, toast: SettingsToast) -> impl IntoView {
     // Derived signals — read each field via `.with(...)` so we
     // borrow the inner record without cloning. Each renders to a
     // `String` because `<input>`'s `prop:value` binds to a string.
-    let focus_duration = Signal::derive(move || {
-        settings.with(|s| s.timer.focus_duration.to_string())
-    });
-    let break_duration = Signal::derive(move || {
-        settings.with(|s| s.timer.break_duration.to_string())
-    });
-    let long_break_duration = Signal::derive(move || {
-        settings.with(|s| s.timer.long_break_duration.to_string())
-    });
-    let total_sessions = Signal::derive(move || {
-        settings.with(|s| s.timer.total_sessions.to_string())
-    });
+    let focus_duration =
+        Signal::derive(move || settings.with(|s| s.timer.focus_duration.to_string()));
+    let break_duration =
+        Signal::derive(move || settings.with(|s| s.timer.break_duration.to_string()));
+    let long_break_duration =
+        Signal::derive(move || settings.with(|s| s.timer.long_break_duration.to_string()));
+    let total_sessions =
+        Signal::derive(move || settings.with(|s| s.timer.total_sessions.to_string()));
 
     // Change handlers — each fires on blur (`on:change`), updates the
     // settings signal in place, and shows the auto-save toast. The

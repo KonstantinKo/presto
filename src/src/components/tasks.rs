@@ -198,12 +198,8 @@ mod tests {
             "task-list",
             "task-input-row",
         ];
-        const REQUIRED_CLASSES: &[&str] = &[
-            "task-item",
-            "task-checkbox",
-            "task-delete-btn",
-            "task-text",
-        ];
+        const REQUIRED_CLASSES: &[&str] =
+            &["task-item", "task-checkbox", "task-delete-btn", "task-text"];
         assert!(!REQUIRED_IDS.is_empty(), "ID contract must be non-empty");
         assert!(
             !REQUIRED_CLASSES.is_empty(),

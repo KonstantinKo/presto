@@ -449,7 +449,9 @@ impl TimerState {
     /// shifts the *future* portion of the session.
     pub fn adjust_remaining_secs(&mut self, delta_secs: i32, clock: &dyn Clock) {
         let max_secs = i64::from(self.durations.for_mode(self.current_mode));
-        let proposed = self.time_remaining_secs.saturating_add(i64::from(delta_secs));
+        let proposed = self
+            .time_remaining_secs
+            .saturating_add(i64::from(delta_secs));
         // Floor at 1 second (the JS-era clamp prevents the display
         // from showing 0:00 outside the natural completion path).
         // Ceil at the current mode's full duration so a +5 press at
@@ -1322,8 +1324,8 @@ mod tests {
     fn adjust_remaining_adds_seconds_when_idle() {
         let clock = MockClock::new(0);
         let mut state = TimerState::new(Durations::default()); // focus 1500
-        // Knock the displayed remaining down to 1200 first so the
-        // +300 doesn't immediately saturate against the cap.
+                                                               // Knock the displayed remaining down to 1200 first so the
+                                                               // +300 doesn't immediately saturate against the cap.
         state.adjust_remaining_secs(-300, &clock);
         assert_eq!(state.time_remaining_secs(), 1200);
         state.adjust_remaining_secs(300, &clock);

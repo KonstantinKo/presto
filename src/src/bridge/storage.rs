@@ -34,8 +34,8 @@ use super::commands::{
 use super::error::BridgeError;
 use super::types::{
     LegacyHistoryPayload, LegacyManualSessionsPayload, LegacySettingsPayload, LegacyTagsPayload,
-    LegacyTasksPayload, LegacyUserStatePayload, ManualSession, Session, Settings, SupabaseSessionPayload,
-    Tag, Task,
+    LegacyTasksPayload, LegacyUserStatePayload, ManualSession, Session, Settings,
+    SupabaseSessionPayload, Tag, Task,
 };
 
 // ── localStorage helpers ─────────────────────────────────────────────────────
@@ -45,8 +45,7 @@ use super::types::{
 /// to the cutover, but we treat them as the cold-start no-op rather
 /// than failing).
 fn local_storage() -> Option<web_sys::Storage> {
-    web_sys::window()
-        .and_then(|w| w.local_storage().ok().flatten())
+    web_sys::window().and_then(|w| w.local_storage().ok().flatten())
 }
 
 /// Read a single localStorage key as the raw JSON string. Returns
@@ -105,7 +104,11 @@ pub async fn import_legacy_settings_from_storage() -> Result<(), BridgeError> {
     let auto_check_raw = read_key(&storage, "presto_auto_check_updates");
 
     // Cold-start: if every key is absent, skip the bridge call entirely.
-    if settings_raw.is_none() && theme.is_none() && timer_theme.is_none() && auto_check_raw.is_none() {
+    if settings_raw.is_none()
+        && theme.is_none()
+        && timer_theme.is_none()
+        && auto_check_raw.is_none()
+    {
         return Ok(());
     }
 
@@ -234,11 +237,7 @@ pub async fn import_legacy_user_state_from_storage() -> Result<(), BridgeError> 
     let skipped_raw = read_key(&storage, "presto-skipped-versions");
     let session_raw = read_key(&storage, "pomodoro-session");
 
-    if guest_raw.is_none()
-        && auth_raw.is_none()
-        && skipped_raw.is_none()
-        && session_raw.is_none()
-    {
+    if guest_raw.is_none() && auth_raw.is_none() && skipped_raw.is_none() && session_raw.is_none() {
         return Ok(());
     }
 

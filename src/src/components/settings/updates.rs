@@ -42,7 +42,10 @@ use crate::components::settings::SettingsToast;
 /// Updates settings tab.
 #[component]
 pub fn UpdatesSettings(
-    #[allow(unused_variables, reason = "auto_check_updates field arrives in Phase 4c persistence hop")]
+    #[allow(
+        unused_variables,
+        reason = "auto_check_updates field arrives in Phase 4c persistence hop"
+    )]
     settings: RwSignal<Settings>,
     toast: SettingsToast,
 ) -> impl IntoView {
@@ -112,9 +115,7 @@ pub fn UpdatesSettings(
         }
     });
     let info_visible = Signal::derive(move || update_info.with(Option::is_some));
-    let latest_version = Signal::derive(move || {
-        update_info.get().unwrap_or_default()
-    });
+    let latest_version = Signal::derive(move || update_info.get().unwrap_or_default());
 
     view! {
         <div class="category-header">

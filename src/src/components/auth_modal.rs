@@ -40,8 +40,8 @@
 // expansion — splitting it would fragment the JSX-style DOM tree.
 #![allow(clippy::must_use_candidate, clippy::too_many_lines)]
 
-use leptos::prelude::*;
 use leptos::ev::SubmitEvent;
+use leptos::prelude::*;
 
 use crate::bridge::types::{AuthSession, AuthUser};
 use crate::managers::auth::AuthState;
@@ -118,12 +118,9 @@ pub fn AuthModal(auth_state: RwSignal<AuthState>) -> impl IntoView {
     let email = RwSignal::new(String::new());
     let password = RwSignal::new(String::new());
 
-    let display_name = Signal::derive(move || {
-        auth_state.with(user_display_name)
-    });
-    let is_authenticated = Signal::derive(move || {
-        auth_state.with(|s| matches!(s, AuthState::SignedIn { .. }))
-    });
+    let display_name = Signal::derive(move || auth_state.with(user_display_name));
+    let is_authenticated =
+        Signal::derive(move || auth_state.with(|s| matches!(s, AuthState::SignedIn { .. })));
 
     let on_avatar_click = move |_| {
         dropdown_open.update(|v| *v = !*v);
@@ -154,9 +151,7 @@ pub fn AuthModal(auth_state: RwSignal<AuthState>) -> impl IntoView {
         // call; the in-memory branch is sufficient for the e2e
         // spec's mocked path.
         let session = mock_session(&email_value);
-        auth_state.set(AuthState::SignedIn {
-            user: session.user,
-        });
+        auth_state.set(AuthState::SignedIn { user: session.user });
         overlay_open.set(false);
         email.set(String::new());
         password.set(String::new());
@@ -339,7 +334,11 @@ mod tests {
         let session = mock_session("a@b.c");
         assert_eq!(session.user.email, "a@b.c");
         assert_eq!(
-            session.user.user_metadata.get("full_name").and_then(|v| v.as_str()),
+            session
+                .user
+                .user_metadata
+                .get("full_name")
+                .and_then(|v| v.as_str()),
             Some("Test User"),
         );
     }

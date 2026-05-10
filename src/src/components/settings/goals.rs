@@ -31,13 +31,9 @@ fn parse_minutes(raw: &str, fallback: u32) -> u32 {
 
 /// Goals settings tab — single weekly-goal input.
 #[component]
-pub fn GoalsSettings(
-    settings: RwSignal<Settings>,
-    toast: SettingsToast,
-) -> impl IntoView {
-    let weekly_goal = Signal::derive(move || {
-        settings.with(|s| s.timer.weekly_goal_minutes.to_string())
-    });
+pub fn GoalsSettings(settings: RwSignal<Settings>, toast: SettingsToast) -> impl IntoView {
+    let weekly_goal =
+        Signal::derive(move || settings.with(|s| s.timer.weekly_goal_minutes.to_string()));
 
     let on_change = move |ev| {
         let value = parse_minutes(&event_target_value(&ev), 125);

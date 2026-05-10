@@ -716,7 +716,11 @@ mod tests {
         assert_eq!(decoded.user.id, "user-uuid");
         assert_eq!(decoded.user.email, "user@example.com");
         assert_eq!(
-            decoded.user.user_metadata.get("full_name").and_then(|v| v.as_str()),
+            decoded
+                .user
+                .user_metadata
+                .get("full_name")
+                .and_then(|v| v.as_str()),
             Some("Konstantin"),
         );
     }

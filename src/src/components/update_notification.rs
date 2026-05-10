@@ -43,9 +43,7 @@ use crate::managers::update::UpdateInfo;
 ///   whether to add the `.visible` class; the version text
 ///   projects the `Available::version` slot.
 #[component]
-pub fn UpdateNotification(
-    update_info: RwSignal<UpdateInfo>,
-) -> impl IntoView {
+pub fn UpdateNotification(update_info: RwSignal<UpdateInfo>) -> impl IntoView {
     // Local "user closed it" flag. The JS-era surface at
     // `src/components/update-notification.js` retains the dismissal
     // across navigations within the same launch (the spec at
@@ -59,8 +57,7 @@ pub fn UpdateNotification(
     // affordance that lands with the bridge call) would also
     // dismiss the banner.
     let visible = Signal::derive(move || {
-        !dismissed.get()
-            && update_info.with(|i| matches!(i, UpdateInfo::Available { .. }))
+        !dismissed.get() && update_info.with(|i| matches!(i, UpdateInfo::Available { .. }))
     });
 
     // Version text for `#update-notification-version`. Reads

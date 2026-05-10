@@ -33,17 +33,12 @@ use crate::components::settings::SettingsToast;
 
 /// Notifications settings tab.
 #[component]
-pub fn NotificationsSettings(
-    settings: RwSignal<Settings>,
-    toast: SettingsToast,
-) -> impl IntoView {
+pub fn NotificationsSettings(settings: RwSignal<Settings>, toast: SettingsToast) -> impl IntoView {
     // Derived signals — read each bool field via `.with(...)`.
-    let desktop_enabled = Signal::derive(move || {
-        settings.with(|s| s.notifications.desktop_notifications)
-    });
-    let sound_enabled = Signal::derive(move || {
-        settings.with(|s| s.notifications.sound_notifications)
-    });
+    let desktop_enabled =
+        Signal::derive(move || settings.with(|s| s.notifications.desktop_notifications));
+    let sound_enabled =
+        Signal::derive(move || settings.with(|s| s.notifications.sound_notifications));
     // Status text mirrors the JS-era `notifications.js` pattern
     // (`Enabled` / `Disabled` based on the toggle). The e2e spec at
     // `settings-notifications.spec.js:26` asserts `toContainText("Disabled")`

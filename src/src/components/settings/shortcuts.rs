@@ -30,8 +30,8 @@
 // helper cluster.
 #![allow(clippy::must_use_candidate, clippy::too_many_lines)]
 
-use leptos::prelude::*;
 use leptos::ev::KeyboardEvent;
+use leptos::prelude::*;
 
 use crate::bridge::types::Settings;
 use crate::components::settings::SettingsToast;
@@ -104,11 +104,13 @@ fn shortcut_row(
     toast: SettingsToast,
 ) -> impl IntoView {
     let value = Signal::derive(move || {
-        settings.with(|s| match slot {
-            ShortcutSlot::StartStop => s.shortcuts.start_stop.clone(),
-            ShortcutSlot::Reset => s.shortcuts.reset.clone(),
-            ShortcutSlot::Skip => s.shortcuts.skip.clone(),
-        }).unwrap_or_default()
+        settings
+            .with(|s| match slot {
+                ShortcutSlot::StartStop => s.shortcuts.start_stop.clone(),
+                ShortcutSlot::Reset => s.shortcuts.reset.clone(),
+                ShortcutSlot::Skip => s.shortcuts.skip.clone(),
+            })
+            .unwrap_or_default()
     });
     let is_recording = Signal::derive(move || recording.get() == Some(slot));
 
@@ -169,10 +171,7 @@ fn shortcut_row(
 
 /// Shortcuts settings tab.
 #[component]
-pub fn ShortcutsSettings(
-    settings: RwSignal<Settings>,
-    toast: SettingsToast,
-) -> impl IntoView {
+pub fn ShortcutsSettings(settings: RwSignal<Settings>, toast: SettingsToast) -> impl IntoView {
     let recording = RwSignal::new(None::<ShortcutSlot>);
 
     view! {
@@ -199,11 +198,7 @@ mod tests {
     /// `tests/e2e/settings-shortcuts.spec.js`.
     #[test]
     fn shortcuts_selector_contract_documented() {
-        const REQUIRED_IDS: &[&str] = &[
-            "start-stop-shortcut",
-            "reset-shortcut",
-            "skip-shortcut",
-        ];
+        const REQUIRED_IDS: &[&str] = &["start-stop-shortcut", "reset-shortcut", "skip-shortcut"];
         let mut seen: Vec<&str> = Vec::with_capacity(REQUIRED_IDS.len());
         for id in REQUIRED_IDS {
             assert!(!seen.contains(id), "duplicate selector ID: {id}");

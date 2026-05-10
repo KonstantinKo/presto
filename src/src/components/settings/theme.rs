@@ -66,9 +66,9 @@ fn set_html_attr(attr: &str, value: &str) {
 /// — this is defence-in-depth).
 fn capitalise_first(stem: &str) -> String {
     let mut chars = stem.chars();
-    chars
-        .next()
-        .map_or_else(String::new, |first| first.to_uppercase().chain(chars).collect())
+    chars.next().map_or_else(String::new, |first| {
+        first.to_uppercase().chain(chars).collect()
+    })
 }
 
 /// Theme settings tab — light/dark/auto picker + timer theme grid.

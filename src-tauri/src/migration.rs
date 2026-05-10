@@ -119,8 +119,9 @@ fn write_user_state_sentinel(dir: &Path) -> Result<(), BridgeError> {
     std::fs::create_dir_all(dir).map_err(|e| BridgeError::Internal {
         msg: format!("create app data dir: {e}"),
     })?;
-    std::fs::write(dir.join(USER_STATE_SENTINEL), b"")
-        .map_err(|e| BridgeError::Internal { msg: format!("write user-state sentinel: {e}") })
+    std::fs::write(dir.join(USER_STATE_SENTINEL), b"").map_err(|e| BridgeError::Internal {
+        msg: format!("write user-state sentinel: {e}"),
+    })
 }
 
 // ── Handlers ────────────────────────────────────────────────────────────────
@@ -315,8 +316,8 @@ pub(super) fn import_supabase_session(
 #[cfg(test)]
 mod tests {
     use super::{
-        import_history, import_manual_sessions, import_supabase_session, import_tags,
-        import_tasks, import_user_state, LegacyHistoryPayload, LegacyManualSessionsPayload,
+        import_history, import_manual_sessions, import_supabase_session, import_tags, import_tasks,
+        import_user_state, LegacyHistoryPayload, LegacyManualSessionsPayload,
         LegacySettingsPayload, LegacyTagsPayload, LegacyTasksPayload, LegacyUserStatePayload,
         SupabaseSessionPayload, SupabaseUserMirror,
     };
@@ -382,7 +383,9 @@ mod tests {
     #[test]
     fn import_history_writes_history_json_when_absent() {
         let dir = tempdir().unwrap();
-        let payload = LegacyHistoryPayload { history: vec![sample_session()] };
+        let payload = LegacyHistoryPayload {
+            history: vec![sample_session()],
+        };
         import_history(dir.path(), &payload).unwrap();
         assert!(dir.path().join("history.json").exists());
     }
@@ -391,7 +394,9 @@ mod tests {
     fn import_history_skips_when_history_json_already_exists() {
         let dir = tempdir().unwrap();
         std::fs::write(dir.path().join("history.json"), b"[\"sentinel\"]").unwrap();
-        let payload = LegacyHistoryPayload { history: vec![sample_session()] };
+        let payload = LegacyHistoryPayload {
+            history: vec![sample_session()],
+        };
         import_history(dir.path(), &payload).unwrap();
         let after = std::fs::read_to_string(dir.path().join("history.json")).unwrap();
         assert_eq!(after, "[\"sentinel\"]");
@@ -400,7 +405,9 @@ mod tests {
     #[test]
     fn import_history_with_empty_vec_is_a_noop() {
         let dir = tempdir().unwrap();
-        let payload = LegacyHistoryPayload { history: Vec::new() };
+        let payload = LegacyHistoryPayload {
+            history: Vec::new(),
+        };
         import_history(dir.path(), &payload).unwrap();
         assert!(!dir.path().join("history.json").exists());
     }
@@ -412,7 +419,9 @@ mod tests {
     #[test]
     fn import_history_is_idempotent_across_two_calls() {
         let dir = tempdir().unwrap();
-        let payload = LegacyHistoryPayload { history: vec![sample_session()] };
+        let payload = LegacyHistoryPayload {
+            history: vec![sample_session()],
+        };
         import_history(dir.path(), &payload).unwrap();
         let first_bytes = std::fs::read(dir.path().join("history.json")).unwrap();
         // Second call with a different payload must NOT overwrite —
@@ -445,7 +454,9 @@ mod tests {
     #[test]
     fn import_tasks_writes_when_absent() {
         let dir = tempdir().unwrap();
-        let payload = LegacyTasksPayload { tasks: vec![sample_task()] };
+        let payload = LegacyTasksPayload {
+            tasks: vec![sample_task()],
+        };
         import_tasks(dir.path(), &payload).unwrap();
         assert!(dir.path().join("tasks.json").exists());
     }
@@ -454,7 +465,9 @@ mod tests {
     fn import_tasks_skips_when_already_present() {
         let dir = tempdir().unwrap();
         std::fs::write(dir.path().join("tasks.json"), b"[]").unwrap();
-        let payload = LegacyTasksPayload { tasks: vec![sample_task()] };
+        let payload = LegacyTasksPayload {
+            tasks: vec![sample_task()],
+        };
         import_tasks(dir.path(), &payload).unwrap();
         let after = std::fs::read_to_string(dir.path().join("tasks.json")).unwrap();
         assert_eq!(after, "[]");
@@ -466,7 +479,9 @@ mod tests {
     #[test]
     fn import_tasks_is_idempotent_across_two_calls() {
         let dir = tempdir().unwrap();
-        let payload = LegacyTasksPayload { tasks: vec![sample_task()] };
+        let payload = LegacyTasksPayload {
+            tasks: vec![sample_task()],
+        };
         import_tasks(dir.path(), &payload).unwrap();
         let first_bytes = std::fs::read(dir.path().join("tasks.json")).unwrap();
         let payload2 = LegacyTasksPayload {
@@ -498,7 +513,9 @@ mod tests {
     #[test]
     fn import_tags_writes_when_absent() {
         let dir = tempdir().unwrap();
-        let payload = LegacyTagsPayload { tags: vec![sample_tag()] };
+        let payload = LegacyTagsPayload {
+            tags: vec![sample_tag()],
+        };
         import_tags(dir.path(), &payload).unwrap();
         assert!(dir.path().join("tags.json").exists());
     }
@@ -507,7 +524,9 @@ mod tests {
     fn import_tags_skips_when_already_present() {
         let dir = tempdir().unwrap();
         std::fs::write(dir.path().join("tags.json"), b"[]").unwrap();
-        let payload = LegacyTagsPayload { tags: vec![sample_tag()] };
+        let payload = LegacyTagsPayload {
+            tags: vec![sample_tag()],
+        };
         import_tags(dir.path(), &payload).unwrap();
         let after = std::fs::read_to_string(dir.path().join("tags.json")).unwrap();
         assert_eq!(after, "[]");
@@ -518,7 +537,9 @@ mod tests {
     #[test]
     fn import_tags_is_idempotent_across_two_calls() {
         let dir = tempdir().unwrap();
-        let payload = LegacyTagsPayload { tags: vec![sample_tag()] };
+        let payload = LegacyTagsPayload {
+            tags: vec![sample_tag()],
+        };
         import_tags(dir.path(), &payload).unwrap();
         let first_bytes = std::fs::read(dir.path().join("tags.json")).unwrap();
         let payload2 = LegacyTagsPayload {
@@ -554,7 +575,9 @@ mod tests {
     #[test]
     fn import_manual_sessions_writes_when_absent() {
         let dir = tempdir().unwrap();
-        let payload = LegacyManualSessionsPayload { sessions: vec![sample_manual()] };
+        let payload = LegacyManualSessionsPayload {
+            sessions: vec![sample_manual()],
+        };
         import_manual_sessions(dir.path(), &payload).unwrap();
         assert!(dir.path().join("manual_sessions.json").exists());
     }
@@ -563,10 +586,11 @@ mod tests {
     fn import_manual_sessions_skips_when_already_present() {
         let dir = tempdir().unwrap();
         std::fs::write(dir.path().join("manual_sessions.json"), b"[]").unwrap();
-        let payload = LegacyManualSessionsPayload { sessions: vec![sample_manual()] };
+        let payload = LegacyManualSessionsPayload {
+            sessions: vec![sample_manual()],
+        };
         import_manual_sessions(dir.path(), &payload).unwrap();
-        let after =
-            std::fs::read_to_string(dir.path().join("manual_sessions.json")).unwrap();
+        let after = std::fs::read_to_string(dir.path().join("manual_sessions.json")).unwrap();
         assert_eq!(after, "[]");
     }
 
@@ -575,12 +599,16 @@ mod tests {
     #[test]
     fn import_manual_sessions_is_idempotent_across_two_calls() {
         let dir = tempdir().unwrap();
-        let payload = LegacyManualSessionsPayload { sessions: vec![sample_manual()] };
+        let payload = LegacyManualSessionsPayload {
+            sessions: vec![sample_manual()],
+        };
         import_manual_sessions(dir.path(), &payload).unwrap();
         let first_bytes = std::fs::read(dir.path().join("manual_sessions.json")).unwrap();
         let mut second = sample_manual();
         second.id = "should-not-write".to_string();
-        let payload2 = LegacyManualSessionsPayload { sessions: vec![second] };
+        let payload2 = LegacyManualSessionsPayload {
+            sessions: vec![second],
+        };
         import_manual_sessions(dir.path(), &payload2).unwrap();
         let second_bytes = std::fs::read(dir.path().join("manual_sessions.json")).unwrap();
         assert_eq!(first_bytes, second_bytes);
@@ -599,7 +627,10 @@ mod tests {
         };
         import_user_state(dir.path(), &payload).unwrap();
         assert!(dir.path().join("session.json").exists());
-        assert!(dir.path().join("legacy-user-state-imported.marker").exists());
+        assert!(dir
+            .path()
+            .join("legacy-user-state-imported.marker")
+            .exists());
     }
 
     #[test]

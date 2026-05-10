@@ -51,8 +51,8 @@
 use leptos::prelude::*;
 use wasm_bindgen::JsCast;
 
-use crate::bridge::timer_mode::TimerMode;
 use crate::bridge::session_type::SessionType;
+use crate::bridge::timer_mode::TimerMode;
 use crate::bridge::types::{ManualSession, Settings, Tag};
 use crate::engine::clock::Clock;
 use crate::engine::durations::Durations;
@@ -64,7 +64,13 @@ use crate::engine::timer::TimerState;
 /// because the standalone `TagsView` is no longer mounted alongside
 /// the in-timer popover; once the standalone `TagsView` is reaped the
 /// catalogue lives in one place.
-const ICON_OPTIONS: &[&str] = &["\u{1f9e0}", "\u{1f4aa}", "\u{1f3af}", "\u{26a1}", "\u{1f525}"];
+const ICON_OPTIONS: &[&str] = &[
+    "\u{1f9e0}",
+    "\u{1f4aa}",
+    "\u{1f3af}",
+    "\u{26a1}",
+    "\u{1f525}",
+];
 
 /// Icon-picker default. The visual-regression baseline shows a brain
 /// glyph rendered through the remixicon webfont (chromium-linux test
@@ -142,9 +148,9 @@ fn pad_two(value: u32) -> String {
 /// `bridge::commands::save_manual_sessions` hop alongside this so
 /// the rows survive a process restart.
 fn synth_completed_session(now_ms: i64, focus_duration_secs: u32) -> ManualSession {
-    let now = chrono::DateTime::<chrono::Utc>::from_timestamp_millis(now_ms)
-        .unwrap_or_else(|| chrono::DateTime::<chrono::Utc>::from_timestamp(0, 0)
-            .expect("epoch valid"));
+    let now = chrono::DateTime::<chrono::Utc>::from_timestamp_millis(now_ms).unwrap_or_else(|| {
+        chrono::DateTime::<chrono::Utc>::from_timestamp(0, 0).expect("epoch valid")
+    });
     let end = now;
     let start = end - chrono::Duration::seconds(i64::from(focus_duration_secs));
     let id = format!("session-{}", end.timestamp_millis());
@@ -205,8 +211,8 @@ pub fn TimerView() -> impl IntoView {
     // baseline (focus 25, break 5, long break 20) so the display
     // matches the cold-start contract that `_smoke.spec.js`
     // asserts.
-    let settings = use_context::<RwSignal<Settings>>()
-        .unwrap_or_else(|| RwSignal::new(Settings::default()));
+    let settings =
+        use_context::<RwSignal<Settings>>().unwrap_or_else(|| RwSignal::new(Settings::default()));
     let initial_durations = settings.with_untracked(durations_from_settings);
 
     // Shared session log (provided by App). When a focus session
@@ -215,8 +221,8 @@ pub fn TimerView() -> impl IntoView {
     // completed run. Phase 4c attaches the
     // `bridge::commands::save_manual_sessions` hop; today the
     // signal is the in-memory branch.
-    let sessions = use_context::<RwSignal<Vec<ManualSession>>>()
-        .unwrap_or_else(|| RwSignal::new(Vec::new()));
+    let sessions =
+        use_context::<RwSignal<Vec<ManualSession>>>().unwrap_or_else(|| RwSignal::new(Vec::new()));
 
     // Engine state — RwSignal so derived projections (countdown
     // text, mode label, running flag) re-render on `update()`.
@@ -286,8 +292,12 @@ pub fn TimerView() -> impl IntoView {
     // skips when a form input is focused so typing in the
     // settings-shortcuts recorder doesn't double-fire.
     Effect::new(move |_| {
-        let Some(window) = web_sys::window() else { return };
-        let Some(document) = window.document() else { return };
+        let Some(window) = web_sys::window() else {
+            return;
+        };
+        let Some(document) = window.document() else {
+            return;
+        };
         let closure = wasm_bindgen::closure::Closure::<dyn FnMut(web_sys::KeyboardEvent)>::new(
             move |ev: web_sys::KeyboardEvent| {
                 // Skip when typing in a form field — the JS-era
@@ -330,10 +340,8 @@ pub fn TimerView() -> impl IntoView {
                 }
             },
         );
-        let _ = document.add_event_listener_with_callback(
-            "keydown",
-            closure.as_ref().unchecked_ref(),
-        );
+        let _ =
+            document.add_event_listener_with_callback("keydown", closure.as_ref().unchecked_ref());
         closure.forget();
     });
 
@@ -345,8 +353,12 @@ pub fn TimerView() -> impl IntoView {
     // re-click `#timer-status` expecting the dropdown to re-open
     // from a closed state.
     Effect::new(move |_| {
-        let Some(window) = web_sys::window() else { return };
-        let Some(document) = window.document() else { return };
+        let Some(window) = web_sys::window() else {
+            return;
+        };
+        let Some(document) = window.document() else {
+            return;
+        };
         let closure = wasm_bindgen::closure::Closure::<dyn FnMut(web_sys::MouseEvent)>::new(
             move |ev: web_sys::MouseEvent| {
                 if !tag_dropdown_open.get_untracked() {
@@ -370,10 +382,8 @@ pub fn TimerView() -> impl IntoView {
                 }
             },
         );
-        let _ = document.add_event_listener_with_callback(
-            "click",
-            closure.as_ref().unchecked_ref(),
-        );
+        let _ =
+            document.add_event_listener_with_callback("click", closure.as_ref().unchecked_ref());
         // The closure is intentionally leaked so the listener
         // outlives the Effect. The TimerView is mounted for the
         // lifetime of the App; cleanup happens implicitly when the
@@ -524,9 +534,7 @@ pub fn TimerView() -> impl IntoView {
                     // Capture focus duration before tick so a
                     // mid-tick rebase via `set_durations` doesn't
                     // race with the synth-session below.
-                    let focus_secs_at_tick = settings
-                        .with_untracked(durations_from_settings)
-                        .focus;
+                    let focus_secs_at_tick = settings.with_untracked(durations_from_settings).focus;
                     let events = state.tick(&BrowserClock);
                     // If a focus session just completed (the engine
                     // emits `PomodoroCompleted` on the focus →
@@ -534,24 +542,23 @@ pub fn TimerView() -> impl IntoView {
                     // `ManualSession` to the shared log so the
                     // CalendarView table reflects today's run.
                     let completed_focus = was_focus
-                        && events.iter().any(|e| matches!(
-                            e,
-                            crate::engine::timer::TimerEvent::PomodoroCompleted { .. }
-                        ));
+                        && events.iter().any(|e| {
+                            matches!(
+                                e,
+                                crate::engine::timer::TimerEvent::PomodoroCompleted { .. }
+                            )
+                        });
                     if completed_focus {
                         let now_ms = BrowserClock.now_ms();
-                        let session = synth_completed_session(
-                            now_ms,
-                            focus_secs_at_tick,
-                        );
+                        let session = synth_completed_session(now_ms, focus_secs_at_tick);
                         sessions.update(|list| list.push(session));
                     }
                     if was_running && !state.is_running() {
                         // Engine just transitioned out of running
                         // (mode completion). If auto-start is on,
                         // kick off the next session.
-                        let auto_start = settings
-                            .with_untracked(|s| s.notifications.auto_start_timer);
+                        let auto_start =
+                            settings.with_untracked(|s| s.notifications.auto_start_timer);
                         if auto_start {
                             let _ = state.start(&BrowserClock);
                         }

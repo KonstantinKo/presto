@@ -123,8 +123,7 @@ async fn post_token<B: Serialize + Sync + ?Sized>(
     if !status.is_success() {
         // Distinguish 400/401 (bad creds / expired token) from 5xx.
         let body_text = response.text().await.unwrap_or_default();
-        if status == reqwest::StatusCode::BAD_REQUEST
-            || status == reqwest::StatusCode::UNAUTHORIZED
+        if status == reqwest::StatusCode::BAD_REQUEST || status == reqwest::StatusCode::UNAUTHORIZED
         {
             return Err(BridgeError::InvalidArgument {
                 field: "credentials".to_string(),
