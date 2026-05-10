@@ -875,8 +875,9 @@ mod tests {
         load_tasks, register_global_shortcuts, reset_all_data, save_daily_stats,
         save_manual_sessions, save_session_data, save_settings, save_tag, save_tasks,
         start_activity_monitoring, start_oauth_server, stop_activity_monitoring,
-        supabase_get_session, supabase_sign_in_with_password, supabase_sign_out, track_event,
-        update_activity_timeout, update_tray_icon, update_tray_menu, write_excel_file,
+        supabase_get_session, supabase_refresh_session, supabase_sign_in_with_password,
+        supabase_sign_out, track_event, update_activity_timeout, update_tray_icon,
+        update_tray_menu, write_excel_file,
     };
     use crate::bridge::error::BridgeError;
     use crate::bridge::session_type::SessionType;
@@ -1750,5 +1751,35 @@ mod tests {
             supabase_get_session().await
         }
         let _ = assert_signature().await;
+    }
+
+    #[wasm_bindgen_test]
+    async fn supabase_refresh_session_round_trip_short_circuits_when_bridge_absent() {
+        let result = supabase_refresh_session("rt-old".to_string()).await;
+        match result {
+            Err(BridgeError::BridgeUnavailable) => {}
+            other => panic!("expected BridgeUnavailable, got {other:?}"),
+        }
+    }
+
+    /// Compile-time signature pin per contracts/tauri-bridge.md §"Supabase
+    /// auth adapter family":
+    /// `supabase_refresh_session(refresh_token: String)
+    ///     -> Result<AuthSession, BridgeError>`.
+    /// Distinct from `supabase_sign_in_with_password` in the input
+    /// shape (single token, not email + password) and from
+    /// `supabase_get_session` in that the return is a bare
+    /// `AuthSession` (not `Option<AuthSession>`) — a successful
+    /// refresh always yields a fresh session record. The consumer
+    /// (`managers/auth.rs`) calls this only when it already holds a
+    /// non-`None` session, so the no-session path is not reachable.
+    #[wasm_bindgen_test]
+    async fn supabase_refresh_session_round_trip_signature_pinned() {
+        async fn assert_signature(
+            refresh_token: String,
+        ) -> Result<AuthSession, BridgeError> {
+            supabase_refresh_session(refresh_token).await
+        }
+        let _ = assert_signature("rt-old".to_string()).await;
     }
 }
