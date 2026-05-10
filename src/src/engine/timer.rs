@@ -538,6 +538,39 @@ mod tests {
         assert_eq!(state.time_remaining_secs(), remaining_at_pause - 1);
     }
 
+    /// T136: after `total_sessions` focus pomodoros have been
+    /// completed, further `start()` calls return
+    /// `TimerError::MaxSessionCapReached` rather than re-arming
+    /// the countdown. Mirrors the `totalSessions` cap at
+    /// `pomodoro-timer.js:31` (default 10) plus the
+    /// `currentSession`-display gating at line 1117-1119.
+    #[test]
+    fn max_session_cap_stops_at_total_sessions() {
+        let clock = MockClock::new(0);
+        let mut state = TimerState::new(Durations::default());
+        // Lower the cap for test speed.
+        state.set_total_sessions(2);
+
+        // Drive two full focus → break → focus return cycles to
+        // hit the cap.
+        for _ in 0..2 {
+            state.start(&clock).expect("start focus");
+            clock.advance(25 * 60 * 1000);
+            state.tick(&clock);
+            // Drive the break to completion.
+            state.start(&clock).expect("start break");
+            clock.advance(i64::from(state.current_mode_duration_secs()) * 1000);
+            state.tick(&clock);
+        }
+
+        assert_eq!(state.completed_pomodoros(), 2);
+
+        // Cap reached — `start` is rejected.
+        let result = state.start(&clock);
+        assert_eq!(result, Err(super::TimerError::MaxSessionCapReached));
+        assert!(!state.is_running());
+    }
+
     /// T128: drift compensation recovers after an OS-suspend gap.
     /// SC-005, AS-1.3. Mirrors `updateTimerWithAccuracy` at
     /// `pomodoro-timer.js:730-789`, which computes elapsed time
