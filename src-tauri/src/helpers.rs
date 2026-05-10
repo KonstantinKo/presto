@@ -396,16 +396,15 @@ pub(super) fn delete_all_data_in(dir: &Path) -> Result<(), String> {
 mod tests {
     use super::{
         append_daily_stats_to, append_session_tag_in, delete_all_data_in, delete_tag_in,
-        is_debounced, read_history_from, read_manual_sessions_from, read_session_from,
-        read_session_tags_from, read_settings_from, read_tags_from, read_tasks_from,
-        upsert_tag_in, write_manual_sessions_to, write_session_to, write_settings_to,
-        write_tags_to, write_tasks_to,
+        is_debounced, read_history_from, read_session_from, read_session_tags_from,
+        read_settings_from, read_tags_from, read_tasks_from, upsert_tag_in, write_session_to,
+        write_settings_to, write_tags_to, write_tasks_to,
     };
     use std::collections::HashMap;
     use std::time::{Duration, Instant};
 
     // Re-use parent-module types (private to lib.rs but accessible from descendants).
-    use super::super::{AppSettings, ManualSession, PomodoroSession, SessionTag, Tag, Task};
+    use super::super::{AppSettings, PomodoroSession, SessionTag, Tag, Task};
 
     // ── helpers::is_debounced (pre-existing) ──────────────────────────────────
 
@@ -650,25 +649,6 @@ mod tests {
         assert_eq!(history.len(), 1);
         assert_eq!(history[0].completed_pomodoros, 5);
         assert_eq!(history[0].date, "2024-06-01");
-    }
-
-    // ── Manual session helpers ────────────────────────────────────────────────
-
-    fn make_manual_session(id: &str, date: &str) -> ManualSession {
-        ManualSession {
-            id: id.to_string(),
-            // Spec 001-leptos-migration T029: SessionType is the closed-domain
-            // replacement for the legacy `session_type: String` field on
-            // ManualSession. Wire format unchanged (camelCase strings).
-            session_type: crate::SessionType::Focus,
-            duration: 25,
-            start_time: "09:00".to_string(),
-            end_time: "09:25".to_string(),
-            notes: None,
-            created_at: "2024-01-01T09:00:00Z".to_string(),
-            date: date.to_string(),
-            tags: None,
-        }
     }
 
     // ── Tags helpers ──────────────────────────────────────────────────────────
