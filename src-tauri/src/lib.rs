@@ -918,7 +918,6 @@ pub fn run() {
                 save_manual_sessions,
                 load_manual_sessions,
                 load_tags,
-                save_tags,
                 save_tag,
                 delete_tag,
                 load_session_tags,
@@ -1128,15 +1127,6 @@ async fn load_tags(app: AppHandle) -> Result<Vec<Tag>, BridgeError> {
         .app_data_dir()
         .map_err(|e| BridgeError::Internal { msg: format!("Failed to get app data directory: {e}") })?;
     helpers::read_tags_from(&app_data_dir).map_err(BridgeError::from)
-}
-
-#[tauri::command]
-async fn save_tags(tags: Vec<Tag>, app: AppHandle) -> Result<(), BridgeError> {
-    let app_data_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| BridgeError::Internal { msg: format!("Failed to get app data directory: {e}") })?;
-    helpers::write_tags_to(&app_data_dir, &tags).map_err(BridgeError::from)
 }
 
 #[tauri::command]
