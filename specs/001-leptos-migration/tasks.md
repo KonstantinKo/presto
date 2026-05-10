@@ -270,54 +270,54 @@ Per principle, Roman numeral + name (per plan-template.md):
 
 ### Engine — TimerState transitions (mode + session)
 
-- [ ] T120 [T:RED] [US1] `engine::timer::tests::starts_in_focus_mode` — done-signal: fails.
-- [ ] T121 [T:GREEN] [US1] Implement `TimerState::new()` and the `Idle → Focus` transition — done-signal: passes.
-- [ ] T122 [T:RED] [US1] `engine::timer::tests::focus_completes_after_25min_emits_pomodoro_completed` — done-signal: fails.
-- [ ] T123 [T:GREEN] [US1] Implement focus-complete transition + `pomodoroCompleted` event emission — done-signal: passes.
-- [ ] T124 [T:RED] [US1] `engine::timer::tests::break_after_focus` — done-signal: fails.
-- [ ] T125 [T:GREEN] [US1] Implement `Focus → Break` transition — done-signal: passes.
-- [ ] T126 [T:RED] [US1] `engine::timer::tests::long_break_after_4_focus_sessions` — done-signal: fails.
-- [ ] T127 [T:GREEN] [US1] Implement `Focus → LongBreak` after 4 cycles — done-signal: passes.
+- [x] T120 [T:RED] [US1] `engine::timer::tests::starts_in_focus_mode` — done-signal: fails.
+- [x] T121 [T:GREEN] [US1] Implement `TimerState::new()` and the `Idle → Focus` transition — done-signal: passes.
+- [x] T122 [T:RED] [US1] `engine::timer::tests::focus_completes_after_25min_emits_pomodoro_completed` — done-signal: fails.
+- [x] T123 [T:GREEN] [US1] Implement focus-complete transition + `pomodoroCompleted` event emission — done-signal: passes.
+- [x] T124 [T:RED] [US1] `engine::timer::tests::break_after_focus` — done-signal: fails.
+- [x] T125 [T:GREEN] [US1] Implement `Focus → Break` transition — done-signal: passes.
+- [x] T126 [T:RED] [US1] `engine::timer::tests::long_break_after_4_focus_sessions` — done-signal: fails.
+- [x] T127 [T:GREEN] [US1] Implement `Focus → LongBreak` after 4 cycles — done-signal: passes.
 
 ### Engine — Drift compensation
 
-- [ ] T128 [T:RED] [US1] `engine::timer::tests::drift_compensation_recovers_90s_of_os_suspend` (SC-005, AS-1.3) — done-signal: fails.
-- [ ] T129 [T:GREEN] [US1] Implement wall-clock-anchored elapsed computation in `TimerState::tick(now_ms)` — done-signal: passes.
+- [x] T128 [T:RED] [US1] `engine::timer::tests::drift_compensation_recovers_90s_of_os_suspend` (SC-005, AS-1.3) — done-signal: fails.
+- [x] T129 [T:GREEN] [US1] Implement wall-clock-anchored elapsed computation in `TimerState::tick(now_ms)` — done-signal: passes.
 
 ### Engine — Smart-pause activity gate
 
-- [ ] T130 [T:RED] [US1] `engine::activity_signal::tests::idle_active_edge_detection` — done-signal: fails.
-- [ ] T131 [T:GREEN] [US1] Implement `ActivitySignal` reduction (Idle ↔ Active edge detection; mid-state events folded) — done-signal: passes.
-- [ ] T132 [T:RED] [US1] `engine::timer::tests::smart_pause_pauses_after_inactive_timeout` — done-signal: fails.
-- [ ] T133 [T:GREEN] [US1] Wire `ActivitySignal` consumption into `TimerState::tick` for smart-pause — done-signal: passes.
-- [ ] T134 [T:RED] [US1] `engine::timer::tests::smart_pause_resumes_on_activity` — done-signal: fails.
-- [ ] T135 [T:GREEN] [US1] Implement smart-pause resume path — done-signal: passes.
+- [x] T130 [T:RED] [US1] `engine::activity_signal::tests::idle_active_edge_detection` — done-signal: fails.
+- [x] T131 [T:GREEN] [US1] Implement `ActivitySignal` reduction (Idle ↔ Active edge detection; mid-state events folded) — done-signal: passes.
+- [x] T132 [T:RED] [US1] `engine::timer::tests::smart_pause_pauses_after_inactive_timeout` — done-signal: fails.
+- [x] T133 [T:GREEN] [US1] Wire `ActivitySignal` consumption into `TimerState::tick` for smart-pause — done-signal: passes.
+- [x] T134 [T:RED] [US1] `engine::timer::tests::smart_pause_resumes_on_activity` — done-signal: fails.
+- [x] T135 [T:GREEN] [US1] Implement smart-pause resume path — done-signal: passes.
 
 ### Engine — Max-session cap
 
-- [ ] T136 [T:RED] [US1] `engine::timer::tests::max_session_cap_stops_at_total_sessions` — done-signal: fails.
-- [ ] T137 [T:GREEN] [US1] Implement max-session-cap stop transition — done-signal: passes.
+- [x] T136 [T:RED] [US1] `engine::timer::tests::max_session_cap_stops_at_total_sessions` — done-signal: fails.
+- [x] T137 [T:GREEN] [US1] Implement max-session-cap stop transition — done-signal: passes.
 
 ### Engine — Manual session entry
 
-- [ ] T138 [T:RED] [US1] `engine::timer::tests::manual_session_entry_routes_through_engine` (Principle I rule "manual session entry must go through the same engine path as live sessions") — done-signal: fails.
-- [ ] T139 [T:GREEN] [US1] Implement `TimerState::record_manual_session(session)` path — done-signal: passes.
+- [x] T138 [T:RED] [US1] `engine::timer::tests::manual_session_entry_routes_through_engine` (Principle I rule "manual session entry must go through the same engine path as live sessions") — done-signal: fails.
+- [x] T139 [T:GREEN] [US1] Implement `TimerState::record_manual_session(session)` path — done-signal: passes.
 
 ### Engine — Reset / Skip
 
-- [ ] T140 [T:RED] [US1] `engine::timer::tests::reset_returns_to_initial_state` — done-signal: fails.
-- [ ] T141 [T:GREEN] [US1] Implement reset transition — done-signal: passes.
-- [ ] T142 [T:RED] [US1] `engine::timer::tests::skip_advances_to_next_mode_without_emitting_completed` — done-signal: fails.
-- [ ] T143 [T:GREEN] [US1] Implement skip transition — done-signal: passes.
+- [x] T140 [T:RED] [US1] `engine::timer::tests::reset_returns_to_initial_state` — done-signal: fails.
+- [x] T141 [T:GREEN] [US1] Implement reset transition — done-signal: passes.
+- [x] T142 [T:RED] [US1] `engine::timer::tests::skip_advances_to_next_mode_without_emitting_completed` — done-signal: fails.
+- [x] T143 [T:GREEN] [US1] Implement skip transition — done-signal: passes.
 
 ### Engine — Date format pinning
 
-- [ ] T144 [T:RED] [US1] `engine::date_format::tests::matches_js_to_date_string` — iterates 366 dates and asserts `chrono_format(d) == js_to_date_string(d)`; chrono format string `"%a %b %d %Y"` per data-model.md §`Session.date` — done-signal: fails.
-- [ ] T145 [T:GREEN] [US1] Implement `engine::date_format::format_session_date(timestamp_ms) -> String` — done-signal: passes.
+- [x] T144 [T:RED] [US1] `engine::date_format::tests::matches_js_to_date_string` — iterates 366 dates and asserts `chrono_format(d) == js_to_date_string(d)`; chrono format string `"%a %b %d %Y"` per data-model.md §`Session.date` — done-signal: fails.
+- [x] T145 [T:GREEN] [US1] Implement `engine::date_format::format_session_date(timestamp_ms) -> String` — done-signal: passes.
 
 ### Engine — `web-sys` purity gate (CI-coupled to T224)
 
-- [ ] T146 [US1] Run the engine `web-sys` grep gate locally on a clean Phase 2 HEAD — done-signal: `if grep -rE "web_sys|web-sys" src/src/engine/ ; then exit 1; fi` exits 0.
+- [x] T146 [US1] Run the engine `web-sys` grep gate locally on a clean Phase 2 HEAD — done-signal: `if grep -rE "web_sys|web-sys" src/src/engine/ ; then exit 1; fi` exits 0.
 
 **Checkpoint**: every behaviour rule from `src/core/pomodoro-timer.js` has a passing Rust test. SC-007 satisfied.
 

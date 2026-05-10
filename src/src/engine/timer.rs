@@ -1,9 +1,10 @@
 // Engine — `TimerState` pomodoro state machine.
 //
 // Spec 001-leptos-migration §Phase 2 (T120-T146); ported from
-// `src/core/pomodoro-timer.js`. Pure state machine — no `web-sys`,
-// no DOM reads. All inputs (wall-clock time, activity signals,
-// settings) are passed in via constructor / setters / `tick(now_ms)`.
+// `src/core/pomodoro-timer.js`. Pure state machine — no DOM-
+// binding crate imports, no DOM reads. All inputs (wall-clock
+// time, activity signals, settings) are passed in via constructor
+// / setters / `tick(now_ms)`.
 //
 // See `engine/mod.rs` for module-level Principle I rationale.
 

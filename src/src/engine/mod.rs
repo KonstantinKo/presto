@@ -3,13 +3,14 @@
 // (T120-T146).
 //
 // **Principle I (The Timer Is Sacred)**: this module is a pure Rust
-// state machine. No `web-sys` imports under `src/src/engine/` — the
-// repo enforces this with the grep gate in T146 / Phase 7 CI. DOM
-// inputs (real wall-clock time, raw activity events from the macOS
+// state machine. No DOM-binding crate imports under
+// `src/src/engine/` — the repo enforces this with a grep gate in
+// T146 / Phase 7 CI (see plan.md §CI gates). DOM inputs (real
+// wall-clock time, raw activity events from the macOS
 // `ActivityMonitor` plugin) enter the engine via the abstract
-// `Clock` trait and the `ActivitySignal` enum, which are fed by the
-// bridge layer. Tests inject deterministic implementations so every
-// behavioural rule from the JS source is reproducible.
+// `Clock` trait and the `ActivitySignal` enum, which are fed by
+// the bridge layer. Tests inject deterministic implementations so
+// every behavioural rule from the JS source is reproducible.
 //
 // Module breakdown:
 // - `timer` — `TimerState` state machine + `TimerEvent` emissions.
