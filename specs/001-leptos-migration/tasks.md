@@ -331,23 +331,23 @@ Per principle, Roman numeral + name (per plan-template.md):
 
 ### managers/settings (10 tasks)
 
-- [ ] T147 [T:RED] [US1] `managers::settings::tests::load_returns_default_when_missing_file` — done-signal: fails.
-- [ ] T148 [T:GREEN] [US1] Implement `Settings::load()` calling `bridge::commands::load_settings` and falling back to default — done-signal: passes.
-- [ ] T149 [T:RED] [US1] `managers::settings::tests::missing_serde_default_fields_use_defaults` (mirrors `app_settings_missing_serde_default_fields_use_defaults` in `src-tauri/src/lib.rs:1241`) — done-signal: fails.
-- [ ] T150 [T:GREEN] [US1] Implement field-level `#[serde(default = "...")]` defaults on `Settings` and nested types — done-signal: passes.
-- [ ] T151 [T:RED] [US1] `managers::settings::tests::migrates_hide_status_bar_to_status_bar_display` (per plan.md §Testing strategy named test; covers all five cases in data-model.md §Settings legacy migration: `hide_status_bar:true → IconOnly`, `hide_status_bar:false → Default`, `status_bar_display: "icon-only" present → IconOnly` (kebab-case round-trip from a pre-cutover JS-era settings JSON fixture), `status_bar_display: "default" present → Default`, neither → `Default`) — done-signal: fails.
-- [ ] T152 [T:GREEN] [US1] Implement `deserialize_status_bar_display_with_legacy_fallback` custom deserializer — done-signal: passes.
-- [ ] T153 [T:RED] [US1] `managers::settings::tests::save_writes_full_shape_drops_legacy_field` — done-signal: fails.
-- [ ] T154 [T:GREEN] [US1] Implement `Settings::save()` round-trip writing only the new shape — done-signal: passes.
-- [ ] T155 [T:RED] [US1] `managers::settings::tests::idempotent_missing_field_migration_writes_back` (FR-005) — done-signal: fails.
-- [ ] T156 [T:GREEN] [US1] Implement load → fill defaults → write-back idempotent path — done-signal: passes.
+- [x] T147 [T:RED] [US1] `managers::settings::tests::load_returns_default_when_missing_file` — done-signal: fails.
+- [x] T148 [T:GREEN] [US1] Implement `Settings::load()` calling `bridge::commands::load_settings` and falling back to default — done-signal: passes.
+- [x] T149 [T:RED] [US1] `managers::settings::tests::missing_serde_default_fields_use_defaults` (mirrors `app_settings_missing_serde_default_fields_use_defaults` in `src-tauri/src/lib.rs:1241`) — done-signal: fails.
+- [x] T150 [T:GREEN] [US1] Implement field-level `#[serde(default = "...")]` defaults on `Settings` and nested types — done-signal: passes.
+- [x] T151 [T:RED] [US1] `managers::settings::tests::migrates_hide_status_bar_to_status_bar_display` (per plan.md §Testing strategy named test; covers all five cases in data-model.md §Settings legacy migration: `hide_status_bar:true → IconOnly`, `hide_status_bar:false → Default`, `status_bar_display: "icon-only" present → IconOnly` (kebab-case round-trip from a pre-cutover JS-era settings JSON fixture), `status_bar_display: "default" present → Default`, neither → `Default`) — done-signal: fails.
+- [x] T152 [T:GREEN] [US1] Implement `deserialize_status_bar_display_with_legacy_fallback` custom deserializer — done-signal: passes.
+- [x] T153 [T:RED] [US1] `managers::settings::tests::save_writes_full_shape_drops_legacy_field` — done-signal: fails.
+- [x] T154 [T:GREEN] [US1] Implement `Settings::save()` round-trip writing only the new shape — done-signal: passes.
+- [x] T155 [T:RED] [US1] `managers::settings::tests::idempotent_missing_field_migration_writes_back` (FR-005) — done-signal: fails.
+- [x] T156 [T:GREEN] [US1] Implement load → fill defaults → write-back idempotent path — done-signal: passes.
 
 ### managers/navigation (4 tasks)
 
-- [ ] T157 [T:RED] [US1] `managers::navigation::tests::initial_view_is_timer` and `tests::any_view_to_any_view_transition_allowed` — done-signal: fails.
-- [ ] T158 [T:GREEN] [US1] Implement `NavView` + `SettingsTab` enums and `Navigation::transition_to(view)` — done-signal: passes.
-- [ ] T159 [T:RED] [US1] `managers::navigation::tests::settings_tab_transitions_preserve_selected_tab` — done-signal: fails.
-- [ ] T160 [T:GREEN] [US1] Implement settings-tab nested transition — done-signal: passes.
+- [x] T157 [T:RED] [US1] `managers::navigation::tests::initial_view_is_timer` and `tests::any_view_to_any_view_transition_allowed` — done-signal: fails.
+- [x] T158 [T:GREEN] [US1] Implement `NavView` + `SettingsTab` enums and `Navigation::transition_to(view)` — done-signal: passes.
+- [x] T159 [T:RED] [US1] `managers::navigation::tests::settings_tab_transitions_preserve_selected_tab` — done-signal: fails.
+- [x] T160 [T:GREEN] [US1] Implement settings-tab nested transition — done-signal: passes.
 
 ### managers/tag (6 tasks)
 
