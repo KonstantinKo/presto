@@ -144,16 +144,14 @@ impl TagManager {
     /// Spec 001-leptos-migration §Phase 3b T166.
     #[must_use]
     pub fn list_reduction(loaded: Vec<Tag>) -> Self {
-        let mut seen_ids: Vec<String> = Vec::with_capacity(loaded.len());
         let mut tags: Vec<Tag> = Vec::with_capacity(loaded.len());
         for tag in loaded {
             if tag.id.is_empty() || tag.name.is_empty() {
                 continue;
             }
-            if seen_ids.iter().any(|id| id == &tag.id) {
+            if tags.iter().any(|t| t.id == tag.id) {
                 continue;
             }
-            seen_ids.push(tag.id.clone());
             tags.push(tag);
         }
         Self { tags }

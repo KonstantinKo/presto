@@ -180,10 +180,7 @@ pub(super) fn import_history(
     app_data_dir: &Path,
     payload: &LegacyHistoryPayload,
 ) -> Result<(), BridgeError> {
-    if app_data_dir.join("history.json").exists() {
-        return Ok(());
-    }
-    if payload.history.is_empty() {
+    if app_data_dir.join("history.json").exists() || payload.history.is_empty() {
         return Ok(());
     }
     std::fs::create_dir_all(app_data_dir).map_err(|e| BridgeError::Internal {
@@ -199,10 +196,7 @@ pub(super) fn import_tasks(
     app_data_dir: &Path,
     payload: &LegacyTasksPayload,
 ) -> Result<(), BridgeError> {
-    if app_data_dir.join("tasks.json").exists() {
-        return Ok(());
-    }
-    if payload.tasks.is_empty() {
+    if app_data_dir.join("tasks.json").exists() || payload.tasks.is_empty() {
         return Ok(());
     }
     helpers::write_tasks_to(app_data_dir, &payload.tasks)?;
@@ -218,10 +212,7 @@ pub(super) fn import_tags(
     app_data_dir: &Path,
     payload: &LegacyTagsPayload,
 ) -> Result<(), BridgeError> {
-    if app_data_dir.join("tags.json").exists() {
-        return Ok(());
-    }
-    if payload.tags.is_empty() {
+    if app_data_dir.join("tags.json").exists() || payload.tags.is_empty() {
         return Ok(());
     }
     helpers::write_tags_to(app_data_dir, &payload.tags)?;
@@ -234,10 +225,7 @@ pub(super) fn import_manual_sessions(
     app_data_dir: &Path,
     payload: &LegacyManualSessionsPayload,
 ) -> Result<(), BridgeError> {
-    if app_data_dir.join("manual_sessions.json").exists() {
-        return Ok(());
-    }
-    if payload.sessions.is_empty() {
+    if app_data_dir.join("manual_sessions.json").exists() || payload.sessions.is_empty() {
         return Ok(());
     }
     helpers::write_manual_sessions_to(app_data_dir, &payload.sessions)?;
@@ -341,8 +329,7 @@ pub(super) fn import_supabase_session(
             command: "import_legacy_supabase_session".to_string(),
             error: format!("re-shape payload into AuthSession: {e}"),
         })?;
-    auth::persist_session(app_data_dir, &session)?;
-    Ok(())
+    auth::persist_session(app_data_dir, &session)
 }
 
 #[cfg(test)]

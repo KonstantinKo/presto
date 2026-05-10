@@ -380,11 +380,7 @@ impl TimerState {
             && !self.is_auto_paused
             && self.current_session_elapsed_secs == 0
         {
-            self.time_remaining_secs = match self.current_mode {
-                TimerMode::Focus => durations.focus as i64,
-                TimerMode::Break => durations.short_break as i64,
-                TimerMode::LongBreak => durations.long_break as i64,
-            };
+            self.time_remaining_secs = durations.for_mode(self.current_mode) as i64;
         }
     }
 

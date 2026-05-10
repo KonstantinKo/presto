@@ -485,6 +485,13 @@ fn should_debounce_shortcut(action: &str) -> bool {
     helpers::is_debounced(&mut map, action, Instant::now(), Duration::from_millis(500))
 }
 
+
+fn get_app_data_dir(app: &AppHandle) -> Result<std::path::PathBuf, BridgeError> {
+    app.path().app_data_dir().map_err(|e| BridgeError::Internal {
+        msg: format!("Failed to get app data directory: {e}"),
+    })
+}
+
 impl ActivityMonitor {
     #[cfg(target_os = "macos")]
     fn new(app_handle: AppHandle, timeout_seconds: u64) -> Self {
@@ -633,12 +640,7 @@ async fn update_activity_timeout(timeout_seconds: u64) -> Result<(), BridgeError
 
 #[tauri::command]
 async fn save_session_data(session: PomodoroSession, app: AppHandle) -> Result<(), BridgeError> {
-    let app_data_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| BridgeError::Internal {
-            msg: format!("Failed to get app data directory: {e}"),
-        })?;
+    let app_data_dir = get_app_data_dir(&app)?;
 
     helpers::write_session_to(&app_data_dir, &session)?;
 
@@ -656,23 +658,13 @@ async fn save_session_data(session: PomodoroSession, app: AppHandle) -> Result<(
 
 #[tauri::command]
 async fn load_session_data(app: AppHandle) -> Result<Option<PomodoroSession>, BridgeError> {
-    let app_data_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| BridgeError::Internal {
-            msg: format!("Failed to get app data directory: {e}"),
-        })?;
+    let app_data_dir = get_app_data_dir(&app)?;
     helpers::read_session_from(&app_data_dir).map_err(BridgeError::from)
 }
 
 #[tauri::command]
 async fn save_tasks(tasks: Vec<Task>, app: AppHandle) -> Result<(), BridgeError> {
-    let app_data_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| BridgeError::Internal {
-            msg: format!("Failed to get app data directory: {e}"),
-        })?;
+    let app_data_dir = get_app_data_dir(&app)?;
 
     helpers::write_tasks_to(&app_data_dir, &tasks)?;
 
@@ -685,34 +677,19 @@ async fn save_tasks(tasks: Vec<Task>, app: AppHandle) -> Result<(), BridgeError>
 
 #[tauri::command]
 async fn load_tasks(app: AppHandle) -> Result<Vec<Task>, BridgeError> {
-    let app_data_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| BridgeError::Internal {
-            msg: format!("Failed to get app data directory: {e}"),
-        })?;
+    let app_data_dir = get_app_data_dir(&app)?;
     helpers::read_tasks_from(&app_data_dir).map_err(BridgeError::from)
 }
 
 #[tauri::command]
 async fn get_stats_history(app: AppHandle) -> Result<Vec<PomodoroSession>, BridgeError> {
-    let app_data_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| BridgeError::Internal {
-            msg: format!("Failed to get app data directory: {e}"),
-        })?;
+    let app_data_dir = get_app_data_dir(&app)?;
     helpers::read_history_from(&app_data_dir).map_err(BridgeError::from)
 }
 
 #[tauri::command]
 async fn save_daily_stats(session: PomodoroSession, app: AppHandle) -> Result<(), BridgeError> {
-    let app_data_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| BridgeError::Internal {
-            msg: format!("Failed to get app data directory: {e}"),
-        })?;
+    let app_data_dir = get_app_data_dir(&app)?;
     helpers::append_daily_stats_to(&app_data_dir, &session).map_err(BridgeError::from)
 }
 
@@ -786,6 +763,16 @@ async fn update_tray_icon(
     final_result
 }
 
+fn emit_tray_and_show(app: &AppHandle, event: &str) {
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.emit(event, ());
+    }
+    let app_clone = app.clone();
+    tauri::async_runtime::spawn(async move {
+        show_app_window(app_clone).await;
+    });
+}
+
 #[allow(clippy::unused_async)] // awaits run_on_main_thread on macOS
 async fn show_app_window(app: AppHandle) {
     let settings = app
@@ -810,12 +797,7 @@ async fn show_app_window(app: AppHandle) {
 
 #[tauri::command]
 async fn save_settings(settings: AppSettings, app: AppHandle) -> Result<(), BridgeError> {
-    let app_data_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| BridgeError::Internal {
-            msg: format!("Failed to get app data directory: {e}"),
-        })?;
+    let app_data_dir = get_app_data_dir(&app)?;
 
     helpers::write_settings_to(&app_data_dir, &settings)?;
 
@@ -829,12 +811,7 @@ async fn save_settings(settings: AppSettings, app: AppHandle) -> Result<(), Brid
 
 #[tauri::command]
 async fn load_settings(app: AppHandle) -> Result<AppSettings, BridgeError> {
-    let app_data_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| BridgeError::Internal {
-            msg: format!("Failed to get app data directory: {e}"),
-        })?;
+    let app_data_dir = get_app_data_dir(&app)?;
     helpers::read_settings_from(&app_data_dir).map_err(|e| BridgeError::Internal {
         msg: format!("Failed to read settings: {e}"),
     })
@@ -886,12 +863,7 @@ async fn register_global_shortcuts(
 
 #[tauri::command]
 async fn reset_all_data(app: AppHandle) -> Result<(), BridgeError> {
-    let app_data_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| BridgeError::Internal {
-            msg: format!("Failed to get app data directory: {e}"),
-        })?;
+    let app_data_dir = get_app_data_dir(&app)?;
 
     helpers::delete_all_data_in(&app_data_dir)?;
 
@@ -935,12 +907,7 @@ async fn save_manual_sessions(
     sessions: Vec<ManualSession>,
     app: AppHandle,
 ) -> Result<(), BridgeError> {
-    let app_data_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| BridgeError::Internal {
-            msg: format!("Failed to get app data directory: {e}"),
-        })?;
+    let app_data_dir = get_app_data_dir(&app)?;
 
     helpers::write_manual_sessions_to(&app_data_dir, &sessions)?;
 
@@ -956,12 +923,7 @@ async fn save_manual_sessions(
 
 #[tauri::command]
 async fn load_manual_sessions(app: AppHandle) -> Result<Vec<ManualSession>, BridgeError> {
-    let app_data_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| BridgeError::Internal {
-            msg: format!("Failed to get app data directory: {e}"),
-        })?;
+    let app_data_dir = get_app_data_dir(&app)?;
     helpers::read_manual_sessions_from(&app_data_dir).map_err(BridgeError::from)
 }
 
@@ -1098,40 +1060,16 @@ pub fn run() {
                             });
                         }
                         "start_session" => {
-                            if let Some(window) = app_handle.get_webview_window("main") {
-                                let _ = window.emit("tray-start-session", ());
-                            }
-                            let app_clone = app_handle.clone();
-                            tauri::async_runtime::spawn(async move {
-                                show_app_window(app_clone).await;
-                            });
+                            emit_tray_and_show(&app_handle, "tray-start-session");
                         }
                         "pause" => {
-                            if let Some(window) = app_handle.get_webview_window("main") {
-                                let _ = window.emit("tray-pause", ());
-                            }
-                            let app_clone = app_handle.clone();
-                            tauri::async_runtime::spawn(async move {
-                                show_app_window(app_clone).await;
-                            });
+                            emit_tray_and_show(&app_handle, "tray-pause");
                         }
                         "skip" => {
-                            if let Some(window) = app_handle.get_webview_window("main") {
-                                let _ = window.emit("tray-skip", ());
-                            }
-                            let app_clone = app_handle.clone();
-                            tauri::async_runtime::spawn(async move {
-                                show_app_window(app_clone).await;
-                            });
+                            emit_tray_and_show(&app_handle, "tray-skip");
                         }
                         "cancel" => {
-                            if let Some(window) = app_handle.get_webview_window("main") {
-                                let _ = window.emit("tray-cancel", ());
-                            }
-                            let app_clone = app_handle.clone();
-                            tauri::async_runtime::spawn(async move {
-                                show_app_window(app_clone).await;
-                            });
+                            emit_tray_and_show(&app_handle, "tray-cancel");
                         }
                         "quit" => {
                             app_handle.exit(0);
@@ -1231,45 +1169,25 @@ pub fn run() {
 
 #[tauri::command]
 async fn load_tags(app: AppHandle) -> Result<Vec<Tag>, BridgeError> {
-    let app_data_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| BridgeError::Internal {
-            msg: format!("Failed to get app data directory: {e}"),
-        })?;
+    let app_data_dir = get_app_data_dir(&app)?;
     helpers::read_tags_from(&app_data_dir).map_err(BridgeError::from)
 }
 
 #[tauri::command]
 async fn save_tag(tag: Tag, app: AppHandle) -> Result<(), BridgeError> {
-    let app_data_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| BridgeError::Internal {
-            msg: format!("Failed to get app data directory: {e}"),
-        })?;
+    let app_data_dir = get_app_data_dir(&app)?;
     helpers::upsert_tag_in(&app_data_dir, tag).map_err(BridgeError::from)
 }
 
 #[tauri::command]
 async fn delete_tag(tag_id: String, app: AppHandle) -> Result<(), BridgeError> {
-    let app_data_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| BridgeError::Internal {
-            msg: format!("Failed to get app data directory: {e}"),
-        })?;
+    let app_data_dir = get_app_data_dir(&app)?;
     helpers::delete_tag_in(&app_data_dir, &tag_id).map_err(BridgeError::from)
 }
 
 #[tauri::command]
 async fn add_session_tag(session_tag: SessionTag, app: AppHandle) -> Result<(), BridgeError> {
-    let app_data_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| BridgeError::Internal {
-            msg: format!("Failed to get app data directory: {e}"),
-        })?;
+    let app_data_dir = get_app_data_dir(&app)?;
     helpers::append_session_tag_in(&app_data_dir, session_tag).map_err(BridgeError::from)
 }
 
@@ -1427,12 +1345,7 @@ async fn supabase_sign_in_with_password(
     app: AppHandle,
 ) -> Result<auth::AuthSession, BridgeError> {
     let session = auth::sign_in_with_password(&email, &password).await?;
-    let app_data_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| BridgeError::Internal {
-            msg: format!("Failed to get app data directory: {e}"),
-        })?;
+    let app_data_dir = get_app_data_dir(&app)?;
     auth::persist_session(&app_data_dir, &session)?;
     Ok(session)
 }
@@ -1453,12 +1366,7 @@ async fn supabase_sign_in_with_password(
 #[tauri::command]
 async fn supabase_sign_out(refresh_token: String, app: AppHandle) -> Result<(), BridgeError> {
     auth::sign_out(&refresh_token).await?;
-    let app_data_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| BridgeError::Internal {
-            msg: format!("Failed to get app data directory: {e}"),
-        })?;
+    let app_data_dir = get_app_data_dir(&app)?;
     auth::clear_session(&app_data_dir)
 }
 
@@ -1472,12 +1380,7 @@ async fn supabase_sign_out(refresh_token: String, app: AppHandle) -> Result<(), 
 // source of truth lives below the bridge).
 #[tauri::command]
 async fn supabase_get_session(app: AppHandle) -> Result<Option<auth::AuthSession>, BridgeError> {
-    let app_data_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| BridgeError::Internal {
-            msg: format!("Failed to get app data directory: {e}"),
-        })?;
+    let app_data_dir = get_app_data_dir(&app)?;
     auth::read_session(&app_data_dir)
 }
 
@@ -1495,12 +1398,7 @@ async fn supabase_refresh_session(
     app: AppHandle,
 ) -> Result<auth::AuthSession, BridgeError> {
     let session = auth::refresh_session(&refresh_token).await?;
-    let app_data_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| BridgeError::Internal {
-            msg: format!("Failed to get app data directory: {e}"),
-        })?;
+    let app_data_dir = get_app_data_dir(&app)?;
     auth::persist_session(&app_data_dir, &session)?;
     Ok(session)
 }
@@ -1532,12 +1430,7 @@ async fn import_legacy_settings(
     payload: migration::LegacySettingsPayload,
     app: AppHandle,
 ) -> Result<(), BridgeError> {
-    let app_data_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| BridgeError::Internal {
-            msg: format!("Failed to get app data directory: {e}"),
-        })?;
+    let app_data_dir = get_app_data_dir(&app)?;
     migration::import_settings(&app_data_dir, &payload)
 }
 
@@ -1546,12 +1439,7 @@ async fn import_legacy_history(
     payload: migration::LegacyHistoryPayload,
     app: AppHandle,
 ) -> Result<(), BridgeError> {
-    let app_data_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| BridgeError::Internal {
-            msg: format!("Failed to get app data directory: {e}"),
-        })?;
+    let app_data_dir = get_app_data_dir(&app)?;
     migration::import_history(&app_data_dir, &payload)
 }
 
@@ -1560,12 +1448,7 @@ async fn import_legacy_tasks(
     payload: migration::LegacyTasksPayload,
     app: AppHandle,
 ) -> Result<(), BridgeError> {
-    let app_data_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| BridgeError::Internal {
-            msg: format!("Failed to get app data directory: {e}"),
-        })?;
+    let app_data_dir = get_app_data_dir(&app)?;
     migration::import_tasks(&app_data_dir, &payload)
 }
 
@@ -1574,12 +1457,7 @@ async fn import_legacy_tags(
     payload: migration::LegacyTagsPayload,
     app: AppHandle,
 ) -> Result<(), BridgeError> {
-    let app_data_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| BridgeError::Internal {
-            msg: format!("Failed to get app data directory: {e}"),
-        })?;
+    let app_data_dir = get_app_data_dir(&app)?;
     migration::import_tags(&app_data_dir, &payload)
 }
 
@@ -1588,12 +1466,7 @@ async fn import_legacy_manual_sessions(
     payload: migration::LegacyManualSessionsPayload,
     app: AppHandle,
 ) -> Result<(), BridgeError> {
-    let app_data_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| BridgeError::Internal {
-            msg: format!("Failed to get app data directory: {e}"),
-        })?;
+    let app_data_dir = get_app_data_dir(&app)?;
     migration::import_manual_sessions(&app_data_dir, &payload)
 }
 
@@ -1602,12 +1475,7 @@ async fn import_legacy_user_state(
     payload: migration::LegacyUserStatePayload,
     app: AppHandle,
 ) -> Result<(), BridgeError> {
-    let app_data_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| BridgeError::Internal {
-            msg: format!("Failed to get app data directory: {e}"),
-        })?;
+    let app_data_dir = get_app_data_dir(&app)?;
     migration::import_user_state(&app_data_dir, &payload)
 }
 
@@ -1616,12 +1484,7 @@ async fn import_legacy_supabase_session(
     payload: migration::SupabaseSessionPayload,
     app: AppHandle,
 ) -> Result<(), BridgeError> {
-    let app_data_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| BridgeError::Internal {
-            msg: format!("Failed to get app data directory: {e}"),
-        })?;
+    let app_data_dir = get_app_data_dir(&app)?;
     migration::import_supabase_session(&app_data_dir, &payload)
 }
 
@@ -1635,23 +1498,13 @@ async fn import_legacy_supabase_session(
 
 #[tauri::command]
 async fn is_legacy_migration_complete(app: AppHandle) -> Result<bool, BridgeError> {
-    let app_data_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| BridgeError::Internal {
-            msg: format!("Failed to get app data directory: {e}"),
-        })?;
+    let app_data_dir = get_app_data_dir(&app)?;
     Ok(app_data_dir.join("legacy-migration-done.marker").exists())
 }
 
 #[tauri::command]
 async fn mark_legacy_migration_complete(app: AppHandle) -> Result<(), BridgeError> {
-    let app_data_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| BridgeError::Internal {
-            msg: format!("Failed to get app data directory: {e}"),
-        })?;
+    let app_data_dir = get_app_data_dir(&app)?;
     std::fs::create_dir_all(&app_data_dir).map_err(|e| BridgeError::Internal {
         msg: format!("Failed to create app data directory: {e}"),
     })?;
