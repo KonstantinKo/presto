@@ -670,7 +670,7 @@ mod tests {
         load_tasks, register_global_shortcuts, reset_all_data, save_daily_stats,
         save_manual_sessions, save_session_data, save_settings, save_tag, save_tasks,
         start_activity_monitoring, stop_activity_monitoring, update_activity_timeout,
-        update_tray_icon, update_tray_menu,
+        update_tray_icon, update_tray_menu, write_excel_file,
     };
     use crate::bridge::error::BridgeError;
     use crate::bridge::session_type::SessionType;
@@ -1319,5 +1319,38 @@ mod tests {
             update_tray_menu(is_running, is_paused, current_mode).await
         }
         let _ = assert_signature(true, false, TimerMode::LongBreak).await;
+    }
+
+    #[wasm_bindgen_test]
+    async fn write_excel_file_round_trip_short_circuits_when_bridge_absent() {
+        let result = write_excel_file(
+            "/tmp/export.xlsx".to_string(),
+            "UEsDBBQAAAAIAA==".to_string(),
+        )
+        .await;
+        match result {
+            Err(BridgeError::BridgeUnavailable) => {}
+            other => panic!("expected BridgeUnavailable, got {other:?}"),
+        }
+    }
+
+    /// Compile-time signature pin per contracts/tauri-bridge.md row 25:
+    /// `write_excel_file(path: String, data: String) -> Result<(), BridgeError>`.
+    /// `data` is base64-encoded XLSX bytes per the Tauri-side handler at
+    /// `src-tauri/src/lib.rs:1219`. Kept for cutover-period parity only;
+    /// deprecated by the new `export_sessions_xlsx` (introduced in Phase
+    /// 1D / T097) and removed in Phase 6 cleanup. The wrapper exists so
+    /// the JS-era export path can compile against the new bridge during
+    /// the transition.
+    #[wasm_bindgen_test]
+    async fn write_excel_file_round_trip_signature_pinned() {
+        async fn assert_signature(path: String, data: String) -> Result<(), BridgeError> {
+            write_excel_file(path, data).await
+        }
+        let _ = assert_signature(
+            "/tmp/export.xlsx".to_string(),
+            "UEsDBBQAAAAIAA==".to_string(),
+        )
+        .await;
     }
 }
