@@ -31,6 +31,7 @@ use wasm_bindgen_futures::JsFuture;
 
 use super::availability::bridge_available;
 use super::error::BridgeError;
+use super::timer_mode::TimerMode;
 use super::types::{
     ManualSession, Session, SessionTag, Settings, ShortcutSettings, Tag, Task, UpdateTrayIconArgs,
 };
@@ -610,6 +611,49 @@ pub async fn is_autostart_enabled() -> Result<bool, BridgeError> {
 /// `BridgeError::Internal`.
 pub async fn update_tray_icon(args: UpdateTrayIconArgs) -> Result<(), BridgeError> {
     invoke_serde("update_tray_icon", &args).await
+}
+
+/// Rebuild the system-tray context menu so item enable/disable state
+/// reflects the live timer's status. Tauri-side handler:
+/// `update_tray_menu(is_running: bool, is_paused: bool, current_mode:
+///                   TimerMode) -> Result<(), BridgeError>`
+/// at `src-tauri/src/lib.rs:1124`.
+///
+/// Distinct from `update_tray_icon` in that the contract row 24 keeps
+/// the three args as separate parameters (no struct collapse) — the
+/// argument count is small and the call site reads naturally.
+///
+/// `current_mode: TimerMode` is the closed-domain enum tightening from
+/// Phase 1A T027 (was `String` pre-cutover); the camelCase wire form is
+/// preserved exactly via `TimerMode`'s `#[serde(rename_all =
+/// "camelCase")]`. The Tauri-side handler uses the variant to choose
+/// the cancel-item label (`"Cancel"` in Focus mode vs. `"Cancel Last"`
+/// during a break).
+///
+/// # Errors
+/// Returns `BridgeError::BridgeUnavailable` when the Tauri JS bridge is
+/// not present. Tauri-side menu-construction failures (rare; e.g.,
+/// `MenuItem::with_id` returns an error) surface as `BridgeError::Internal`.
+pub async fn update_tray_menu(
+    is_running: bool,
+    is_paused: bool,
+    current_mode: TimerMode,
+) -> Result<(), BridgeError> {
+    #[derive(Serialize)]
+    struct Args {
+        is_running: bool,
+        is_paused: bool,
+        current_mode: TimerMode,
+    }
+    invoke_serde(
+        "update_tray_menu",
+        &Args {
+            is_running,
+            is_paused,
+            current_mode,
+        },
+    )
+    .await
 }
 
 // Tests gated on `wasm32` because every wrapper-test is a
