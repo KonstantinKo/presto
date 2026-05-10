@@ -11,7 +11,18 @@
 // reads either shape on disk and emits only the new shape on save
 // (legacy field is dropped; see `data-model.md` §"Settings legacy
 // migration").
+//
+// Lint allowance: `clippy::future_not_send` is allowed at the module
+// level for the same reason as on `bridge::commands` — every async
+// path here transitively awaits a `JsFuture` from `bridge::commands`,
+// and `JsValue` (and everything built on it) is `!Send` by
+// construction on `wasm32-unknown-unknown`. The runtime is
+// single-threaded; demanding `Send` would force a `!Send`-erasure
+// shim that does nothing on the WASM target.
+#![allow(clippy::future_not_send)]
 
+use crate::bridge::commands;
+use crate::bridge::error::BridgeError;
 use crate::bridge::types::Settings;
 
 /// Wrapper over the user's `Settings` record. Phase 3a wires up the
@@ -35,10 +46,39 @@ impl SettingsManager {
         }
     }
 
+    /// Build a manager from the result of
+    /// `bridge::commands::load_settings()` (or any equivalent loader),
+    /// falling back to `Settings::default()` on error. Mirrors the
+    /// JS-side catch-and-default at
+    /// `src/managers/settings-manager.js:125-128`: persistence
+    /// failures (missing file, deserialise error, bridge unavailable)
+    /// must not poison the manager's state — the user always sees a
+    /// usable default until they edit a field that triggers a save.
+    #[must_use]
+    pub fn from_loaded_or_default(loaded: Result<Settings, BridgeError>) -> Self {
+        Self {
+            state: loaded.unwrap_or_default(),
+        }
+    }
+
     /// Borrow the current settings record.
     #[must_use]
     pub const fn current(&self) -> &Settings {
         &self.state
+    }
+
+    /// Async cold-start path: ask the bridge for the persisted settings,
+    /// fall back to `Settings::default()` on any error (cold start, bridge
+    /// unavailable, corrupted file). Mirrors the JS-side
+    /// `SettingsManager.loadSettings` flow at
+    /// `src/managers/settings-manager.js:103-129`.
+    ///
+    /// The wrapper is `async` because the underlying
+    /// `bridge::commands::load_settings` is `async`. Tests for the pure
+    /// merge logic exercise `from_loaded_or_default` directly to keep the
+    /// host test path off the wasm bindgen boundary.
+    pub async fn load() -> Self {
+        Self::from_loaded_or_default(commands::load_settings().await)
     }
 }
 
