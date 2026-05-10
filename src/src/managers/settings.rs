@@ -227,8 +227,7 @@ mod tests {
             "autostart": false,
             "hide_status_bar": true
         }"#;
-        let mgr = SettingsManager::ingest_raw_json(legacy)
-            .expect("legacy shape must deserialise");
+        let mgr = SettingsManager::ingest_raw_json(legacy).expect("legacy shape must deserialise");
         assert!(
             mgr.needs_writeback(),
             "legacy hide_status_bar present must flag writeback",
@@ -263,8 +262,7 @@ mod tests {
             "hide_icon_on_close": false,
             "status_bar_display": "default"
         }"#;
-        let mgr = SettingsManager::ingest_raw_json(missing_weekly_goal)
-            .expect("must deserialise");
+        let mgr = SettingsManager::ingest_raw_json(missing_weekly_goal).expect("must deserialise");
         assert!(
             mgr.needs_writeback(),
             "missing weekly_goal_minutes must flag writeback",
@@ -290,8 +288,7 @@ mod tests {
             "hide_icon_on_close": false,
             "status_bar_display": "default"
         }"#;
-        let mgr = SettingsManager::ingest_raw_json(canonical)
-            .expect("must deserialise");
+        let mgr = SettingsManager::ingest_raw_json(canonical).expect("must deserialise");
         assert!(
             !mgr.needs_writeback(),
             "canonical full shape must NOT flag writeback",
@@ -327,8 +324,7 @@ mod tests {
             "autostart": false,
             "hide_status_bar": true
         }"#;
-        let mgr = SettingsManager::ingest_raw_json(legacy)
-            .expect("legacy shape must deserialise");
+        let mgr = SettingsManager::ingest_raw_json(legacy).expect("legacy shape must deserialise");
         let payload = mgr.save_payload_json().expect("must serialise");
 
         assert!(
@@ -404,10 +400,9 @@ mod tests {
         // Case 3: kebab-case round-trip from a JS-era settings JSON
         // that already carries the new field. Pre-cutover JS-side
         // migration step had already started writing this shape.
-        let mgr = SettingsManager::ingest_raw_json(&make_json(
-            r#", "status_bar_display": "icon-only""#,
-        ))
-        .expect("new shape kebab-case must deserialise");
+        let mgr =
+            SettingsManager::ingest_raw_json(&make_json(r#", "status_bar_display": "icon-only""#))
+                .expect("new shape kebab-case must deserialise");
         assert_eq!(
             mgr.current().status_bar_display,
             StatusBarDisplay::IconOnly,
@@ -415,10 +410,9 @@ mod tests {
         );
 
         // Case 4: kebab-case `status_bar_display: "default" → Default`.
-        let mgr = SettingsManager::ingest_raw_json(&make_json(
-            r#", "status_bar_display": "default""#,
-        ))
-        .expect("new shape default kebab-case must deserialise");
+        let mgr =
+            SettingsManager::ingest_raw_json(&make_json(r#", "status_bar_display": "default""#))
+                .expect("new shape default kebab-case must deserialise");
         assert_eq!(
             mgr.current().status_bar_display,
             StatusBarDisplay::Default,
@@ -496,9 +490,15 @@ mod tests {
             mgr.current().notifications.allow_continuous_sessions,
             defaults.notifications.allow_continuous_sessions,
         );
-        assert_eq!(mgr.current().advanced.debug_mode, defaults.advanced.debug_mode);
+        assert_eq!(
+            mgr.current().advanced.debug_mode,
+            defaults.advanced.debug_mode
+        );
         assert_eq!(mgr.current().analytics_enabled, defaults.analytics_enabled);
-        assert_eq!(mgr.current().hide_icon_on_close, defaults.hide_icon_on_close);
+        assert_eq!(
+            mgr.current().hide_icon_on_close,
+            defaults.hide_icon_on_close
+        );
         // T151 covers the migration cases for status_bar_display in
         // detail; here we only assert the "neither field present"
         // branch lands at `StatusBarDisplay::default()`.
