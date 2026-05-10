@@ -144,6 +144,110 @@ impl SettingsManager {
 mod tests {
     use super::SettingsManager;
 
+    /// T155 [RED]: FR-005 idempotent migration. When a settings JSON
+    /// is read that:
+    ///
+    /// - lacks any `#[serde(default)]`-marked field, OR
+    /// - carries the legacy `hide_status_bar` field instead of the
+    ///   new `status_bar_display` field,
+    ///
+    /// the manager MUST flag the in-memory state as needing
+    /// writeback. After the writeback, the on-disk shape is the
+    /// post-cutover canonical shape, and a subsequent load is a
+    /// no-op (no further writeback needed). Mirrors the JS-side
+    /// `scheduleAutoSave()` call at
+    /// `src/managers/settings-manager.js:116` that runs after the
+    /// `hide_status_bar → status_bar_display` migration step.
+    ///
+    /// Done-signal: this test currently fails because
+    /// `SettingsManager::needs_writeback` does not yet exist.
+    /// T156 GREEN attaches the dirty-flag tracking via the
+    /// `ingest_raw_json` path.
+    #[test]
+    fn idempotent_missing_field_migration_writes_back() {
+        // Case A: legacy `hide_status_bar` field present.
+        let legacy = r#"{
+            "shortcuts": {"start_stop": null, "reset": null, "skip": null},
+            "timer": {"focus_duration": 25, "break_duration": 5,
+                      "long_break_duration": 20, "total_sessions": 10},
+            "notifications": {"desktop_notifications": true,
+                              "sound_notifications": true,
+                              "auto_start_timer": true, "smart_pause": false,
+                              "smart_pause_timeout": 30},
+            "autostart": false,
+            "hide_status_bar": true
+        }"#;
+        let mgr = SettingsManager::ingest_raw_json(legacy)
+            .expect("legacy shape must deserialise");
+        assert!(
+            mgr.needs_writeback(),
+            "legacy hide_status_bar present must flag writeback",
+        );
+
+        // Now save and re-read — the second load is the canonical
+        // shape and must NOT flag writeback.
+        let canonical_payload = mgr.save_payload_json().expect("must serialise");
+        let mgr2 = SettingsManager::ingest_raw_json(&canonical_payload)
+            .expect("canonical shape must deserialise");
+        assert!(
+            !mgr2.needs_writeback(),
+            "canonical post-save shape must NOT flag writeback (idempotent)",
+        );
+
+        // Case B: missing `weekly_goal_minutes` (a #[serde(default)]
+        // field) on a settings JSON that's otherwise canonical.
+        let missing_weekly_goal = r#"{
+            "shortcuts": {"start_stop": null, "reset": null, "skip": null},
+            "timer": {"focus_duration": 25, "break_duration": 5,
+                      "long_break_duration": 20, "total_sessions": 10},
+            "notifications": {"desktop_notifications": true,
+                              "sound_notifications": true,
+                              "auto_start_timer": true,
+                              "auto_start_focus": false,
+                              "allow_continuous_sessions": false,
+                              "smart_pause": false,
+                              "smart_pause_timeout": 30},
+            "advanced": {"debug_mode": false},
+            "autostart": false,
+            "analytics_enabled": true,
+            "hide_icon_on_close": false,
+            "status_bar_display": "default"
+        }"#;
+        let mgr = SettingsManager::ingest_raw_json(missing_weekly_goal)
+            .expect("must deserialise");
+        assert!(
+            mgr.needs_writeback(),
+            "missing weekly_goal_minutes must flag writeback",
+        );
+
+        // Case C: full canonical shape with every field present —
+        // must NOT flag writeback.
+        let canonical = r#"{
+            "shortcuts": {"start_stop": null, "reset": null, "skip": null},
+            "timer": {"focus_duration": 25, "break_duration": 5,
+                      "long_break_duration": 20, "total_sessions": 10,
+                      "weekly_goal_minutes": 125},
+            "notifications": {"desktop_notifications": true,
+                              "sound_notifications": true,
+                              "auto_start_timer": true,
+                              "auto_start_focus": false,
+                              "allow_continuous_sessions": false,
+                              "smart_pause": false,
+                              "smart_pause_timeout": 30},
+            "advanced": {"debug_mode": false},
+            "autostart": false,
+            "analytics_enabled": true,
+            "hide_icon_on_close": false,
+            "status_bar_display": "default"
+        }"#;
+        let mgr = SettingsManager::ingest_raw_json(canonical)
+            .expect("must deserialise");
+        assert!(
+            !mgr.needs_writeback(),
+            "canonical full shape must NOT flag writeback",
+        );
+    }
+
     /// T153 [RED]: a save round-trip must produce the post-cutover
     /// wire shape only — the legacy `hide_status_bar` field never
     /// re-appears once the manager has read it. The JS-side
