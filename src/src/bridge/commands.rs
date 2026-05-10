@@ -788,7 +788,7 @@ pub async fn track_event<S: std::hash::BuildHasher>(
 /// shape (`AuthSession` per data-model.md §`Session (Supabase auth
 /// session)`) is byte-stable across the bridge: the Tauri-side
 /// `auth::AuthSession` and the Leptos-side `types::AuthSession` are
-/// snake_case JSON twins, so a wire-shape drift fails both crates'
+/// `snake_case` JSON twins, so a wire-shape drift fails both crates'
 /// tests at once.
 ///
 /// # Errors
@@ -809,6 +809,31 @@ pub async fn supabase_sign_in_with_password(
         password: String,
     }
     invoke_serde("supabase_sign_in_with_password", &Args { email, password }).await
+}
+
+/// Sign out: revoke the refresh token at Supabase REST and clear the
+/// Rust-side persisted session.
+///
+/// Tauri-side handler: `supabase_sign_out(refresh_token: String)
+/// -> Result<(), BridgeError>` at `src-tauri/src/lib.rs`. Replaces
+/// the JS `supabase-js` `signOut` call. The handler hits `/auth/v1/logout`
+/// best-effort (network failure is absorbed) and always clears the
+/// app-data dir's `supabase-session.json`, so the user is signed out
+/// client-side regardless of network status. Idempotent: signing out
+/// when no session is persisted is a successful no-op.
+///
+/// # Errors
+/// Returns `BridgeError::BridgeUnavailable` when the Tauri JS bridge is
+/// not present. Returns `BridgeError::InvalidArgument` for an empty
+/// `refresh_token` (the wrapper does not pre-validate — the handler
+/// does). Returns `BridgeError::Internal` for filesystem errors
+/// during the local clear (other than `NotFound`, which is absorbed).
+pub async fn supabase_sign_out(refresh_token: String) -> Result<(), BridgeError> {
+    #[derive(Serialize)]
+    struct Args {
+        refresh_token: String,
+    }
+    invoke_serde("supabase_sign_out", &Args { refresh_token }).await
 }
 
 // Tests gated on `wasm32` because every wrapper-test is a

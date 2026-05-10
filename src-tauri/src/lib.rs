@@ -877,7 +877,8 @@ pub fn run() {
                 set_dock_visibility,
                 set_status_bar_visibility,
                 track_event,
-                supabase_sign_in_with_password
+                supabase_sign_in_with_password,
+                supabase_sign_out
             ])
             .setup(|app| {
                 let initial_settings = load_settings_sync(app.handle());
@@ -1291,6 +1292,28 @@ async fn supabase_sign_in_with_password(
     })?;
     auth::persist_session(&app_data_dir, &session)?;
     Ok(session)
+}
+
+// `supabase_sign_out` — Phase 1D T091.
+//
+// Replaces the JS `supabase-js` `signOut` call. POSTs to Supabase REST
+// `/auth/v1/logout` to revoke the refresh token server-side, then
+// removes the persisted session file from the app-data dir. Network
+// failure on the REST call is tolerated (best-effort revocation —
+// matches supabase-js's same-named behaviour); the local clear is
+// always attempted so the user is signed out client-side regardless
+// of network status.
+//
+// Empty `refresh_token` → `InvalidArgument` before any HTTP roundtrip
+// or filesystem touch. Filesystem errors during the local clear (other
+// than NotFound, which is absorbed as the idempotent no-op) → `Internal`.
+#[tauri::command]
+async fn supabase_sign_out(refresh_token: String, app: AppHandle) -> Result<(), BridgeError> {
+    auth::sign_out(&refresh_token).await?;
+    let app_data_dir = app.path().app_data_dir().map_err(|e| BridgeError::Internal {
+        msg: format!("Failed to get app data directory: {e}"),
+    })?;
+    auth::clear_session(&app_data_dir)
 }
 
 #[tauri::command]

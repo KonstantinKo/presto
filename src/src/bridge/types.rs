@@ -276,7 +276,7 @@ impl Default for Settings {
 /// renames this to `AuthSession` so the two types never conflict at a
 /// call site that imports both.
 ///
-/// Wire shape: snake_case JSON via serde's default field naming. Matches
+/// Wire shape: `snake_case` JSON via serde's default field naming. Matches
 /// supabase-js's REST response shape directly so the Rust adapter
 /// (`src-tauri/src/auth.rs`) can deserialise the `/auth/v1/token`
 /// response into this struct without a translation layer.
