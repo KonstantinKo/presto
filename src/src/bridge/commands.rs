@@ -1677,26 +1677,39 @@ mod tests {
         let _ = assert_signature().await;
     }
 
+    /// Phase 1G refinement (T118-T119) per contracts/tauri-bridge.md
+    /// §"Error handling": `is_autostart_enabled` is a read-only
+    /// "is X on?" query, and consumers want the `Result<bool, …>`
+    /// shape to collapse to a single `bool` arm at the call site
+    /// when the bridge is absent (rather than handling both `Err`
+    /// AND `Ok(false)`/`Ok(true)`). The bridge-absent short-circuit
+    /// returns `Ok(false)` — the documented sentinel for "treat as
+    /// not-enabled" — instead of the uniform `Err(BridgeUnavailable)`
+    /// the other 25 wrappers use.
+    ///
+    /// This is the only wrapper that gets sentinel semantics in
+    /// Phase 1G. Save/update commands keep `Err` because their
+    /// caller has a real side-effect to perform; list-returning
+    /// reads keep `Err` for now (broader sentinel adoption is a
+    /// follow-up). See the wrapper doc-comment at the top of this
+    /// file for the rationale.
     #[wasm_bindgen_test]
-    async fn is_autostart_enabled_round_trip_short_circuits_when_bridge_absent() {
+    async fn is_autostart_enabled_short_circuits_to_false_when_bridge_absent() {
         let result = is_autostart_enabled().await;
         match result {
-            Err(BridgeError::BridgeUnavailable) => {}
-            other => panic!("expected BridgeUnavailable, got {other:?}"),
+            Ok(false) => {}
+            other => panic!("expected Ok(false) sentinel, got {other:?}"),
         }
     }
 
     /// Compile-time signature pin per contracts/tauri-bridge.md row 22:
-    /// `is_autostart_enabled() -> Result<bool, BridgeError>`.
-    /// First wrapper in this batch whose return type is `bool` (not
-    /// `()` / `Vec<…>` / `Option<…>`); pins that the wrapper returns the
-    /// bare `bool` rather than an `Option<bool>` or wrapped record.
-    /// The contract tauri-bridge.md §"Error handling" notes that the
-    /// `BridgeAvailable::Absent` short-circuit may yield a sentinel
-    /// (false) for read-only commands at a later phase (Phase 1G), but
-    /// in this phase the wrapper uses the uniform `Err(BridgeUnavailable)`
-    /// short-circuit consistent with the other 25 wrappers. Caller-side
-    /// adaptation to a sentinel false (if needed) lives at the consumer.
+    /// `is_autostart_enabled() -> Result<bool, BridgeError>`. The
+    /// outer `Result` is preserved post-1G so callers that want the
+    /// fail-loud shape can still bind a non-`BridgeUnavailable` error
+    /// (e.g., `Internal` from a plugin failure under the live bridge);
+    /// only the `BridgeUnavailable` short-circuit collapses to a
+    /// sentinel `Ok(false)`. Pins that the wrapper returns the bare
+    /// `bool` rather than an `Option<bool>` or wrapped record.
     #[wasm_bindgen_test]
     async fn is_autostart_enabled_round_trip_signature_pinned() {
         async fn assert_signature() -> Result<bool, BridgeError> {
