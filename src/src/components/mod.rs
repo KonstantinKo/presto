@@ -29,5 +29,6 @@
 // `pub mod` declaration alongside its skeleton file. Timer is the
 // first (T189); Tasks (T192), History (T195), Calendar (T198) and
 // Tags (T201) follow.
+pub mod history;
 pub mod tasks;
 pub mod timer;
