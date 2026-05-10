@@ -32,6 +32,18 @@ pub struct SettingsManager {
     /// Current authoritative settings — `Default::default()` until
     /// `load()` lands.
     state: Settings,
+    /// `true` iff the in-memory state diverges from what the on-disk
+    /// shape was when the manager last ingested it (FR-005 idempotent
+    /// migration). Set by `ingest_raw_json` whenever the input JSON
+    /// is missing a `#[serde(default)]`-marked field, carries a
+    /// legacy `hide_status_bar` field instead of the new
+    /// `status_bar_display`, or otherwise differs structurally from
+    /// the canonical post-cutover wire shape. The components layer
+    /// (Phase 4) honours this flag by triggering a save after the
+    /// next user-driven mutation, mirroring the JS-side
+    /// `scheduleAutoSave()` call at
+    /// `src/managers/settings-manager.js:116`.
+    needs_writeback: bool,
 }
 
 impl SettingsManager {
@@ -43,6 +55,7 @@ impl SettingsManager {
     pub fn new() -> Self {
         Self {
             state: Settings::default(),
+            needs_writeback: false,
         }
     }
 
@@ -54,10 +67,14 @@ impl SettingsManager {
     /// failures (missing file, deserialise error, bridge unavailable)
     /// must not poison the manager's state — the user always sees a
     /// usable default until they edit a field that triggers a save.
+    ///
+    /// Cold-start fallback never sets `needs_writeback`: there is no
+    /// legacy file to migrate when the load itself failed.
     #[must_use]
     pub fn from_loaded_or_default(loaded: Result<Settings, BridgeError>) -> Self {
         Self {
             state: loaded.unwrap_or_default(),
+            needs_writeback: false,
         }
     }
 
@@ -65,6 +82,21 @@ impl SettingsManager {
     #[must_use]
     pub const fn current(&self) -> &Settings {
         &self.state
+    }
+
+    /// `true` iff the manager's last `ingest_raw_json` call observed a
+    /// non-canonical on-disk shape (a missing `#[serde(default)]`
+    /// field, or a legacy `hide_status_bar` carried over). The
+    /// caller is expected to schedule a save once it's safe to do so;
+    /// the next ingest of the resulting canonical payload returns
+    /// `false`, matching the JS-side
+    /// `scheduleAutoSave → save → re-load → no schedule` cycle.
+    ///
+    /// Spec 001-leptos-migration §Phase 3a T156; FR-005 idempotent
+    /// migration path.
+    #[must_use]
+    pub const fn needs_writeback(&self) -> bool {
+        self.needs_writeback
     }
 
     /// Ingest a raw on-disk settings JSON document. Mirrors the
@@ -78,8 +110,9 @@ impl SettingsManager {
     /// post-cutover shape regardless of which 0.4.x revision wrote
     /// the file.
     ///
-    /// Used for tests + (via T156) the future "load → fill defaults
-    /// → write back" idempotent migration path.
+    /// Sets `needs_writeback` if the input JSON's normalised shape
+    /// differs from the canonical post-cutover save shape (FR-005
+    /// idempotent migration path; T156).
     ///
     /// # Errors
     /// Returns `serde_json::Error` if the input is not valid JSON or
@@ -87,8 +120,25 @@ impl SettingsManager {
     /// (such as `shortcuts`, `timer`, `notifications`, `autostart` —
     /// every released 0.4.x build emits these).
     pub fn ingest_raw_json(raw: &str) -> Result<Self, serde_json::Error> {
+        // Parse the input twice: once into the typed `Settings`
+        // (which runs every projection: serde defaults, the
+        // `SettingsOnDisk` legacy `hide_status_bar` fallback, etc.),
+        // and once into a structural `serde_json::Value`. Re-emit the
+        // typed value as JSON, parse THAT to a `Value`, and compare:
+        // any structural divergence (missing serde-default field,
+        // legacy `hide_status_bar` carried over, unknown extra keys)
+        // means the next save would write a different shape — i.e.
+        // the migration is non-idempotent for THIS particular
+        // on-disk file and we owe it a writeback.
         let state: Settings = serde_json::from_str(raw)?;
-        Ok(Self { state })
+        let input_value: serde_json::Value = serde_json::from_str(raw)?;
+        let canonical_str = serde_json::to_string(&state)?;
+        let canonical_value: serde_json::Value = serde_json::from_str(&canonical_str)?;
+        let needs_writeback = input_value != canonical_value;
+        Ok(Self {
+            state,
+            needs_writeback,
+        })
     }
 
     /// Async cold-start path: ask the bridge for the persisted settings,
