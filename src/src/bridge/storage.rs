@@ -354,4 +354,21 @@ mod tests {
             "expected Ok(()) for empty localStorage, got {result:?}"
         );
     }
+
+    /// T102 (RED). Pin the existence + cold-start return shape of the
+    /// `pomodoro-history` reader. The contract:
+    /// `import_legacy_history_from_storage()` returns
+    /// `Result<(), BridgeError>` and absorbs the no-localStorage case
+    /// as `Ok(())` so the entry point in T115 can call it
+    /// unconditionally. The signature pin uses an `async fn` binding;
+    /// a return-type drift breaks compilation. T103 GREEN re-asserts
+    /// the contract against the post-cutover-shape body.
+    #[wasm_bindgen_test]
+    async fn imports_legacy_history() {
+        async fn assert_signature() -> Result<(), super::super::error::BridgeError> {
+            super::import_legacy_history_from_storage().await
+        }
+        let result = assert_signature().await;
+        assert!(result.is_ok(), "cold-start no-op contract: {result:?}");
+    }
 }
