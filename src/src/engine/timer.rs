@@ -37,6 +37,12 @@ pub enum TimerEvent {
     /// re-recorded on emit so the suspend gap is not charged
     /// against the session.
     AutoResumed,
+    /// A manual session backfill was recorded through the engine.
+    /// Carries the recorded duration in seconds. Per Principle I,
+    /// manual entries route through the same engine path as live
+    /// sessions so the pomodoros + focus-time accumulators have a
+    /// single source of truth.
+    ManualSessionRecorded { duration_secs: u32 },
 }
 
 /// Pomodoro state machine.
@@ -99,6 +105,11 @@ pub struct TimerState {
     /// `start()` calls return `MaxSessionCapReached`. Mirrors
     /// `totalSessions` at `pomodoro-timer.js:31` (default 10).
     total_sessions: u32,
+    /// Cumulative focus time across the run, in seconds. Mirrors
+    /// `totalFocusTime` at `pomodoro-timer.js:32`. Both completed
+    /// live sessions and manual backfills (per Principle I)
+    /// integrate into this accumulator.
+    total_focus_secs: u32,
 }
 
 impl TimerState {
@@ -121,6 +132,7 @@ impl TimerState {
             smart_pause_enabled: false,
             is_auto_paused: false,
             total_sessions: 10,
+            total_focus_secs: 0,
         }
     }
 
@@ -218,6 +230,30 @@ impl TimerState {
     /// at runtime.
     pub const fn set_total_sessions(&mut self, total: u32) {
         self.total_sessions = total;
+    }
+
+    /// Cumulative focus time in seconds across both live and
+    /// manual sessions. Mirrors `totalFocusTime` at
+    /// `pomodoro-timer.js:32`.
+    #[must_use]
+    pub const fn total_focus_secs(&self) -> u32 {
+        self.total_focus_secs
+    }
+
+    /// Records a manual session backfill of `duration_secs`
+    /// through the engine path (per Principle I — manual entries
+    /// flow through the same accumulators as live sessions).
+    ///
+    /// Increments `completed_pomodoros`, integrates the duration
+    /// into `total_focus_secs`, and emits
+    /// `ManualSessionRecorded { duration_secs }`. The in-flight
+    /// session's mode and countdown are unaffected — backfill
+    /// adds to the historical record without disturbing the
+    /// current run.
+    pub fn record_manual_session(&mut self, duration_secs: u32) -> Vec<TimerEvent> {
+        self.completed_pomodoros = self.completed_pomodoros.saturating_add(1);
+        self.total_focus_secs = self.total_focus_secs.saturating_add(duration_secs);
+        vec![TimerEvent::ManualSessionRecorded { duration_secs }]
     }
 
     /// Consume an `ActivitySignal` from the bridge layer.
@@ -355,6 +391,14 @@ impl TimerState {
             match self.current_mode {
                 TimerMode::Focus => {
                     self.completed_pomodoros = self.completed_pomodoros.saturating_add(1);
+                    // Integrate the wall-clock-accumulated focus
+                    // work into the run-wide total. Mirrors
+                    // `totalFocusTime += actualElapsedTime` at
+                    // `pomodoro-timer.js:1167`.
+                    self.total_focus_secs = self
+                        .total_focus_secs
+                        .saturating_add(self.current_session_elapsed_secs);
+                    self.current_session_elapsed_secs = 0;
                     events.push(TimerEvent::PomodoroCompleted {
                         completed_pomodoros: self.completed_pomodoros,
                     });
