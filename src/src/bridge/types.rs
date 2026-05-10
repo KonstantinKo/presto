@@ -13,6 +13,7 @@
 use serde::{Deserialize, Serialize};
 
 use super::session_type::SessionType;
+use super::timer_mode::TimerMode;
 
 /// Pomodoro session record persisted in the user's app-data directory.
 /// Mirrors `PomodoroSession` at `src-tauri/src/lib.rs:142-148`.
@@ -262,6 +263,34 @@ impl Default for Settings {
             hide_status_bar: false,
         }
     }
+}
+
+/// Argument bundle for `bridge::commands::update_tray_icon`.
+///
+/// Per contracts/tauri-bridge.md row 23 / data-model.md §`UpdateTrayIconArgs`,
+/// the Tauri-side handler at `src-tauri/src/lib.rs:538` takes six positional
+/// parameters (`timer_text`, `is_running`, `session_mode`, `current_session`,
+/// `total_sessions`, `mode_icon`); the Leptos wrapper collapses them into
+/// this single typed struct so the call site reads
+/// `update_tray_icon(args)` rather than a six-arg sprawl.
+///
+/// The on-the-wire shape is preserved exactly: `serde-wasm-bindgen`
+/// flattens the struct fields to top-level keys in the Tauri args bag,
+/// matching the per-positional-arg shape Tauri 2.x expects. `session_mode`
+/// is the closed-domain `TimerMode` enum (Phase 1A T027) — a `String`
+/// drift here would not compile (FR-008).
+///
+/// `mode_icon: Option<String>` mirrors the Tauri-side handler's
+/// `mode_icon: Option<String>`; the handler falls back to a hard-coded
+/// emoji per `TimerMode` variant when `None`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UpdateTrayIconArgs {
+    pub timer_text: String,
+    pub is_running: bool,
+    pub session_mode: TimerMode,
+    pub current_session: u32,
+    pub total_sessions: u32,
+    pub mode_icon: Option<String>,
 }
 
 #[cfg(test)]

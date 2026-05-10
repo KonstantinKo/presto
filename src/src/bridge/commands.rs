@@ -31,7 +31,9 @@ use wasm_bindgen_futures::JsFuture;
 
 use super::availability::bridge_available;
 use super::error::BridgeError;
-use super::types::{ManualSession, Session, SessionTag, Settings, ShortcutSettings, Tag, Task};
+use super::types::{
+    ManualSession, Session, SessionTag, Settings, ShortcutSettings, Tag, Task, UpdateTrayIconArgs,
+};
 
 #[wasm_bindgen]
 extern "C" {
@@ -577,6 +579,37 @@ pub async fn disable_autostart() -> Result<(), BridgeError> {
 /// API is unavailable) surface as `BridgeError::Internal`.
 pub async fn is_autostart_enabled() -> Result<bool, BridgeError> {
     invoke_serde("is_autostart_enabled", &serde_json::Value::Null).await
+}
+
+// ---------------------------------------------------------------------------
+// Window & tray
+// ---------------------------------------------------------------------------
+
+/// Update the system-tray icon's title, tooltip, and mode glyph. Tauri-side
+/// handler:
+/// `update_tray_icon(timer_text, is_running, session_mode, current_session,
+///                   total_sessions, mode_icon) -> Result<(), BridgeError>`
+/// at `src-tauri/src/lib.rs:538`.
+///
+/// The contract collapses six positional Tauri-side args into a single
+/// `UpdateTrayIconArgs` struct (data-model.md §`UpdateTrayIconArgs`).
+/// `serde-wasm-bindgen` serialises the struct's fields to top-level keys
+/// in the Tauri args bag — byte-identical wire shape to the
+/// pre-collapse JS call site.
+///
+/// `session_mode: TimerMode` is the closed-domain enum tightening from
+/// Phase 1A T027 (was `String` pre-cutover); the camelCase wire form
+/// (`"focus"` / `"break"` / `"longBreak"`) is preserved exactly via
+/// `TimerMode`'s `#[serde(rename_all = "camelCase")]`.
+///
+/// # Errors
+/// Returns `BridgeError::BridgeUnavailable` when the Tauri JS bridge is
+/// not present. The Tauri-side handler runs the title/tooltip update on
+/// the macOS main thread; failures (e.g., the `tray_by_id("main")`
+/// lookup misses, or the macOS thread dispatch fails) surface as
+/// `BridgeError::Internal`.
+pub async fn update_tray_icon(args: UpdateTrayIconArgs) -> Result<(), BridgeError> {
+    invoke_serde("update_tray_icon", &args).await
 }
 
 // Tests gated on `wasm32` because every wrapper-test is a
