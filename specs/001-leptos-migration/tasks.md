@@ -531,7 +531,7 @@ Per principle, Roman numeral + name (per plan-template.md):
 
 **Goal**: `baseline-cap` CI gate wired and dry-run-tested; engine `web-sys` grep gate wired and dry-run-tested.
 
-- [ ] T244 [US4] Wire `baseline-cap` stage from plan.md §CI gates into `.agentex.yml` (or `.github/workflows/ci.yml` per repo convention); the stage greps for changed `tests/e2e/__screenshots__/visual-regression/*.png` files in the PR diff and fails at >2 — done-signal: throwaway-branch run on a PR with 0 changed baselines exits 0.
+- [x] T244 [US4] Wire `baseline-cap` stage from plan.md §CI gates into `.agentex.yml` (or `.github/workflows/ci.yml` per repo convention); the stage greps for changed `tests/e2e/__screenshots__/visual-regression/*.png` files in the PR diff and fails at >2 — done-signal: throwaway-branch run on a PR with 0 changed baselines exits 0.
 - [ ] T245 [US4] Verify `baseline-cap` fail-closed by intentionally re-capturing 3 baselines on a throwaway branch — done-signal: CI exits 1 with the documented error message; throwaway branch is then deleted.
 - [ ] T246 [US1] Wire engine `web-sys` grep gate from plan.md §CI gates into `.agentex.yml` `qa.lint` — done-signal: clean HEAD's lint stage exits 0.
 - [ ] T247 [US1] Verify engine `web-sys` grep gate fail-closed by introducing a temporary `web_sys::` reference under `src/src/engine/` on a throwaway branch — done-signal: lint stage exits 1 with the documented error message; throwaway branch deleted.

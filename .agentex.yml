@@ -45,6 +45,10 @@ qa:
     # plugin-injected commands are exempt. See scripts/check-mock-drift.sh
     # header for the full exemption list.
     - bash scripts/check-mock-drift.sh
+    # Baseline-cap gate (T244, Principle IV): at most 2 visual-regression
+    # baseline PNGs may change in a single PR. >2 escalates to a
+    # constitution-amendment-or-spec-revision discussion.
+    - bash scripts/check-baseline-cap.sh
 
   format:
     - command: cargo fmt --all -- --check
