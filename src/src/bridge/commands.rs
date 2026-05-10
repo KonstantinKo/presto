@@ -902,11 +902,11 @@ pub async fn supabase_refresh_session(
 #[cfg(all(test, target_arch = "wasm32"))]
 mod tests {
     use super::{
-        add_session_tag, delete_tag, disable_autostart, enable_autostart, get_stats_history,
-        is_autostart_enabled, load_manual_sessions, load_session_data, load_settings, load_tags,
-        load_tasks, register_global_shortcuts, reset_all_data, save_daily_stats,
-        save_manual_sessions, save_session_data, save_settings, save_tag, save_tasks,
-        start_activity_monitoring, start_oauth_server, stop_activity_monitoring,
+        add_session_tag, delete_tag, disable_autostart, enable_autostart, export_sessions_xlsx,
+        get_stats_history, is_autostart_enabled, load_manual_sessions, load_session_data,
+        load_settings, load_tags, load_tasks, register_global_shortcuts, reset_all_data,
+        save_daily_stats, save_manual_sessions, save_session_data, save_settings, save_tag,
+        save_tasks, start_activity_monitoring, start_oauth_server, stop_activity_monitoring,
         supabase_get_session, supabase_refresh_session, supabase_sign_in_with_password,
         supabase_sign_out, track_event, update_activity_timeout, update_tray_icon,
         update_tray_menu, write_excel_file,
@@ -1813,5 +1813,51 @@ mod tests {
             supabase_refresh_session(refresh_token).await
         }
         let _ = assert_signature("rt-old".to_string()).await;
+    }
+
+    // -----------------------------------------------------------------------
+    // Phase 1D — export_sessions_xlsx (T096-T098). Replaces the JS `xlsx`
+    // library's writeFile() with a Tauri-side `rust_xlsxwriter` call that
+    // builds the workbook server-side from a typed `Vec<ManualSession>`
+    // — less data crossing the bridge, no JS xlsx dep in the bundle.
+    // -----------------------------------------------------------------------
+
+    #[wasm_bindgen_test]
+    async fn export_sessions_xlsx_round_trip_short_circuits_when_bridge_absent() {
+        let result = export_sessions_xlsx(
+            "/tmp/export.xlsx".to_string(),
+            sample_manual_sessions(),
+        )
+        .await;
+        match result {
+            Err(BridgeError::BridgeUnavailable) => {}
+            other => panic!("expected BridgeUnavailable, got {other:?}"),
+        }
+    }
+
+    /// Compile-time signature pin per contracts/tauri-bridge.md
+    /// §"`export_sessions_xlsx` — replaces JS `xlsx` library":
+    /// `export_sessions_xlsx(path: String, sessions: Vec<ManualSession>)
+    ///     -> Result<(), BridgeError>`.
+    /// Distinct from the deprecated `write_excel_file(path, data: String)`
+    /// (kept for cutover-period parity but unused by the post-cutover
+    /// Leptos crate; removed in Phase 6) in that the Tauri-side handler
+    /// builds the workbook itself from typed `ManualSession` records
+    /// rather than accepting a base64-encoded blob the JS-era `xlsx`
+    /// library produced. Same on-disk file shape; less data crossing
+    /// the bridge.
+    #[wasm_bindgen_test]
+    async fn export_sessions_xlsx_round_trip_signature_pinned() {
+        async fn assert_signature(
+            path: String,
+            sessions: Vec<ManualSession>,
+        ) -> Result<(), BridgeError> {
+            export_sessions_xlsx(path, sessions).await
+        }
+        let _ = assert_signature(
+            "/tmp/export.xlsx".to_string(),
+            sample_manual_sessions(),
+        )
+        .await;
     }
 }
