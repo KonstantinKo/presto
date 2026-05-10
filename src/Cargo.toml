@@ -33,6 +33,15 @@ features = [
     "Document",
     "Element",
     "HtmlElement",
+    "Node",
+    # `EventTarget` + `MouseEvent` power the document-level close-on-
+    # outside-click listener for the tag-dropdown popover in
+    # `components::timer`. Mirrors the JS-era
+    # `document.addEventListener("click", ...)` at the deleted
+    # `src/managers/tag-manager.js` that closed the popover when the
+    # user clicked outside `#timer-status` / `#tag-dropdown-menu`.
+    "EventTarget",
+    "MouseEvent",
     # `Storage` powers the Phase 1E transition-only legacy localStorage
     # migration (`bridge::storage::migrate_legacy_localstorage`); each
     # per-domain reader probes `window().local_storage()` for one of

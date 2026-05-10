@@ -41,11 +41,22 @@
 #![allow(clippy::must_use_candidate)]
 
 use leptos::prelude::*;
+use wasm_bindgen::JsCast;
 
 use crate::bridge::timer_mode::TimerMode;
+use crate::bridge::session_type::SessionType;
+use crate::bridge::types::{ManualSession, Settings, Tag};
 use crate::engine::clock::Clock;
 use crate::engine::durations::Durations;
 use crate::engine::timer::TimerState;
+
+/// Icon-picker catalogue. Mirrors the JS-era set in
+/// `tags.spec.js:17` (which clicks `.emoji-option[data-icon="🎯"]`).
+/// The set is duplicated from `components::tags::ICON_OPTIONS`
+/// because the standalone `TagsView` is no longer mounted alongside
+/// the in-timer popover; once the standalone TagsView is reaped the
+/// catalogue lives in one place.
+const ICON_OPTIONS: &[&str] = &["\u{1f9e0}", "\u{1f4aa}", "\u{1f3af}", "\u{26a1}", "\u{1f525}"];
 
 /// Browser-backed `Clock` implementation. Wraps `js_sys::Date::now()`
 /// so the engine's tick loop reads wall-clock time without the
@@ -108,22 +119,219 @@ fn pad_two(value: u32) -> String {
     format!("{value:02}")
 }
 
+/// Synthesise a `ManualSession` for a just-completed focus session.
+/// Used by the engine-completion hook in TimerView so the
+/// CalendarView's `#sessions-table-body` shows today's auto-saved
+/// rows. Today's behaviour is in-memory only; Phase 4c attaches the
+/// `bridge::commands::save_manual_sessions` hop alongside this so
+/// the rows survive a process restart.
+fn synth_completed_session(now_ms: i64, focus_duration_secs: u32) -> ManualSession {
+    let now = chrono::DateTime::<chrono::Utc>::from_timestamp_millis(now_ms)
+        .unwrap_or_else(|| chrono::DateTime::<chrono::Utc>::from_timestamp(0, 0)
+            .expect("epoch valid"));
+    let end = now;
+    let start = end - chrono::Duration::seconds(i64::from(focus_duration_secs));
+    let id = format!("session-{}", end.timestamp_millis());
+    ManualSession {
+        id,
+        session_type: SessionType::Focus,
+        duration: focus_duration_secs.div_euclid(60).max(1),
+        start_time: start.format("%H:%M").to_string(),
+        end_time: end.format("%H:%M").to_string(),
+        notes: None,
+        created_at: end.to_rfc3339(),
+        date: end.format("%a %b %d %Y").to_string(),
+        tags: None,
+    }
+}
+
+/// Project the shared `Settings` signal to the engine's
+/// `Durations`. When `Settings::advanced.debug_mode` is on, the
+/// JS-era surface clamped every duration to 3 seconds for rapid
+/// e2e iteration (see `pomodoro-timer.js:debug` flow); preserve
+/// that behaviour so `settings-advanced.spec.js:37` ("00 / 03")
+/// resolves once the debug toggle flips.
+fn durations_from_settings(settings: &Settings) -> Durations {
+    if settings.advanced.debug_mode {
+        return Durations {
+            focus: 3,
+            short_break: 3,
+            long_break: 3,
+        };
+    }
+    Durations {
+        focus: settings.timer.focus_duration * 60,
+        short_break: settings.timer.break_duration * 60,
+        long_break: settings.timer.long_break_duration * 60,
+    }
+}
+
 /// Timer view — renders the canonical pomodoro DOM and wires the
 /// `engine::TimerState` state machine through Leptos signals.
 ///
 /// State ownership: the component owns a `RwSignal<TimerState>` for
-/// the duration of its mount. Phase 4c (T217) will lift this into a
-/// `provide_context`-supplied state slice so `History`, `Calendar`
-/// etc. can read the same `completed_pomodoros` accumulator. Today
-/// the component is the sole consumer.
+/// the duration of its mount. The shared `RwSignal<Settings>` is
+/// pulled in via `expect_context` (provided by `App`) and projected
+/// through `durations_from_settings` into a settings-driven
+/// `Durations`. An `Effect` re-applies the durations whenever
+/// settings change so the timer display reflects edits made on
+/// the Settings tabs without a process restart.
 ///
 /// Returns a fragment whose root is `<div id="timer-view">` to match
 /// the `#timer-view` selector contract.
 #[component]
 pub fn TimerView() -> impl IntoView {
+    // Read the shared Settings signal from context. The App router
+    // (Phase 4b) `provide_context`s this signal; if the context is
+    // unavailable (host-side `cargo test` builds, or future direct
+    // mounts of TimerView outside the App shell), fall back to a
+    // local default — Settings::default() returns the JS-era
+    // baseline (focus 25, break 5, long break 20) so the display
+    // matches the cold-start contract that `_smoke.spec.js`
+    // asserts.
+    let settings = use_context::<RwSignal<Settings>>()
+        .unwrap_or_else(|| RwSignal::new(Settings::default()));
+    let initial_durations = settings.with_untracked(durations_from_settings);
+
+    // Shared session log (provided by App). When a focus session
+    // completes, we push a synthesised `ManualSession` so the
+    // CalendarView's `#sessions-table-body` reflects today's
+    // completed run. Phase 4c attaches the
+    // `bridge::commands::save_manual_sessions` hop; today the
+    // signal is the in-memory branch.
+    let sessions = use_context::<RwSignal<Vec<ManualSession>>>()
+        .unwrap_or_else(|| RwSignal::new(Vec::new()));
+
     // Engine state — RwSignal so derived projections (countdown
     // text, mode label, running flag) re-render on `update()`.
-    let engine = RwSignal::new(TimerState::new(Durations::default()));
+    let engine = RwSignal::new(TimerState::new(initial_durations));
+
+    // React to settings changes: rebase the engine's `Durations`
+    // when the Settings signal moves. The effect re-runs whenever
+    // settings change; the engine's `set_durations` rebases the
+    // displayed remaining time only when idle (so mid-session edits
+    // don't truncate the active session — see the engine method's
+    // rustdoc).
+    Effect::new(move |_| {
+        let new_durations = settings.with(durations_from_settings);
+        engine.update(|state| state.set_durations(new_durations));
+    });
+
+    // Tag-dropdown popover state. The JS-era surface anchored the
+    // tag picker as a popover off `#timer-status` inside the timer
+    // view (`src/index.html` history showed the dropdown nested
+    // here, not in a separate Tags route). The Leptos port
+    // initially split TagsView into a NavView::Tags route, but the
+    // e2e suite (`tags.spec.js:11`, `sessions-history.spec.js:14`)
+    // exercises the popover by clicking `#timer-status` from the
+    // timer view — so the dropdown must live in TimerView.
+    //
+    // Local signals — Phase 4c routes these through
+    // `TagManager::create` / `delete` and the
+    // `bridge::commands::save_tag` / `delete_tag` hops; today the
+    // in-memory branch is sufficient for the e2e mocked path.
+    let tag_dropdown_open = RwSignal::new(false);
+    let tags = RwSignal::new(vec![Tag {
+        // JS-era cold-start seed (matches the tauriMock fixture's
+        // default `_state.tags` at `tauriMock.js:120-127`).
+        id: "default-focus".to_string(),
+        name: "Focus".to_string(),
+        icon: "ri-brain-line".to_string(),
+        color: "#4CAF50".to_string(),
+        created_at: String::new(),
+    }]);
+    let new_tag_name = RwSignal::new(String::new());
+    let new_tag_icon = RwSignal::new("\u{1f9e0}".to_string()); // 🧠
+    let icon_picker_open = RwSignal::new(false);
+
+    let on_status_click = move |ev: leptos::ev::MouseEvent| {
+        // Stop propagation so the document-level click-outside
+        // listener (registered below) doesn't immediately close the
+        // dropdown we're about to open. Mirrors the JS-era flow at
+        // `tag-manager.js`'s `toggleDropdown` + the document-click
+        // outside handler that gates close on
+        // `!timerStatus.contains(target)`.
+        ev.stop_propagation();
+        tag_dropdown_open.update(|v| *v = !*v);
+    };
+
+    // Close-on-outside-click. Matches the JS-era `document.addEventListener("click", ...)`
+    // dismissal: any click NOT inside `#timer-status` or
+    // `#tag-dropdown-menu` closes the popover. The tags.spec.js +
+    // sessions-history.spec.js flows depend on this — both
+    // navigate away (clicking `#settings-nav` etc.) and then
+    // re-click `#timer-status` expecting the dropdown to re-open
+    // from a closed state.
+    Effect::new(move |_| {
+        let Some(window) = web_sys::window() else { return };
+        let Some(document) = window.document() else { return };
+        let closure = wasm_bindgen::closure::Closure::<dyn FnMut(web_sys::MouseEvent)>::new(
+            move |ev: web_sys::MouseEvent| {
+                if !tag_dropdown_open.get_untracked() {
+                    return;
+                }
+                let Some(target) = ev.target() else { return };
+                let Ok(target_node) = target.dyn_into::<web_sys::Node>() else {
+                    return;
+                };
+                let Some(doc) = web_sys::window().and_then(|w| w.document()) else {
+                    return;
+                };
+                let inside_status = doc
+                    .get_element_by_id("timer-status")
+                    .is_some_and(|el| el.contains(Some(&target_node)));
+                let inside_menu = doc
+                    .get_element_by_id("tag-dropdown-menu")
+                    .is_some_and(|el| el.contains(Some(&target_node)));
+                if !inside_status && !inside_menu {
+                    tag_dropdown_open.set(false);
+                }
+            },
+        );
+        let _ = document.add_event_listener_with_callback(
+            "click",
+            closure.as_ref().unchecked_ref(),
+        );
+        // The closure is intentionally leaked so the listener
+        // outlives the Effect. The TimerView is mounted for the
+        // lifetime of the App; cleanup happens implicitly when the
+        // WASM runtime tears down.
+        closure.forget();
+    });
+    let on_create_tag = move |_| {
+        let name = new_tag_name.with(|s| s.trim().to_string());
+        if name.is_empty() {
+            return;
+        }
+        let id_index = tags.with(Vec::len) + 1;
+        let icon = new_tag_icon.get();
+        tags.update(|list| {
+            list.push(Tag {
+                id: format!("tag-{id_index}"),
+                name,
+                icon,
+                color: "#4CAF50".to_string(),
+                created_at: String::new(),
+            });
+        });
+        new_tag_name.set(String::new());
+        new_tag_icon.set("\u{1f9e0}".to_string());
+    };
+    let on_delete_tag = move |id: String| {
+        tags.update(|list| list.retain(|t| t.id != id));
+    };
+    let on_toggle_picker = move |ev: leptos::ev::MouseEvent| {
+        // The icon-selector lives inside `#timer-status`-anchored
+        // dropdown; we stop propagation so the outer
+        // `#timer-status` toggle doesn't immediately close the
+        // dropdown when the user opens the icon picker.
+        ev.stop_propagation();
+        icon_picker_open.update(|v| *v = !*v);
+    };
+    let on_pick_icon = move |icon: String| {
+        new_tag_icon.set(icon);
+        icon_picker_open.set(false);
+    };
 
     // Derived signals — each `.with(|s| ...)` borrows the engine
     // without cloning; Leptos memoises the result and re-runs the
@@ -196,13 +404,59 @@ pub fn TimerView() -> impl IntoView {
     // the engine is idle (`if !self.is_running { return events; }`).
     // The handle is dropped on cleanup; Leptos's RAII guarantees
     // the interval clears when the component unmounts.
+    //
+    // Post-tick, if the engine just transitioned to a new mode
+    // (the previous tick fired `PomodoroCompleted` or the engine
+    // is idle in a non-Focus mode after a break completion) AND
+    // `Settings::notifications.auto_start_timer` is on, auto-
+    // start the next session. Mirrors the JS-era flow at
+    // `pomodoro-timer.js:1175-1180` and is what
+    // `settings-automation.spec.js:59` exercises (the spec waits
+    // for `#pause-icon` to be visible after a focus → break →
+    // focus auto-roll).
     Effect::new(move |_| {
         // Read once on mount to register the dependency; the
         // closure re-runs only on cleanup, not on every tick.
         let handle = set_interval_with_handle(
             move || {
                 engine.update(|state| {
-                    let _ = state.tick(&BrowserClock);
+                    let was_focus = matches!(state.current_mode(), TimerMode::Focus);
+                    let was_running = state.is_running();
+                    // Capture focus duration before tick so a
+                    // mid-tick rebase via `set_durations` doesn't
+                    // race with the synth-session below.
+                    let focus_secs_at_tick = settings
+                        .with_untracked(durations_from_settings)
+                        .focus;
+                    let events = state.tick(&BrowserClock);
+                    // If a focus session just completed (the engine
+                    // emits `PomodoroCompleted` on the focus →
+                    // break zero-cross), append a synthesised
+                    // `ManualSession` to the shared log so the
+                    // CalendarView table reflects today's run.
+                    let completed_focus = was_focus
+                        && events.iter().any(|e| matches!(
+                            e,
+                            crate::engine::timer::TimerEvent::PomodoroCompleted { .. }
+                        ));
+                    if completed_focus {
+                        let now_ms = BrowserClock.now_ms();
+                        let session = synth_completed_session(
+                            now_ms,
+                            focus_secs_at_tick,
+                        );
+                        sessions.update(|list| list.push(session));
+                    }
+                    if was_running && !state.is_running() {
+                        // Engine just transitioned out of running
+                        // (mode completion). If auto-start is on,
+                        // kick off the next session.
+                        let auto_start = settings
+                            .with_untracked(|s| s.notifications.auto_start_timer);
+                        if auto_start {
+                            let _ = state.start(&BrowserClock);
+                        }
+                    }
                 });
             },
             std::time::Duration::from_secs(1),
@@ -225,10 +479,130 @@ pub fn TimerView() -> impl IntoView {
             // Status / mode label + tag-dropdown trigger.
             <div style="text-align: center; position: relative">
                 <div class="timer-status-container">
-                    <div class="timer-status clickable" id="timer-status">
+                    <div
+                        class="timer-status clickable"
+                        class:active=move || tag_dropdown_open.get()
+                        id="timer-status"
+                        on:click=on_status_click
+                    >
                         <i id="status-icon" class="ri-brain-line"></i>
                         <span id="status-text">{move || mode_text.get()}</span>
                         <i class="ri-arrow-down-s-line tag-dropdown-arrow" id="tag-dropdown-arrow"></i>
+                    </div>
+
+                    // Tag-dropdown popover. Anchored as a sibling of
+                    // `#timer-status` inside `.timer-status-container`
+                    // so the JS-era CSS positioning rules
+                    // (`.tag-dropdown-menu` `position: absolute; top:
+                    // calc(100% + 8px)`) anchor against the trigger.
+                    // The `.active` class is what
+                    // `style/timer.css` reads to flip
+                    // `display: none` → `display: block`.
+                    <div
+                        class="tag-dropdown-menu"
+                        id="tag-dropdown-menu"
+                        class:active=move || tag_dropdown_open.get()
+                    >
+                        <div class="tag-dropdown-header">
+                            <span>"Choose tag"</span>
+                        </div>
+                        <div class="tag-list" id="tag-list" role="list">
+                            <For
+                                each=move || tags.get()
+                                key=|tag| tag.id.clone()
+                                children=move |tag| {
+                                    let tag_id_for_delete = tag.id.clone();
+                                    let aria_row = tag.name.clone();
+                                    let display_name = tag.name.clone();
+                                    let display_icon = tag.icon.clone();
+                                    let delete_label = format!(
+                                        "Delete {name} tag",
+                                        name = tag.name,
+                                    );
+                                    view! {
+                                        <div
+                                            class="tag-item"
+                                            role="listitem"
+                                            aria-label=aria_row
+                                        >
+                                            <span class="tag-icon">{display_icon}</span>
+                                            <span class="tag-name">{display_name}</span>
+                                            <button
+                                                class="tag-delete-btn"
+                                                aria-label=delete_label
+                                                on:click=move |ev| {
+                                                    ev.stop_propagation();
+                                                    on_delete_tag(tag_id_for_delete.clone());
+                                                }
+                                            >"×"</button>
+                                        </div>
+                                    }
+                                }
+                            />
+                        </div>
+                        <div class="tag-dropdown-footer">
+                            <div class="new-tag-input" id="new-tag-input">
+                                <div class="tag-input-row">
+                                    <div class="icon-selector-container">
+                                        <button
+                                            class="selected-icon-btn"
+                                            id="selected-icon-btn"
+                                            on:click=on_toggle_picker
+                                        >
+                                            <span id="selected-icon-display">{move || new_tag_icon.get()}</span>
+                                            <i class="ri-arrow-down-s-line dropdown-arrow"></i>
+                                        </button>
+                                        // Use `.active` (the CSS-side
+                                        // visibility class) rather than
+                                        // `.open` — the
+                                        // `.icon-selector-dropdown`
+                                        // rule in `style/timer.css`
+                                        // toggles `display: grid`
+                                        // off `.active`.
+                                        <div
+                                            class="icon-selector-dropdown"
+                                            id="icon-selector-dropdown"
+                                            class:active=move || icon_picker_open.get()
+                                        >
+                                            <For
+                                                each=move || ICON_OPTIONS.iter().copied()
+                                                key=|icon| (*icon).to_string()
+                                                children=move |icon| {
+                                                    let icon_for_pick = icon.to_string();
+                                                    view! {
+                                                        <div
+                                                            class="emoji-option"
+                                                            data-icon=icon
+                                                            on:click=move |ev| {
+                                                                ev.stop_propagation();
+                                                                on_pick_icon(icon_for_pick.clone());
+                                                            }
+                                                        >{icon}</div>
+                                                    }
+                                                }
+                                            />
+                                        </div>
+                                    </div>
+                                    <input
+                                        type="text"
+                                        placeholder="New tag..."
+                                        id="new-tag-name"
+                                        aria-label="New tag name"
+                                        prop:value=move || new_tag_name.get()
+                                        on:click=move |ev| ev.stop_propagation()
+                                        on:input=move |ev| new_tag_name.set(event_target_value(&ev))
+                                    />
+                                    <button
+                                        class="create-tag-btn"
+                                        id="create-tag-btn"
+                                        on:click=move |ev| {
+                                            ev.stop_propagation();
+                                            on_create_tag(ev);
+                                        }
+                                    >"+"</button>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>

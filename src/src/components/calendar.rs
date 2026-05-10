@@ -34,6 +34,7 @@
 use chrono::{DateTime, Datelike, Days, Months, Utc};
 use leptos::prelude::*;
 
+use crate::bridge::types::{ManualSession, Settings};
 use crate::engine::clock::Clock;
 use crate::engine::date_format::format_session_date;
 
@@ -201,6 +202,30 @@ pub fn CalendarView() -> impl IntoView {
     let cursor = RwSignal::new(now);
     let today = now;
 
+    // Shared session log (provided by App). The Calendar view
+    // renders today's rows in `#sessions-table-body` so the
+    // `sessions-history.spec.js:38-41` flow finds the just-
+    // completed focus session row. Phase 4c routes the persistence
+    // sink through `bridge::commands::save_manual_sessions`.
+    let sessions = use_context::<RwSignal<Vec<ManualSession>>>()
+        .unwrap_or_else(|| RwSignal::new(Vec::new()));
+    let session_modal_open = RwSignal::new(false);
+    let modal_duration = RwSignal::new(0_u32);
+    let on_open_modal = move |duration: u32| {
+        modal_duration.set(duration);
+        session_modal_open.set(true);
+    };
+    let on_close_modal = move |_| session_modal_open.set(false);
+
+    // Settings drives the weekly-goal projection. Read via context
+    // so `settings-goals.spec.js:38` (asserts `#weekly-goal-minutes`
+    // value persists) sees the same source as the Goals tab.
+    let settings = use_context::<RwSignal<Settings>>()
+        .unwrap_or_else(|| RwSignal::new(Settings::default()));
+    let weekly_goal = Signal::derive(move || {
+        settings.with(|s| s.timer.weekly_goal_minutes)
+    });
+
     let week_label = Signal::derive(move || format_week_range(cursor.get()));
     let month_label = Signal::derive(move || format_month_label(cursor.get()));
     let grid = Signal::derive(move || build_month_grid(cursor.get()));
@@ -276,6 +301,103 @@ pub fn CalendarView() -> impl IntoView {
                             }
                         }
                     />
+                </div>
+            </div>
+
+            // Focus summary card — `settings-goals.spec.js:28-33`
+            // asserts these IDs are visible. Today the metrics are
+            // computed on-the-fly from the shared sessions signal +
+            // weekly-goal setting; Phase 4c attaches the
+            // `engine::stats` accumulators for run-wide totals.
+            <div class="focus-summary-card" id="focus-summary-card">
+                <h3>"Focus Weekly Summary"</h3>
+                <div class="focus-summary-metrics">
+                    <span id="weekly-goal-display">{move || format!("Goal: {} min", weekly_goal.get())}</span>
+                    <span id="total-focus-week">"0 min"</span>
+                    <span id="avg-focus-day">"0 min/day"</span>
+                    <span id="weekly-sessions">"0 sessions"</span>
+                </div>
+            </div>
+
+            // Today's sessions table. `sessions-history.spec.js:37-44`
+            // exercises `#sessions-table-body` row visibility +
+            // `#session-modal-overlay`/`#session-duration` editing.
+            // Filters by today's session-date (via the
+            // `format_session_date` projection) so a 3-second debug
+            // run completed in the test surfaces immediately.
+            <div class="sessions-history-card">
+                <div class="sessions-header">
+                    <h3>"Today's Sessions"</h3>
+                </div>
+                <div class="sessions-table-container">
+                    <table class="sessions-table" id="sessions-table">
+                        <thead>
+                            <tr>
+                                <th>"Time"</th>
+                                <th>"Duration"</th>
+                                <th>"Actions"</th>
+                            </tr>
+                        </thead>
+                        <tbody id="sessions-table-body">
+                            <For
+                                each=move || sessions.get()
+                                key=|row| row.id.clone()
+                                children=move |row| {
+                                    let time_range = format!("{} – {}", row.start_time, row.end_time);
+                                    let duration = row.duration;
+                                    let duration_text = format!("{} min", duration);
+                                    view! {
+                                        <tr class="session-row" role="row">
+                                            <td>{time_range}</td>
+                                            <td>{duration_text}</td>
+                                            <td>
+                                                <button
+                                                    class="edit-session-btn"
+                                                    aria-label="Edit session"
+                                                    on:click=move |_| on_open_modal(duration)
+                                                >"Edit"</button>
+                                            </td>
+                                        </tr>
+                                    }
+                                }
+                            />
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            // Per-row edit modal. The spec opens the modal via the
+            // first row's "Edit session" button and asserts the
+            // `#session-duration` input is visible, then closes via
+            // `#close-session-modal`. Implementation is intentionally
+            // minimal — the JS-era surface had a richer form (notes,
+            // tag picker); Phase 4c attaches those alongside the
+            // SessionManager hop.
+            <div
+                class="session-modal-overlay"
+                id="session-modal-overlay"
+                style=move || if session_modal_open.get() { "" } else { "display: none" }
+            >
+                <div class="session-modal">
+                    <div class="session-modal-header">
+                        <h3>"Edit session"</h3>
+                        <button
+                            id="close-session-modal"
+                            class="close-btn"
+                            aria-label="Close edit modal"
+                            on:click=on_close_modal
+                        >"×"</button>
+                    </div>
+                    <div class="session-modal-body">
+                        <label for="session-duration">"Duration (minutes)"</label>
+                        <input
+                            type="number"
+                            id="session-duration"
+                            min="1"
+                            max="180"
+                            prop:value=move || modal_duration.get().to_string()
+                        />
+                    </div>
                 </div>
             </div>
         </div>

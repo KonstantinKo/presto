@@ -353,6 +353,41 @@ impl TimerState {
         events
     }
 
+    /// Replace the per-mode `Durations` while the timer is idle.
+    ///
+    /// Mirrors the JS-era `pomodoro-timer.js:onSettingsChanged` flow:
+    /// when settings update, the new durations are absorbed and the
+    /// remaining time on the active mode is rebased to the new
+    /// duration ONLY if the timer is idle (otherwise the user's
+    /// current session continues against the old anchor — matches
+    /// the JS-era behaviour where mid-session settings tweaks don't
+    /// truncate the running session).
+    ///
+    /// Used by Phase 4c's TimerView ↔ `RwSignal<Settings>` bridge so
+    /// `settings-general.spec.js` (focus-duration 25 → 5) and
+    /// `settings-advanced.spec.js` (debug-mode → 3-second timers)
+    /// see the timer display update without a process restart.
+    pub const fn set_durations(&mut self, durations: Durations) {
+        self.durations = durations;
+        // Only rebase the displayed remaining time when the timer is
+        // idle. A running / paused timer keeps its existing remaining
+        // value so mid-session edits don't truncate the user's
+        // progress. The check covers both `is_running` and
+        // `current_session_elapsed_secs > 0` (which catches the
+        // post-pause / pre-resume window).
+        if !self.is_running
+            && !self.is_paused
+            && !self.is_auto_paused
+            && self.current_session_elapsed_secs == 0
+        {
+            self.time_remaining_secs = match self.current_mode {
+                TimerMode::Focus => durations.focus as i64,
+                TimerMode::Break => durations.short_break as i64,
+                TimerMode::LongBreak => durations.long_break as i64,
+            };
+        }
+    }
+
     /// Resets the engine to its initial state.
     ///
     /// Idle in `Focus` mode with the focus duration's worth of

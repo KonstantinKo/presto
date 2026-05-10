@@ -165,12 +165,16 @@ pub fn AutomationSettings(
                     "Automatically pause the timer during focus sessions when no activity is detected."
                 </p>
             </div>
+            // The `#smart-pause-timeout-setting { display: none }` CSS
+            // rule in `style/settings.css` is more specific than an
+            // empty inline `style=""`, so the conditional reveal goes
+            // through the CSS-side `.visible` modifier rather than an
+            // inline style override (the JS-era surface used the same
+            // class hook).
             <div
                 class="setting-item"
                 id="smart-pause-timeout-setting"
-                style=move || {
-                    if smart_pause.get() { "" } else { "display: none" }
-                }
+                class:visible=move || smart_pause.get()
             >
                 <label for="smart-pause-timeout">
                     "Inactivity Timeout: "

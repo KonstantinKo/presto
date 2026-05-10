@@ -55,9 +55,7 @@ use crate::bridge::storage;
 use crate::bridge::types::{Settings, UpdateAvailablePayload};
 use crate::components::auth_modal::AuthModal;
 use crate::components::calendar::CalendarView;
-use crate::components::history::HistoryView;
 use crate::components::settings::SettingsView;
-use crate::components::tags::TagsView;
 use crate::components::tasks::TasksView;
 use crate::components::team::TeamView;
 use crate::components::timer::TimerView;
@@ -79,6 +77,26 @@ pub fn App() -> impl IntoView {
     let auth_state = RwSignal::new(AuthState::default());
     let update_info = RwSignal::new(UpdateInfo::default());
 
+    // Shared session log. TimerView pushes a `ManualSession` on
+    // engine completion (focus session zero-cross OR a `skip()`
+    // mid-focus that was over the JS-era 1-minute floor).
+    // CalendarView reads the same signal to render the
+    // `#sessions-table-body` rows that
+    // `sessions-history.spec.js:38-41` exercises.
+    let sessions = RwSignal::new(Vec::<crate::bridge::types::ManualSession>::new());
+
+    // Make `RwSignal<Settings>` available to descendants via context.
+    // TimerView reads it to derive the engine's `Durations` from the
+    // settings.timer fields (so `settings-general.spec.js` and the
+    // debug-mode flow in `settings-advanced.spec.js` pick up the
+    // edited values without going through a SettingsManager hop).
+    // SettingsView still receives the same signal as a prop because
+    // its sub-tabs were wired before context was available; both
+    // surfaces refer to the same RwSignal so updates from either
+    // path propagate to TimerView.
+    provide_context(settings);
+    provide_context(sessions);
+
     // Derived view-active flags. Each per-view container reads its
     // own flag to decide whether to apply `.hidden` — matching the
     // JS-era pattern at `screens.js:26-35`
@@ -90,9 +108,16 @@ pub fn App() -> impl IntoView {
     let is_settings =
         Signal::derive(move || nav.with(|n| matches!(n.current(), NavView::Settings(_))));
     let is_tasks = Signal::derive(move || nav.with(|n| matches!(n.current(), NavView::Tasks)));
-    let is_history =
-        Signal::derive(move || nav.with(|n| matches!(n.current(), NavView::History)));
-    let is_tags = Signal::derive(move || nav.with(|n| matches!(n.current(), NavView::Tags)));
+    // `NavView::History` is reachable via NavigationManager but
+    // not mounted by the App router; CalendarView owns the
+    // sessions-table surface today (see route block below).
+    let _is_history_unused: () = ();
+    // `NavView::Tags` is reachable through the navigation manager
+    // but the App router does not mount a standalone TagsView (see
+    // the route block below for the rationale). The variant is
+    // preserved on `NavView` so navigation history serialization
+    // stays stable.
+    let _is_tags_unused: () = ();
 
     let active_settings_tab = Signal::derive(move || {
         nav.with(|n| match n.current() {
@@ -282,12 +307,26 @@ pub fn App() -> impl IntoView {
             <div class="view-host" class:hidden=move || !is_tasks.get()>
                 <TasksView/>
             </div>
-            <div class="view-host" class:hidden=move || !is_history.get()>
-                <HistoryView/>
-            </div>
-            <div class="view-host" class:hidden=move || !is_tags.get()>
-                <TagsView/>
-            </div>
+            // HistoryView is intentionally not mounted by the App
+            // router. Its `#sessions-table-body` /
+            // `#session-modal-overlay` selectors are now owned by
+            // CalendarView (which renders today's rows inline beneath
+            // the calendar grid — matches the JS-era surface where
+            // history was a sub-card on the calendar page). Mounting
+            // both produced duplicate ids and tripped Playwright's
+            // strict-mode locator resolution
+            // (`sessions-history.spec.js:42`). The HistoryView code
+            // remains in `components::history` for a future surface.
+            // Phase 4c: TagsView is intentionally not mounted by the
+            // App router. The JS-era surface had a single tag
+            // dropdown — anchored under `#timer-status` inside
+            // TimerView — so the e2e suite addresses
+            // `#tag-dropdown-menu` as a singleton. A standalone
+            // mount produced two elements with that id and tripped
+            // Playwright's strict-mode locator resolution
+            // (`tags.spec.js:11-12`). The TagsView code remains in
+            // `components::tags` for a future surface (e.g. a
+            // global tag-management screen).
         </main>
 
         // Always-on overlays — the update banner is mounted at the
