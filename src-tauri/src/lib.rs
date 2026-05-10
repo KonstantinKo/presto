@@ -879,7 +879,8 @@ pub fn run() {
                 track_event,
                 supabase_sign_in_with_password,
                 supabase_sign_out,
-                supabase_get_session
+                supabase_get_session,
+                supabase_refresh_session
             ])
             .setup(|app| {
                 let initial_settings = load_settings_sync(app.handle());
@@ -1331,6 +1332,27 @@ async fn supabase_get_session(app: AppHandle) -> Result<Option<auth::AuthSession
         msg: format!("Failed to get app data directory: {e}"),
     })?;
     auth::read_session(&app_data_dir)
+}
+
+// `supabase_refresh_session` — Phase 1D T095.
+//
+// Swaps the refresh token at Supabase REST
+// `/auth/v1/token?grant_type=refresh_token`, persists the freshly-issued
+// session to the app-data dir (overwriting the old record), and returns
+// the new session. Empty `refresh_token` → `InvalidArgument` before any
+// HTTP roundtrip; HTTP 400/401 → `InvalidArgument` (token expired or
+// revoked); 5xx / network → `Internal`.
+#[tauri::command]
+async fn supabase_refresh_session(
+    refresh_token: String,
+    app: AppHandle,
+) -> Result<auth::AuthSession, BridgeError> {
+    let session = auth::refresh_session(&refresh_token).await?;
+    let app_data_dir = app.path().app_data_dir().map_err(|e| BridgeError::Internal {
+        msg: format!("Failed to get app data directory: {e}"),
+    })?;
+    auth::persist_session(&app_data_dir, &session)?;
+    Ok(session)
 }
 
 #[tauri::command]

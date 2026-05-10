@@ -861,6 +861,38 @@ pub async fn supabase_get_session() -> Result<Option<AuthSession>, BridgeError> 
     invoke_serde("supabase_get_session", &serde_json::Value::Null).await
 }
 
+/// Swap the current refresh token for a fresh access + refresh pair.
+///
+/// Tauri-side handler: `supabase_refresh_session(refresh_token: String)
+/// -> Result<AuthSession, BridgeError>` at `src-tauri/src/lib.rs`. The
+/// handler hits Supabase REST
+/// `/auth/v1/token?grant_type=refresh_token`, persists the freshly-issued
+/// session to the app-data dir (overwriting the old record), and
+/// returns the new session.
+///
+/// Replaces the JS `supabase-js` `refreshSession` call. The bare
+/// `AuthSession` return (not `Option<…>`) reflects that a successful
+/// refresh always yields a fresh record; consumers only invoke this
+/// when they already hold a non-`None` session, so the no-session
+/// path is not reachable here.
+///
+/// # Errors
+/// Returns `BridgeError::BridgeUnavailable` when the Tauri JS bridge is
+/// not present. Returns `BridgeError::InvalidArgument` for an empty
+/// token or for Supabase REST 400/401 responses (token expired or
+/// revoked — the consumer should fall back to the sign-in flow).
+/// Returns `BridgeError::Internal` for network failures or 5xx
+/// responses.
+pub async fn supabase_refresh_session(
+    refresh_token: String,
+) -> Result<AuthSession, BridgeError> {
+    #[derive(Serialize)]
+    struct Args {
+        refresh_token: String,
+    }
+    invoke_serde("supabase_refresh_session", &Args { refresh_token }).await
+}
+
 // Tests gated on `wasm32` because every wrapper-test is a
 // `#[wasm_bindgen_test]` — running them via `cargo test` on the host
 // target would produce dead-code lint failures (the host-side
