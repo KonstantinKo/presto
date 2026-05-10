@@ -21,8 +21,8 @@ use serde::{Deserialize, Serialize};
 /// crosses the bridge without translation.
 ///
 /// Distinct from `SessionType` (`Custom` exists there for manual entries
-/// and has no equivalent here — the live engine only runs Focus / Break /
-/// LongBreak modes per the pomodoro contract).
+/// and has no equivalent here — the live engine only runs `Focus`,
+/// `Break`, and `LongBreak` modes per the pomodoro contract).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum TimerMode {

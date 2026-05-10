@@ -497,7 +497,9 @@ pub async fn stop_activity_monitoring() -> Result<(), BridgeError> {
 }
 
 /// Reconfigure the running `ActivityMonitor`'s idle threshold without
-/// tearing it down. Tauri-side handler:
+/// tearing it down.
+///
+/// Tauri-side handler:
 /// `update_activity_timeout(timeout_seconds: u64) -> Result<(), BridgeError>`
 /// at `src-tauri/src/lib.rs:450`.
 ///
@@ -586,8 +588,9 @@ pub async fn is_autostart_enabled() -> Result<bool, BridgeError> {
 // Window & tray
 // ---------------------------------------------------------------------------
 
-/// Update the system-tray icon's title, tooltip, and mode glyph. Tauri-side
-/// handler:
+/// Update the system-tray icon's title, tooltip, and mode glyph.
+///
+/// Tauri-side handler:
 /// `update_tray_icon(timer_text, is_running, session_mode, current_session,
 ///                   total_sessions, mode_icon) -> Result<(), BridgeError>`
 /// at `src-tauri/src/lib.rs:538`.
@@ -614,7 +617,9 @@ pub async fn update_tray_icon(args: UpdateTrayIconArgs) -> Result<(), BridgeErro
 }
 
 /// Rebuild the system-tray context menu so item enable/disable state
-/// reflects the live timer's status. Tauri-side handler:
+/// reflects the live timer's status.
+///
+/// Tauri-side handler:
 /// `update_tray_menu(is_running: bool, is_paused: bool, current_mode:
 ///                   TimerMode) -> Result<(), BridgeError>`
 /// at `src-tauri/src/lib.rs:1124`.
@@ -688,6 +693,37 @@ pub async fn write_excel_file(path: String, data: String) -> Result<(), BridgeEr
         data: String,
     }
     invoke_serde("write_excel_file", &Args { path, data }).await
+}
+
+// ---------------------------------------------------------------------------
+// OAuth
+// ---------------------------------------------------------------------------
+
+/// Start the OAuth callback HTTP server and return the loopback port
+/// it bound to. Tauri-side handler:
+/// `start_oauth_server() -> Result<u16, BridgeError>`
+/// at `src-tauri/src/lib.rs:1224`.
+///
+/// Final wrapper in the surviving table (contract row 26). The
+/// Tauri-side handler delegates to `tauri_plugin_oauth::start(callback)`,
+/// which spawns a single-shot HTTP listener on `127.0.0.1:<random
+/// available port>` and emits `oauth-callback` to the calling window
+/// once the redirect comes in. The wrapper returns the port number;
+/// the JS-era flow builds the `redirect_uri` against
+/// `http://localhost:{port}/`. The `oauth-callback` event side-channel
+/// is owned by the consumer (`managers::auth` in Phase 4); the wrapper
+/// only surfaces the port.
+///
+/// `u16` matches the `tauri_plugin_oauth::start` callback's port type
+/// exactly — a `u32` or `i32` drift on either side would not compile.
+///
+/// # Errors
+/// Returns `BridgeError::BridgeUnavailable` when the Tauri JS bridge is
+/// not present. Returns `BridgeError::Internal` if the OAuth plugin
+/// fails to bind a listener (rare; e.g., the loopback interface is
+/// down) or if the HTTP server thread fails to spawn.
+pub async fn start_oauth_server() -> Result<u16, BridgeError> {
+    invoke_serde("start_oauth_server", &serde_json::Value::Null).await
 }
 
 // Tests gated on `wasm32` because every wrapper-test is a
