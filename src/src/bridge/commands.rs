@@ -565,10 +565,10 @@ pub async fn disable_autostart() -> Result<(), BridgeError> {
 mod tests {
     use super::{
         add_session_tag, delete_tag, disable_autostart, enable_autostart, get_stats_history,
-        load_manual_sessions, load_session_data, load_settings, load_tags, load_tasks,
-        register_global_shortcuts, reset_all_data, save_daily_stats, save_manual_sessions,
-        save_session_data, save_settings, save_tag, save_tasks, start_activity_monitoring,
-        stop_activity_monitoring, update_activity_timeout,
+        is_autostart_enabled, load_manual_sessions, load_session_data, load_settings, load_tags,
+        load_tasks, register_global_shortcuts, reset_all_data, save_daily_stats,
+        save_manual_sessions, save_session_data, save_settings, save_tag, save_tasks,
+        start_activity_monitoring, stop_activity_monitoring, update_activity_timeout,
     };
     use crate::bridge::error::BridgeError;
     use crate::bridge::session_type::SessionType;
@@ -1116,6 +1116,34 @@ mod tests {
     async fn disable_autostart_round_trip_signature_pinned() {
         async fn assert_signature() -> Result<(), BridgeError> {
             disable_autostart().await
+        }
+        let _ = assert_signature().await;
+    }
+
+    #[wasm_bindgen_test]
+    async fn is_autostart_enabled_round_trip_short_circuits_when_bridge_absent() {
+        let result = is_autostart_enabled().await;
+        match result {
+            Err(BridgeError::BridgeUnavailable) => {}
+            other => panic!("expected BridgeUnavailable, got {other:?}"),
+        }
+    }
+
+    /// Compile-time signature pin per contracts/tauri-bridge.md row 22:
+    /// `is_autostart_enabled() -> Result<bool, BridgeError>`.
+    /// First wrapper in this batch whose return type is `bool` (not
+    /// `()` / `Vec<…>` / `Option<…>`); pins that the wrapper returns the
+    /// bare `bool` rather than an `Option<bool>` or wrapped record.
+    /// The contract tauri-bridge.md §"Error handling" notes that the
+    /// `BridgeAvailable::Absent` short-circuit may yield a sentinel
+    /// (false) for read-only commands at a later phase (Phase 1G), but
+    /// in this phase the wrapper uses the uniform `Err(BridgeUnavailable)`
+    /// short-circuit consistent with the other 25 wrappers. Caller-side
+    /// adaptation to a sentinel false (if needed) lives at the consumer.
+    #[wasm_bindgen_test]
+    async fn is_autostart_enabled_round_trip_signature_pinned() {
+        async fn assert_signature() -> Result<bool, BridgeError> {
+            is_autostart_enabled().await
         }
         let _ = assert_signature().await;
     }
