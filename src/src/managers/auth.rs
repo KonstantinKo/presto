@@ -221,6 +221,31 @@ impl<S: GuestModeStore> AuthManager<S> {
         self.store.clear_guest();
     }
 
+    /// User opts out of sign-in. Lifts `Unauthenticated → Guest`
+    /// (or stays at `Guest` idempotently) and persists
+    /// `presto-guest-mode = "true"` so the next launch's
+    /// `project_from_store()` lands `Guest` directly. Mirrors the
+    /// JS-side `continueAsGuest` flow at `auth-manager.js:89-95`.
+    ///
+    /// First-class per Principle II — guest mode is the documented
+    /// no-account path, not a side-effect of a failure mode. The
+    /// JS-era surface also calls `markAuthSeen()` here; the Rust
+    /// port keeps that flag in the user-state slice (Phase 1E,
+    /// `LegacyUserStatePayload::auth_seen`) and the components
+    /// layer (Phase 4) wires the marker — the manager state machine
+    /// only owns the auth state itself.
+    ///
+    /// Idempotent: calling on an already-`Guest` manager is a
+    /// successful no-op (the flag is re-asserted; matches the
+    /// JS-era `setItem` semantics where re-setting the same value
+    /// is harmless).
+    ///
+    /// Spec 001-leptos-migration §Phase 3c T182.
+    pub fn continue_as_guest(&mut self) {
+        self.state = AuthState::Guest;
+        self.store.set_guest();
+    }
+
     /// Cold-start projection: if the `presto-guest-mode` flag is
     /// `true` in the supplied store, lift `Unauthenticated → Guest`;
     /// otherwise leave the state unchanged. Pure helper — the wasm
