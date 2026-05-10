@@ -37,7 +37,7 @@ use wasm_bindgen::JsCast as _;
 
 use crate::bridge::types::Settings;
 use crate::components::settings::SettingsToast;
-use crate::theme::loader::{apply_theme, resolve_color_mode, system_prefers_dark};
+use crate::theme::loader::{apply_timer_theme, resolve_color_mode, system_prefers_dark};
 use crate::theme::themes::ALL_THEMES;
 
 /// Apply `data-<attr>="<value>"` to the document's `<html>` element.
@@ -87,13 +87,10 @@ pub fn ThemeSettings(settings: RwSignal<Settings>, toast: SettingsToast) -> impl
         settings.update(|s| s.appearance.theme = normalised.to_string());
         toast.show("Settings saved");
     };
-    // Timer-theme handler routes through the loader's apply_theme
-    // for the `data-theme` write *as well* — when a user picks a
-    // tile, the e2e flow asserts on `data-theme` toggling. The
-    // tile selection itself is reflected via `data-timer-theme`.
-    // Also persists to the shared settings signal.
+    // Timer-theme handler applies the data-timer-theme attribute via
+    // the loader and also persists to the shared settings signal.
     let on_timer_theme = move |id: &'static str| {
-        apply_theme(id);
+        apply_timer_theme(id);
         set_html_attr("data-timer-theme", id);
         settings.update(|s| s.appearance.timer_theme = id.to_string());
         toast.show("Settings saved");
