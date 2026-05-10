@@ -405,6 +405,31 @@ mod tests {
         assert!(!dir.path().join("history.json").exists());
     }
 
+    /// T103 named-test (per F4 idempotency design). A second-launch
+    /// re-import MUST be a successful no-op even when the first
+    /// launch already wrote the history file. Pins the entry-point
+    /// contract that T115's `migrate_legacy_localstorage` relies on.
+    #[test]
+    fn import_history_is_idempotent_across_two_calls() {
+        let dir = tempdir().unwrap();
+        let payload = LegacyHistoryPayload { history: vec![sample_session()] };
+        import_history(dir.path(), &payload).unwrap();
+        let first_bytes = std::fs::read(dir.path().join("history.json")).unwrap();
+        // Second call with a different payload must NOT overwrite —
+        // the existence-check guarantees idempotency.
+        let payload2 = LegacyHistoryPayload {
+            history: vec![PomodoroSession {
+                completed_pomodoros: 99,
+                total_focus_time: 99,
+                current_session: 99,
+                date: "different".to_string(),
+            }],
+        };
+        import_history(dir.path(), &payload2).unwrap();
+        let second_bytes = std::fs::read(dir.path().join("history.json")).unwrap();
+        assert_eq!(first_bytes, second_bytes, "second import must be a no-op");
+    }
+
     // ── import_tasks ────────────────────────────────────────────────────────
 
     fn sample_task() -> Task {
