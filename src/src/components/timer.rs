@@ -256,60 +256,51 @@ mod tests {
 
     /// T191 — visual-regression / selector contract pin.
     ///
-    /// The e2e suite (`tests/e2e/timer.spec.js`,
-    /// `_smoke.spec.js`, `tags.spec.js`,
-    /// `sessions-history.spec.js`, `visual-regression.spec.js`)
-    /// asserts on a fixed set of `id="..."` attributes against
-    /// the timer view. Drift here breaks the e2e run; this
-    /// host-side test surfaces the drift earlier (in `cargo
-    /// test` rather than `npx playwright test`) by enumerating
-    /// the contract surface alongside the spec line that
-    /// consumes each selector.
+    /// The e2e suite (`tests/e2e/timer.spec.js`, `_smoke.spec.js`,
+    /// `tags.spec.js`, `sessions-history.spec.js`,
+    /// `visual-regression.spec.js`) asserts on a fixed set of
+    /// `id="..."` attributes against the timer view. Drift here
+    /// breaks the e2e run; this host-side test surfaces the drift
+    /// earlier (in `cargo test` rather than `npx playwright test`)
+    /// by enumerating the contract surface alongside the spec line
+    /// that consumes each selector.
     ///
-    /// Source map (every entry below is exercised by the
-    /// referenced spec line):
+    /// Source map (every entry below is exercised by the referenced
+    /// spec line):
     ///
-    /// - `timer-view`           — `_smoke.spec.js:19` (`toBeVisible`),
-    ///                            `visual-regression.spec.js`
-    ///                            (timer-view screenshot baseline).
-    /// - `timer-minutes`        — `_smoke.spec.js:17` (initial "25"),
-    ///                            `timer.spec.js:28` (post-reset
-    ///                            "25").
-    /// - `timer-seconds`        — `_smoke.spec.js:18` ("00"),
-    ///                            `timer.spec.js:13` (ticks),
-    ///                            `timer.spec.js:29` ("00" reset).
-    /// - `play-pause-btn`       — `timer.spec.js:8,16,21` (start /
-    ///                            pause / resume).
-    /// - `stop-btn`             — `timer.spec.js:25` (reset).
-    /// - `skip-btn`             — present for E8 tray-skip + manual
-    ///                            skip flow (Phase 4c wires the
-    ///                            tray subscription).
-    /// - `play-icon`            — `timer.spec.js:7,17,30`
-    ///                            (visibility toggles).
-    /// - `pause-icon`           — `timer.spec.js:9,18` (running
-    ///                            indicator).
-    /// - `timer-status`         — `tags.spec.js:11,33`,
-    ///                            `sessions-history.spec.js:14`
-    ///                            (tag-dropdown trigger).
-    /// - `status-text`          — `sessions-history.spec.js:28`
-    ///                            ("Break" after focus completes).
-    /// - `status-icon`          — JS-era icon swap (`ri-brain-line`
-    ///                            for Focus, `ri-cup-line` for
-    ///                            Break); covered by visual
-    ///                            regression baselines.
-    /// - `progress-dots`        — JS-era `#progress-dots` filled by
-    ///                            the daily-goal projection;
-    ///                            container present so the visual
-    ///                            shell matches even before
-    ///                            population.
-    /// - `tag-dropdown-arrow`   — chevron next to status-text;
-    ///                            covered by visual regression.
+    /// - `timer-view` — `_smoke.spec.js:19` (`toBeVisible`),
+    ///   `visual-regression.spec.js` (timer-view screenshot
+    ///   baseline).
+    /// - `timer-minutes` — `_smoke.spec.js:17` (initial "25"),
+    ///   `timer.spec.js:28` (post-reset "25").
+    /// - `timer-seconds` — `_smoke.spec.js:18` ("00"),
+    ///   `timer.spec.js:13` (ticks), `timer.spec.js:29` ("00"
+    ///   reset).
+    /// - `play-pause-btn` — `timer.spec.js:8,16,21` (start / pause
+    ///   / resume).
+    /// - `stop-btn` — `timer.spec.js:25` (reset).
+    /// - `skip-btn` — present for E8 tray-skip + manual skip flow
+    ///   (Phase 4c wires the tray subscription).
+    /// - `play-icon` — `timer.spec.js:7,17,30` (visibility toggles).
+    /// - `pause-icon` — `timer.spec.js:9,18` (running indicator).
+    /// - `timer-status` — `tags.spec.js:11,33`,
+    ///   `sessions-history.spec.js:14` (tag-dropdown trigger).
+    /// - `status-text` — `sessions-history.spec.js:28` ("Break"
+    ///   after focus completes).
+    /// - `status-icon` — JS-era icon swap (`ri-brain-line` for
+    ///   Focus, `ri-cup-line` for Break); covered by visual
+    ///   regression baselines.
+    /// - `progress-dots` — JS-era `#progress-dots` filled by the
+    ///   daily-goal projection; container present so the visual
+    ///   shell matches even before population.
+    /// - `tag-dropdown-arrow` — chevron next to status-text;
+    ///   covered by visual regression.
     ///
     /// If a spec adds a new selector, append it here AND to the
     /// `view!` macro above so the contract drift is caught at
-    /// `cargo test` time. Visual baseline updates are out of
-    /// scope (per AGENTS.md §"Don't update visual regression
-    /// baselines without explicit visual review").
+    /// `cargo test` time. Visual baseline updates are out of scope
+    /// (per AGENTS.md §"Don't update visual regression baselines
+    /// without explicit visual review").
     #[test]
     fn timer_view_selector_contract_documented() {
         const REQUIRED_IDS: &[&str] = &[
