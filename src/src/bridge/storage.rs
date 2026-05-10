@@ -391,4 +391,14 @@ mod tests {
         let result = assert_signature().await;
         assert!(result.is_ok(), "cold-start no-op contract: {result:?}");
     }
+
+    /// T108 (RED). Pin `presto_manual_sessions` reader contract.
+    #[wasm_bindgen_test]
+    async fn imports_legacy_manual_sessions() {
+        async fn assert_signature() -> Result<(), super::super::error::BridgeError> {
+            super::import_legacy_manual_sessions_from_storage().await
+        }
+        let result = assert_signature().await;
+        assert!(result.is_ok(), "cold-start no-op contract: {result:?}");
+    }
 }
