@@ -271,13 +271,20 @@ const TAURI_MOCK_INIT_SCRIPT = `
             // the supabase-js auth path with a Rust REST adapter. The mock
             // shape mirrors AuthSession (data-model.md 'Session'):
             // { access_token, refresh_token, user: { id, email, user_metadata } }.
+            //
+            // Phase 4e R-003: user_metadata.full_name = "Test User" is
+            // load-bearing for auth.spec.js:29 toHaveText("Test User").
+            // Pre-Phase-4e the AuthModal synthesised this metadata locally;
+            // now it is the bridge-returned metadata that drives the display
+            // name, so the mock must produce the same shape a real Supabase
+            // server would return for a user with that profile.
             return {
               access_token: "mock-access-token",
               refresh_token: "mock-refresh-token",
               user: {
                 id: "mock-user-id",
                 email: (args && args.email) || "test@example.com",
-                user_metadata: {},
+                user_metadata: { full_name: "Test User" },
               },
             };
 
