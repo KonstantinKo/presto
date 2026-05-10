@@ -454,7 +454,7 @@ mod tests {
         add_session_tag, delete_tag, get_stats_history, load_manual_sessions, load_session_data,
         load_settings, load_tags, load_tasks, register_global_shortcuts, reset_all_data,
         save_daily_stats, save_manual_sessions, save_session_data, save_settings, save_tag,
-        save_tasks,
+        save_tasks, start_activity_monitoring,
     };
     use crate::bridge::error::BridgeError;
     use crate::bridge::session_type::SessionType;
@@ -887,5 +887,29 @@ mod tests {
             register_global_shortcuts(s).await
         }
         let _ = assert_signature(sample_shortcuts()).await;
+    }
+
+    #[wasm_bindgen_test]
+    async fn start_activity_monitoring_round_trip_short_circuits_when_bridge_absent() {
+        let result = start_activity_monitoring(30).await;
+        match result {
+            Err(BridgeError::BridgeUnavailable) => {}
+            other => panic!("expected BridgeUnavailable, got {other:?}"),
+        }
+    }
+
+    /// Compile-time signature pin per contracts/tauri-bridge.md row 17:
+    /// `start_activity_monitoring(timeout_seconds: u64) -> Result<(), BridgeError>`.
+    /// macOS-only Rust-side; on other platforms the handler returns an
+    /// error, but the Leptos wrapper signature is platform-agnostic
+    /// because the bridge never branches on the host platform — that
+    /// kind of conditionality belongs to the consumer (`engine::activity_signal`).
+    /// `timeout_seconds` is `u64` to match the Tauri-side handler exactly.
+    #[wasm_bindgen_test]
+    async fn start_activity_monitoring_round_trip_signature_pinned() {
+        async fn assert_signature(t: u64) -> Result<(), BridgeError> {
+            start_activity_monitoring(t).await
+        }
+        let _ = assert_signature(30).await;
     }
 }
