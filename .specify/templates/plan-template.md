@@ -43,12 +43,13 @@ Tracking* below). Cite principle by Roman numeral + name (e.g. "I. The Timer Is 
   `settings.analytics_enabled` respect, and PII scrubbing at emit time.
 - **III. Type Safety Over Defensive Code** — Are new closed domains modeled as sum
   types? Is validation confined to system boundaries (Tauri inputs, Supabase
-  responses, file imports)? Do the `cargo clippy` + `cargo fmt` + `prettier --check`
-  lints stay green without new blanket `#[allow]`s?
+  responses, file imports)? Do the strict static analysis gates stay green without
+  new blanket `#[allow]`s? (Tool specifics in `.agentex.yml` / `AGENTS.md`.)
 - **IV. Visual Regression Is The UI Contract** — Does this feature change the UI?
   If yes, confirm the visual regression suite runs locally before push and that any
-  baseline updates are flagged with a one-line PR note. Do NOT propose tolerance
-  changes here — those require a constitution amendment.
+  baseline updates are flagged with a one-line PR note. Tolerance and baseline
+  count are configuration details — changes to either require explicit
+  justification in the PR (per Principle IV), not silent adjustment.
 - **V. Test-First For Stateful Engines** — Does this feature touch the timer engine,
   manager state machines, Tauri-backed persistence, or time-keeping math? If yes,
   failing tests precede implementation and assert behaviour, not internal structure.
@@ -63,9 +64,9 @@ Tracking* below). Cite principle by Roman numeral + name (e.g. "I. The Timer Is 
   confirm the spec exists at `specs/<NNN-feature>/spec.md` and this plan references
   the principles it brushes against by name.
 - **IX. Lock Files Are First-Class** — Does this feature add or remove dependencies?
-  If yes, confirm the regenerated `package-lock.json` and/or `Cargo.lock` will be
-  staged in the same commit as the manifest change, and that CI uses `npm ci` /
-  `cargo build --frozen`.
+  If yes, confirm all active lockfiles will be staged in the same commit as the
+  manifest change, and that CI uses frozen/locked install commands (never the mutable
+  install variant).
 
 Principles **II (Local-First)** and **VII (No Upstream Compatibility Burden)** are
 typically informational for plans (privacy posture is rarely changed per-feature;
