@@ -200,6 +200,27 @@ impl<S: GuestModeStore> AuthManager<S> {
         self.store.clear_guest();
     }
 
+    /// Drop the in-memory session and clear the
+    /// `presto-guest-mode` flag. Mirrors the JS-side `signOut`
+    /// success branch at `auth-manager.js:163-177` plus the
+    /// listener-driven flag clear at lines 56-60. The Tauri-side
+    /// `bridge::commands::supabase_sign_out` call is the caller's
+    /// responsibility (same rationale as `complete_sign_in` — the
+    /// manager stays synchronous so the state-machine logic is
+    /// host-testable per Principle V).
+    ///
+    /// Legal from any state: `SignedIn → Unauthenticated` is the
+    /// canonical case, but `Guest → Unauthenticated` and
+    /// `Unauthenticated → Unauthenticated` (idempotent) are also
+    /// supported. The post-state is always `Unauthenticated` and
+    /// the flag is always cleared.
+    ///
+    /// Spec 001-leptos-migration §Phase 3c T180.
+    pub fn sign_out(&mut self) {
+        self.state = AuthState::Unauthenticated;
+        self.store.clear_guest();
+    }
+
     /// Cold-start projection: if the `presto-guest-mode` flag is
     /// `true` in the supplied store, lift `Unauthenticated → Guest`;
     /// otherwise leave the state unchanged. Pure helper — the wasm
@@ -332,7 +353,7 @@ mod tests {
 
     /// T179 [RED]: `sign_out` transitions `SignedIn →
     /// Unauthenticated` per data-model.md §`AuthState` transitions
-    /// table. Mirrors the JS-side SIGNED_OUT listener at
+    /// table. Mirrors the JS-side `SIGNED_OUT` listener at
     /// `auth-manager.js:56-60` which clears `currentUser`,
     /// `isGuest = false`, and removes the `presto-guest-mode` key.
     /// The Rust port collapses these into a single state move:
