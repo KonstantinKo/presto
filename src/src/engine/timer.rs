@@ -417,8 +417,7 @@ impl TimerState {
         // mode start) — the test exercises the focus-start
         // boundary because that's where the user-visible "no more
         // sessions" affordance fires.
-        if self.current_mode == TimerMode::Focus
-            && self.completed_pomodoros >= self.total_sessions
+        if self.current_mode == TimerMode::Focus && self.completed_pomodoros >= self.total_sessions
         {
             return Err(TimerError::MaxSessionCapReached);
         }
@@ -446,8 +445,7 @@ impl TimerState {
         if !self.is_running {
             return events;
         }
-        let (Some(start_ms), Some(duration_secs)) =
-            (self.timer_start_ms, self.timer_duration_secs)
+        let (Some(start_ms), Some(duration_secs)) = (self.timer_start_ms, self.timer_duration_secs)
         else {
             return events;
         };
@@ -781,7 +779,9 @@ mod tests {
         assert!(
             events.iter().any(|e| matches!(
                 e,
-                super::TimerEvent::ManualSessionRecorded { duration_secs: 1200 }
+                super::TimerEvent::ManualSessionRecorded {
+                    duration_secs: 1200
+                }
             )),
             "expected ManualSessionRecorded {{ duration_secs: 1200 }} in {events:?}"
         );
