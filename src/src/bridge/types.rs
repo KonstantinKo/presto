@@ -265,6 +265,43 @@ impl Default for Settings {
     }
 }
 
+/// Supabase auth session record. Mirrors data-model.md §`Session (Supabase
+/// auth session — distinct from pomodoro `Session`)`.
+///
+/// Phase 1D T088-T089: replaces the JS `supabase-js` SDK's `Session` type.
+/// Persisted Rust-side per research.md §6 (the JS-era localStorage
+/// `sb-<project-ref>-auth-token` shape moves to the app-data dir on
+/// first post-cutover launch). Distinct from `Session` (the pomodoro
+/// session record above) by design — the data-model.md collision note
+/// renames this to `AuthSession` so the two types never conflict at a
+/// call site that imports both.
+///
+/// Wire shape: snake_case JSON via serde's default field naming. Matches
+/// supabase-js's REST response shape directly so the Rust adapter
+/// (`src-tauri/src/auth.rs`) can deserialise the `/auth/v1/token`
+/// response into this struct without a translation layer.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AuthSession {
+    pub access_token: String,
+    pub refresh_token: String,
+    pub user: AuthUser,
+}
+
+/// Supabase auth user record embedded in `AuthSession`. Mirrors
+/// data-model.md §`AuthUser`.
+///
+/// `user_metadata` is intentionally `serde_json::Value` (not a typed
+/// struct) because Supabase's metadata is open-ended — apps store
+/// per-tenant fields like `full_name`, `avatar_url`, OAuth-provider
+/// claims, etc. The Leptos consumers (`managers/auth.rs`) read specific
+/// keys via `.get("full_name")` rather than imposing a closed shape.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AuthUser {
+    pub id: String,
+    pub email: String,
+    pub user_metadata: serde_json::Value,
+}
+
 /// Argument bundle for `bridge::commands::update_tray_icon`.
 ///
 /// Per contracts/tauri-bridge.md row 23 / data-model.md §`UpdateTrayIconArgs`,
@@ -295,7 +332,7 @@ pub struct UpdateTrayIconArgs {
 
 #[cfg(test)]
 mod tests {
-    use super::{ManualSession, Session, Settings, Task};
+    use super::{AuthSession, AuthUser, ManualSession, Session, Settings, Task};
     use crate::bridge::session_type::SessionType;
 
     #[test]
@@ -380,6 +417,55 @@ mod tests {
         assert!(decoded.analytics_enabled);
         assert!(!decoded.hide_icon_on_close);
         assert!(!decoded.hide_status_bar);
+    }
+
+    #[test]
+    fn auth_session_round_trips_snake_case() {
+        // Pins the wire shape against supabase-js's `/auth/v1/token`
+        // response so the Rust REST adapter (`src-tauri/src/auth.rs`)
+        // can deserialise the upstream response directly into this
+        // struct. `user_metadata` is `serde_json::Value` so apps can
+        // carry arbitrary OAuth-provider claims without forcing a
+        // closed-shape migration.
+        let s = AuthSession {
+            access_token: "eyJhbGciOi...".to_string(),
+            refresh_token: "rt-abc-123".to_string(),
+            user: AuthUser {
+                id: "user-uuid".to_string(),
+                email: "user@example.com".to_string(),
+                user_metadata: serde_json::json!({"full_name": "Konstantin"}),
+            },
+        };
+        let json = serde_json::to_string(&s).unwrap();
+        // Round-trip stability: the encoded JSON must contain the
+        // top-level keys supabase-js produces (snake_case via serde
+        // default), with `user` nested as an object.
+        assert!(json.contains(r#""access_token":"eyJhbGciOi...""#));
+        assert!(json.contains(r#""refresh_token":"rt-abc-123""#));
+        assert!(json.contains(r#""email":"user@example.com""#));
+        assert!(json.contains(r#""full_name":"Konstantin""#));
+        let decoded: AuthSession = serde_json::from_str(&json).unwrap();
+        assert_eq!(decoded.access_token, "eyJhbGciOi...");
+        assert_eq!(decoded.user.id, "user-uuid");
+        assert_eq!(decoded.user.email, "user@example.com");
+        assert_eq!(
+            decoded.user.user_metadata.get("full_name").and_then(|v| v.as_str()),
+            Some("Konstantin"),
+        );
+    }
+
+    #[test]
+    fn auth_session_deserialises_with_empty_user_metadata() {
+        // The mock entry in tauriMock.js (T087) emits `user_metadata: {}`;
+        // make sure that shape decodes cleanly so the e2e short-circuit
+        // path doesn't trip a SerdeRoundtrip error.
+        let json = r#"{
+            "access_token": "tok",
+            "refresh_token": "rt",
+            "user": {"id": "id", "email": "e@e", "user_metadata": {}}
+        }"#;
+        let decoded: AuthSession = serde_json::from_str(json).unwrap();
+        assert!(decoded.user.user_metadata.is_object());
     }
 
     #[test]

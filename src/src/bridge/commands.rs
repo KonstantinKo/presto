@@ -787,14 +787,15 @@ mod tests {
         is_autostart_enabled, load_manual_sessions, load_session_data, load_settings, load_tags,
         load_tasks, register_global_shortcuts, reset_all_data, save_daily_stats,
         save_manual_sessions, save_session_data, save_settings, save_tag, save_tasks,
-        start_activity_monitoring, start_oauth_server, stop_activity_monitoring, track_event,
-        update_activity_timeout, update_tray_icon, update_tray_menu, write_excel_file,
+        start_activity_monitoring, start_oauth_server, stop_activity_monitoring,
+        supabase_sign_in_with_password, track_event, update_activity_timeout, update_tray_icon,
+        update_tray_menu, write_excel_file,
     };
     use crate::bridge::error::BridgeError;
     use crate::bridge::session_type::SessionType;
     use crate::bridge::timer_mode::TimerMode;
     use crate::bridge::types::{
-        ManualSession, Session, SessionTag, Settings, ShortcutSettings, Tag, Task,
+        AuthSession, ManualSession, Session, SessionTag, Settings, ShortcutSettings, Tag, Task,
         UpdateTrayIconArgs,
     };
     use std::collections::HashMap;
@@ -1566,5 +1567,46 @@ mod tests {
             Err(BridgeError::BridgeUnavailable) => {}
             other => panic!("expected BridgeUnavailable, got {other:?}"),
         }
+    }
+
+    // -----------------------------------------------------------------------
+    // Phase 1D — supabase_* family (T087-T095). Each wrapper hits a Rust
+    // REST adapter that replaces a supabase-js call site. Per
+    // contracts/tauri-bridge.md §"Supabase auth adapter family", the four
+    // commands cover sign-in, sign-out, session read, and session refresh.
+    // -----------------------------------------------------------------------
+
+    #[wasm_bindgen_test]
+    async fn supabase_sign_in_with_password_round_trip_short_circuits_when_bridge_absent() {
+        let result = supabase_sign_in_with_password(
+            "user@example.com".to_string(),
+            "hunter2".to_string(),
+        )
+        .await;
+        match result {
+            Err(BridgeError::BridgeUnavailable) => {}
+            other => panic!("expected BridgeUnavailable, got {other:?}"),
+        }
+    }
+
+    /// Compile-time signature pin per contracts/tauri-bridge.md §"Supabase
+    /// auth adapter family":
+    /// `supabase_sign_in_with_password(email: String, password: String)
+    ///     -> Result<AuthSession, BridgeError>`.
+    /// Both args are `String` (owned) because the JS-era call site already
+    /// holds owned creds (form input). Returns the typed `AuthSession`
+    /// from `bridge::types` rather than a `serde_json::Value` blob — the
+    /// closed-domain shape lets consumers (`managers/auth.rs`) bind to
+    /// `session.access_token` and `session.user.email` directly. Drift on
+    /// either side fails compilation per FR-008.
+    #[wasm_bindgen_test]
+    async fn supabase_sign_in_with_password_round_trip_signature_pinned() {
+        async fn assert_signature(
+            email: String,
+            password: String,
+        ) -> Result<AuthSession, BridgeError> {
+            supabase_sign_in_with_password(email, password).await
+        }
+        let _ = assert_signature("user@example.com".to_string(), "hunter2".to_string()).await;
     }
 }
