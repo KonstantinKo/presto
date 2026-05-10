@@ -49,14 +49,23 @@ pub enum SettingsTab {
 
 /// Active-view state machine.
 ///
-/// Owns the current `NavView` and exposes a `transition_to(view)`
-/// method that lands the new view unconditionally (router-style; no
-/// gating). The settings-tab preservation logic lives in T160.
+/// Owns the current `NavView` and the last-selected
+/// `SettingsTab`. `transition_to(view)` lands `view`
+/// unconditionally (router-style; no gating).
+/// `enter_settings()` lands `Settings(last_settings_tab)`,
+/// preserving the user's settings-tab selection across
+/// round-trips through other views (T160).
 #[derive(Debug, Clone, Default)]
 pub struct NavigationManager {
     /// Current top-level view. Initial state is `NavView::Timer`
     /// per data-model.md §`NavView`.
     current: NavView,
+    /// Last-selected settings sub-tab. Initial state is
+    /// `SettingsTab::General`. Updated by `select_settings_tab`;
+    /// read by `enter_settings`. Mirrors the JS-side behaviour
+    /// where the settings page restores its previous tab on
+    /// re-entry rather than resetting to General.
+    last_settings_tab: SettingsTab,
 }
 
 impl NavigationManager {
@@ -67,6 +76,7 @@ impl NavigationManager {
     pub const fn new() -> Self {
         Self {
             current: NavView::Timer,
+            last_settings_tab: SettingsTab::General,
         }
     }
 
@@ -76,13 +86,45 @@ impl NavigationManager {
         self.current
     }
 
+    /// Borrow the last-selected settings sub-tab. Useful for tests
+    /// and for the components layer (Phase 4) to highlight the
+    /// active tab without inspecting `current()`.
+    #[must_use]
+    pub const fn last_settings_tab(&self) -> SettingsTab {
+        self.last_settings_tab
+    }
+
     /// Land `view` as the active view. No gating — every transition
     /// is allowed (data-model.md §`NavView`). Mirrors the JS-side
     /// `switchView` body at
     /// `src/managers/navigation-manager.js:56-106` minus the DOM
     /// effects (those live in the Phase 4 components layer).
+    ///
+    /// When the supplied view is a `Settings(tab)`, the
+    /// `last_settings_tab` slice is updated so the next
+    /// `enter_settings()` call (which doesn't specify a tab)
+    /// restores the same one.
     pub const fn transition_to(&mut self, view: NavView) {
+        if let NavView::Settings(tab) = view {
+            self.last_settings_tab = tab;
+        }
         self.current = view;
+    }
+
+    /// Land `Settings(last_settings_tab)`. Convenience for the
+    /// sidebar's "Settings" button which doesn't specify a sub-tab;
+    /// the manager picks up where the user last left off (T160).
+    pub const fn enter_settings(&mut self) {
+        self.current = NavView::Settings(self.last_settings_tab);
+    }
+
+    /// Land `Settings(tab)` and record `tab` as the new
+    /// last-selected sub-tab. Convenience for the settings-page
+    /// in-page tab strip; equivalent to
+    /// `transition_to(NavView::Settings(tab))`.
+    pub const fn select_settings_tab(&mut self, tab: SettingsTab) {
+        self.last_settings_tab = tab;
+        self.current = NavView::Settings(tab);
     }
 }
 
