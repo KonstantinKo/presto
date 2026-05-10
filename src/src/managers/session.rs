@@ -128,6 +128,29 @@ impl SessionManager {
             *slot = updated;
         }
     }
+
+    /// Remove the manual-session entry with the matching `id` from
+    /// the in-memory list. Pure mutation — delete-of-unknown-id is
+    /// a no-op (`Vec::retain` filters out only matches). The
+    /// durable half of the flow is `save_manual` (T168 GREEN): the
+    /// Tauri side has no per-entry delete command, so the
+    /// wire-level write is a full
+    /// `save_manual_sessions(remaining)` call — this is exactly
+    /// what tasks.md T172 calls "bulk re-save with the entry
+    /// omitted, matching the deleted `delete_manual_session` JS
+    /// path".
+    ///
+    /// Engine accumulators are NOT decremented on delete: the
+    /// historical pomodoros / focus-time accumulators are run-wide
+    /// totals that don't shrink on retroactive edits. The JS-era
+    /// `deleteCurrentSession` flow at
+    /// `src/managers/session-manager.js:375-411` also doesn't
+    /// touch the engine.
+    ///
+    /// Spec 001-leptos-migration §Phase 3b T172.
+    pub fn delete_manual(&mut self, id: &str) {
+        self.manual_sessions.retain(|s| s.id != id);
+    }
 }
 
 #[cfg(test)]
