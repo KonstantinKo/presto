@@ -271,27 +271,6 @@ pub(super) fn write_manual_sessions_to(
     write_json_atomic(&dir.join("manual_sessions.json"), sessions)
 }
 
-/// Inserts or replaces the entry matching `session.id` in
-/// `manual_sessions.json`.
-#[allow(clippy::redundant_pub_crate)]
-pub(super) fn upsert_manual_session_in(
-    dir: &Path,
-    session: super::ManualSession,
-) -> Result<(), String> {
-    let mut sessions = read_manual_sessions_from(dir)?;
-    sessions.retain(|s| s.id != session.id);
-    sessions.push(session);
-    write_manual_sessions_to(dir, &sessions)
-}
-
-/// Removes the entry matching `session_id` from `manual_sessions.json`.
-#[allow(clippy::redundant_pub_crate)]
-pub(super) fn delete_manual_session_in(dir: &Path, session_id: &str) -> Result<(), String> {
-    let mut sessions = read_manual_sessions_from(dir)?;
-    sessions.retain(|s| s.id != session_id);
-    write_manual_sessions_to(dir, &sessions)
-}
-
 // ── Tags ──────────────────────────────────────────────────────────────────────
 
 /// Reads `tags.json` from `dir`.
@@ -416,11 +395,11 @@ pub(super) fn delete_all_data_in(dir: &Path) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::{
-        append_daily_stats_to, append_session_tag_in, delete_all_data_in, delete_manual_session_in,
-        delete_tag_in, is_debounced, read_history_from, read_manual_sessions_from,
-        read_session_from, read_session_tags_from, read_settings_from, read_tags_from,
-        read_tasks_from, upsert_manual_session_in, upsert_tag_in, write_manual_sessions_to,
-        write_session_to, write_settings_to, write_tags_to, write_tasks_to,
+        append_daily_stats_to, append_session_tag_in, delete_all_data_in, delete_tag_in,
+        is_debounced, read_history_from, read_manual_sessions_from, read_session_from,
+        read_session_tags_from, read_settings_from, read_tags_from, read_tasks_from,
+        upsert_tag_in, write_manual_sessions_to, write_session_to, write_settings_to,
+        write_tags_to, write_tasks_to,
     };
     use std::collections::HashMap;
     use std::time::{Duration, Instant};
@@ -690,36 +669,6 @@ mod tests {
             date: date.to_string(),
             tags: None,
         }
-    }
-
-    #[test]
-    fn manual_session_upsert_replaces_existing_id() {
-        let dir = tempfile::tempdir().expect("tempdir");
-        let original = make_manual_session("s-1", "2024-06-01");
-        let updated = ManualSession {
-            duration: 50,
-            ..make_manual_session("s-1", "2024-06-01")
-        };
-        let other = make_manual_session("s-2", "2024-06-01");
-        write_manual_sessions_to(dir.path(), &[original, other]).expect("write");
-        upsert_manual_session_in(dir.path(), updated).expect("upsert");
-        let sessions = read_manual_sessions_from(dir.path()).expect("read");
-        assert_eq!(sessions.len(), 2);
-        let s1 = sessions.iter().find(|s| s.id == "s-1").expect("s-1");
-        assert_eq!(s1.duration, 50);
-        assert!(sessions.iter().any(|s| s.id == "s-2"));
-    }
-
-    #[test]
-    fn manual_session_delete_removes_only_target() {
-        let dir = tempfile::tempdir().expect("tempdir");
-        let a = make_manual_session("s-a", "2024-06-01");
-        let b = make_manual_session("s-b", "2024-06-01");
-        write_manual_sessions_to(dir.path(), &[a, b]).expect("write");
-        delete_manual_session_in(dir.path(), "s-a").expect("delete");
-        let sessions = read_manual_sessions_from(dir.path()).expect("read");
-        assert_eq!(sessions.len(), 1);
-        assert_eq!(sessions[0].id, "s-b");
     }
 
     // ── Tags helpers ──────────────────────────────────────────────────────────
