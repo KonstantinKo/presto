@@ -3,7 +3,7 @@
 **Phase**: 1 (Design & Contracts)
 **Feeds**: [plan.md](../plan.md) §Modules, [data-model.md](../data-model.md)
 
-This file enumerates the Tauri commands surviving in `src-tauri/src/lib.rs`'s `tauri::generate_handler![…]` block post-cutover (26 of today's 36) and the new commands introduced by this migration. For each command we capture: argument shape, return shape (typed `BridgeError` enum), whether it's currently called from JS today, and the post-migration Leptos-side wrapper signature.
+This file enumerates the Tauri commands surviving in `src-tauri/src/lib.rs`'s `tauri::generate_handler![…]` block post-cutover (25 of today's 36) and the new commands introduced by this migration. For each command we capture: argument shape, return shape (typed `BridgeError` enum), whether it's currently called from JS today, and the post-migration Leptos-side wrapper signature.
 
 The plan's contract is: **post-migration, no Tauri command may be added or modified without updating both sides in the same commit, AND `tests/e2e/fixtures/tauriMock.js` getting the corresponding mock entry in the same commit (or a prior commit, if test-first ordering applies — see §Mock-first rule below).**
 
