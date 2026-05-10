@@ -191,4 +191,81 @@ mod tests {
         assert_eq!(payload.len(), 1, "payload mirrors manager state");
         assert_eq!(payload[0].id, manual.id);
     }
+
+    /// T169 [RED]: `update_manual(updated)` replaces the matching
+    /// in-memory entry by `id` (mirrors the JS-side
+    /// `updateSession` flow at
+    /// `src/managers/session-manager.js:354-373` where the
+    /// list-by-date is mutated in place at the matching index).
+    /// Update-of-unknown-id is a no-op (no entry added; the JS-era
+    /// `findIndex` returns `-1` and the splice is skipped).
+    ///
+    /// Distinct from `create_manual`: an update does NOT pump the
+    /// engine accumulators — those reflect the original entry, and
+    /// the JS-era flow at line 354 doesn't touch the timer engine
+    /// either. Only the persisted record changes.
+    ///
+    /// Done-signal: this test currently fails because
+    /// `SessionManager::update_manual` does not yet exist.
+    /// T170 GREEN attaches the implementation.
+    #[test]
+    fn manual_session_update_replaces_by_id() {
+        let mut mgr = SessionManager::new();
+        let mut engine = TimerState::new(Durations::default());
+
+        let m1 = sample_manual("m-1", 25, "Sat May 10 2026");
+        let m2 = sample_manual("m-2", 50, "Sat May 10 2026");
+        let _ = mgr.create_manual(&mut engine, m1);
+        let _ = mgr.create_manual(&mut engine, m2);
+        assert_eq!(mgr.manual_sessions().len(), 2);
+
+        let pomodoros_before_update = engine.completed_pomodoros();
+        let total_focus_before_update = engine.total_focus_secs();
+
+        // Replace m-1 with a longer-duration entry.
+        let mut updated = sample_manual("m-1", 40, "Sat May 10 2026");
+        updated.notes = Some("revised".to_string());
+        mgr.update_manual(updated.clone());
+
+        assert_eq!(
+            mgr.manual_sessions().len(),
+            2,
+            "update must not change the list length",
+        );
+
+        let m1_after = mgr
+            .manual_sessions()
+            .iter()
+            .find(|s| s.id == "m-1")
+            .expect("m-1 still in the list");
+        assert_eq!(m1_after.duration, 40, "duration replaced");
+        assert_eq!(
+            m1_after.notes.as_deref(),
+            Some("revised"),
+            "notes replaced",
+        );
+
+        // Engine accumulators are unaffected by an update — only the
+        // persisted record changes (mirrors the JS-era flow which
+        // also doesn't re-pump the engine on update).
+        assert_eq!(
+            engine.completed_pomodoros(),
+            pomodoros_before_update,
+            "update must NOT pump engine.completed_pomodoros",
+        );
+        assert_eq!(
+            engine.total_focus_secs(),
+            total_focus_before_update,
+            "update must NOT pump engine.total_focus_secs",
+        );
+
+        // Update-of-unknown-id is a no-op.
+        let len_before_noop = mgr.manual_sessions().len();
+        mgr.update_manual(sample_manual("m-nope", 99, "Sat May 10 2026"));
+        assert_eq!(
+            mgr.manual_sessions().len(),
+            len_before_noop,
+            "update of unknown id is a no-op (list unchanged)",
+        );
+    }
 }
