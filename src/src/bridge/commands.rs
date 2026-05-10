@@ -183,10 +183,10 @@ pub async fn save_daily_stats(session: Session) -> Result<(), BridgeError> {
 #[cfg(all(test, target_arch = "wasm32"))]
 mod tests {
     use super::{
-        get_stats_history, load_session_data, save_daily_stats, save_session_data,
+        get_stats_history, load_session_data, save_daily_stats, save_session_data, save_tasks,
     };
     use crate::bridge::error::BridgeError;
-    use crate::bridge::types::Session;
+    use crate::bridge::types::{Session, Task};
     use wasm_bindgen_test::wasm_bindgen_test;
 
     fn sample_session() -> Session {
@@ -196,6 +196,25 @@ mod tests {
             current_session: 4,
             date: "Sat May 10 2026".to_string(),
         }
+    }
+
+    fn sample_tasks() -> Vec<Task> {
+        vec![
+            Task {
+                id: 1,
+                text: "ship the wrapper".to_string(),
+                completed: false,
+                created_at: "2026-05-10T08:00:00Z".to_string(),
+                completed_at: None,
+            },
+            Task {
+                id: 2,
+                text: "write the test".to_string(),
+                completed: true,
+                created_at: "2026-05-10T07:30:00Z".to_string(),
+                completed_at: Some("2026-05-10T08:30:00Z".to_string()),
+            },
+        ]
     }
 
     /// Under `wasm-pack test --node`, no `__TAURI_INTERNALS__` is installed,
@@ -287,5 +306,24 @@ mod tests {
             save_daily_stats(s).await
         }
         let _ = assert_signature(sample_session()).await;
+    }
+
+    #[wasm_bindgen_test]
+    async fn save_tasks_round_trip_short_circuits_when_bridge_absent() {
+        let result = save_tasks(sample_tasks()).await;
+        match result {
+            Err(BridgeError::BridgeUnavailable) => {}
+            other => panic!("expected BridgeUnavailable, got {other:?}"),
+        }
+    }
+
+    /// Compile-time signature pin per contracts/tauri-bridge.md row 5:
+    /// `save_tasks(tasks: Vec<Task>) -> Result<(), BridgeError>`.
+    #[wasm_bindgen_test]
+    async fn save_tasks_round_trip_signature_pinned() {
+        async fn assert_signature(t: Vec<Task>) -> Result<(), BridgeError> {
+            save_tasks(t).await
+        }
+        let _ = assert_signature(sample_tasks()).await;
     }
 }
