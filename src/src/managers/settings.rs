@@ -270,6 +270,10 @@ mod tests {
 
         // Case C: full canonical shape with every field present —
         // must NOT flag writeback.
+        //
+        // Phase 4e R-002: includes the user-state slice fields
+        // (`guest_mode`, `auth_seen`, `skipped_versions`) so the
+        // round-trip has nothing to writeback.
         let canonical = r#"{
             "shortcuts": {"start_stop": null, "reset": null, "skip": null},
             "timer": {"focus_duration": 25, "break_duration": 5,
@@ -286,7 +290,10 @@ mod tests {
             "autostart": false,
             "analytics_enabled": true,
             "hide_icon_on_close": false,
-            "status_bar_display": "default"
+            "status_bar_display": "default",
+            "guest_mode": false,
+            "auth_seen": false,
+            "skipped_versions": []
         }"#;
         let mgr = SettingsManager::ingest_raw_json(canonical).expect("must deserialise");
         assert!(

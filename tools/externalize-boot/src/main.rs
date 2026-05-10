@@ -186,7 +186,9 @@ const wasm = await init();
                 assert!(body.contains("import init"));
                 assert!(body.contains("const wasm = await init()"));
                 assert!(!rewritten_html.contains("import init"));
-                assert!(rewritten_html.contains(r#"<script type="module" src="/boot.js"></script>"#));
+                assert!(
+                    rewritten_html.contains(r#"<script type="module" src="/boot.js"></script>"#)
+                );
                 assert!(rewritten_html.contains("modulepreload"));
             }
             SplitOutcome::NoInlineScript => panic!("expected Split, got NoInlineScript"),

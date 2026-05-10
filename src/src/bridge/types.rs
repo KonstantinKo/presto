@@ -271,6 +271,28 @@ pub struct Settings {
     #[serde(default)]
     pub hide_icon_on_close: bool,
     pub status_bar_display: StatusBarDisplay,
+    // Phase 4e R-002: user-state slice — mirrors the Tauri-side
+    // `AppSettings` widening byte-for-byte. The JS-era
+    // `presto-guest-mode` / `presto-auth-seen` /
+    // `presto-skipped-versions` localStorage flags fold into these
+    // fields on first post-cutover launch (see
+    // `bridge::storage::import_legacy_user_state_from_storage` and
+    // `migration.rs::import_user_state`). Once migrated, `guest_mode`
+    // is the canonical signal; the localStorage fallback at
+    // `managers::auth::WebGuestModeStore` is kept only as a
+    // belt-and-braces fallback for sandboxed origins where the
+    // Tauri bridge round-trip didn't complete.
+    //
+    // Each field is `#[serde(default)]` so 0.4.x settings JSONs
+    // predating this widening still deserialise into the cold-start
+    // shape (`guest_mode: false`, `auth_seen: false`,
+    // `skipped_versions: vec![]`).
+    #[serde(default)]
+    pub guest_mode: bool,
+    #[serde(default)]
+    pub auth_seen: bool,
+    #[serde(default)]
+    pub skipped_versions: Vec<String>,
 }
 
 impl Default for Settings {
@@ -284,6 +306,11 @@ impl Default for Settings {
             analytics_enabled: true,
             hide_icon_on_close: false,
             status_bar_display: StatusBarDisplay::Default,
+            // Phase 4e R-002 cold-start defaults — see field-level
+            // doc-comment for the rationale.
+            guest_mode: false,
+            auth_seen: false,
+            skipped_versions: Vec::new(),
         }
     }
 }
@@ -327,6 +354,15 @@ struct SettingsOnDisk {
     /// because the post-conversion `Settings` has no field for it.
     #[serde(default)]
     hide_status_bar: Option<bool>,
+    /// Phase 4e R-002 user-state slice (`#[serde(default)]` so the
+    /// pre-widening shape still deserialises). See `Settings`
+    /// doc-comment for per-field semantics.
+    #[serde(default)]
+    guest_mode: bool,
+    #[serde(default)]
+    auth_seen: bool,
+    #[serde(default)]
+    skipped_versions: Vec<String>,
 }
 
 impl From<SettingsOnDisk> for Settings {
@@ -344,6 +380,9 @@ impl From<SettingsOnDisk> for Settings {
             analytics_enabled: raw.analytics_enabled,
             hide_icon_on_close: raw.hide_icon_on_close,
             status_bar_display,
+            guest_mode: raw.guest_mode,
+            auth_seen: raw.auth_seen,
+            skipped_versions: raw.skipped_versions,
         }
     }
 }
@@ -653,6 +692,32 @@ mod tests {
             decoded.shortcuts.start_stop.as_deref(),
             Some("CommandOrControl+Alt+Space"),
         );
+        // Phase 4e R-002 user-state slice — cold-start defaults
+        // present on the wire.
+        assert!(!decoded.guest_mode);
+        assert!(!decoded.auth_seen);
+        assert!(decoded.skipped_versions.is_empty());
+        assert!(json.contains(r#""guest_mode":false"#));
+        assert!(json.contains(r#""auth_seen":false"#));
+        assert!(json.contains(r#""skipped_versions":[]"#));
+    }
+
+    /// Phase 4e R-002 round-trip: a `Settings` with non-default
+    /// user-state values serialises and deserialises stably.
+    #[test]
+    fn settings_round_trips_user_state_slice() {
+        let s = Settings {
+            guest_mode: true,
+            auth_seen: true,
+            skipped_versions: vec!["0.5.0".to_string(), "0.5.1".to_string()],
+            ..Settings::default()
+        };
+        let json = serde_json::to_string(&s).unwrap();
+        let decoded: Settings = serde_json::from_str(&json).unwrap();
+        assert!(decoded.guest_mode);
+        assert!(decoded.auth_seen);
+        assert_eq!(decoded.skipped_versions.len(), 2);
+        assert_eq!(decoded.skipped_versions[0], "0.5.0");
     }
 
     #[test]

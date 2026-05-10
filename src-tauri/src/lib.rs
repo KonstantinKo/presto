@@ -234,6 +234,28 @@ struct AppSettings {
     #[serde(default)]
     hide_icon_on_close: bool,
     status_bar_display: StatusBarDisplay,
+    // Phase 4e R-002: user-state slice — broadens the on-disk
+    // settings shape to carry the JS-era user-state flags that
+    // `import_user_state` would otherwise drop. Each is `serde-default`
+    // so 0.4.x settings JSONs predating this widening still
+    // deserialise (the missing-field branch falls back to the
+    // unauthenticated cold-start shape).
+    //
+    // - `guest_mode`: `presto-guest-mode == "true"` localStorage
+    //   flag, projected here so post-migration cold starts can read
+    //   the canonical signal from `Settings` rather than
+    //   localStorage. Once the migration runs, the localStorage key
+    //   is cleared and this field becomes the source of truth.
+    // - `auth_seen`: `presto-auth-seen` flag — the user has dismissed
+    //   the welcome-overlay at least once.
+    // - `skipped_versions`: the JSON-encoded `Vec<String>` from the
+    //   `presto-skipped-versions` localStorage key.
+    #[serde(default)]
+    guest_mode: bool,
+    #[serde(default)]
+    auth_seen: bool,
+    #[serde(default)]
+    skipped_versions: Vec<String>,
 }
 
 /// On-disk shape of the settings JSON, accepting either the new
@@ -273,6 +295,16 @@ struct AppSettingsOnDisk {
     /// post-conversion `AppSettings` has no field for it.
     #[serde(default)]
     hide_status_bar: Option<bool>,
+    /// Phase 4e R-002 user-state slice — see `AppSettings` doc-comment
+    /// for the per-field semantics. Each is `serde-default` so the
+    /// pre-widening shape (no user-state slice on the wire) still
+    /// deserialises into the cold-start shape.
+    #[serde(default)]
+    guest_mode: bool,
+    #[serde(default)]
+    auth_seen: bool,
+    #[serde(default)]
+    skipped_versions: Vec<String>,
 }
 
 impl From<AppSettingsOnDisk> for AppSettings {
@@ -290,6 +322,9 @@ impl From<AppSettingsOnDisk> for AppSettings {
             analytics_enabled: raw.analytics_enabled,
             hide_icon_on_close: raw.hide_icon_on_close,
             status_bar_display,
+            guest_mode: raw.guest_mode,
+            auth_seen: raw.auth_seen,
+            skipped_versions: raw.skipped_versions,
         }
     }
 }
@@ -389,6 +424,14 @@ impl Default for AppSettings {
             analytics_enabled: true,
             hide_icon_on_close: false,
             status_bar_display: StatusBarDisplay::Default,
+            // Phase 4e R-002: cold-start defaults — neither guest
+            // nor auth-seen, no skipped updates. `guest_mode = false`
+            // matches Principle II's "auth choice is opt-in"
+            // line: a fresh install lands at the welcome overlay,
+            // not pre-projected into Guest.
+            guest_mode: false,
+            auth_seen: false,
+            skipped_versions: Vec::new(),
         }
     }
 }
@@ -1726,6 +1769,10 @@ mod tests {
         assert!(s.shortcuts.start_stop.is_some());
         assert!(s.shortcuts.reset.is_some());
         assert!(s.shortcuts.skip.is_some());
+        // Phase 4e R-002 user-state slice — cold-start defaults.
+        assert!(!s.guest_mode);
+        assert!(!s.auth_seen);
+        assert!(s.skipped_versions.is_empty());
     }
 
     #[test]

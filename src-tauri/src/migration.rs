@@ -235,17 +235,19 @@ pub(super) fn import_manual_sessions(
 
 /// Idempotent via the user-state sentinel marker file (rather than
 /// the `settings.json` file, because `import_settings` may run
-/// independently of `import_user_state`). The four flags fold into
-/// the `AppSettings` slice that today does not have a `guest_mode` /
-/// `auth_seen` / `skipped_versions` field; today the import is
-/// best-effort: it persists the active session via the existing
-/// `helpers::write_session_to` path, and writes the sentinel so the
-/// next launch skips the no-op fold of the missing fields.
+/// independently of `import_user_state`).
 ///
-/// A later phase that lands `AppSettings::user_state` (per
-/// data-model.md §"Legacy localStorage migration") will broaden this
-/// import; the sentinel keeps the contract idempotent across that
-/// future broadening.
+/// **Phase 4e R-002 broadening**: `AppSettings` now carries the
+/// `guest_mode` / `auth_seen` / `skipped_versions` slots, so this
+/// handler folds the JS-era flags into the on-disk settings file.
+/// The fold is read-modify-write: read the current `AppSettings`
+/// (cold-start = `AppSettings::default()`), set the three fields
+/// from the payload (only when the payload value is `Some` /
+/// non-empty — never clobber a more-recent post-cutover value
+/// with a stale legacy `false`), write the merged settings back.
+/// The active session, if present, persists via the existing
+/// `helpers::write_session_to` path; the sentinel guards against
+/// a second-launch re-import overwriting newer data.
 pub(super) fn import_user_state(
     app_data_dir: &Path,
     payload: &LegacyUserStatePayload,
@@ -258,9 +260,28 @@ pub(super) fn import_user_state(
             helpers::write_session_to(app_data_dir, session)?;
         }
     }
-    // Per the doc-comment: today the four flag fields don't have
-    // permanent slots; we write the sentinel so subsequent launches
-    // skip the same fold attempt. A later phase widens this.
+    // R-002 fold: read current settings (or fall back to default
+    // when the file is absent — the read helper does that), apply
+    // the legacy flags, write back. Treat `Some(false)` as "user
+    // explicitly opted out of guest mode" — that's still a
+    // meaningful state distinct from "no signal at all", and a
+    // 0.4.x user who toggled guest mode off should land at the
+    // unauthenticated welcome state, not the cold-start guest
+    // projection. Empty `skipped_versions` is also a meaningful
+    // signal (the user has dismissed no updates yet); we copy it
+    // verbatim.
+    let mut settings = helpers::read_settings_from(app_data_dir).unwrap_or_default();
+    if let Some(guest) = payload.guest_mode {
+        settings.guest_mode = guest;
+    }
+    if let Some(seen) = payload.auth_seen {
+        settings.auth_seen = seen;
+    }
+    settings
+        .skipped_versions
+        .clone_from(&payload.skipped_versions);
+    helpers::write_settings_to(app_data_dir, &settings)?;
+
     write_user_state_sentinel(app_data_dir)?;
     Ok(())
 }
@@ -631,6 +652,83 @@ mod tests {
             .path()
             .join("legacy-user-state-imported.marker")
             .exists());
+    }
+
+    /// Phase 4e R-002 named-test: the user-state fold persists the
+    /// JS-era `guest_mode` / `auth_seen` / `skipped_versions` flags
+    /// into the on-disk `AppSettings` so the post-migration cold
+    /// start projects the correct auth/guest state without the
+    /// localStorage round-trip.
+    ///
+    /// Pins the FR-006 contract: a 0.4.x guest user who applies the
+    /// auto-update MUST remain in guest mode post-update.
+    #[test]
+    fn import_user_state_persists_guest_mode_into_settings() {
+        let dir = tempdir().unwrap();
+        let payload = LegacyUserStatePayload {
+            guest_mode: Some(true),
+            auth_seen: Some(true),
+            skipped_versions: vec!["1.2.3".to_string()],
+            active_session: None,
+        };
+        import_user_state(dir.path(), &payload).unwrap();
+
+        // Read back settings.json — the user-state fields must be
+        // present with the imported values.
+        let settings_text =
+            std::fs::read_to_string(dir.path().join("settings.json")).expect("settings written");
+        let parsed: AppSettings = serde_json::from_str(&settings_text).expect("valid settings");
+        assert!(parsed.guest_mode, "guest_mode must persist as true");
+        assert!(parsed.auth_seen, "auth_seen must persist as true");
+        assert_eq!(
+            parsed.skipped_versions,
+            vec!["1.2.3".to_string()],
+            "skipped_versions must persist verbatim",
+        );
+    }
+
+    /// Round-trip: `AppSettings` JSON encoding carries the new R-002
+    /// fields, and a deserialise of that JSON re-derives the same
+    /// values. Pins the wire shape against drift.
+    #[test]
+    fn app_settings_round_trips_user_state_slice() {
+        let original = AppSettings {
+            guest_mode: true,
+            auth_seen: true,
+            skipped_versions: vec!["0.5.0".to_string(), "0.5.1".to_string()],
+            ..AppSettings::default()
+        };
+        let json = serde_json::to_string(&original).expect("serialize");
+        assert!(json.contains(r#""guest_mode":true"#));
+        assert!(json.contains(r#""auth_seen":true"#));
+        assert!(json.contains(r#""skipped_versions":["0.5.0","0.5.1"]"#));
+        let decoded: AppSettings = serde_json::from_str(&json).expect("deserialize");
+        assert!(decoded.guest_mode);
+        assert!(decoded.auth_seen);
+        assert_eq!(decoded.skipped_versions.len(), 2);
+    }
+
+    /// Backwards compatibility: a 0.4.x settings.json without the
+    /// new R-002 fields must deserialise into `AppSettings` with the
+    /// cold-start defaults for those fields. Pins the
+    /// `#[serde(default)]` markers against drift.
+    #[test]
+    fn app_settings_legacy_shape_uses_default_user_state_slice() {
+        let legacy = r#"{
+            "shortcuts": {"start_stop": null, "reset": null, "skip": null},
+            "timer": {"focus_duration": 25, "break_duration": 5,
+                      "long_break_duration": 20, "total_sessions": 10},
+            "notifications": {"desktop_notifications": true,
+                              "sound_notifications": true,
+                              "auto_start_timer": true, "smart_pause": false,
+                              "smart_pause_timeout": 30},
+            "autostart": false
+        }"#;
+        let decoded: AppSettings =
+            serde_json::from_str(legacy).expect("legacy minimal shape must deserialise");
+        assert!(!decoded.guest_mode);
+        assert!(!decoded.auth_seen);
+        assert!(decoded.skipped_versions.is_empty());
     }
 
     #[test]
