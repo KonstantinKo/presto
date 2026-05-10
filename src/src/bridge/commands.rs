@@ -485,7 +485,7 @@ mod tests {
         add_session_tag, delete_tag, get_stats_history, load_manual_sessions, load_session_data,
         load_settings, load_tags, load_tasks, register_global_shortcuts, reset_all_data,
         save_daily_stats, save_manual_sessions, save_session_data, save_settings, save_tag,
-        save_tasks, start_activity_monitoring,
+        save_tasks, start_activity_monitoring, stop_activity_monitoring,
     };
     use crate::bridge::error::BridgeError;
     use crate::bridge::session_type::SessionType;
@@ -942,5 +942,29 @@ mod tests {
             start_activity_monitoring(t).await
         }
         let _ = assert_signature(30).await;
+    }
+
+    #[wasm_bindgen_test]
+    async fn stop_activity_monitoring_round_trip_short_circuits_when_bridge_absent() {
+        let result = stop_activity_monitoring().await;
+        match result {
+            Err(BridgeError::BridgeUnavailable) => {}
+            other => panic!("expected BridgeUnavailable, got {other:?}"),
+        }
+    }
+
+    /// Compile-time signature pin per contracts/tauri-bridge.md row 18:
+    /// `stop_activity_monitoring() -> Result<(), BridgeError>`.
+    /// No-arg counterpart to `start_activity_monitoring` — the Tauri-side
+    /// handler reaches for the `ACTIVITY_MONITOR` mutex and calls
+    /// `stop_monitoring()` if a monitor was previously installed; the
+    /// no-op case (monitor never started) is silently absorbed at the
+    /// handler. The Leptos wrapper does not differentiate.
+    #[wasm_bindgen_test]
+    async fn stop_activity_monitoring_round_trip_signature_pinned() {
+        async fn assert_signature() -> Result<(), BridgeError> {
+            stop_activity_monitoring().await
+        }
+        let _ = assert_signature().await;
     }
 }
