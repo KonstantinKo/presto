@@ -110,6 +110,49 @@ impl SettingsManager {
 mod tests {
     use super::SettingsManager;
 
+    /// T153 [RED]: a save round-trip must produce the post-cutover
+    /// wire shape only — the legacy `hide_status_bar` field never
+    /// re-appears once the manager has read it. The JS-side
+    /// behaviour at `src/managers/settings-manager.js:114-120` is
+    /// "migrate, then save"; this Rust port achieves the same
+    /// outcome via the `#[serde(from = "SettingsOnDisk")]` shim
+    /// (T152) — `Settings` itself has no `hide_status_bar` field, so
+    /// the derived `Serialize` impl cannot emit it.
+    ///
+    /// Done-signal: this test currently fails because
+    /// `SettingsManager::save_payload_json` does not yet exist.
+    /// T154 GREEN attaches the helper that the (future, async)
+    /// `save()` wrapper will hand to `bridge::commands::save_settings`.
+    #[test]
+    fn save_writes_full_shape_drops_legacy_field() {
+        // Start from a legacy on-disk shape that carries the old
+        // field; ingest, then save. The serialized payload must
+        // contain the new field (kebab-case) and not the legacy one.
+        let legacy = r#"{
+            "shortcuts": {"start_stop": null, "reset": null, "skip": null},
+            "timer": {"focus_duration": 25, "break_duration": 5,
+                      "long_break_duration": 20, "total_sessions": 10},
+            "notifications": {"desktop_notifications": true,
+                              "sound_notifications": true,
+                              "auto_start_timer": true, "smart_pause": false,
+                              "smart_pause_timeout": 30},
+            "autostart": false,
+            "hide_status_bar": true
+        }"#;
+        let mgr = SettingsManager::ingest_raw_json(legacy)
+            .expect("legacy shape must deserialise");
+        let payload = mgr.save_payload_json().expect("must serialise");
+
+        assert!(
+            !payload.contains("hide_status_bar"),
+            "save payload must not contain the legacy field; got {payload}",
+        );
+        assert!(
+            payload.contains(r#""status_bar_display":"icon-only""#),
+            "save payload must carry the post-migration kebab-case shape; got {payload}",
+        );
+    }
+
     /// T151 [RED]: F1/M3 migration coverage — the five cases from
     /// data-model.md §"Settings legacy migration":
     ///
