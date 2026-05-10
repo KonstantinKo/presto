@@ -369,6 +369,28 @@ pub async fn save_settings(settings: Settings) -> Result<(), BridgeError> {
     invoke_serde("save_settings", &Args { settings }).await
 }
 
+/// Read the persisted settings record. Tauri-side handler:
+/// `load_settings() -> Result<AppSettings, BridgeError>`
+/// at `src-tauri/src/lib.rs:642`.
+///
+/// Returns `Settings` (not `Option<Settings>`) — the Tauri-side
+/// `helpers::read_settings_from` falls back to `AppSettings::default()`
+/// when no settings file exists yet, so the cold-start case yields the
+/// default record rather than a `None` discriminator. Missing nested
+/// fields in older `0.4.x` settings JSONs are filled in by
+/// `#[serde(default)]` on each field (per FR-005 — round-trip every
+/// released JSON without manual migration).
+///
+/// # Errors
+/// Returns `BridgeError::BridgeUnavailable` when the Tauri JS bridge is
+/// not present. Otherwise returns whatever variant the Tauri-side handler
+/// maps its filesystem failure to (typically `BridgeError::Internal`),
+/// or `BridgeError::SerdeRoundtrip` if the on-disk JSON cannot be
+/// deserialised.
+pub async fn load_settings() -> Result<Settings, BridgeError> {
+    invoke_serde("load_settings", &serde_json::Value::Null).await
+}
+
 // Tests gated on `wasm32` because every wrapper-test is a
 // `#[wasm_bindgen_test]` — running them via `cargo test` on the host
 // target would produce dead-code lint failures (the host-side
