@@ -44,6 +44,17 @@ base64 = "0.21"
 # `thiserror` powers the `BridgeError` mirror enum (spec
 # 001-leptos-migration T025; mirrors `presto-web` Cargo.toml).
 thiserror = "1"
+# `reqwest` powers the Supabase REST adapter introduced in Phase 1D
+# T088-T095. Per research.md §6, we deliberately reject the supabase-rs
+# SDK in favour of direct REST + JWT against the four `/auth/v1/*`
+# endpoints. `rustls-tls` + `default-features = false` skip the
+# native-tls path so we don't drag OpenSSL onto Linux/macOS targets.
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+# `rust_xlsxwriter` powers the export_sessions_xlsx command introduced
+# in Phase 1D T097-T098. Per research.md §8, write-only is sufficient
+# (we never read xlsx files); chosen over umya-spreadsheet for its
+# smaller binary size.
+rust_xlsxwriter = "0.79"
 
 [dev-dependencies]
 tempfile = "3"

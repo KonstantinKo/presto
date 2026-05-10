@@ -33,7 +33,8 @@ use super::availability::bridge_available;
 use super::error::BridgeError;
 use super::timer_mode::TimerMode;
 use super::types::{
-    ManualSession, Session, SessionTag, Settings, ShortcutSettings, Tag, Task, UpdateTrayIconArgs,
+    AuthSession, ManualSession, Session, SessionTag, Settings, ShortcutSettings, Tag, Task,
+    UpdateTrayIconArgs,
 };
 
 #[wasm_bindgen]
@@ -772,6 +773,42 @@ pub async fn track_event<S: std::hash::BuildHasher>(
     // from this object and forwards it to the Aptabase plugin.
     let props = props.map(|map| map.into_iter().collect::<serde_json::Map<_, _>>());
     invoke_serde("track_event", &Args { name, props }).await
+}
+
+/// Sign in with email + password against Supabase auth.
+///
+/// Tauri-side handler: `supabase_sign_in_with_password(email: String,
+/// password: String) -> Result<AuthSession, BridgeError>` at
+/// `src-tauri/src/lib.rs`. The handler hits Supabase REST
+/// `/auth/v1/token?grant_type=password`, persists the returned session
+/// to the app-data directory, and surfaces the same record back to the
+/// caller.
+///
+/// Replaces the JS `supabase-js` `signInWithPassword` call. The session
+/// shape (`AuthSession` per data-model.md §`Session (Supabase auth
+/// session)`) is byte-stable across the bridge: the Tauri-side
+/// `auth::AuthSession` and the Leptos-side `types::AuthSession` are
+/// snake_case JSON twins, so a wire-shape drift fails both crates'
+/// tests at once.
+///
+/// # Errors
+/// Returns `BridgeError::BridgeUnavailable` when the Tauri JS bridge is
+/// not present. Returns `BridgeError::InvalidArgument` for empty creds
+/// or for Supabase REST 400/401 responses (bad password, unknown
+/// account). Returns `BridgeError::Internal` for network failures or
+/// 5xx responses. Returns `BridgeError::SerdeRoundtrip` if Supabase
+/// returns a non-`AuthSession`-shaped body (would be a Supabase API
+/// regression — not expected in normal operation).
+pub async fn supabase_sign_in_with_password(
+    email: String,
+    password: String,
+) -> Result<AuthSession, BridgeError> {
+    #[derive(Serialize)]
+    struct Args {
+        email: String,
+        password: String,
+    }
+    invoke_serde("supabase_sign_in_with_password", &Args { email, password }).await
 }
 
 // Tests gated on `wasm32` because every wrapper-test is a

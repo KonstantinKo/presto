@@ -14,6 +14,7 @@ use tauri_plugin_autostart::ManagerExt;
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut};
 use tauri_plugin_oauth::start;
 
+mod auth;
 mod helpers;
 
 // `BridgeError` — typed return variant for every Tauri command.
@@ -875,7 +876,8 @@ pub fn run() {
                 start_oauth_server,
                 set_dock_visibility,
                 set_status_bar_visibility,
-                track_event
+                track_event,
+                supabase_sign_in_with_password
             ])
             .setup(|app| {
                 let initial_settings = load_settings_sync(app.handle());
@@ -1261,6 +1263,34 @@ async fn track_event(
         let _ = app.track_event(&name, payload);
     }
     Ok(())
+}
+
+// `supabase_sign_in_with_password` — Phase 1D T089.
+//
+// Replaces the JS `supabase-js` `signInWithPassword` call. Authenticates
+// against Supabase REST `/auth/v1/token?grant_type=password` and persists
+// the resulting session to the app-data directory. The returned
+// `auth::AuthSession` mirrors the Leptos-side `bridge::types::AuthSession`
+// byte-for-byte on the wire.
+//
+// Network/HTTP failure → `BridgeError::Internal`. Invalid credentials
+// (HTTP 400/401 from Supabase) → `BridgeError::InvalidArgument`.
+// Empty email/password → `BridgeError::InvalidArgument` before any HTTP
+// roundtrip. Spec FR-018 / Principle II: auth is opt-in; guest mode is
+// unaffected because it's a separate localStorage flag, not a Supabase
+// concept.
+#[tauri::command]
+async fn supabase_sign_in_with_password(
+    email: String,
+    password: String,
+    app: AppHandle,
+) -> Result<auth::AuthSession, BridgeError> {
+    let session = auth::sign_in_with_password(&email, &password).await?;
+    let app_data_dir = app.path().app_data_dir().map_err(|e| BridgeError::Internal {
+        msg: format!("Failed to get app data directory: {e}"),
+    })?;
+    auth::persist_session(&app_data_dir, &session)?;
+    Ok(session)
 }
 
 #[tauri::command]
