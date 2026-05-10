@@ -242,14 +242,30 @@ pub fn TimerView() -> impl IntoView {
             // Control buttons. The icon visibility toggles match the
             // JS-era `style="display: none"` flips — the e2e suite
             // asserts on `toBeVisible()` / `toBeHidden()` of the
-            // `#play-icon` / `#pause-icon` IDs.
+            // `#play-icon` / `#pause-icon` IDs. Inline SVGs mirror the
+            // JS-era `index.html` markup byte-for-byte (heroicons-
+            // style play / pause glyphs at viewBox 0 0 24 24); empty
+            // <span> stand-ins would be zero-size boxes that
+            // `toBeVisible()` rejects.
             <div class="controls">
-                <button id="stop-btn" class="control-btn" aria-label="Reset timer" on:click=on_stop></button>
-                <button id="play-pause-btn" class="control-btn primary" aria-label="Start or pause timer" on:click=on_play_pause>
-                    <span id="play-icon" style=move || play_icon_style.get()></span>
-                    <span id="pause-icon" style=move || pause_icon_style.get()></span>
+                <button id="stop-btn" class="control-btn" aria-label="Reset timer" on:click=on_stop>
+                    <svg id="stop-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
                 </button>
-                <button id="skip-btn" class="control-btn" aria-label="Skip session" on:click=on_skip></button>
+                <button id="play-pause-btn" class="control-btn primary" aria-label="Start or pause timer" on:click=on_play_pause>
+                    <svg id="play-icon" viewBox="0 0 24 24" fill="currentColor" style=move || play_icon_style.get()>
+                        <path fill-rule="evenodd" clip-rule="evenodd"
+                            d="M4.5 5.653c0-1.427 1.529-2.33 2.779-1.643l11.54 6.347c1.295.712 1.295 2.573 0 3.286L7.28 19.99c-1.25.687-2.779-.217-2.779-1.643V5.653Z" />
+                    </svg>
+                    <svg id="pause-icon" viewBox="0 0 24 24" fill="currentColor" style=move || pause_icon_style.get()>
+                        <path fill-rule="evenodd" clip-rule="evenodd"
+                            d="M6.75 5.25a.75.75 0 0 1 .75-.75H9a.75.75 0 0 1 .75.75v13.5a.75.75 0 0 1-.75.75H7.5a.75.75 0 0 1-.75-.75V5.25Zm7.5 0A.75.75 0 0 1 15 4.5h1.5a.75.75 0 0 1 .75.75v13.5a.75.75 0 0 1-.75.75H15a.75.75 0 0 1-.75-.75V5.25Z" />
+                    </svg>
+                </button>
+                <button id="skip-btn" class="control-btn" aria-label="Skip session" on:click=on_skip>
+                    <i id="skip-brain-icon" class="ri-brain-line" style="font-size: 24px"></i>
+                </button>
             </div>
         </div>
     }

@@ -233,7 +233,7 @@ pub fn CalendarView() -> impl IntoView {
     let today_label = format_session_date(today.timestamp_millis());
 
     view! {
-        <div class="view-container view-section hidden" id="calendar-view">
+        <div class="view-container view-section" id="calendar-view">
             <h1>"Calendar & Statistics"</h1>
 
             // Week selector — prev/next + the active range label.

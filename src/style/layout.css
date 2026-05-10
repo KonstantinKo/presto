@@ -68,6 +68,19 @@ body.longBreak {
   display: none;
 }
 
+/*
+ * `.view-host` is the Leptos-only wrapper introduced in Phase 4b T216
+ * (`src/src/app.rs`); it carries the dynamic `class:hidden` toggle for
+ * each top-level view because the inner `<div id="<name>-view">` is
+ * owned by the per-view component. The hidden rule below mirrors the
+ * `.view-container.hidden` rule above so the e2e
+ * `waitForSelector("#<name>-view:not(.hidden)")` (visible state) flips
+ * correctly when the App router toggles the wrapper.
+ */
+.view-host.hidden {
+  display: none;
+}
+
 /* Specific styling for calendar view */
 @keyframes fadeIn {
   from {
