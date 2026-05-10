@@ -695,6 +695,34 @@ mod tests {
         );
     }
 
+    /// T140: `reset()` returns the engine to its initial state —
+    /// idle in `Focus` mode with the focus duration's worth of
+    /// time remaining and the per-session elapsed accumulator
+    /// cleared. The cumulative `completed_pomodoros` and
+    /// `total_focus_secs` are NOT reset (those are run-wide;
+    /// midnight monitoring is what clears them in the JS source
+    /// at `pomodoro-timer.js:925-972`).
+    ///
+    /// Mirrors `resetTimer` at `pomodoro-timer.js:854-878`.
+    #[test]
+    fn reset_returns_to_initial_state() {
+        let clock = MockClock::new(0);
+        let mut state = TimerState::new(Durations::default());
+        state.start(&clock).expect("start");
+        clock.advance(60_000);
+        state.tick(&clock);
+        assert!(state.is_running());
+        assert_eq!(state.current_session_elapsed_secs(), 60);
+
+        state.reset();
+
+        assert!(!state.is_running());
+        assert!(!state.is_auto_paused());
+        assert_eq!(state.current_mode(), TimerMode::Focus);
+        assert_eq!(state.time_remaining_secs(), 25 * 60);
+        assert_eq!(state.current_session_elapsed_secs(), 0);
+    }
+
     /// T128: drift compensation recovers after an OS-suspend gap.
     /// SC-005, AS-1.3. Mirrors `updateTimerWithAccuracy` at
     /// `pomodoro-timer.js:730-789`, which computes elapsed time
