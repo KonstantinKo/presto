@@ -703,4 +703,24 @@ mod tests {
             super::BridgeError::InvalidArgument { ref field, .. } if field == "access_token"
         ));
     }
+
+    /// T113 named-test (per F4 idempotency design + research.md §6
+    /// step 4). Two-call no-op: the second invocation must not
+    /// overwrite the first's persisted session, even with a different
+    /// payload. Pins the consumer-visible "first import wins" rule.
+    #[test]
+    fn import_supabase_session_is_idempotent_across_two_calls() {
+        let dir = tempdir().unwrap();
+        let payload1 = sample_supabase_payload();
+        import_supabase_session(dir.path(), &payload1).unwrap();
+        let first = super::auth::read_session(dir.path()).unwrap().unwrap();
+        // Second call with mutated tokens must NOT overwrite.
+        let mut payload2 = sample_supabase_payload();
+        payload2.access_token = "different-tok".to_string();
+        payload2.refresh_token = "different-rt".to_string();
+        import_supabase_session(dir.path(), &payload2).unwrap();
+        let second = super::auth::read_session(dir.path()).unwrap().unwrap();
+        assert_eq!(first.access_token, second.access_token);
+        assert_eq!(first.refresh_token, second.refresh_token);
+    }
 }
