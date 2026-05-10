@@ -267,6 +267,16 @@ const TAURI_MOCK_INIT_SCRIPT = `
           case "write_excel_file":
             return null;
 
+          case "track_event":
+            // Spec 001-leptos-migration T084 (mock-first per FR-010 / Principle VI):
+            // Replaces the JS @aptabase/tauri shim. Tauri-side handler at
+            // src-tauri/src/lib.rs gates on settings.analytics_enabled before
+            // calling tauri_plugin_aptabase. The mock is a no-op because the
+            // e2e suite never asserts on Aptabase delivery — it asserts on the
+            // call shape (name + props) when needed via a spy installed by
+            // individual specs.
+            return;
+
           case "plugin:updater|check": {
             // Read config lazily so override scripts that run after this init script
             // can configure the updater response.
