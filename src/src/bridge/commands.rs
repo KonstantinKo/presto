@@ -401,8 +401,8 @@ pub async fn load_settings() -> Result<Settings, BridgeError> {
 mod tests {
     use super::{
         add_session_tag, delete_tag, get_stats_history, load_manual_sessions, load_session_data,
-        load_settings, load_tags, load_tasks, save_daily_stats, save_manual_sessions,
-        save_session_data, save_settings, save_tag, save_tasks,
+        load_settings, load_tags, load_tasks, reset_all_data, save_daily_stats,
+        save_manual_sessions, save_session_data, save_settings, save_tag, save_tasks,
     };
     use crate::bridge::error::BridgeError;
     use crate::bridge::session_type::SessionType;
@@ -780,6 +780,29 @@ mod tests {
     async fn load_settings_round_trip_signature_pinned() {
         async fn assert_signature() -> Result<Settings, BridgeError> {
             load_settings().await
+        }
+        let _ = assert_signature().await;
+    }
+
+    #[wasm_bindgen_test]
+    async fn reset_all_data_round_trip_short_circuits_when_bridge_absent() {
+        let result = reset_all_data().await;
+        match result {
+            Err(BridgeError::BridgeUnavailable) => {}
+            other => panic!("expected BridgeUnavailable, got {other:?}"),
+        }
+    }
+
+    /// Compile-time signature pin per contracts/tauri-bridge.md row 15:
+    /// `reset_all_data() -> Result<(), BridgeError>`.
+    /// No-arg destructive command — the Tauri-side handler clears every
+    /// app-data file and resets `SettingsState` to `AppSettings::default()`
+    /// in one shot. There is no confirmation arg because the JS-side
+    /// caller is expected to gate on user intent before invoking.
+    #[wasm_bindgen_test]
+    async fn reset_all_data_round_trip_signature_pinned() {
+        async fn assert_signature() -> Result<(), BridgeError> {
+            reset_all_data().await
         }
         let _ = assert_signature().await;
     }
