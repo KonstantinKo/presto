@@ -63,6 +63,7 @@ use crate::components::update_notification::UpdateNotification;
 use crate::managers::auth::AuthState;
 use crate::managers::navigation::{NavView, NavigationManager, SettingsTab};
 use crate::managers::update::{UpdateInfo, UpdateManager};
+use crate::theme::loader;
 
 /// Top-level App component. Mounts the sidebar nav, the active
 /// view, the global update banner, and the auth modal.
@@ -217,6 +218,12 @@ pub fn App() -> impl IntoView {
                         }
                     });
                 }
+                let resolved = loader::resolve_color_mode(
+                    &loaded.appearance.theme,
+                    loader::system_prefers_dark(),
+                );
+                loader::apply_theme(resolved);
+                loader::apply_timer_theme(&loaded.appearance.timer_theme);
                 settings.set(loaded);
             }
             // Phase 4e R-003: cold-start session probe — read the
@@ -490,8 +497,12 @@ pub fn App() -> impl IntoView {
             let mut update_mgr = UpdateManager::new();
             let listener =
                 events::listen::<UpdateAvailablePayload>(UPDATE_AVAILABLE, move |payload| {
-                    update_mgr.handle_event(payload);
-                    update_info.set(update_mgr.info().clone());
+                    let skipped =
+                        settings.with_untracked(|s| s.skipped_versions.contains(&payload.version));
+                    if !skipped {
+                        update_mgr.handle_event(payload);
+                        update_info.set(update_mgr.info().clone());
+                    }
                 })
                 .await;
             // The Listener guard is intentionally leaked into the
@@ -658,7 +669,7 @@ pub fn App() -> impl IntoView {
         // top level so navigation doesn't unmount it (the spec at
         // `update-notification.spec.js:32-34` asserts the banner's
         // dismissed flag survives Calendar → Timer round-trips).
-        <UpdateNotification update_info=update_info/>
+        <UpdateNotification update_info=update_info settings=settings/>
 
         // T218 degraded-mode banner — visible only when the Tauri
         // JS bridge is absent (Trunk dev server / browser-only

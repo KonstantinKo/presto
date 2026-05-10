@@ -91,6 +91,37 @@ pub fn apply_resolved(theme_name: &str) {
     apply_theme(resolve_theme(theme_name));
 }
 
+/// Apply `timer_theme_id` as the `data-timer-theme` attribute on
+/// `<html>`. Cold-start companion to `apply_theme` — restores the
+/// persisted timer-theme palette without going through the
+/// `ThemeSettings` tile click handler.
+#[cfg(target_arch = "wasm32")]
+pub fn apply_timer_theme(timer_theme_id: &str) {
+    use wasm_bindgen::JsCast as _;
+
+    let Some(window) = web_sys::window() else {
+        return;
+    };
+    let Some(document) = window.document() else {
+        return;
+    };
+    let Some(root) = document.document_element() else {
+        return;
+    };
+    if let Ok(html) = root.dyn_into::<web_sys::HtmlElement>() {
+        let _ = html.set_attribute("data-timer-theme", timer_theme_id);
+    }
+}
+
+/// Host-side stub for `apply_timer_theme`.
+#[cfg(not(target_arch = "wasm32"))]
+#[allow(
+    clippy::missing_const_for_fn,
+    // Cannot be `const fn` because the wasm-target sibling has DOM
+    // I/O; signatures must match across cfg variants.
+)]
+pub fn apply_timer_theme(_timer_theme_id: &str) {}
+
 /// Whether the operating system requests a dark colour scheme.
 ///
 /// Reads `window.matchMedia("(prefers-color-scheme: dark)").matches`

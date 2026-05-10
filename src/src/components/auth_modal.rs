@@ -317,6 +317,11 @@ pub fn AuthModal(auth_state: RwSignal<AuthState>) -> impl IntoView {
                                 class="auth-btn guest-btn"
                                 id="continue-guest"
                                 on:click=move |_| {
+                                    // Persist guest_mode through the shared settings signal
+                                    // so the debounced save sink routes it to disk. On the
+                                    // next cold start the `app.rs` projection lifts
+                                    // auth_state into Guest without requiring the overlay.
+                                    settings.update(|s| s.guest_mode = true);
                                     auth_state.set(AuthState::Guest);
                                     overlay_open.set(false);
                                 }

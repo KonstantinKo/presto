@@ -234,6 +234,8 @@ struct AppSettings {
     notifications: NotificationSettings,
     #[serde(default)]
     advanced: AdvancedSettings,
+    #[serde(default)]
+    appearance: AppearanceSettings,
     autostart: bool,
     #[serde(default = "default_analytics_enabled")]
     analytics_enabled: bool,
@@ -290,6 +292,8 @@ struct AppSettingsOnDisk {
     notifications: NotificationSettings,
     #[serde(default)]
     advanced: AdvancedSettings,
+    #[serde(default)]
+    appearance: AppearanceSettings,
     autostart: bool,
     #[serde(default = "default_analytics_enabled")]
     analytics_enabled: bool,
@@ -324,6 +328,7 @@ impl From<AppSettingsOnDisk> for AppSettings {
             timer: raw.timer,
             notifications: raw.notifications,
             advanced: raw.advanced,
+            appearance: raw.appearance,
             autostart: raw.autostart,
             analytics_enabled: raw.analytics_enabled,
             hide_icon_on_close: raw.hide_icon_on_close,
@@ -342,6 +347,35 @@ struct ShortcutSettings {
     skip: Option<String>,
 }
 
+/// Appearance / theme preferences. `theme` is the color-mode preference
+/// ("auto" / "light" / "dark"); `timer_theme` is the timer palette stem
+/// (e.g. "espresso"). Both carry `#[serde(default)]` so pre-widening
+/// settings JSONs fill in the JS-era cold-start values.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+struct AppearanceSettings {
+    #[serde(default = "default_theme")]
+    theme: String,
+    #[serde(default = "default_timer_theme")]
+    timer_theme: String,
+}
+
+impl Default for AppearanceSettings {
+    fn default() -> Self {
+        Self {
+            theme: default_theme(),
+            timer_theme: default_timer_theme(),
+        }
+    }
+}
+
+fn default_theme() -> String {
+    "auto".to_string()
+}
+
+fn default_timer_theme() -> String {
+    "espresso".to_string()
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 struct TimerSettings {
     focus_duration: u32,
@@ -350,10 +384,16 @@ struct TimerSettings {
     total_sessions: u32,
     #[serde(default = "default_weekly_goal")]
     weekly_goal_minutes: u32,
+    #[serde(default = "default_max_session_time")]
+    max_session_time: u32,
 }
 
 const fn default_weekly_goal() -> u32 {
     125
+}
+
+const fn default_max_session_time() -> u32 {
+    120
 }
 
 const fn default_analytics_enabled() -> bool {
@@ -411,6 +451,7 @@ impl Default for AppSettings {
                 long_break_duration: 20,
                 total_sessions: 10,
                 weekly_goal_minutes: 125,
+                max_session_time: 120,
             },
             notifications: NotificationSettings {
                 desktop_notifications: true,
@@ -419,9 +460,10 @@ impl Default for AppSettings {
                 auto_start_focus: false,
                 allow_continuous_sessions: false,
                 smart_pause: false,
-                smart_pause_timeout: 30, // default 30 seconds
+                smart_pause_timeout: 30,
             },
             advanced: AdvancedSettings::default(),
+            appearance: AppearanceSettings::default(),
             autostart: false,
             analytics_enabled: true,
             hide_icon_on_close: false,
@@ -1705,7 +1747,10 @@ mod tests {
             s.timer.weekly_goal_minutes,
             defaults.timer.weekly_goal_minutes
         );
+        assert_eq!(s.timer.max_session_time, defaults.timer.max_session_time);
         assert_eq!(s.advanced.debug_mode, defaults.advanced.debug_mode);
+        assert_eq!(s.appearance.theme, defaults.appearance.theme);
+        assert_eq!(s.appearance.timer_theme, defaults.appearance.timer_theme);
     }
 
     #[test]
@@ -1784,6 +1829,7 @@ mod tests {
         assert_eq!(s.timer.long_break_duration, 20);
         assert_eq!(s.timer.total_sessions, 10);
         assert_eq!(s.timer.weekly_goal_minutes, 125);
+        assert_eq!(s.timer.max_session_time, 120);
         assert!(s.analytics_enabled);
         assert!(!s.autostart);
         assert!(!s.hide_icon_on_close);
@@ -1803,6 +1849,38 @@ mod tests {
         assert!(!s.guest_mode);
         assert!(!s.auth_seen);
         assert!(s.skipped_versions.is_empty());
+        // Appearance defaults: auto color-mode, espresso timer theme.
+        assert_eq!(s.appearance.theme, "auto");
+        assert_eq!(s.appearance.timer_theme, "espresso");
+    }
+
+    #[test]
+    fn app_settings_appearance_round_trips_and_defaults_for_legacy_json() {
+        // A legacy 0.4.x JSON without `appearance` or `max_session_time` must
+        // deserialise to the defaults.
+        let legacy = r#"{
+            "shortcuts": {"start_stop": null, "reset": null, "skip": null},
+            "timer": {"focus_duration": 25, "break_duration": 5,
+                      "long_break_duration": 20, "total_sessions": 10},
+            "notifications": {"desktop_notifications": true,
+                              "sound_notifications": true,
+                              "auto_start_timer": true, "smart_pause": false,
+                              "smart_pause_timeout": 30},
+            "autostart": false
+        }"#;
+        let s: AppSettings = serde_json::from_str(legacy).expect("legacy shape must deserialise");
+        assert_eq!(s.appearance.theme, "auto");
+        assert_eq!(s.appearance.timer_theme, "espresso");
+        assert_eq!(s.timer.max_session_time, 120);
+
+        // A round-trip of the default `AppSettings` must include the new fields.
+        let json = serde_json::to_string(&AppSettings::default()).expect("must serialise");
+        assert!(json.contains(r#""appearance":{"theme":"auto","timer_theme":"espresso"}"#));
+        assert!(json.contains(r#""max_session_time":120"#));
+        let decoded: AppSettings = serde_json::from_str(&json).expect("round-trip must succeed");
+        assert_eq!(decoded.appearance.theme, "auto");
+        assert_eq!(decoded.appearance.timer_theme, "espresso");
+        assert_eq!(decoded.timer.max_session_time, 120);
     }
 
     #[test]

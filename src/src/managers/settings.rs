@@ -273,12 +273,13 @@ mod tests {
         //
         // Phase 4e R-002: includes the user-state slice fields
         // (`guest_mode`, `auth_seen`, `skipped_versions`) so the
-        // round-trip has nothing to writeback.
+        // round-trip has nothing to writeback. Also includes
+        // `appearance` and `max_session_time` from issue-36 widening.
         let canonical = r#"{
             "shortcuts": {"start_stop": null, "reset": null, "skip": null},
             "timer": {"focus_duration": 25, "break_duration": 5,
                       "long_break_duration": 20, "total_sessions": 10,
-                      "weekly_goal_minutes": 125},
+                      "weekly_goal_minutes": 125, "max_session_time": 120},
             "notifications": {"desktop_notifications": true,
                               "sound_notifications": true,
                               "auto_start_timer": true,
@@ -287,6 +288,7 @@ mod tests {
                               "smart_pause": false,
                               "smart_pause_timeout": 30},
             "advanced": {"debug_mode": false},
+            "appearance": {"theme": "auto", "timer_theme": "espresso"},
             "autostart": false,
             "analytics_enabled": true,
             "hide_icon_on_close": false,

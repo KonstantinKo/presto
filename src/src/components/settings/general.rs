@@ -61,6 +61,8 @@ pub fn GeneralSettings(settings: RwSignal<Settings>, toast: SettingsToast) -> im
         Signal::derive(move || settings.with(|s| s.timer.long_break_duration.to_string()));
     let total_sessions =
         Signal::derive(move || settings.with(|s| s.timer.total_sessions.to_string()));
+    let max_session_time =
+        Signal::derive(move || settings.with(|s| s.timer.max_session_time.to_string()));
 
     // Change handlers — each fires on blur (`on:change`), updates the
     // settings signal in place, and shows the auto-save toast. The
@@ -85,6 +87,11 @@ pub fn GeneralSettings(settings: RwSignal<Settings>, toast: SettingsToast) -> im
     let on_total_sessions_change = move |ev| {
         let value = parse_minutes(&event_target_value(&ev), 10);
         settings.update(|s| s.timer.total_sessions = value);
+        toast.show("Settings saved");
+    };
+    let on_max_session_change = move |ev| {
+        let value = parse_minutes(&event_target_value(&ev), 120);
+        settings.update(|s| s.timer.max_session_time = value);
         toast.show("Settings saved");
     };
 
@@ -151,15 +158,16 @@ pub fn GeneralSettings(settings: RwSignal<Settings>, toast: SettingsToast) -> im
                     "Number of focus sessions to complete each day"
                 </p>
             </div>
-            // `#max-session-time` is part of the JS-era DOM but does
-            // not yet have a backing field in `Settings::timer`; the
-            // input is rendered for visual parity (a later refinement
-            // will extend `TimerSettings`). The e2e general spec does
-            // not interact with this input, so the static value is
-            // safe.
             <div class="setting-item">
                 <label for="max-session-time">"Max Session Time (minutes):"</label>
-                <input type="number" id="max-session-time" min="30" max="480" value="120"/>
+                <input
+                    type="number"
+                    id="max-session-time"
+                    min="30"
+                    max="480"
+                    prop:value=move || max_session_time.get()
+                    on:change=on_max_session_change
+                />
                 <p class="setting-description">
                     "Maximum time per session before auto-pause (default: 2 hours)"
                 </p>
@@ -180,6 +188,10 @@ mod tests {
         assert_eq!(parse_minutes("-1", 25), 25);
         assert_eq!(parse_minutes("5", 25), 5);
         assert_eq!(parse_minutes("  5  ", 25), 5);
+        // max_session_time fallback: 120 when input is invalid.
+        assert_eq!(parse_minutes("", 120), 120);
+        assert_eq!(parse_minutes("notanumber", 120), 120);
+        assert_eq!(parse_minutes("60", 120), 60);
     }
 
     /// T205 — selector contract pin for the General tab. Sourced

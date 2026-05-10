@@ -35,6 +35,8 @@
 use leptos::prelude::*;
 use wasm_bindgen::JsCast as _;
 
+use crate::bridge::types::Settings;
+use crate::components::settings::SettingsToast;
 use crate::theme::loader::{apply_theme, resolve_color_mode, system_prefers_dark};
 use crate::theme::themes::ALL_THEMES;
 
@@ -73,22 +75,28 @@ fn capitalise_first(stem: &str) -> String {
 
 /// Theme settings tab — light/dark/auto picker + timer theme grid.
 #[component]
-pub fn ThemeSettings() -> impl IntoView {
+pub fn ThemeSettings(settings: RwSignal<Settings>, toast: SettingsToast) -> impl IntoView {
     // Color-theme handler resolves `auto` against the OS preference
-    // and applies the concrete `data-theme` token. The JS-era
-    // pattern at `src/managers/theme-manager.js` does the same:
-    // `auto` is a settings-level value, never a rendered token.
+    // and applies the concrete `data-theme` token. Also persists
+    // the preference string ("auto"/"light"/"dark") to the shared
+    // settings signal so the debounced save sink routes it to disk.
     let on_theme = move |pref: &'static str| {
-        let resolved = resolve_color_mode(pref, system_prefers_dark());
+        let normalised = normalise_theme_pref(pref);
+        let resolved = resolve_color_mode(normalised, system_prefers_dark());
         set_html_attr("data-theme", resolved);
+        settings.update(|s| s.appearance.theme = normalised.to_string());
+        toast.show("Settings saved");
     };
     // Timer-theme handler routes through the loader's apply_theme
     // for the `data-theme` write *as well* — when a user picks a
     // tile, the e2e flow asserts on `data-theme` toggling. The
     // tile selection itself is reflected via `data-timer-theme`.
+    // Also persists to the shared settings signal.
     let on_timer_theme = move |id: &'static str| {
         apply_theme(id);
         set_html_attr("data-timer-theme", id);
+        settings.update(|s| s.appearance.timer_theme = id.to_string());
+        toast.show("Settings saved");
     };
 
     view! {
@@ -166,9 +174,19 @@ pub fn ThemeSettings() -> impl IntoView {
     }
 }
 
+/// Map an unknown theme preference string to "auto". Valid values
+/// ("auto", "light", "dark") pass through unchanged; anything else
+/// is treated as the safe default.
+fn normalise_theme_pref(pref: &str) -> &str {
+    match pref {
+        "auto" | "light" | "dark" => pref,
+        _ => "auto",
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::capitalise_first;
+    use super::{capitalise_first, normalise_theme_pref};
     use crate::theme::themes::ALL_THEMES;
 
     /// T205 — selector contract pin. Sourced from
@@ -203,5 +221,15 @@ mod tests {
         assert_eq!(capitalise_first("espresso"), "Espresso");
         assert_eq!(capitalise_first("pipboy"), "Pipboy");
         assert_eq!(capitalise_first(""), "");
+    }
+
+    #[test]
+    fn normalise_theme_pref_passes_valid_and_maps_unknown_to_auto() {
+        assert_eq!(normalise_theme_pref("auto"), "auto");
+        assert_eq!(normalise_theme_pref("light"), "light");
+        assert_eq!(normalise_theme_pref("dark"), "dark");
+        assert_eq!(normalise_theme_pref(""), "auto");
+        assert_eq!(normalise_theme_pref("system"), "auto");
+        assert_eq!(normalise_theme_pref("DARK"), "auto");
     }
 }

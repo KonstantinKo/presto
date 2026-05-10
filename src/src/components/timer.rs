@@ -693,17 +693,14 @@ pub fn TimerView() -> impl IntoView {
         <div class="view-container" id="timer-view">
             // Progress dots — one dot per session in the daily total.
             // Mirrors the JS-era `pomodoro-timer.js:renderProgressDots`
-            // surface; the visual-regression baseline shows 11 dots
-            // (the JS-era default total_sessions count was 11 — eight
-            // focus + three long breaks). Each dot's `completed`
-            // class is gated on the engine's `completed_pomodoros`
-            // accumulator. The total comes from
-            // `Settings::timer.total_sessions` (defaults to 10 today;
-            // the JS-era default of 11 is preserved on the
-            // visual-regression baseline screenshots).
+            // surface. Each dot's `completed` class is gated on the
+            // engine's `completed_pomodoros` accumulator. The total
+            // comes from `Settings::timer.total_sessions` (default 10;
+            // the JS-era default was also 10). A floor of 1 prevents a
+            // zero-dot row when the setting is cleared to 0.
             <div class="progress-dots" id="progress-dots">
                 {move || {
-                    let total = settings.with(|s| s.timer.total_sessions.max(11));
+                    let total = dot_count(settings.with(|s| s.timer.total_sessions));
                     let completed = engine.with(TimerState::completed_pomodoros);
                     (0..total)
                         .map(|i| {
@@ -1072,9 +1069,15 @@ pub fn TimerView() -> impl IntoView {
     }
 }
 
+/// Pure dot-count projection: raw `total_sessions` value with a floor
+/// of 1 so a zero setting never produces an empty dot row.
+fn dot_count(total: u32) -> u32 {
+    total.max(1)
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{mode_label, pad_two};
+    use super::{dot_count, mode_label, pad_two};
     use crate::bridge::timer_mode::TimerMode;
 
     /// T191 — visual-regression / selector contract pin.
@@ -1179,5 +1182,18 @@ mod tests {
         assert_eq!(mode_label(TimerMode::Focus), "Focus");
         assert_eq!(mode_label(TimerMode::Break), "Break");
         assert_eq!(mode_label(TimerMode::LongBreak), "Long Break");
+    }
+
+    #[test]
+    fn dot_count_floors_at_one_and_passes_through_nonzero() {
+        assert_eq!(dot_count(0), 1, "zero must yield 1-dot floor");
+        assert_eq!(dot_count(1), 1);
+        assert_eq!(
+            dot_count(10),
+            10,
+            "default total_sessions = 10 must pass unchanged"
+        );
+        assert_eq!(dot_count(11), 11);
+        assert_eq!(dot_count(20), 20);
     }
 }

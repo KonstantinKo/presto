@@ -128,11 +128,43 @@ impl Default for ShortcutSettings {
     }
 }
 
-/// Timer durations & session count. Mirrors `TimerSettings` at
-/// `src-tauri/src/lib.rs:219-227`.
+/// Appearance / theme preferences.
 ///
-/// `weekly_goal_minutes` carries a `#[serde(default = "...")]` because
-/// settings JSON written by pre-`weekly_goal` builds lacks the field.
+/// `theme` is the color-mode preference ("auto" / "light" / "dark");
+/// `timer_theme` is the timer palette stem (e.g. "espresso"). Mirrors
+/// `AppearanceSettings` in `src-tauri/src/lib.rs` byte-for-byte on the wire
+/// (FR-005 / FR-008 lockstep discipline).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AppearanceSettings {
+    #[serde(default = "default_theme")]
+    pub theme: String,
+    #[serde(default = "default_timer_theme")]
+    pub timer_theme: String,
+}
+
+impl Default for AppearanceSettings {
+    fn default() -> Self {
+        Self {
+            theme: default_theme(),
+            timer_theme: default_timer_theme(),
+        }
+    }
+}
+
+fn default_theme() -> String {
+    "auto".to_string()
+}
+
+fn default_timer_theme() -> String {
+    "espresso".to_string()
+}
+
+/// Timer durations & session count. Mirrors `TimerSettings` at
+/// `src-tauri/src/lib.rs`.
+///
+/// `weekly_goal_minutes` and `max_session_time` carry
+/// `#[serde(default = "...")]` because settings JSON written by
+/// pre-widening builds lacks those fields.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TimerSettings {
     /// Minutes.
@@ -144,6 +176,9 @@ pub struct TimerSettings {
     pub total_sessions: u32,
     #[serde(default = "default_weekly_goal")]
     pub weekly_goal_minutes: u32,
+    /// Maximum continuous session time before auto-pause (minutes).
+    #[serde(default = "default_max_session_time")]
+    pub max_session_time: u32,
 }
 
 impl Default for TimerSettings {
@@ -154,12 +189,17 @@ impl Default for TimerSettings {
             long_break_duration: 20,
             total_sessions: 10,
             weekly_goal_minutes: default_weekly_goal(),
+            max_session_time: default_max_session_time(),
         }
     }
 }
 
 const fn default_weekly_goal() -> u32 {
     125
+}
+
+const fn default_max_session_time() -> u32 {
+    120
 }
 
 const fn default_analytics_enabled() -> bool {
@@ -265,6 +305,8 @@ pub struct Settings {
     pub notifications: NotificationSettings,
     #[serde(default)]
     pub advanced: AdvancedSettings,
+    #[serde(default)]
+    pub appearance: AppearanceSettings,
     pub autostart: bool,
     #[serde(default = "default_analytics_enabled")]
     pub analytics_enabled: bool,
@@ -302,6 +344,7 @@ impl Default for Settings {
             timer: TimerSettings::default(),
             notifications: NotificationSettings::default(),
             advanced: AdvancedSettings::default(),
+            appearance: AppearanceSettings::default(),
             autostart: false,
             analytics_enabled: true,
             hide_icon_on_close: false,
@@ -342,6 +385,8 @@ struct SettingsOnDisk {
     notifications: NotificationSettings,
     #[serde(default)]
     advanced: AdvancedSettings,
+    #[serde(default)]
+    appearance: AppearanceSettings,
     autostart: bool,
     #[serde(default = "default_analytics_enabled")]
     analytics_enabled: bool,
@@ -376,6 +421,7 @@ impl From<SettingsOnDisk> for Settings {
             timer: raw.timer,
             notifications: raw.notifications,
             advanced: raw.advanced,
+            appearance: raw.appearance,
             autostart: raw.autostart,
             analytics_enabled: raw.analytics_enabled,
             hide_icon_on_close: raw.hide_icon_on_close,
@@ -630,7 +676,10 @@ pub struct UpdateAvailablePayload {
 
 #[cfg(test)]
 mod tests {
-    use super::{AuthSession, AuthUser, ManualSession, Session, Settings, StatusBarDisplay, Task};
+    use super::{
+        AppearanceSettings, AuthSession, AuthUser, ManualSession, Session, Settings,
+        StatusBarDisplay, Task,
+    };
     use crate::bridge::session_type::SessionType;
 
     #[test]
@@ -682,6 +731,7 @@ mod tests {
         let decoded: Settings = serde_json::from_str(&json).unwrap();
         assert_eq!(decoded.timer.focus_duration, 25);
         assert_eq!(decoded.timer.weekly_goal_minutes, 125);
+        assert_eq!(decoded.timer.max_session_time, 120);
         assert!(decoded.notifications.desktop_notifications);
         assert!(decoded.analytics_enabled);
         assert_eq!(decoded.status_bar_display, StatusBarDisplay::Default);
@@ -700,6 +750,43 @@ mod tests {
         assert!(json.contains(r#""guest_mode":false"#));
         assert!(json.contains(r#""auth_seen":false"#));
         assert!(json.contains(r#""skipped_versions":[]"#));
+        // Appearance block present on the wire.
+        assert_eq!(decoded.appearance.theme, "auto");
+        assert_eq!(decoded.appearance.timer_theme, "espresso");
+        assert!(json.contains(r#""appearance":{"theme":"auto","timer_theme":"espresso"}"#));
+        assert!(json.contains(r#""max_session_time":120"#));
+    }
+
+    #[test]
+    fn settings_appearance_deserialises_from_legacy_json() {
+        // Pre-widening 0.4.x JSONs lack `appearance` and `max_session_time`.
+        // The serde defaults must fire for both.
+        let legacy = r#"{
+            "shortcuts": {"start_stop": null, "reset": null, "skip": null},
+            "timer": {"focus_duration": 25, "break_duration": 5,
+                      "long_break_duration": 20, "total_sessions": 10},
+            "notifications": {"desktop_notifications": true,
+                              "sound_notifications": true,
+                              "auto_start_timer": true, "smart_pause": false,
+                              "smart_pause_timeout": 30},
+            "autostart": false
+        }"#;
+        let decoded: Settings = serde_json::from_str(legacy).unwrap();
+        assert_eq!(decoded.appearance.theme, "auto");
+        assert_eq!(decoded.appearance.timer_theme, "espresso");
+        assert_eq!(decoded.timer.max_session_time, 120);
+    }
+
+    #[test]
+    fn appearance_settings_round_trips() {
+        let a = AppearanceSettings {
+            theme: "dark".to_string(),
+            timer_theme: "pipboy".to_string(),
+        };
+        let json = serde_json::to_string(&a).unwrap();
+        let decoded: AppearanceSettings = serde_json::from_str(&json).unwrap();
+        assert_eq!(decoded.theme, "dark");
+        assert_eq!(decoded.timer_theme, "pipboy");
     }
 
     /// Phase 4e R-002 round-trip: a `Settings` with non-default
@@ -743,12 +830,15 @@ mod tests {
         }"#;
         let decoded: Settings = serde_json::from_str(legacy).unwrap();
         assert_eq!(decoded.timer.weekly_goal_minutes, 125);
+        assert_eq!(decoded.timer.max_session_time, 120);
         assert!(!decoded.notifications.auto_start_focus);
         assert!(!decoded.notifications.allow_continuous_sessions);
         assert!(!decoded.advanced.debug_mode);
         assert!(decoded.analytics_enabled);
         assert!(!decoded.hide_icon_on_close);
         assert_eq!(decoded.status_bar_display, StatusBarDisplay::default());
+        assert_eq!(decoded.appearance.theme, "auto");
+        assert_eq!(decoded.appearance.timer_theme, "espresso");
     }
 
     #[test]
