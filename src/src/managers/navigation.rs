@@ -104,6 +104,59 @@ mod tests {
         assert_eq!(nav.current(), NavView::Timer);
     }
 
+    /// T159 [RED]: settings-tab nested transition preservation.
+    /// When the user navigates Settings(Theme) → Tasks → Settings,
+    /// the second `Settings` landing must restore the previously
+    /// active sub-tab (Theme), NOT reset to `General`. Mirrors the
+    /// JS-side behaviour where `SettingsManager.populateSettingsUI`
+    /// reads the last-selected settings tab from a manager-owned
+    /// state slice rather than re-initialising on every Settings
+    /// landing (see `setupSettingsNavigation` plumbing at
+    /// `src/managers/settings-manager.js`).
+    ///
+    /// API: `enter_settings()` (no arg) lands `Settings(last_tab)`;
+    /// `select_settings_tab(tab)` lands `Settings(tab)` AND records
+    /// `tab` as the last-selected one for future `enter_settings()`
+    /// calls.
+    ///
+    /// Done-signal: this test currently fails because
+    /// `enter_settings` and `select_settings_tab` do not yet exist.
+    /// T160 GREEN attaches them.
+    #[test]
+    fn settings_tab_transitions_preserve_selected_tab() {
+        let mut nav = NavigationManager::new();
+
+        // Pick a non-default tab.
+        nav.select_settings_tab(SettingsTab::Theme);
+        assert_eq!(nav.current(), NavView::Settings(SettingsTab::Theme));
+        assert_eq!(nav.last_settings_tab(), SettingsTab::Theme);
+
+        // Leave settings.
+        nav.transition_to(NavView::Tasks);
+        assert_eq!(nav.current(), NavView::Tasks);
+        // Last-selected tab is preserved across the round-trip.
+        assert_eq!(nav.last_settings_tab(), SettingsTab::Theme);
+
+        // Re-enter settings without specifying a tab — must land
+        // Settings(Theme), not Settings(General).
+        nav.enter_settings();
+        assert_eq!(
+            nav.current(),
+            NavView::Settings(SettingsTab::Theme),
+            "re-entering settings must restore the last-selected tab",
+        );
+
+        // Switch tab and verify it lands.
+        nav.select_settings_tab(SettingsTab::Shortcuts);
+        assert_eq!(nav.current(), NavView::Settings(SettingsTab::Shortcuts));
+
+        // Round-trip away and back, verifying Shortcuts is now the
+        // remembered tab.
+        nav.transition_to(NavView::Calendar);
+        nav.enter_settings();
+        assert_eq!(nav.current(), NavView::Settings(SettingsTab::Shortcuts));
+    }
+
     /// T157 [RED]: any-to-any transition rule per data-model.md
     /// §`NavView` ("any `NavView::X → NavView::Y` is allowed").
     /// Iterates every (from, to) pair across the seven top-level
