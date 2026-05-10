@@ -774,14 +774,6 @@ async fn register_global_shortcuts(
 }
 
 #[tauri::command]
-async fn unregister_global_shortcuts(app: AppHandle) -> Result<(), BridgeError> {
-    app.global_shortcut()
-        .unregister_all()
-        .map_err(|e| BridgeError::Internal { msg: format!("Failed to unregister shortcuts: {e}") })?;
-    Ok(())
-}
-
-#[tauri::command]
 async fn reset_all_data(app: AppHandle) -> Result<(), BridgeError> {
     let app_data_dir = app
         .path()
@@ -907,7 +899,6 @@ pub fn run() {
                 save_settings,
                 load_settings,
                 register_global_shortcuts,
-                unregister_global_shortcuts,
                 reset_all_data,
                 start_activity_monitoring,
                 stop_activity_monitoring,
