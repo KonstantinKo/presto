@@ -233,4 +233,55 @@ mod tests {
     fn system_prefers_dark_signature_pinned() {
         let _ = super::system_prefers_dark();
     }
+
+    /// T225 (host-side phase gate stand-in).
+    ///
+    /// The visual regression suite asserts on 14 baselines under
+    /// `tests/e2e/__screenshots__/visual-regression/`. Re-capture
+    /// of more than 2 baselines escalates per Principle IV; the
+    /// preferred count is 0. The full
+    /// `npx playwright test visual-regression.spec.js` gate is
+    /// currently blocked on a pre-existing parser error in
+    /// `tests/e2e/fixtures/tauriMock.js` (line 283, unrelated to
+    /// Phase 5 — landed in Phase 1E). This test is the host-side
+    /// stand-in: it walks the baseline directory and pins the
+    /// expected count so an accidental baseline regeneration
+    /// surfaces as a `cargo test` diff. Phase 7 CI is the canonical
+    /// gate; this is a developer-loop cross-check.
+    #[test]
+    fn visual_regression_baseline_count_pinned() {
+        // Resolve the e2e baseline dir relative to the workspace
+        // root. CARGO_MANIFEST_DIR for `presto-web` is
+        // `<workspace>/src`; the baselines live two levels up
+        // under `tests/e2e/__screenshots__/visual-regression`.
+        let manifest_dir = env!("CARGO_MANIFEST_DIR");
+        let baselines = std::path::PathBuf::from(manifest_dir)
+            .join("..")
+            .join("tests")
+            .join("e2e")
+            .join("__screenshots__")
+            .join("visual-regression");
+        let entries = std::fs::read_dir(&baselines).unwrap_or_else(|err| {
+            panic!(
+                "expected visual-regression baseline dir at {} ({err})",
+                baselines.display()
+            );
+        });
+        let pngs: Vec<_> = entries
+            .filter_map(Result::ok)
+            .filter(|e| {
+                e.path()
+                    .extension()
+                    .and_then(|s| s.to_str())
+                    .is_some_and(|ext| ext.eq_ignore_ascii_case("png"))
+            })
+            .collect();
+        assert_eq!(
+            pngs.len(),
+            14,
+            "expected 14 visual-regression baselines per spec 001 SC-001; \
+             found {} (re-captures > 2 escalate per Principle IV)",
+            pngs.len(),
+        );
+    }
 }
