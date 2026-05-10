@@ -17,7 +17,10 @@
 // on `wasm32-unknown-unknown`. The runtime is single-threaded.
 #![allow(clippy::future_not_send)]
 
+use crate::bridge::commands;
+use crate::bridge::error::BridgeError;
 use crate::bridge::types::ManualSession;
+use crate::engine::timer::{TimerEvent, TimerState};
 
 /// Wrapper over the user's manual-session backfill list. Phase 3b
 /// wires up the state machine; per-entry CRUD lands in
@@ -45,6 +48,67 @@ impl SessionManager {
     #[must_use]
     pub fn manual_sessions(&self) -> &[ManualSession] {
         &self.manual_sessions
+    }
+
+    /// Append a manual-session backfill, routing the entry through
+    /// the engine's `record_manual_session(duration_secs)`
+    /// accumulator path (Principle I — manual entries flow through
+    /// the same engine accumulators as live sessions). The
+    /// `ManualSession::duration` field is in minutes per
+    /// data-model.md §`ManualSession`; the engine consumes
+    /// seconds, so the conversion lands here.
+    ///
+    /// Returns the engine's emitted `TimerEvent`s so the caller
+    /// (Phase 4 components) can fan them out to listeners (e.g.
+    /// the tray icon's pomodoros-completed display). The bulk
+    /// re-save through `save_manual` is the caller's
+    /// responsibility — the manager updates state synchronously
+    /// and the on-disk file catches up after the async hop.
+    ///
+    /// Spec 001-leptos-migration §Phase 3b T168.
+    pub fn create_manual(
+        &mut self,
+        engine: &mut TimerState,
+        manual: ManualSession,
+    ) -> Vec<TimerEvent> {
+        let duration_secs = manual.duration.saturating_mul(60);
+        let events = engine.record_manual_session(duration_secs);
+        self.manual_sessions.push(manual);
+        events
+    }
+
+    /// Build the bulk save payload — the `Vec<ManualSession>` shape
+    /// the Tauri-side `save_manual_sessions(sessions)` wrapper
+    /// expects. Mirrors the JS-side `saveSessionsToStorage` flow at
+    /// `src/managers/session-manager.js:54-78` where the entire
+    /// on-disk file is rewritten on every mutation; the JS-era
+    /// in-memory shape is a date-keyed map but the wire shape is a
+    /// flat `Vec` (the JS code flattens with
+    /// `Object.keys(...).forEach(date => ...push({...session,
+    /// date}))`). Our in-memory shape is already the flat `Vec`
+    /// because each `ManualSession` carries its own `date` field.
+    ///
+    /// Pure helper — used by tests and by the async `save_manual`
+    /// wrapper for diagnostics.
+    #[must_use]
+    pub fn save_payload(&self) -> Vec<ManualSession> {
+        self.manual_sessions.clone()
+    }
+
+    /// Async save path: hand the current bulk payload to
+    /// `bridge::commands::save_manual_sessions` (per Principle VI —
+    /// managers reach the Tauri side only through the typed bridge
+    /// wrapper). Mirrors the JS-side `await invoke(
+    /// "save_manual_sessions", { sessions })` at
+    /// `src/managers/session-manager.js:67-69`.
+    ///
+    /// # Errors
+    /// Returns whatever `bridge::commands::save_manual_sessions`
+    /// returns — `BridgeError::BridgeUnavailable` when the Tauri
+    /// JS bridge is not present, or whichever variant the Tauri-
+    /// side handler maps its filesystem failure to.
+    pub async fn save_manual(&self) -> Result<(), BridgeError> {
+        commands::save_manual_sessions(self.save_payload()).await
     }
 }
 
