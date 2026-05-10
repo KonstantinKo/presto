@@ -159,4 +159,29 @@ mod tests {
             other @ UpdateInfo::NoUpdate => panic!("expected Available, got {other:?}"),
         }
     }
+
+    /// T185 [RED]: the polling cadence between successive auto
+    /// update-checks MUST match the JS-era baseline at
+    /// `src/managers/update-manager-global.js:219` —
+    /// `setInterval(..., 60 * 60 * 1000)` = 1 hour.
+    ///
+    /// The Rust port exposes the cadence as
+    /// `UpdateManager::POLL_INTERVAL` (a `core::time::Duration`),
+    /// pinned by this test so a future drift to a different cadence
+    /// (e.g., 24h or 6h) breaks the build rather than silently
+    /// drifting from the established UX baseline. The components
+    /// layer (Phase 4) drives the actual interval timer; this pin
+    /// is the canonical source of truth.
+    ///
+    /// Done-signal: this test currently fails because
+    /// `UpdateManager::POLL_INTERVAL` does not yet exist. T186
+    /// GREEN attaches the constant.
+    #[test]
+    fn polling_cadence_matches_jsbaseline() {
+        assert_eq!(
+            super::UpdateManager::POLL_INTERVAL,
+            core::time::Duration::from_secs(60 * 60),
+            "JS-era baseline at update-manager-global.js:219 is 60 * 60 * 1000 ms",
+        );
+    }
 }
