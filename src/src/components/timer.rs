@@ -49,11 +49,13 @@
 #![allow(clippy::must_use_candidate, clippy::too_many_lines)]
 
 use leptos::prelude::*;
+use leptos::task::spawn_local;
 use wasm_bindgen::JsCast;
 
+use crate::bridge::commands;
 use crate::bridge::session_type::SessionType;
 use crate::bridge::timer_mode::TimerMode;
-use crate::bridge::types::{ManualSession, Settings, Tag};
+use crate::bridge::types::{ManualSession, Session, Settings, Tag};
 use crate::engine::clock::Clock;
 use crate::engine::durations::Durations;
 use crate::engine::timer::TimerState;
@@ -462,6 +464,11 @@ pub fn TimerView() -> impl IntoView {
     // the in-memory state machine is correct even though
     // persistence is a no-op on the dev server.
     let on_play_pause = move |_| {
+        // Track whether we are starting (not-running → running) so we can
+        // fire the `timer_start` analytics event after the engine mutation.
+        let was_running_before = engine.with_untracked(TimerState::is_running);
+        let was_idle_before =
+            engine.with_untracked(|s| !s.is_running() && !s.is_paused() && !s.is_auto_paused());
         engine.update(|state| {
             if state.is_running() {
                 // Manual pause via the engine's public API. Unlike
@@ -481,6 +488,25 @@ pub fn TimerView() -> impl IntoView {
                 let _ = state.start(&BrowserClock);
             }
         });
+        // R-004: fire timer_start analytics on idle → running transitions.
+        // Gated on analytics_enabled; errors absorbed (bridge absent on
+        // dev server).
+        let analytics = settings.with_untracked(|s| s.analytics_enabled);
+        let _ = (was_running_before, was_idle_before); // suppress unused warnings
+        if analytics && !was_running_before {
+            spawn_local(async move {
+                let mut props = std::collections::HashMap::new();
+                props.insert(
+                    "action".to_string(),
+                    serde_json::Value::String(if was_idle_before {
+                        "start".to_string()
+                    } else {
+                        "resume".to_string()
+                    }),
+                );
+                let _ = commands::track_event("timer_start", Some(props)).await;
+            });
+        }
     };
     let on_stop = move |_| {
         engine.update(TimerState::reset);
@@ -531,6 +557,7 @@ pub fn TimerView() -> impl IntoView {
                 engine.update(|state| {
                     let was_focus = matches!(state.current_mode(), TimerMode::Focus);
                     let was_running = state.is_running();
+                    let mode_before = state.current_mode();
                     // Capture focus duration before tick so a
                     // mid-tick rebase via `set_durations` doesn't
                     // race with the synth-session below.
@@ -552,6 +579,51 @@ pub fn TimerView() -> impl IntoView {
                         let now_ms = BrowserClock.now_ms();
                         let session = synth_completed_session(now_ms, focus_secs_at_tick);
                         sessions.update(|list| list.push(session));
+
+                        // R-004: persist accumulated session counters +
+                        // append to the daily-stats history on each
+                        // completed focus session. Both calls use the
+                        // engine state captured immediately after the
+                        // tick so the completed_pomodoros count
+                        // includes the session that just finished.
+                        // Errors absorbed — bridge absent on the dev
+                        // server; real Tauri builds surface fs errors
+                        // in dev tools, not UI.
+                        let completed = state.completed_pomodoros();
+                        let total_focus = state.total_focus_secs();
+                        let now_dt = chrono::DateTime::<chrono::Utc>::from_timestamp_millis(now_ms)
+                            .unwrap_or_else(|| {
+                                chrono::DateTime::<chrono::Utc>::from_timestamp(0, 0)
+                                    .expect("epoch valid")
+                            });
+                        let date_str = now_dt.format("%a %b %d %Y").to_string();
+                        let session_data = Session {
+                            completed_pomodoros: completed,
+                            total_focus_time: total_focus,
+                            current_session: completed.saturating_add(1),
+                            date: date_str,
+                        };
+                        let sd_for_stats = session_data.clone();
+                        let analytics = settings.with_untracked(|s| s.analytics_enabled);
+                        let total_for_event = total_focus;
+                        spawn_local(async move {
+                            let _ = commands::save_session_data(session_data).await;
+                            let _ = commands::save_daily_stats(sd_for_stats).await;
+                            // R-004: pomodoro_completed analytics event.
+                            if analytics {
+                                let mut props = std::collections::HashMap::new();
+                                props.insert(
+                                    "completed_pomodoros".to_string(),
+                                    serde_json::Value::Number(completed.into()),
+                                );
+                                props.insert(
+                                    "total_focus_secs".to_string(),
+                                    serde_json::Value::Number(total_for_event.into()),
+                                );
+                                let _ =
+                                    commands::track_event("pomodoro_completed", Some(props)).await;
+                            }
+                        });
                     }
                     if was_running && !state.is_running() {
                         // Engine just transitioned out of running
@@ -562,6 +634,41 @@ pub fn TimerView() -> impl IntoView {
                         if auto_start {
                             let _ = state.start(&BrowserClock);
                         }
+                    }
+
+                    // R-004: tray icon + menu update on mode transitions.
+                    // PM lean: only fire on mode change (focus → break etc.)
+                    // not on every 1Hz tick — avoids 1 IPC/sec steady-state
+                    // cost. The Tauri-side handler is a no-op when the tray
+                    // is absent (Linux without tray support) so errors are
+                    // absorbed here.
+                    let mode_after = state.current_mode();
+                    let mode_changed = mode_before != mode_after;
+                    let running_changed = was_running != state.is_running();
+                    if mode_changed || running_changed {
+                        use crate::bridge::types::UpdateTrayIconArgs;
+                        let mins = state.time_remaining_secs() / 60;
+                        let secs = state.time_remaining_secs() % 60;
+                        let timer_text = format!("{mins:02}:{secs:02}");
+                        let is_running = state.is_running();
+                        let is_paused = state.is_paused() || state.is_auto_paused();
+                        let current_session = state.completed_pomodoros().saturating_add(1);
+                        let total_sessions = settings.with_untracked(|s| s.timer.total_sessions);
+                        let tray_args = UpdateTrayIconArgs {
+                            timer_text,
+                            is_running,
+                            session_mode: mode_after,
+                            current_session,
+                            total_sessions,
+                            mode_icon: None,
+                        };
+                        let mode_for_menu = mode_after;
+                        spawn_local(async move {
+                            let _ = commands::update_tray_icon(tray_args).await;
+                            let _ =
+                                commands::update_tray_menu(is_running, is_paused, mode_for_menu)
+                                    .await;
+                        });
                     }
                 });
             },

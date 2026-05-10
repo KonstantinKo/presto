@@ -1099,18 +1099,65 @@ pub async fn import_legacy_supabase_session(
     invoke_serde("import_legacy_supabase_session", &Args { payload }).await
 }
 
-// R-006: legacy migration sentinel wrappers.
-//
-// `is_legacy_migration_complete` returns `true` when the sentinel file
-// `<app-data>/legacy-migration-done.marker` exists (written by
-// `mark_legacy_migration_complete` on first successful migration). The
-// App startup path calls this first; when `true` it skips the 7-call
-// per-domain migration block, capping steady-state cold-start cost to
-// one IPC trip instead of seven.
+// ---------------------------------------------------------------------------
+// UI helpers — dialog
+// ---------------------------------------------------------------------------
+
+/// Show a native Tauri confirmation dialog. Returns `Ok(true)` when the user
+/// confirms, `Ok(false)` when they cancel.
+///
+/// The bridge mock maps `plugin:dialog|ask` to `false` by default (the e2e
+/// test `settings-advanced.spec.js:44` exercises the cancel path). When the
+/// bridge is absent, the call short-circuits; callers should use
+/// `unwrap_or(false)` to treat the error as "not confirmed".
+///
+/// # Errors
+/// Returns `BridgeError::BridgeUnavailable` when the Tauri JS bridge is
+/// not present. Otherwise returns whatever the plugin returns.
+pub async fn dialog_ask(message: &str, title: &str) -> Result<bool, BridgeError> {
+    #[derive(Serialize)]
+    struct Args<'a> {
+        message: &'a str,
+        title: &'a str,
+        kind: &'static str,
+    }
+    invoke_serde(
+        "plugin:dialog|ask",
+        &Args {
+            message,
+            title,
+            kind: "warning",
+        },
+    )
+    .await
+}
+
+/// Check whether the legacy localStorage migration has already run to
+/// completion. Returns `Ok(true)` when the sentinel file
+/// `<app-data>/legacy-migration-done.marker` exists.
+///
+/// The App startup path calls this first; when `true` it short-circuits the
+/// 7-call per-domain migration block, capping steady-state cold-start cost
+/// to one IPC trip instead of seven.
+///
+/// # Errors
+/// Returns `BridgeError::BridgeUnavailable` when the Tauri JS bridge is
+/// not present. Otherwise returns `BridgeError::Internal` on filesystem
+/// failures reading the app-data directory.
 pub async fn is_legacy_migration_complete() -> Result<bool, BridgeError> {
     invoke_serde("is_legacy_migration_complete", &()).await
 }
 
+/// Write the legacy-migration sentinel file to cap future cold-start cost.
+///
+/// Called once by the App startup path on a successful first-time migration
+/// run. Subsequent cold starts probe the sentinel via
+/// `is_legacy_migration_complete` and skip the 7-call migration block.
+///
+/// # Errors
+/// Returns `BridgeError::BridgeUnavailable` when the Tauri JS bridge is
+/// not present. Otherwise returns `BridgeError::Internal` if the sentinel
+/// file cannot be written (filesystem error, quota, etc.).
 pub async fn mark_legacy_migration_complete() -> Result<(), BridgeError> {
     invoke_serde("mark_legacy_migration_complete", &()).await
 }
@@ -1125,13 +1172,14 @@ pub async fn mark_legacy_migration_complete() -> Result<(), BridgeError> {
 mod tests {
     use super::{
         add_session_tag, delete_tag, disable_autostart, enable_autostart, export_sessions_xlsx,
-        get_stats_history, is_autostart_enabled, is_legacy_migration_complete, load_manual_sessions,
-        load_session_data, load_settings, load_tags, load_tasks, mark_legacy_migration_complete,
-        register_global_shortcuts, reset_all_data, save_daily_stats, save_manual_sessions,
-        save_session_data, save_settings, save_tag, save_tasks, start_activity_monitoring,
-        start_oauth_server, stop_activity_monitoring, supabase_get_session,
-        supabase_refresh_session, supabase_sign_in_with_password, supabase_sign_out, track_event,
-        update_activity_timeout, update_tray_icon, update_tray_menu,
+        get_stats_history, is_autostart_enabled, is_legacy_migration_complete,
+        load_manual_sessions, load_session_data, load_settings, load_tags, load_tasks,
+        mark_legacy_migration_complete, register_global_shortcuts, reset_all_data,
+        save_daily_stats, save_manual_sessions, save_session_data, save_settings, save_tag,
+        save_tasks, start_activity_monitoring, start_oauth_server, stop_activity_monitoring,
+        supabase_get_session, supabase_refresh_session, supabase_sign_in_with_password,
+        supabase_sign_out, track_event, update_activity_timeout, update_tray_icon,
+        update_tray_menu,
     };
     use crate::bridge::error::BridgeError;
     use crate::bridge::session_type::SessionType;

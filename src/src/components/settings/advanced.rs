@@ -34,7 +34,9 @@
 #![allow(clippy::must_use_candidate, clippy::too_many_lines)]
 
 use leptos::prelude::*;
+use leptos::task::spawn_local;
 
+use crate::bridge::commands;
 use crate::bridge::types::{Settings, StatusBarDisplay};
 use crate::components::settings::SettingsToast;
 
@@ -94,9 +96,27 @@ pub fn AdvancedSettings(settings: RwSignal<Settings>, toast: SettingsToast) -> i
         toast.show("Settings saved");
     };
     let on_reset = move |_| {
-        // Dialog mock returns false in tests; we no-op locally so
-        // debug-mode / settings state survive the click. Phase 4c
-        // attaches the real bridge call gated on a dialog confirm.
+        // Ask for confirmation via the Tauri dialog plugin before
+        // irreversibly resetting all user data. The mock at
+        // `tauriMock.js` maps `plugin:dialog|ask` to `false` so
+        // `settings-advanced.spec.js:44` ("cancel via the dialog
+        // mock — no reset should occur") passes without mutation.
+        // On a real Tauri build the native OS confirmation dialog
+        // appears; `true` = confirmed → call `reset_all_data`.
+        spawn_local(async move {
+            let confirmed = commands::dialog_ask(
+                "This will permanently delete all your sessions, tags, and settings.",
+                "Reset All Data?",
+            )
+            .await
+            .unwrap_or(false);
+            if confirmed {
+                let _ = commands::reset_all_data().await;
+                // Clear in-memory settings back to default so the UI
+                // reflects the reset without a process restart.
+                settings.set(Settings::default());
+            }
+        });
     };
 
     view! {

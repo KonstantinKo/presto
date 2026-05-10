@@ -52,7 +52,7 @@ use crate::bridge::availability::{bridge_available, BridgeAvailable};
 use crate::bridge::commands;
 use crate::bridge::events::{self, GLOBAL_SHORTCUT, UPDATE_AVAILABLE};
 use crate::bridge::storage;
-use crate::bridge::types::{Settings, UpdateAvailablePayload};
+use crate::bridge::types::{Session, Settings, UpdateAvailablePayload};
 use crate::components::auth_modal::AuthModal;
 use crate::components::calendar::CalendarView;
 use crate::components::settings::SettingsView;
@@ -93,6 +93,12 @@ pub fn App() -> impl IntoView {
     // cold-start load below pre-populates it from disk.
     let tags = RwSignal::new(Vec::<crate::bridge::types::Tag>::new());
 
+    // R-004: session_data signal — tracks accumulated pomodoro counter
+    // state (completed_pomodoros, total_focus_time, current_session).
+    // Cold-start hydrated below; TimerView updates it on each
+    // PomodoroCompleted event via save_session_data.
+    let session_data = RwSignal::new(Option::<Session>::None);
+
     // Make `RwSignal<Settings>` available to descendants via context.
     // TimerView reads it to derive the engine's `Durations` from the
     // settings.timer fields (so `settings-general.spec.js` and the
@@ -105,6 +111,7 @@ pub fn App() -> impl IntoView {
     provide_context(settings);
     provide_context(sessions);
     provide_context(tags);
+    provide_context(session_data);
 
     // Derived view-active flags. Each per-view container reads its
     // own flag to decide whether to apply `.hidden` — matching the
@@ -284,6 +291,84 @@ pub fn App() -> impl IntoView {
             }
         });
 
+        // Phase 4f R-004: settings-driven side effects.
+        //
+        // These Effects track specific settings slices and fire
+        // bridge calls when the relevant field changes. They are
+        // separate from the debounced persistence sink above so
+        // the OS-level side effects (shortcut registration, activity
+        // monitoring, autostart, tray) don't wait 300ms.
+        //
+        // Effect ordering: all five Effects share the same
+        // `RwSignal<Settings>` source. Leptos runs Effects in
+        // declaration order within a single reactive update, so
+        // the persistence sink fires first, then these side-effect
+        // sinks. The ordering is documented but not relied upon —
+        // each sink captures only its own settings slice via
+        // `settings.with(...)` so there is no cross-Effect state
+        // dependency.
+
+        // shortcuts — fire when any shortcut binding changes.
+        let shortcuts_first_run = std::rc::Rc::new(std::cell::Cell::new(true));
+        Effect::new(move |_| {
+            let shortcuts = settings.with(|s| s.shortcuts.clone());
+            if shortcuts_first_run.get() {
+                shortcuts_first_run.set(false);
+                return;
+            }
+            spawn_local(async move {
+                let _ = commands::register_global_shortcuts(shortcuts).await;
+            });
+        });
+
+        // activity monitoring — fire when smart_pause or its timeout changes.
+        let smart_pause_first_run = std::rc::Rc::new(std::cell::Cell::new(true));
+        Effect::new(move |_| {
+            let smart_pause = settings.with(|s| s.notifications.smart_pause);
+            let timeout_secs =
+                settings.with(|s| u64::from(s.notifications.smart_pause_timeout) * 60);
+            if smart_pause_first_run.get() {
+                smart_pause_first_run.set(false);
+                return;
+            }
+            spawn_local(async move {
+                if smart_pause {
+                    let _ = commands::start_activity_monitoring(timeout_secs).await;
+                } else {
+                    let _ = commands::stop_activity_monitoring().await;
+                }
+            });
+        });
+
+        // autostart — fire when the setting flips.
+        let autostart_first_run = std::rc::Rc::new(std::cell::Cell::new(true));
+        Effect::new(move |_| {
+            let autostart = settings.with(|s| s.autostart);
+            if autostart_first_run.get() {
+                autostart_first_run.set(false);
+                return;
+            }
+            spawn_local(async move {
+                if autostart {
+                    let _ = commands::enable_autostart().await;
+                } else {
+                    let _ = commands::disable_autostart().await;
+                }
+            });
+        });
+
+        // Cold-start autostart probe — populate a context signal read
+        // by the Updates settings tab to show the current OS autostart
+        // state (independent of the Settings flag, which may differ if
+        // the OS state was changed outside the app).
+        let autostart_enabled = RwSignal::new(false);
+        provide_context(autostart_enabled);
+        spawn_local(async move {
+            if let Ok(enabled) = commands::is_autostart_enabled().await {
+                autostart_enabled.set(enabled);
+            }
+        });
+
         // Phase 4e R-004: session persistence sink. The shared
         // `sessions` signal is appended to by TimerView's tick
         // closure on `PomodoroCompleted` events. The Effect re-runs
@@ -323,6 +408,17 @@ pub fn App() -> impl IntoView {
                 sessions.set(loaded);
             }
         });
+        // R-004: cold-start session-data hydration. Restores the
+        // accumulated pomodoro counter state from disk so the
+        // progress dots reflect sessions completed before the last
+        // process restart. The signal is provided via context;
+        // TimerView reads it on mount to pre-populate completed_pomodoros.
+        spawn_local(async move {
+            if let Ok(loaded) = commands::load_session_data().await {
+                session_data.set(loaded);
+            }
+        });
+
         // Tag list hydration. Today the TimerView owns its own
         // local `RwSignal<Vec<Tag>>` because the JS-era surface
         // had a single dropdown anchored under `#timer-status`;

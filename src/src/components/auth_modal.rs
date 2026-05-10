@@ -53,6 +53,7 @@ use leptos::prelude::*;
 use leptos::task::spawn_local;
 
 use crate::bridge::commands;
+use crate::bridge::types::Settings;
 use crate::managers::auth::AuthState;
 
 /// Project the current `AuthState` to the display name shown in
@@ -105,6 +106,12 @@ pub fn AuthModal(auth_state: RwSignal<AuthState>) -> impl IntoView {
     // Overlay visibility (toggled by `#user-sign-in` / form submit).
     let overlay_open = RwSignal::new(false);
 
+    // Analytics gating: read settings from context (provided by App).
+    // Falls back to `analytics_enabled = true` (the default) when the
+    // context is absent (direct mounts outside the App shell).
+    let settings =
+        use_context::<RwSignal<Settings>>().unwrap_or_else(|| RwSignal::new(Settings::default()));
+
     // Form-input bindings.
     let email = RwSignal::new(String::new());
     let password = RwSignal::new(String::new());
@@ -153,6 +160,7 @@ pub fn AuthModal(auth_state: RwSignal<AuthState>) -> impl IntoView {
         });
         auth_state.set(AuthState::Unauthenticated);
         dropdown_open.set(false);
+        let analytics = settings.with_untracked(|s| s.analytics_enabled);
         spawn_local(async move {
             // The bridge call returns `BridgeError::BridgeUnavailable`
             // on the dev server (Trunk + e2e mock harness). We swallow
@@ -160,6 +168,14 @@ pub fn AuthModal(auth_state: RwSignal<AuthState>) -> impl IntoView {
             // user contract, and the Tauri side's idempotency means a
             // missed call here is recovered on the next launch.
             let _ = commands::supabase_sign_out(refresh_token).await;
+            // R-004: sign_out analytics event.
+            if analytics {
+                let _ = commands::track_event(
+                    "sign_out",
+                    None::<std::collections::HashMap<String, serde_json::Value>>,
+                )
+                .await;
+            }
         });
     };
 
@@ -190,6 +206,15 @@ pub fn AuthModal(auth_state: RwSignal<AuthState>) -> impl IntoView {
                     email.set(String::new());
                     password.set(String::new());
                     form_error.set(String::new());
+                    // R-004: sign_in_success analytics event.
+                    let analytics = settings.with_untracked(|s| s.analytics_enabled);
+                    if analytics {
+                        let _ = commands::track_event(
+                            "sign_in_success",
+                            None::<std::collections::HashMap<String, serde_json::Value>>,
+                        )
+                        .await;
+                    }
                 }
                 Err(e) => {
                     // Surface a user-facing message. The
