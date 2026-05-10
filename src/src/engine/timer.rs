@@ -43,6 +43,17 @@ pub enum TimerEvent {
     /// sessions so the pomodoros + focus-time accumulators have a
     /// single source of truth.
     ManualSessionRecorded { duration_secs: u32 },
+    /// `skip()` advanced the engine to the next mode. Carries the
+    /// mode that was being skipped (so the persistence layer can
+    /// gate "save this if focus > 1 minute" per
+    /// `pomodoro-timer.js:1088-1090`). Distinct from
+    /// `PomodoroCompleted` so consumers can disambiguate between
+    /// a natural completion (save unconditionally) and a skip
+    /// (conditional save).
+    SessionSkipped {
+        skipped_mode: TimerMode,
+        elapsed_secs: u32,
+    },
 }
 
 /// Pomodoro state machine.
@@ -238,6 +249,67 @@ impl TimerState {
     #[must_use]
     pub const fn total_focus_secs(&self) -> u32 {
         self.total_focus_secs
+    }
+
+    /// Skip the current mode and advance to the next.
+    ///
+    /// Mirrors `skipSession` at `pomodoro-timer.js:974-1150` (the
+    /// "normal skip" branch — overtime / continuous-session
+    /// handling is settings-driven and lives in the manager
+    /// layer). Behaviour:
+    ///
+    /// - Focus skip: `completed_pomodoros++`,
+    ///   `total_focus_secs += current_session_elapsed_secs`,
+    ///   transition to `Break` (or `LongBreak` every fourth).
+    ///   Emits `SessionSkipped { skipped_mode: Focus,
+    ///   elapsed_secs }`.
+    /// - `Break` / `LongBreak` skip: transition back to `Focus`.
+    ///   Emits `SessionSkipped { skipped_mode: Break|LongBreak,
+    ///   elapsed_secs: 0 }` (break-mode elapsed time isn't
+    ///   tracked by the engine).
+    ///
+    /// `is_running` becomes false; the wall-clock anchor is
+    /// cleared. Does NOT emit `PomodoroCompleted` — that event
+    /// is reserved for natural countdown completions because
+    /// the persistence layer reads the two events differently.
+    pub fn skip(&mut self) -> Vec<TimerEvent> {
+        let mut events = Vec::new();
+        let skipped_mode = self.current_mode;
+        let elapsed_secs = if skipped_mode == TimerMode::Focus {
+            self.current_session_elapsed_secs
+        } else {
+            0
+        };
+
+        match skipped_mode {
+            TimerMode::Focus => {
+                self.completed_pomodoros = self.completed_pomodoros.saturating_add(1);
+                self.total_focus_secs = self
+                    .total_focus_secs
+                    .saturating_add(self.current_session_elapsed_secs);
+                self.current_session_elapsed_secs = 0;
+                self.current_mode = if self.completed_pomodoros.is_multiple_of(4) {
+                    TimerMode::LongBreak
+                } else {
+                    TimerMode::Break
+                };
+            }
+            TimerMode::Break | TimerMode::LongBreak => {
+                self.current_mode = TimerMode::Focus;
+            }
+        }
+
+        self.time_remaining_secs = i64::from(self.durations.for_mode(self.current_mode));
+        self.is_running = false;
+        self.is_auto_paused = false;
+        self.timer_start_ms = None;
+        self.timer_duration_secs = None;
+
+        events.push(TimerEvent::SessionSkipped {
+            skipped_mode,
+            elapsed_secs,
+        });
+        events
     }
 
     /// Resets the engine to its initial state.
