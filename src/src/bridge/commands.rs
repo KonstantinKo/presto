@@ -850,7 +850,7 @@ mod tests {
         load_tasks, register_global_shortcuts, reset_all_data, save_daily_stats,
         save_manual_sessions, save_session_data, save_settings, save_tag, save_tasks,
         start_activity_monitoring, start_oauth_server, stop_activity_monitoring,
-        supabase_sign_in_with_password, supabase_sign_out, track_event,
+        supabase_get_session, supabase_sign_in_with_password, supabase_sign_out, track_event,
         update_activity_timeout, update_tray_icon, update_tray_menu, write_excel_file,
     };
     use crate::bridge::error::BridgeError;
@@ -1697,5 +1697,33 @@ mod tests {
             supabase_sign_out(refresh_token).await
         }
         let _ = assert_signature("rt-token".to_string()).await;
+    }
+
+    #[wasm_bindgen_test]
+    async fn supabase_get_session_round_trip_short_circuits_when_bridge_absent() {
+        let result = supabase_get_session().await;
+        match result {
+            Err(BridgeError::BridgeUnavailable) => {}
+            other => panic!("expected BridgeUnavailable, got {other:?}"),
+        }
+    }
+
+    /// Compile-time signature pin per contracts/tauri-bridge.md §"Supabase
+    /// auth adapter family":
+    /// `supabase_get_session() -> Result<Option<AuthSession>, BridgeError>`.
+    /// Distinct from `supabase_sign_in_with_password` in two ways: no
+    /// arguments (the persisted session is read from the app-data dir,
+    /// not requested by ID), and the return is `Option<AuthSession>` —
+    /// `None` is the cold-start "no signed-in user" case (matches the
+    /// `supabase_get_session` mock entry in tauriMock.js, which returns
+    /// `null` by default). A drift to a bare `AuthSession` would force
+    /// the consumer to invent a sentinel for the not-signed-in case and
+    /// is rejected at the type level.
+    #[wasm_bindgen_test]
+    async fn supabase_get_session_round_trip_signature_pinned() {
+        async fn assert_signature() -> Result<Option<AuthSession>, BridgeError> {
+            supabase_get_session().await
+        }
+        let _ = assert_signature().await;
     }
 }
