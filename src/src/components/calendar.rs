@@ -292,8 +292,30 @@ mod tests {
 
     /// T200 — visual-regression / selector contract pin for the
     /// calendar view. Sourced from
-    /// `tests/e2e/calendar-navigation.spec.js`. Each entry maps to
-    /// a `locator("#…")` callsite; drift here breaks the e2e run.
+    /// `tests/e2e/calendar-navigation.spec.js` +
+    /// `tests/e2e/sessions-history.spec.js`. Each entry maps to a
+    /// `locator("#…")` callsite; drift here breaks the e2e run.
+    ///
+    /// - `calendar-view` — root container (`_smoke.spec.js:20`
+    ///   asserts `toBeHidden()` initially).
+    /// - `prev-week` / `next-week` — week navigation
+    ///   (`calendar-navigation.spec.js:17,22-23`).
+    /// - `week-range` — week-range label
+    ///   (`calendar-navigation.spec.js:13` `not.toBeEmpty`).
+    /// - `prev-month` / `next-month` — month navigation
+    ///   (`calendar-navigation.spec.js:33,38-39`).
+    /// - `current-month` — month label
+    ///   (`calendar-navigation.spec.js:14` `not.toBeEmpty`).
+    /// - `calendar-grid` — month grid host
+    ///   (`sessions-history.spec.js:34`).
+    /// - `[aria-current="date"]` — today's cell carries this
+    ///   attribute so `sessions-history.spec.js:34` can locate
+    ///   the today-cell without a date-string coupling.
+    ///
+    /// Visual baseline updates are out of scope per AGENTS.md
+    /// §"Don't update visual regression baselines without
+    /// explicit visual review" — this test only pins the string
+    /// contract.
     #[test]
     fn calendar_view_selector_contract_documented() {
         const REQUIRED_IDS: &[&str] = &[
@@ -306,6 +328,7 @@ mod tests {
             "current-month",
             "calendar-grid",
         ];
+        const TODAY_ARIA_CURRENT_VALUE: &str = "date";
         let mut seen: Vec<&str> = Vec::with_capacity(REQUIRED_IDS.len());
         for id in REQUIRED_IDS {
             assert!(!id.is_empty(), "selector ID must not be empty");
@@ -315,6 +338,13 @@ mod tests {
             );
             seen.push(id);
         }
+        // `[aria-current="date"]` is the spec.js:34 selector — the
+        // today-cell must carry exactly this attribute value, not
+        // `aria-current="true"` or any other token.
+        assert_eq!(
+            TODAY_ARIA_CURRENT_VALUE, "date",
+            "today-cell must carry aria-current=\"date\" per ARIA spec for sessions-history.spec.js:34",
+        );
     }
 
     fn day(year: i32, month: u32, d: u32) -> DateTime<Utc> {
