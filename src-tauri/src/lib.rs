@@ -847,19 +847,6 @@ async fn load_manual_sessions(app: AppHandle) -> Result<Vec<ManualSession>, Brid
     helpers::read_manual_sessions_from(&app_data_dir).map_err(BridgeError::from)
 }
 
-#[tauri::command]
-async fn get_manual_sessions_for_date(
-    date: String,
-    app: AppHandle,
-) -> Result<Vec<ManualSession>, BridgeError> {
-    let app_data_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| BridgeError::Internal { msg: format!("Failed to get app data directory: {e}") })?;
-    let sessions = helpers::read_manual_sessions_from(&app_data_dir)?;
-    Ok(sessions.into_iter().filter(|s| s.date == date).collect())
-}
-
 /// Builds and runs the Tauri application.
 ///
 /// # Panics
@@ -930,7 +917,6 @@ pub fn run() {
                 is_autostart_enabled,
                 save_manual_sessions,
                 load_manual_sessions,
-                get_manual_sessions_for_date,
                 load_tags,
                 save_tags,
                 save_tag,
