@@ -516,20 +516,31 @@ impl TimerState {
     /// against the session. Mirrors `resumeTimer` at
     /// `pomodoro-timer.js:824-878`.
     ///
+    /// `resume()` accepts both the manual-pause unwind path and
+    /// the smart-pause (`is_auto_paused`) unwind path — the JS
+    /// source mirrors the same single-entrypoint behaviour: a
+    /// click on the play/pause button resumes the engine
+    /// regardless of which pause variant put it there. Smart-
+    /// pause's activity-driven unwind continues to flow through
+    /// `observe_activity(Active)` (which still emits
+    /// `AutoResumed`); the explicit-resume path emits
+    /// `SessionResumed` for both.
+    ///
     /// # Errors
     /// Returns `TimerError::NotPaused` if invoked while the engine
-    /// is not in a manual-pause state. Resuming while already
-    /// running is a no-op (`Ok(vec![])`) — symmetric with the
-    /// `pause()` no-op when already paused.
+    /// is not in any pause state (manual or smart). Resuming while
+    /// already running is a no-op (`Ok(vec![])`) — symmetric with
+    /// the `pause()` no-op when already paused.
     pub fn resume(&mut self, clock: &dyn Clock) -> Result<Vec<TimerEvent>, TimerError> {
         if self.is_running && !self.is_paused {
             // Already running — no-op (idempotent).
             return Ok(Vec::new());
         }
-        if !self.is_paused {
+        if !self.is_paused && !self.is_auto_paused {
             return Err(TimerError::NotPaused);
         }
         self.is_paused = false;
+        self.is_auto_paused = false;
         self.is_running = true;
         self.timer_start_ms = Some(clock.now_ms());
         self.timer_duration_secs = Some(self.time_remaining_secs);
