@@ -626,7 +626,7 @@ mod tests {
         load_tasks, register_global_shortcuts, reset_all_data, save_daily_stats,
         save_manual_sessions, save_session_data, save_settings, save_tag, save_tasks,
         start_activity_monitoring, stop_activity_monitoring, update_activity_timeout,
-        update_tray_icon,
+        update_tray_icon, update_tray_menu,
     };
     use crate::bridge::error::BridgeError;
     use crate::bridge::session_type::SessionType;
@@ -1245,5 +1245,35 @@ mod tests {
             update_tray_icon(a).await
         }
         let _ = assert_signature(sample_tray_icon_args()).await;
+    }
+
+    #[wasm_bindgen_test]
+    async fn update_tray_menu_round_trip_short_circuits_when_bridge_absent() {
+        let result = update_tray_menu(true, false, TimerMode::Focus).await;
+        match result {
+            Err(BridgeError::BridgeUnavailable) => {}
+            other => panic!("expected BridgeUnavailable, got {other:?}"),
+        }
+    }
+
+    /// Compile-time signature pin per contracts/tauri-bridge.md row 24:
+    /// `update_tray_menu(is_running: bool, is_paused: bool,
+    ///                   current_mode: TimerMode) -> Result<(), BridgeError>`.
+    /// Distinct from `update_tray_icon` in that the contract keeps the
+    /// three Tauri-side args as separate parameters (no struct collapse)
+    /// — the call sites are infrequent enough that a wrapper struct
+    /// would add noise without ergonomic gain. Pins the typed `TimerMode`
+    /// enum (Phase 1A T027 — was `String`) at the bridge boundary; a
+    /// string drift on `current_mode` would not compile (FR-008).
+    #[wasm_bindgen_test]
+    async fn update_tray_menu_round_trip_signature_pinned() {
+        async fn assert_signature(
+            is_running: bool,
+            is_paused: bool,
+            current_mode: TimerMode,
+        ) -> Result<(), BridgeError> {
+            update_tray_menu(is_running, is_paused, current_mode).await
+        }
+        let _ = assert_signature(true, false, TimerMode::LongBreak).await;
     }
 }
