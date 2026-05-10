@@ -85,13 +85,20 @@ pub fn App() -> impl IntoView {
     // `sessions-history.spec.js:38-41` exercises.
     let sessions = RwSignal::new(Vec::<crate::bridge::types::ManualSession>::new());
 
-    // Phase 4e R-004: shared tag list. Today the TimerView owns
-    // its own local signal seeded with a default-focus tag; the
-    // shared signal exists at App level so the persistence sink
-    // and the eventual TimerView refactor can both observe it.
-    // The signal is provided as context for descendants and the
-    // cold-start load below pre-populates it from disk.
-    let tags = RwSignal::new(Vec::<crate::bridge::types::Tag>::new());
+    // Phase 4e R-004: shared tag list. Seeded with the JS-era default
+    // "Focus" tag so TimerView (which uses_context this signal) renders
+    // the tag row immediately without waiting for the cold-start
+    // load_tags IPC to resolve. The load overwrites the signal with the
+    // persisted list; the default seed is only visible for the ~10ms
+    // before the IPC returns. Matches the tauriMock fixture's
+    // default _state.tags seed at tauriMock.js.
+    let tags = RwSignal::new(vec![crate::bridge::types::Tag {
+        id: "default-focus".to_string(),
+        name: "Focus".to_string(),
+        icon: "ri-brain-line".to_string(),
+        color: "#4CAF50".to_string(),
+        created_at: String::new(),
+    }]);
 
     // R-004: session_data signal — tracks accumulated pomodoro counter
     // state (completed_pomodoros, total_focus_time, current_session).

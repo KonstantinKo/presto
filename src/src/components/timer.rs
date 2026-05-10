@@ -250,20 +250,26 @@ pub fn TimerView() -> impl IntoView {
     // exercises the popover by clicking `#timer-status` from the
     // timer view — so the dropdown must live in TimerView.
     //
-    // Local signals — Phase 4c routes these through
-    // `TagManager::create` / `delete` and the
-    // `bridge::commands::save_tag` / `delete_tag` hops; today the
-    // in-memory branch is sufficient for the e2e mocked path.
+    // Group D (R-004): consume the App-level shared tag list via context
+    // rather than owning a local signal. The App router seeds the context
+    // signal with the JS-era default "Focus" tag (so this component renders
+    // immediately without waiting for load_tags IPC) and overwrites it when
+    // the cold-start load_tags response arrives. Tag CRUD below writes
+    // through the shared signal so the App-level persistence sink fires on
+    // every create / delete — mutations persist across restarts.
     let tag_dropdown_open = RwSignal::new(false);
-    let tags = RwSignal::new(vec![Tag {
-        // JS-era cold-start seed (matches the tauriMock fixture's
-        // default `_state.tags` at `tauriMock.js:120-127`).
-        id: "default-focus".to_string(),
-        name: "Focus".to_string(),
-        icon: "ri-brain-line".to_string(),
-        color: "#4CAF50".to_string(),
-        created_at: String::new(),
-    }]);
+    let tags = use_context::<RwSignal<Vec<Tag>>>().unwrap_or_else(|| {
+        // Fallback: direct mount outside the App shell (host tests,
+        // future Storybook-style previews). Seed with the default so
+        // the UI renders without context.
+        RwSignal::new(vec![Tag {
+            id: "default-focus".to_string(),
+            name: "Focus".to_string(),
+            icon: "ri-brain-line".to_string(),
+            color: "#4CAF50".to_string(),
+            created_at: String::new(),
+        }])
+    });
     let new_tag_name = RwSignal::new(String::new());
     let new_tag_icon = RwSignal::new(DEFAULT_NEW_TAG_ICON.to_string());
     let icon_picker_open = RwSignal::new(false);
