@@ -45,8 +45,7 @@ timer engine, persistence, the Tauri bridge, or auth/sync does.
 | E2E | Playwright (chromium) | Playwright (chromium) |
 
 Single-user desktop. No server backend. Supabase is a thin optional sync
-layer; Aptabase is opt-in analytics. Both are off by default in guest
-mode.
+layer, off by default in guest mode.
 
 ## Conventions
 

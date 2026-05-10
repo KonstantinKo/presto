@@ -1,26 +1,13 @@
 // Advanced settings tab — Phase 4b (T210) of spec
 // 001-leptos-migration. Wires the autostart / hide-icon-on-close /
-// status-bar-display / analytics / debug-mode / reset-data toggles.
+// status-bar-display / debug-mode / reset-data toggles.
 //
 // **Selector contract** (consumed by `tests/e2e/settings-advanced.spec.js`):
 // - `#autostart-enabled` — checkbox (`spec.js:12-16`).
 // - `#hide-icon-on-close` — checkbox (`spec.js:19-20`).
 // - `#status-bar-display` — `<select>` (`spec.js:23-24`).
-// - `#analytics-enabled` — checkbox (`spec.js:27-29`).
 // - `#debug-mode` — checkbox (`spec.js:32-33,47`).
 // - `#reset-all-data-btn` — danger button (`spec.js:44`).
-//
-// Per Principle II (Local-First, Privacy-Default), analytics opt-in
-// would default OFF. The JS-era surface and the canonical
-// `Settings::default()` set `analytics_enabled = true` (data flows
-// through Tauri-side anonymisation before any wire send), and the
-// e2e spec at line 27 asserts that default. The principle's
-// privacy-default line is honoured at the cold-start flow level —
-// the user is presented with the toggle on first launch via the
-// auth modal's "Continue as guest" path (Principle II Guest mode);
-// users who never sign in still have to consciously leave the
-// toggle on. Future work on the auth modal first-run UX would shift
-// the default off; this commit preserves the JS-era baseline.
 //
 // Per Principle I, this component never mutates engine state — the
 // Reset All Data button dispatches via `bridge::commands::reset_all_data`
@@ -64,7 +51,6 @@ pub fn AdvancedSettings(settings: RwSignal<Settings>, toast: SettingsToast) -> i
     // Derived signals.
     let autostart = Signal::derive(move || settings.with(|s| s.autostart));
     let hide_icon = Signal::derive(move || settings.with(|s| s.hide_icon_on_close));
-    let analytics = Signal::derive(move || settings.with(|s| s.analytics_enabled));
     let debug_mode = Signal::derive(move || settings.with(|s| s.advanced.debug_mode));
     let status_bar = Signal::derive(move || {
         settings.with(|s| status_bar_to_str(s.status_bar_display).to_string())
@@ -85,10 +71,6 @@ pub fn AdvancedSettings(settings: RwSignal<Settings>, toast: SettingsToast) -> i
     let on_status_bar = move |ev| {
         let value = parse_status_bar(&event_target_value(&ev));
         settings.update(|s| s.status_bar_display = value);
-        toast.show("Settings saved");
-    };
-    let on_analytics = move |_| {
-        settings.update(|s| s.analytics_enabled = !s.analytics_enabled);
         toast.show("Settings saved");
     };
     let on_debug = move |_| {
@@ -175,24 +157,6 @@ pub fn AdvancedSettings(settings: RwSignal<Settings>, toast: SettingsToast) -> i
             </div>
         </div>
         <div class="settings-section">
-            <h3>"Privacy & Analytics"</h3>
-            <div class="setting-item">
-                <label class="checkbox-label">
-                    <input
-                        type="checkbox"
-                        id="analytics-enabled"
-                        prop:checked=move || analytics.get()
-                        on:change=on_analytics
-                    />
-                    <span class="checkmark"></span>
-                    "Enable Anonymous Statistics"
-                </label>
-                <p class="setting-description">
-                    "Help improve Presto by sharing anonymous usage statistics. No personal data is collected."
-                </p>
-            </div>
-        </div>
-        <div class="settings-section">
             <h3>"Developer Tools"</h3>
             <div class="setting-item">
                 <label class="checkbox-label">
@@ -249,7 +213,6 @@ mod tests {
             "autostart-enabled",
             "hide-icon-on-close",
             "status-bar-display",
-            "analytics-enabled",
             "debug-mode",
             "reset-all-data-btn",
         ];

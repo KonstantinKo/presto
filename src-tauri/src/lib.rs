@@ -6,7 +6,13 @@ use std::thread;
 use std::time::{Duration, Instant};
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::{TrayIconBuilder, TrayIconEvent};
+// Analytics (Aptabase) is disconnected: plugin not registered,
+// `are_analytics_enabled` hard-wired to `false`. `track_event` call
+// sites and the `EventTracker` import are preserved as a re-enable
+// scaffold; re-arm by re-registering the plugin and restoring the
+// settings-backed body of `are_analytics_enabled`.
 use tauri::{Emitter, Manager};
+#[allow(unused_imports)]
 use tauri_plugin_aptabase::EventTracker;
 use tauri_plugin_autostart::ManagerExt;
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut};
@@ -351,7 +357,7 @@ const fn default_weekly_goal() -> u32 {
 }
 
 const fn default_analytics_enabled() -> bool {
-    true
+    false
 }
 
 /// Loads settings synchronously from disk, falling back to defaults on any error.
@@ -365,12 +371,8 @@ fn load_settings_sync(app: &AppHandle) -> AppSettings {
     helpers::read_settings_from(&app_data_dir).unwrap_or_default()
 }
 
-fn are_analytics_enabled(app: &AppHandle) -> bool {
-    app.state::<SettingsState>()
-        .0
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner)
-        .analytics_enabled
+const fn are_analytics_enabled(_app: &AppHandle) -> bool {
+    false
 }
 
 /// User-facing notification preferences; each bool maps to an independent
@@ -453,12 +455,14 @@ impl ActivityMonitor {
     }
 
     #[cfg(target_os = "macos")]
-    fn start_monitoring(&self) -> Result<(), String> {
-        let mut is_monitoring = helpers::lock_or_recover(&self.is_monitoring);
-        if *is_monitoring {
-            return Ok(());
+    fn start_monitoring(&self) {
+        {
+            let mut is_monitoring = helpers::lock_or_recover(&self.is_monitoring);
+            if *is_monitoring {
+                return;
+            }
+            *is_monitoring = true;
         }
-        *is_monitoring = true;
 
         let last_activity = Arc::clone(&self.last_activity);
         let is_monitoring_clone = Arc::clone(&self.is_monitoring);
@@ -509,8 +513,6 @@ impl ActivityMonitor {
                 thread::sleep(Duration::from_millis(500)); // Check every 500ms
             }
         });
-
-        Ok(())
     }
 
     #[cfg(target_os = "macos")]
@@ -554,8 +556,9 @@ async fn start_activity_monitoring(
             *monitor = Some(ActivityMonitor::new(app, timeout_seconds));
         }
         if let Some(ref m) = *monitor {
-            m.start_monitoring()?;
+            m.start_monitoring();
         }
+        drop(monitor);
         Ok(())
     }
 
@@ -966,7 +969,6 @@ pub fn run() {
             .plugin(tauri_plugin_updater::Builder::new().build())
             .plugin(tauri_plugin_process::init())
             .plugin(tauri_plugin_oauth::init())
-            .plugin(tauri_plugin_aptabase::Builder::new("A-EU-9457123106").build())
             .invoke_handler(tauri::generate_handler![
                 save_session_data,
                 load_session_data,
@@ -1169,9 +1171,7 @@ pub fn run() {
             .build(tauri::generate_context!())
             .expect("error while running tauri application")
             .run(|app_handle, event| match event {
-                tauri::RunEvent::Exit => {
-                    // Always track app exit event regardless of analytics settings
-                    // since this is the final event and useful for crash detection
+                tauri::RunEvent::Exit if are_analytics_enabled(app_handle) => {
                     let _ = app_handle.track_event("app_exited", None);
                     app_handle.flush_events_blocking();
                 }

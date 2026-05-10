@@ -73,8 +73,8 @@ presto is a single-user desktop app. Tauri's app-data directory is the authorita
 Rules:
 - All session, task, tag, and settings state MUST persist locally via Tauri commands first; localStorage is the bounded fallback for pure-web contexts (e2e dev server, mocked Tauri bridge).
 - **Auth (Supabase) is optional.** Guest mode is first-class — every feature reachable in guest mode is reachable, full-stop. Sign-in unlocks sync; never gates core timer functionality.
-- **Analytics is opt-in via `settings.analytics_enabled`.** Default off. Respect the toggle at every call site; no "but-this-event-is-anonymous" carve-outs.
-- **PII never appears in plain logs or analytics events.** Identifiers (session_id, tag_id) are fine; user-typed task names, email, IP are not. Scrub at event-emit time, not at display time.
+- **No telemetry.** No analytics events go on the wire.
+- **PII never appears in plain logs.** Identifiers (session_id, tag_id) are fine; user-typed task names, email, IP are not. Scrub at emit time, not at display time.
 - **System plugins** (updater, opener, notification, dialog) run on the user's machine; they MUST NOT exfiltrate beyond what the plugin's documented behaviour requires.
 
 Rationale: the user installed a local pomodoro timer, not a SaaS. Every network call needs a defensible reason and a user-visible toggle. PII discipline keeps GDPR posture without process.

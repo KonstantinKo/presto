@@ -1,7 +1,7 @@
 import { test, expect } from "./fixtures/index.js";
 import { openSettings, selectSettingsCategory, tapTab } from "./fixtures/screens.js";
 
-test("advanced settings: autostart, hide-icon, status bar, analytics, debug mode, cancel reset", async ({
+test("advanced settings: autostart, hide-icon, status bar, debug mode, cancel reset", async ({
   page,
 }) => {
   await page.goto("/index.html");
@@ -22,11 +22,6 @@ test("advanced settings: autostart, hide-icon, status bar, analytics, debug mode
   // Change status bar display to icon-only
   await page.locator("#status-bar-display").selectOption("icon-only");
   await expect(page.locator("#status-bar-display")).toHaveValue("icon-only");
-
-  // Toggle analytics off (default is enabled)
-  await expect(page.locator("#analytics-enabled")).toBeChecked();
-  await page.locator("#analytics-enabled").click();
-  await expect(page.locator("#analytics-enabled")).not.toBeChecked();
 
   // Enable debug mode (3-second timers)
   await page.locator("#debug-mode").click();

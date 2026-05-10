@@ -81,7 +81,6 @@ JS/Vite/Vitest layer is replaced.
   contexts (dev server, e2e mock).
 - **Optional Supabase sync.** Guest mode is first-class; sign-in unlocks
   cross-device history but never gates the timer.
-- **Optional Aptabase analytics.** Opt-in in settings, default off.
 - **Update path matters.** Existing installed users surviving every
   release is a real constraint (Tauri auto-updater); upstream
   compatibility with `murdercode/presto` is not.
@@ -97,7 +96,6 @@ JS/Vite/Vitest layer is replaced.
 | Visual regression | 14 PNG baselines | 14 PNG baselines — unchanged |
 | Backend | Rust (Tauri 2.x) | Rust (Tauri 2.x) — unchanged |
 | Auth (optional) | Supabase JS SDK | Supabase Rust SDK / direct REST |
-| Analytics (optional) | Aptabase (Tauri plugin) | Aptabase — unchanged |
 
 ## Roadmap (rough)
 

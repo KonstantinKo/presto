@@ -39,7 +39,6 @@ A modern, cross-platform Pomodoro timer built with **Tauri + Leptos** (Rust + We
 
 - Guest mode is first-class — every feature works without an account
 - Optional Supabase sign-in for cross-device sync
-- Optional Aptabase analytics (opt-in, off by default)
 
 ### ⌨️ Keyboard Shortcuts
 
@@ -75,9 +74,10 @@ xattr -d com.apple.quarantine /Applications/presto.app
 
 #### Prerequisites
 
-- [Rust](https://rustup.rs/) (latest stable; verified against `1.95+`)
+- [Rust](https://rustup.rs/) **1.95+** (hard floor — `Duration::from_hours` is used as a `const fn` in `src/src/managers/update.rs`). Pinned via `.tool-versions` at the repo root.
 - `wasm32-unknown-unknown` target: `rustup target add wasm32-unknown-unknown`
-- [Trunk](https://trunkrs.dev/): `cargo install trunk` (or `dnf install trunk` on Fedora)
+- [Trunk](https://trunkrs.dev/): `cargo install trunk --locked` (or `dnf install trunk` on Fedora)
+- [Tauri CLI v2](https://tauri.app/): `cargo install tauri-cli --version "^2.0" --locked`
 - Xcode Command Line Tools (macOS): `xcode-select --install`
 - Linux: `webkit2gtk-4.1`, `libsoup3`, `libappindicator3-1` (or distro equivalents)
 
@@ -98,7 +98,7 @@ There is no Node.js or npm dependency at the repo root post-cutover. The end-to-
    cargo tauri dev
    ```
 
-   Tauri's `beforeDevCommand` runs `cd src && trunk serve --port 1420` automatically. The first run downloads ~400 crates and compiles both the Leptos frontend and the Tauri backend; subsequent runs are incremental.
+   Tauri's `beforeDevCommand` spawns `trunk serve --port 1420` against the `src/` crate (the cwd is anchored to the repo root via `git rev-parse --show-toplevel` because tauri-cli's auto-detected cwd lands on `tests/e2e/package.json`). The first run downloads ~400 crates and compiles both the Leptos frontend and the Tauri backend; subsequent runs are incremental.
 
 3. **Build for production**
 
@@ -110,11 +110,15 @@ There is no Node.js or npm dependency at the repo root post-cutover. The end-to-
 
 #### Troubleshooting
 
-- **`No version is set for command cargo` / `rustc`** — you are using `asdf` (or another version manager) and no Rust version is selected for this directory. Add a `.tool-versions` file at the repo root with `rust <stable>`, or run `asdf set -u rust <stable>`.
+- **`No version is set for command cargo` / `rustc`** — you are using `asdf` (or another version manager) and no Rust version is selected for this directory. The repo pins `rust 1.95.0` in `.tool-versions`; run `asdf install rust 1.95.0` (or whatever pin you see) to materialise it.
+
+- **`error[E0658]: use of unstable library feature 'duration_constructors_lite'`** — your toolchain is older than 1.95. Upgrade (see above); `from_hours` only stabilised as a `const fn` in 1.95.
 
 - **`error: failed to find tool. Is 'wasm32-unknown-unknown' installed?`** — `rustup target add wasm32-unknown-unknown`.
 
-- **`trunk: command not found`** — `cargo install trunk` (the workspace's `tools/externalize-boot/` post-build hook also expects `trunk` on PATH).
+- **`error: no such command: tauri`** — `cargo install tauri-cli --version "^2.0" --locked`. When bumping `.tool-versions`, re-install (`--force`) so the binary lands under the new toolchain's `bin/` and asdf shims resolve it.
+
+- **`trunk: command not found`** — `cargo install trunk --locked` (the workspace's `tools/externalize-boot/` post-build hook also expects `trunk` on PATH). Re-install on toolchain bumps for the same shim reason as above.
 
 - **Devtools in dev mode** — devtools are enabled via the `devtools` feature on the `tauri` crate in `src-tauri/Cargo.toml`. Right-click → _Inspect Element_ (or `Cmd+Opt+I` on macOS).
 
@@ -178,7 +182,7 @@ presto/
 
 ### Backend (Rust + Tauri 2.x)
 
-- Tauri 2.x framework with the auto-updater, dialog, global-shortcut, opener, notification, OAuth, and Aptabase plugins
+- Tauri 2.x framework with the auto-updater, dialog, global-shortcut, opener, notification, and OAuth plugins
 - File-based JSON storage in the Tauri app-data directory
 - Direct Supabase REST adapter via `reqwest` (rustls-tls) — no JS auth SDK in the WASM bundle
 

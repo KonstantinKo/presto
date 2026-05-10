@@ -94,8 +94,6 @@ end-to-end.
   review.** A failing diff is either a regression or an intended visual
   change; commit it with a one-line PR note explaining why.
 - **Don't add Tauri commands without extending the mock first.**
-- **Don't bypass the analytics opt-in toggle** (`settings.analytics_enabled`).
-  Even "anonymous" events.
 - **Don't `--no-verify`** unless the next commit fixes the bypass.
 
 ## Things you can find quickly
