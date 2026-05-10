@@ -7,11 +7,6 @@
 #   * Plugin-injected commands the mock services for completeness (e.g.,
 #     `plugin:updater|check`, `plugin:opener|open_url`) — these are not
 #     declared as #[tauri::command] in our crate.
-#   * Phase-6-targeted-for-deletion handlers that are still declared in
-#     lib.rs today but have zero JS call sites (per
-#     specs/001-leptos-migration/contracts/tauri-bridge.md §Deletions).
-#     These are listed under PHASE6_DELETIONS below; they're allowed to be
-#     handler-only (no mock case) during the transition.
 #
 # Exit codes:
 #   0 — every surviving handler has a mock entry, every mock case has a
@@ -39,22 +34,6 @@ if [[ ! -f "${MOCK_JS}" ]]; then
   exit 1
 fi
 
-# Phase-6-targeted-for-deletion handlers (zero JS call sites today; staying in
-# lib.rs until the Phase 6 cleanup commit). Listed in tauri-bridge.md
-# §Deletions. Allowed to be handler-only during the transition.
-PHASE6_DELETIONS=(
-  "save_manual_session"
-  "delete_manual_session"
-  "get_manual_sessions_for_date"
-  "save_tags"
-  "load_session_tags"
-  "save_session_tags"
-  "unregister_global_shortcuts"
-  "show_window"
-  "set_dock_visibility"
-  "set_status_bar_visibility"
-)
-
 # Plugin-injected and OS-level commands that the mock services for fidelity but
 # that are not declared as #[tauri::command] in our crate. These are anything
 # beginning with `plugin:` or that targets the Tauri runtime directly.
@@ -62,15 +41,6 @@ PHASE6_DELETIONS=(
 is_plugin_command() {
   local name="$1"
   [[ "${name}" == *:* ]]
-}
-
-is_phase6_deletion() {
-  local name="$1"
-  local entry
-  for entry in "${PHASE6_DELETIONS[@]}"; do
-    [[ "${entry}" == "${name}" ]] && return 0
-  done
-  return 1
 }
 
 # Extract handler names: every `async fn <name>(` (or `fn <name>(`) immediately
@@ -87,29 +57,21 @@ mock_cases=$(grep -E '^\s*case\s+"[^"]+"\s*:' "${MOCK_JS}" \
   | sed -E 's/^[[:space:]]*case[[:space:]]+"([^"]+)"[[:space:]]*:.*/\1/' \
   | sort -u)
 
-# Filter mock_cases: drop plugin-injected ones (no matching handler by design)
-# AND drop Phase-6-deletion-targeted ones (transition exemption symmetry —
-# if the handler is exempt from drift, so is its mock case if present).
+# Filter mock_cases: drop plugin-injected ones (no matching handler by design).
 filtered_mock_cases=""
 while IFS= read -r name; do
   [[ -z "${name}" ]] && continue
   if is_plugin_command "${name}"; then
     continue
   fi
-  if is_phase6_deletion "${name}"; then
-    continue
-  fi
   filtered_mock_cases="${filtered_mock_cases}${name}"$'\n'
 done <<< "${mock_cases}"
 filtered_mock_cases=$(printf '%s' "${filtered_mock_cases}" | sed '/^$/d' | sort -u)
 
-# Filter handler_names: drop Phase-6 deletions (transition exemption).
+# All declared handlers must have a mock case — no exemptions post-Phase-6.
 filtered_handlers=""
 while IFS= read -r name; do
   [[ -z "${name}" ]] && continue
-  if is_phase6_deletion "${name}"; then
-    continue
-  fi
   filtered_handlers="${filtered_handlers}${name}"$'\n'
 done <<< "${handler_names}"
 filtered_handlers=$(printf '%s' "${filtered_handlers}" | sed '/^$/d' | sort -u)
@@ -142,7 +104,7 @@ fi
 
 if [[ ${drift} -eq 0 ]]; then
   handler_count=$(printf '%s\n' "${filtered_handlers}" | sed '/^$/d' | wc -l | tr -d ' ')
-  echo "check-mock-drift: OK (${handler_count} handlers ↔ mock cases reconciled; Phase 6 deletions exempt)"
+  echo "check-mock-drift: OK (${handler_count} handlers ↔ mock cases reconciled)"
 fi
 
 exit ${drift}

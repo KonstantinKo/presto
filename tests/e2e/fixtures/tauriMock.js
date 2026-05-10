@@ -8,7 +8,6 @@
 /**
  * Browser-context init script installed via addInitScript before any page navigation.
  * It runs before all page scripts and installs:
- * - window.supabase mock (so auth-manager doesn't timeout waiting for the CDN)
  * - window.__TAURI__ mock with in-memory command handlers
  * - window.__E2E_TEST_HARNESS__ for test harness access
  *
@@ -22,75 +21,11 @@ const TAURI_MOCK_INIT_SCRIPT = `
     window.__E2E_CONFIG__ = {};
   }
 
-  // --- Supabase mock ---
-  // waitForSupabase() in src/utils/supabase.js polls window.supabase; provide it
-  // immediately so auth-manager resolves without the 5-second CDN timeout.
-  var _authCallbacks = [];
-  window.supabase = {
-    createClient: function (url, key, opts) {
-      return {
-        auth: {
-          getSession: async function () {
-            return { data: { session: null }, error: null };
-          },
-          onAuthStateChange: function (callback) {
-            _authCallbacks.push(callback);
-            return {
-              data: {
-                subscription: {
-                  unsubscribe: function () {
-                    _authCallbacks = _authCallbacks.filter(function (c) {
-                      return c !== callback;
-                    });
-                  },
-                },
-              },
-            };
-          },
-          signInWithPassword: async function (creds) {
-            var user = {
-              id: "mock-user-id",
-              email: creds.email || "test@example.com",
-              user_metadata: { full_name: "Test User", name: "Test User" },
-            };
-            var session = {
-              user: user,
-              access_token: "mock-access-token",
-              refresh_token: "mock-refresh-token",
-            };
-            setTimeout(function () {
-              _authCallbacks.forEach(function (cb) {
-                try { cb("SIGNED_IN", session); } catch (e) {}
-              });
-            }, 80);
-            return { data: { session: session, user: user }, error: null };
-          },
-          signUp: async function () {
-            return { data: null, error: { message: "Registration not mocked in E2E tests" } };
-          },
-          signInWithOAuth: async function () {
-            return { data: null, error: { message: "OAuth not mocked in E2E tests" } };
-          },
-          signOut: async function () {
-            setTimeout(function () {
-              _authCallbacks.forEach(function (cb) {
-                try { cb("SIGNED_OUT", null); } catch (e) {}
-              });
-            }, 80);
-            return { error: null };
-          },
-          getUser: async function () {
-            return { data: { user: null }, error: null };
-          },
-          setSession: async function () {
-            return { data: { session: null }, error: null };
-          },
-        },
-      };
-    },
-  };
-
-  // Set guest mode and mark auth as seen so auth-manager skips the sign-in overlay
+  // Seed localStorage flags consumed by storage-migration import path.
+  // presto-guest-mode: read by import_legacy_user_state_from_storage to persist
+  // guest status across the 0.4.x → 0.5.x cutover.
+  // presto-auth-seen: read by import_legacy_user_state_from_storage to detect
+  // whether the user has previously seen and dismissed the auth modal.
   localStorage.setItem("presto-guest-mode", "true");
   localStorage.setItem("presto-auth-seen", "true");
 
@@ -100,10 +35,9 @@ const TAURI_MOCK_INIT_SCRIPT = `
     manualSessions: [],
     settings: {},
     sessionData: {
-      completedPomodoros: 0,
-      currentSession: 1,
-      totalFocusTime: 0,
-      currentMode: "focus",
+      completed_pomodoros: 0,
+      current_session: 1,
+      total_focus_time: 0,
     },
     history: [],
     autostartEnabled: false,
@@ -325,6 +259,18 @@ const TAURI_MOCK_INIT_SCRIPT = `
             // the e2e suite asserts on the call shape (path + sessions
             // length), not on the file's bytes (which the host-side
             // integration test in src-tauri/tests/ covers).
+            return;
+
+          case "is_legacy_migration_complete":
+            // R-006: sentinel gate. The mock returns true so the e2e startup
+            // short-circuits the 7-call migration block (no legacy data to migrate
+            // in the test harness). Tests that need to exercise the migration path
+            // can install a per-spec override via addInitScript that returns false.
+            return true;
+
+          case "mark_legacy_migration_complete":
+            // R-006: sentinel write. No-op in tests — the sentinel file lives in
+            // the Tauri app-data dir which doesn't exist in the e2e harness.
             return;
 
           case "import_legacy_supabase_session":
