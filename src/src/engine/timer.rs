@@ -278,4 +278,22 @@ mod tests {
         );
         assert_eq!(state.completed_pomodoros(), 1);
     }
+
+    /// T124: after a focus session completes (the first one), the
+    /// next mode is `Break` (not `LongBreak` — that's every fourth,
+    /// covered in T126). Time remaining resets to the configured
+    /// short-break duration (5 min). Mirrors the
+    /// `completedPomodoros % 4` branch at
+    /// `src/core/pomodoro-timer.js:1195-1199`.
+    #[test]
+    fn break_after_focus() {
+        let clock = MockClock::new(0);
+        let mut state = TimerState::new(Durations::default());
+        state.start(&clock).expect("start");
+        clock.advance(25 * 60 * 1000);
+        state.tick(&clock);
+
+        assert_eq!(state.current_mode(), TimerMode::Break);
+        assert_eq!(state.time_remaining_secs(), 5 * 60);
+    }
 }
