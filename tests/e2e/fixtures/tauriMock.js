@@ -277,6 +277,50 @@ const TAURI_MOCK_INIT_SCRIPT = `
             // individual specs.
             return;
 
+          case "supabase_sign_in_with_password":
+            // Spec 001-leptos-migration T087 (mock-first per FR-010): replaces
+            // the supabase-js auth path with a Rust REST adapter. The mock
+            // shape mirrors AuthSession (data-model.md §`Session`):
+            // { access_token, refresh_token, user: { id, email, user_metadata } }.
+            return {
+              access_token: "mock-access-token",
+              refresh_token: "mock-refresh-token",
+              user: {
+                id: "mock-user-id",
+                email: (args && args.email) || "test@example.com",
+                user_metadata: {},
+              },
+            };
+
+          case "supabase_sign_out":
+            // Tauri-side handler revokes the refresh token via Supabase REST
+            // /auth/v1/logout and clears the Rust-side persisted session.
+            // Mock no-op: the e2e suite asserts on the call shape, not on
+            // server-side revocation.
+            return;
+
+          case "supabase_get_session":
+            // Returns the currently persisted session or null. The mock
+            // returns null by default so the cold-start path (no signed-in
+            // user) is the e2e default; specs that need a signed-in user
+            // install a spec-level override that returns a populated session.
+            return null;
+
+          case "supabase_refresh_session":
+            // Tauri-side handler swaps the refresh token at the Supabase
+            // /auth/v1/token?grant_type=refresh_token endpoint. Mock returns
+            // a pseudo-refreshed AuthSession so the consumer's branching
+            // (refresh succeeded vs. failed) can be exercised end-to-end.
+            return {
+              access_token: "mock-refreshed-access-token",
+              refresh_token: "mock-refreshed-refresh-token",
+              user: {
+                id: "mock-user-id",
+                email: "test@example.com",
+                user_metadata: {},
+              },
+            };
+
           case "plugin:updater|check": {
             // Read config lazily so override scripts that run after this init script
             // can configure the updater response.
