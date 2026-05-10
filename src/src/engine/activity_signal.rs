@@ -8,6 +8,72 @@
 // edge-detection logic so duplicate Active→Active or Idle→Idle
 // emissions are folded into no-ops.
 
+/// Two-state activity signal fed into the engine.
+///
+/// Wire form: the `bridge::events::USER_ACTIVITY` and
+/// `USER_INACTIVITY` Tauri events normalise to this enum at the
+/// bridge boundary; the engine never sees raw mousemove /
+/// inactivity-timer-elapsed events. Mirrors the binary
+/// `isAutoPaused`-control inputs at `pomodoro-timer.js:440-466`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ActivitySignal {
+    /// User input observed — mousemove, keypress, scroll, etc.
+    Active,
+    /// Inactivity threshold elapsed without input.
+    Idle,
+}
+
+/// Edge-detecting reducer over a stream of `ActivitySignal` events.
+///
+/// `observe(signal)` returns `Some(signal)` exactly on a state
+/// transition; runs of duplicate signals fold into a single
+/// reported transition. The reducer assumes the user is `Active`
+/// at construction (the app just gained focus / launched), which
+/// matches the JS-side `handleUserActivity` behaviour at
+/// `pomodoro-timer.js:440` — the first activity event after a
+/// fresh boot is informational, not a transition.
+#[derive(Debug, Clone, Copy)]
+pub struct ActivityReducer {
+    last: ActivitySignal,
+}
+
+impl Default for ActivityReducer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl ActivityReducer {
+    /// Constructs a reducer in the `Active` state.
+    #[must_use]
+    pub const fn new() -> Self {
+        Self {
+            last: ActivitySignal::Active,
+        }
+    }
+
+    /// Observes a raw signal and reports the transition (if any).
+    ///
+    /// Returns `Some(signal)` iff `signal != self.last`; otherwise
+    /// `None`. After observation, the reducer's internal state
+    /// always matches `signal`.
+    pub fn observe(&mut self, signal: ActivitySignal) -> Option<ActivitySignal> {
+        if signal == self.last {
+            None
+        } else {
+            self.last = signal;
+            Some(signal)
+        }
+    }
+
+    /// Current observed state (the last signal seen, or the
+    /// constructor default).
+    #[must_use]
+    pub const fn current(&self) -> ActivitySignal {
+        self.last
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::{ActivityReducer, ActivitySignal};
