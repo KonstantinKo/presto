@@ -31,7 +31,7 @@ use wasm_bindgen_futures::JsFuture;
 
 use super::availability::bridge_available;
 use super::error::BridgeError;
-use super::types::{ManualSession, Session, Task};
+use super::types::{ManualSession, Session, Tag, Task};
 
 #[wasm_bindgen]
 extern "C" {
@@ -257,6 +257,26 @@ pub async fn save_manual_sessions(sessions: Vec<ManualSession>) -> Result<(), Br
 /// unknown `session_type` variant.
 pub async fn load_manual_sessions() -> Result<Vec<ManualSession>, BridgeError> {
     invoke_serde("load_manual_sessions", &serde_json::Value::Null).await
+}
+
+// ---------------------------------------------------------------------------
+// Persistence — tags
+// ---------------------------------------------------------------------------
+
+/// Read the persisted tag list. Tauri-side handler:
+/// `load_tags() -> Result<Vec<Tag>, BridgeError>`
+/// at `src-tauri/src/lib.rs:1059`.
+///
+/// Returns an empty `Vec` if no tags file exists yet (the Tauri-side
+/// helper at `helpers::read_tags_from` treats `NotFound` as empty —
+/// same cold-start convention as `load_tasks` / `load_manual_sessions`).
+///
+/// # Errors
+/// Returns `BridgeError::BridgeUnavailable` when the Tauri JS bridge is
+/// not present. Otherwise returns whatever variant the Tauri-side handler
+/// maps its filesystem failure to (typically `BridgeError::Internal`).
+pub async fn load_tags() -> Result<Vec<Tag>, BridgeError> {
+    invoke_serde("load_tags", &serde_json::Value::Null).await
 }
 
 // Tests gated on `wasm32` because every wrapper-test is a

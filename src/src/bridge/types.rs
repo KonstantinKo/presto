@@ -42,6 +42,24 @@ pub struct Task {
     pub completed_at: Option<String>,
 }
 
+/// User-defined tag attached to sessions and manual entries. Mirrors `Tag`
+/// at `src-tauri/src/lib.rs:167-174`.
+///
+/// On-disk shape: `snake_case` JSON via serde's default field naming. The
+/// `icon` field carries either an emoji or a Remix icon class (e.g.,
+/// `"ri-briefcase-line"`); `color` is a hex string (e.g., `"#3b82f6"`).
+/// Both are pinned to `String` because the JS-era on-disk records mix
+/// the two conventions and a closed-domain enum would force a migration
+/// (FR-005 — no on-disk shape change).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Tag {
+    pub id: String,
+    pub name: String,
+    pub icon: String,
+    pub color: String,
+    pub created_at: String,
+}
+
 /// User-entered manual session record.
 ///
 /// Mirrors `ManualSession` at `src-tauri/src/lib.rs:154-165`. `session_type`
