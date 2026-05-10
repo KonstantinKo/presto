@@ -120,6 +120,59 @@ impl TagManager {
     pub async fn delete_persisted(&self, tag_id: String) -> Result<(), BridgeError> {
         commands::delete_tag(tag_id).await
     }
+
+    /// Build a manager from a loaded tag list, applying the
+    /// JS-side `_loadTagsFromLocalStorage` validation at
+    /// `src/managers/tag-manager.js:126-146`:
+    ///
+    /// - Each record must carry non-empty `id` and non-empty `name`;
+    ///   entries that fail either check are dropped silently
+    ///   (per-record strictness, distinct from the JS-era surface
+    ///   that resets the entire list on any invalid entry — a
+    ///   single corrupt record poisoning the whole list is hostile
+    ///   to user data).
+    /// - Duplicate ids are de-duplicated, first occurrence wins.
+    ///   The JS-side `tags.some(t => t.id === ct.id)` lookups at
+    ///   lines 160 and 185 implicitly assume each id appears at
+    ///   most once.
+    ///
+    /// Empty input reduces to an empty manager — the JS-era default
+    /// `default-focus` seed at lines 148-159 is a first-run UX
+    /// concern that lives in Phase 4 components, not the manager
+    /// state machine.
+    ///
+    /// Spec 001-leptos-migration §Phase 3b T166.
+    #[must_use]
+    pub fn list_reduction(loaded: Vec<Tag>) -> Self {
+        let mut seen_ids: Vec<String> = Vec::with_capacity(loaded.len());
+        let mut tags: Vec<Tag> = Vec::with_capacity(loaded.len());
+        for tag in loaded {
+            if tag.id.is_empty() || tag.name.is_empty() {
+                continue;
+            }
+            if seen_ids.iter().any(|id| id == &tag.id) {
+                continue;
+            }
+            seen_ids.push(tag.id.clone());
+            tags.push(tag);
+        }
+        Self { tags }
+    }
+
+    /// Async cold-start path: ask the bridge for the persisted
+    /// tags, fall back to an empty list on any error (cold start,
+    /// bridge unavailable, corrupted file). Mirrors the JS-side
+    /// `loadTags` flow at `src/managers/tag-manager.js:168-196`,
+    /// minus the localStorage fallback (Phase 1E `import_legacy_tags`
+    /// already migrated those records to the Rust-side store).
+    ///
+    /// The reduction is applied unconditionally so a corrupted
+    /// record on disk doesn't poison the in-memory list.
+    pub async fn load() -> Self {
+        commands::load_tags()
+            .await
+            .map_or_else(|_| Self::new(), Self::list_reduction)
+    }
 }
 
 #[cfg(test)]
