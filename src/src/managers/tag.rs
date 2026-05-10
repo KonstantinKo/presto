@@ -220,4 +220,93 @@ mod tests {
         mgr.delete("tag-nope");
         assert_eq!(mgr.list().len(), 1, "delete of unknown id is a no-op");
     }
+
+    /// T165 [RED]: `list_reduction(loaded)` is the load-time filter
+    /// that mirrors the JS-side `_loadTagsFromLocalStorage` validation
+    /// at `src/managers/tag-manager.js:126-146`. Each loaded record
+    /// must carry a non-empty `id` and a non-empty `name`; entries
+    /// that fail either check are dropped (the JS-era surface
+    /// resets the entire list to `[]` on any invalid record, but the
+    /// Rust port is stricter on the per-record level so a single
+    /// corrupt entry doesn't poison the survivors). The reduction
+    /// also de-duplicates on `id` — the JS-side `tags.some(t =>
+    /// t.id === ct.id)` callsites at lines 160 and 185 implicitly
+    /// rely on each id appearing at most once.
+    ///
+    /// Done-signal: this test currently fails because
+    /// `TagManager::list_reduction` does not yet exist.
+    /// T166 GREEN attaches it.
+    #[test]
+    fn list_reduction_handles_loaded_set() {
+        // Mixed input: two valid, one with empty id, one with empty
+        // name, one duplicate id (the second occurrence is dropped).
+        let valid_a = Tag {
+            id: "tag-a".to_string(),
+            name: "Alpha".to_string(),
+            icon: "ri-a-line".to_string(),
+            color: "#111111".to_string(),
+            created_at: "2026-05-10T00:00:00Z".to_string(),
+        };
+        let valid_b = Tag {
+            id: "tag-b".to_string(),
+            name: "Beta".to_string(),
+            icon: "ri-b-line".to_string(),
+            color: "#222222".to_string(),
+            created_at: "2026-05-10T00:01:00Z".to_string(),
+        };
+        let invalid_empty_id = Tag {
+            id: String::new(),
+            name: "EmptyId".to_string(),
+            icon: String::new(),
+            color: String::new(),
+            created_at: String::new(),
+        };
+        let invalid_empty_name = Tag {
+            id: "tag-c".to_string(),
+            name: String::new(),
+            icon: String::new(),
+            color: String::new(),
+            created_at: String::new(),
+        };
+        let duplicate_a = Tag {
+            id: "tag-a".to_string(),
+            name: "AlphaDup".to_string(),
+            icon: "ri-dup-line".to_string(),
+            color: "#999999".to_string(),
+            created_at: "2026-05-10T00:02:00Z".to_string(),
+        };
+
+        let loaded = vec![
+            valid_a,
+            invalid_empty_id,
+            valid_b,
+            invalid_empty_name,
+            duplicate_a,
+        ];
+        let mgr = TagManager::list_reduction(loaded);
+
+        assert_eq!(
+            mgr.list().len(),
+            2,
+            "reduction must keep exactly the two valid, non-duplicate records",
+        );
+        assert_eq!(mgr.list()[0].id, "tag-a", "first survivor is tag-a");
+        assert_eq!(
+            mgr.list()[0].name,
+            "Alpha",
+            "first occurrence wins on duplicate id (AlphaDup is dropped)",
+        );
+        assert_eq!(mgr.list()[1].id, "tag-b", "second survivor is tag-b");
+
+        // Empty input reduces to an empty list (no default seeding —
+        // the JS-side `default-focus` seed at lines 148-159 is a
+        // first-run UX concern that lives in Phase 4 components,
+        // not the manager state machine).
+        let empty = TagManager::list_reduction(Vec::new());
+        assert_eq!(
+            empty.list().len(),
+            0,
+            "empty input must reduce to an empty list",
+        );
+    }
 }
