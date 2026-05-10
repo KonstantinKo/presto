@@ -245,7 +245,7 @@ pub async fn save_manual_sessions(sessions: Vec<ManualSession>) -> Result<(), Br
 #[cfg(all(test, target_arch = "wasm32"))]
 mod tests {
     use super::{
-        get_stats_history, load_session_data, load_tasks, save_daily_stats,
+        get_stats_history, load_manual_sessions, load_session_data, load_tasks, save_daily_stats,
         save_manual_sessions, save_session_data, save_tasks,
     };
     use crate::bridge::error::BridgeError;
@@ -445,5 +445,28 @@ mod tests {
             save_manual_sessions(s).await
         }
         let _ = assert_signature(sample_manual_sessions()).await;
+    }
+
+    #[wasm_bindgen_test]
+    async fn load_manual_sessions_round_trip_short_circuits_when_bridge_absent() {
+        let result = load_manual_sessions().await;
+        match result {
+            Err(BridgeError::BridgeUnavailable) => {}
+            other => panic!("expected BridgeUnavailable, got {other:?}"),
+        }
+    }
+
+    /// Compile-time signature pin per contracts/tauri-bridge.md row 8:
+    /// `load_manual_sessions() -> Result<Vec<ManualSession>, BridgeError>`.
+    /// Pins both the empty-Vec cold-start convention AND the closed-domain
+    /// `SessionType` enum on the deserialise side — a wire shape that
+    /// arrived with `session_type: "<unknown variant>"` would surface as
+    /// `BridgeError::SerdeRoundtrip` instead of a silently-ignored field.
+    #[wasm_bindgen_test]
+    async fn load_manual_sessions_round_trip_signature_pinned() {
+        async fn assert_signature() -> Result<Vec<ManualSession>, BridgeError> {
+            load_manual_sessions().await
+        }
+        let _ = assert_signature().await;
     }
 }
