@@ -166,21 +166,29 @@ pub fn TasksView() -> impl IntoView {
 
 #[cfg(test)]
 mod tests {
-    /// Selector-contract pin for the tasks view. The e2e suite
-    /// does not currently exercise these selectors (no
-    /// `tasks.spec.js` exists today); they're carried forward so
-    /// the Phase 6 e2e integration finds the DOM it expects when
-    /// the spec lands. The contract surface is:
+    /// T194 — selector contract pin for the tasks view.
+    ///
+    /// The e2e suite does not currently exercise these selectors
+    /// (no `tasks.spec.js` exists today); they're carried forward
+    /// so the Phase 6 e2e integration finds the DOM it expects
+    /// when the spec lands. Visual baseline updates are out of
+    /// scope per AGENTS.md §"Don't update visual regression
+    /// baselines without explicit visual review" — the test below
+    /// only pins the string contract.
+    ///
+    /// Contract surface:
     ///
     /// - `tasks-view` — root container; `.hidden` when not the
     ///   active `NavView`.
+    /// - `task-input-row` — input + add-button row.
     /// - `new-task-input` — text input for the new-task name.
     /// - `add-task-btn` — submit button.
-    /// - `task-list` — `<ul>` host for tasks.
-    /// - `.task-item` — per-row class (T193 attaches the per-row
-    ///   `<For/>` iterator).
+    /// - `task-list` — `<ul>` host for tasks (role="list").
+    /// - `.task-item` — per-row class (rendered by the `<For/>`
+    ///   iterator added in T193).
     /// - `.task-checkbox` — completion toggle.
     /// - `.task-delete-btn` — per-row delete button.
+    /// - `.task-text` — task body text span.
     #[test]
     fn tasks_view_selector_contract_documented() {
         const REQUIRED_IDS: &[&str] = &[
@@ -190,17 +198,34 @@ mod tests {
             "task-list",
             "task-input-row",
         ];
-        const REQUIRED_CLASSES: &[&str] = &["task-item", "task-checkbox", "task-delete-btn"];
+        const REQUIRED_CLASSES: &[&str] = &[
+            "task-item",
+            "task-checkbox",
+            "task-delete-btn",
+            "task-text",
+        ];
         assert!(!REQUIRED_IDS.is_empty(), "ID contract must be non-empty");
         assert!(
             !REQUIRED_CLASSES.is_empty(),
             "class contract must be non-empty",
         );
+        let mut seen_ids: Vec<&str> = Vec::with_capacity(REQUIRED_IDS.len());
         for id in REQUIRED_IDS {
-            assert!(!id.is_empty());
+            assert!(!id.is_empty(), "selector ID must not be empty");
+            assert!(
+                !seen_ids.contains(id),
+                "duplicate selector ID in contract: {id}",
+            );
+            seen_ids.push(id);
         }
+        let mut seen_classes: Vec<&str> = Vec::with_capacity(REQUIRED_CLASSES.len());
         for cls in REQUIRED_CLASSES {
-            assert!(!cls.is_empty());
+            assert!(!cls.is_empty(), "selector class must not be empty");
+            assert!(
+                !seen_classes.contains(cls),
+                "duplicate selector class in contract: {cls}",
+            );
+            seen_classes.push(cls);
         }
     }
 }
