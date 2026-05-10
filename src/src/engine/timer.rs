@@ -194,6 +194,15 @@ impl TimerState {
             events.push(TimerEvent::PomodoroCompleted {
                 completed_pomodoros: self.completed_pomodoros,
             });
+
+            // After a focus session, transition into the appropriate
+            // break mode. The "every fourth" long-break rule lands in
+            // T127; this commit covers only the short-break branch.
+            // Mirrors `pomodoro-timer.js:1194-1205` (the
+            // `completedPomodoros % 4 === 0` branch is filled in by
+            // T127's GREEN commit).
+            self.current_mode = TimerMode::Break;
+            self.time_remaining_secs = i64::from(self.durations.for_mode(self.current_mode));
         }
 
         events
