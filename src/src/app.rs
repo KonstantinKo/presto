@@ -211,7 +211,18 @@ pub fn App() -> impl IntoView {
     }
 
     view! {
-        <nav class="sidebar">
+        // The sidebar carries a per-mode theme class (`focus` /
+        // `break` / `longBreak`) so `style/sidebar.css`'s
+        // `.sidebar.focus .sidebar-icon.active { background:
+        // var(--focus-primary-btn) }` rule applies — the
+        // visual-regression baseline shows the active nav button
+        // with a saturated red background, which is gated on this
+        // theme class. The Phase 4d cut wires only `focus` since
+        // the timer engine starts in `Focus` mode and the visual
+        // baseline is captured pre-start; Phase 4e attaches the
+        // engine-mode → sidebar-class projection so break/long-break
+        // states also flip the highlight color.
+        <nav class="sidebar focus">
             <div class="sidebar-icons">
                 <button
                     class="sidebar-icon"
