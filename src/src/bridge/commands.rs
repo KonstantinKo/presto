@@ -526,10 +526,10 @@ pub async fn update_activity_timeout(timeout_seconds: u64) -> Result<(), BridgeE
 #[cfg(all(test, target_arch = "wasm32"))]
 mod tests {
     use super::{
-        add_session_tag, delete_tag, get_stats_history, load_manual_sessions, load_session_data,
-        load_settings, load_tags, load_tasks, register_global_shortcuts, reset_all_data,
-        save_daily_stats, save_manual_sessions, save_session_data, save_settings, save_tag,
-        save_tasks, start_activity_monitoring, stop_activity_monitoring,
+        add_session_tag, delete_tag, enable_autostart, get_stats_history, load_manual_sessions,
+        load_session_data, load_settings, load_tags, load_tasks, register_global_shortcuts,
+        reset_all_data, save_daily_stats, save_manual_sessions, save_session_data, save_settings,
+        save_tag, save_tasks, start_activity_monitoring, stop_activity_monitoring,
         update_activity_timeout,
     };
     use crate::bridge::error::BridgeError;
@@ -1035,5 +1035,28 @@ mod tests {
             update_activity_timeout(t).await
         }
         let _ = assert_signature(45).await;
+    }
+
+    #[wasm_bindgen_test]
+    async fn enable_autostart_round_trip_short_circuits_when_bridge_absent() {
+        let result = enable_autostart().await;
+        match result {
+            Err(BridgeError::BridgeUnavailable) => {}
+            other => panic!("expected BridgeUnavailable, got {other:?}"),
+        }
+    }
+
+    /// Compile-time signature pin per contracts/tauri-bridge.md row 20:
+    /// `enable_autostart() -> Result<(), BridgeError>`.
+    /// No-arg setter — the Tauri-side handler reaches into the autolaunch
+    /// plugin's `AutoLaunchManager::enable()`. Failure (e.g., the user has
+    /// revoked the necessary OS permission) maps to `BridgeError::Internal`
+    /// at the handler boundary; the wrapper surfaces it unchanged.
+    #[wasm_bindgen_test]
+    async fn enable_autostart_round_trip_signature_pinned() {
+        async fn assert_signature() -> Result<(), BridgeError> {
+            enable_autostart().await
+        }
+        let _ = assert_signature().await;
     }
 }
