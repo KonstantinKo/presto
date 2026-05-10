@@ -379,8 +379,8 @@ pub async fn save_settings(settings: Settings) -> Result<(), BridgeError> {
 mod tests {
     use super::{
         add_session_tag, delete_tag, get_stats_history, load_manual_sessions, load_session_data,
-        load_tags, load_tasks, save_daily_stats, save_manual_sessions, save_session_data,
-        save_settings, save_tag, save_tasks,
+        load_settings, load_tags, load_tasks, save_daily_stats, save_manual_sessions,
+        save_session_data, save_settings, save_tag, save_tasks,
     };
     use crate::bridge::error::BridgeError;
     use crate::bridge::session_type::SessionType;
@@ -736,5 +736,29 @@ mod tests {
             save_settings(s).await
         }
         let _ = assert_signature(sample_settings()).await;
+    }
+
+    #[wasm_bindgen_test]
+    async fn load_settings_round_trip_short_circuits_when_bridge_absent() {
+        let result = load_settings().await;
+        match result {
+            Err(BridgeError::BridgeUnavailable) => {}
+            other => panic!("expected BridgeUnavailable, got {other:?}"),
+        }
+    }
+
+    /// Compile-time signature pin per contracts/tauri-bridge.md row 14:
+    /// `load_settings() -> Result<Settings, BridgeError>`.
+    /// Distinct from `load_session_data` / `load_tasks` etc. in that the
+    /// return is a bare `Settings` (not `Option<Settings>` or `Vec<…>`):
+    /// the Tauri-side handler falls back to `Settings::default()` when
+    /// no settings file exists yet, so the cold-start case yields the
+    /// default record rather than `None`.
+    #[wasm_bindgen_test]
+    async fn load_settings_round_trip_signature_pinned() {
+        async fn assert_signature() -> Result<Settings, BridgeError> {
+            load_settings().await
+        }
+        let _ = assert_signature().await;
     }
 }
