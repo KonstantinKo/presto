@@ -300,7 +300,7 @@ pub enum BridgeError {
 }
 ```
 
-**Serde shape**: externally-tagged (`#[serde(tag = "kind")]`) — chosen for the simplest cross-language wire shape: every error JSON object carries a `kind` discriminator and the variant fields alongside (e.g., `{"kind":"invalid_argument","field":"email","reason":"empty"}`). This lets `serde-wasm-bindgen` produce structured error objects the Leptos side can pattern-match on without parsing strings.
+**Serde shape**: internally-tagged (`#[serde(tag = "kind")]`) — chosen for the simplest cross-language wire shape: every error JSON object carries a `kind` discriminator and the variant fields alongside (e.g., `{"kind":"invalid_argument","field":"email","reason":"empty"}`). This lets `serde-wasm-bindgen` produce structured error objects the Leptos side can pattern-match on without parsing strings.
 
 **Mapping strategy** (Tauri-side, applied in the cutover commit): every existing `.map_err(|e| e.to_string())` call site in `src-tauri/src/lib.rs` is rewritten to map into a `BridgeError` variant. The default (when the call site has no semantic context) is `BridgeError::Internal { msg: e.to_string() }`. Where the call site already discriminates (e.g., a missing-row branch vs. a write failure), it maps to `NotFound` / `Internal` as appropriate. Where an existing handler already validates an argument and returns a `String` error, the rewrite uses `InvalidArgument`. The migration is mechanical, file-by-file, and covered by a `bridge::error::tests::*` suite in the Leptos crate exercising every variant's serde round-trip.
 
@@ -322,7 +322,7 @@ The diff history must show the three commits in this order. Squash-merging is al
 
 ### Phase 0.5 — mock/handler reconciliation (precedes Phase 1)
 
-The current `default:` clause in `tauriMock.js:285-288` **rejects** unmocked commands — it does not cover them. The mock and the handler set in `src-tauri/src/lib.rs` have drifted: 17 handler-registered commands have no mock entry, and 4 mock entries have no corresponding handler. Of the 17 missing-mock commands, 10 are deleted by this feature (see §Deletions) and don't need mocks. The remaining 8 do, and the 4 stale entries get removed.
+The current `default:` clause in `tauriMock.js:285-288` **rejects** unmocked commands — it does not cover them. The mock and the handler set in `src-tauri/src/lib.rs` have drifted: 18 handler-registered commands have no mock entry, and 4 mock entries have no corresponding handler. Of the 18 missing-mock commands, 10 are deleted by this feature (see §Deletions) and don't need mocks. The remaining 8 do, and the 4 stale entries get removed.
 
 Phase 0.5 of the implementation phasing reconciles the mock to today's surviving handler set **before** Phase 1 introduces any new commands. Concretely:
 
