@@ -442,6 +442,37 @@ pub async fn register_global_shortcuts(shortcuts: ShortcutSettings) -> Result<()
     invoke_serde("register_global_shortcuts", &Args { shortcuts }).await
 }
 
+// ---------------------------------------------------------------------------
+// Activity monitoring
+// ---------------------------------------------------------------------------
+
+/// Start the macOS-side `ActivityMonitor` with the supplied idle
+/// timeout. Tauri-side handler:
+/// `start_activity_monitoring(timeout_seconds: u64) -> Result<(), BridgeError>`
+/// at `src-tauri/src/lib.rs:418`.
+///
+/// macOS-only on the Rust side (the handler is `cfg(target_os = "macos")`
+/// gated; on other hosts it returns an error). The Leptos wrapper is
+/// platform-agnostic — the consumer (`engine::activity_signal`) is
+/// responsible for ignoring the error on non-macOS hosts (it falls
+/// back to DOM-event-driven activity detection there).
+///
+/// `timeout_seconds: u64` matches the Tauri-side handler exactly.
+///
+/// # Errors
+/// Returns `BridgeError::BridgeUnavailable` when the Tauri JS bridge is
+/// not present. Otherwise returns the Tauri-side handler's error
+/// variant — `BridgeError::Internal` on macOS for monitor-thread
+/// failures, or whatever the non-macOS stub returns (typically also
+/// `BridgeError::Internal`).
+pub async fn start_activity_monitoring(timeout_seconds: u64) -> Result<(), BridgeError> {
+    #[derive(Serialize)]
+    struct Args {
+        timeout_seconds: u64,
+    }
+    invoke_serde("start_activity_monitoring", &Args { timeout_seconds }).await
+}
+
 // Tests gated on `wasm32` because every wrapper-test is a
 // `#[wasm_bindgen_test]` — running them via `cargo test` on the host
 // target would produce dead-code lint failures (the host-side
