@@ -224,10 +224,33 @@ pub fn TagsView() -> impl IntoView {
 mod tests {
     use super::{DEFAULT_ICON, ICON_OPTIONS};
 
-    /// Selector contract pin for the tags dropdown, sourced from
-    /// `tests/e2e/tags.spec.js` and `sessions-history.spec.js`.
-    /// Each entry maps to a `locator("#…")` callsite; drift here
-    /// breaks the e2e run.
+    /// T203 — visual-regression / selector contract pin for the
+    /// tags dropdown. Sourced from `tests/e2e/tags.spec.js` and
+    /// `tests/e2e/sessions-history.spec.js`. Each entry maps to a
+    /// `locator("#…")` callsite; drift here breaks the e2e run.
+    ///
+    /// - `tag-dropdown-menu` — dropdown root
+    ///   (`tags.spec.js:11,33` `toBeVisible`).
+    /// - `tag-list` — list host (`tags.spec.js:24,29,35`).
+    /// - `selected-icon-btn` — icon picker trigger
+    ///   (`tags.spec.js:14`).
+    /// - `selected-icon-display` — current-icon display child of
+    ///   the trigger button.
+    /// - `icon-selector-dropdown` — picker pop-out
+    ///   (`tags.spec.js:15` `toBeVisible`).
+    /// - `new-tag-name` — name input (`tags.spec.js:19`).
+    /// - `create-tag-btn` — submit button (`tags.spec.js:20`).
+    /// - `new-tag-input` — wrapper for the input row.
+    ///
+    /// Per-row classes: `.tag-item` (also targeted by
+    /// `sessions-history.spec.js:18`) plus `role="listitem"`
+    /// (`tags.spec.js:24`'s `[role="listitem"]` attribute
+    /// selector).
+    ///
+    /// Visual baseline updates are out of scope per AGENTS.md
+    /// §"Don't update visual regression baselines without
+    /// explicit visual review" — this test only pins the string
+    /// contract.
     #[test]
     fn tags_view_selector_contract_documented() {
         const REQUIRED_IDS: &[&str] = &[
@@ -240,6 +263,15 @@ mod tests {
             "new-tag-name",
             "create-tag-btn",
         ];
+        const REQUIRED_CLASSES: &[&str] = &[
+            "tag-item",
+            "tag-delete-btn",
+            "emoji-option",
+            "selected-icon-btn",
+            "create-tag-btn",
+            "tag-dropdown-menu",
+            "icon-selector-dropdown",
+        ];
         let mut seen: Vec<&str> = Vec::with_capacity(REQUIRED_IDS.len());
         for id in REQUIRED_IDS {
             assert!(!id.is_empty(), "selector ID must not be empty");
@@ -248,6 +280,15 @@ mod tests {
                 "duplicate selector ID in contract: {id}",
             );
             seen.push(id);
+        }
+        let mut seen_classes: Vec<&str> = Vec::with_capacity(REQUIRED_CLASSES.len());
+        for cls in REQUIRED_CLASSES {
+            assert!(!cls.is_empty(), "selector class must not be empty");
+            assert!(
+                !seen_classes.contains(cls),
+                "duplicate selector class in contract: {cls}",
+            );
+            seen_classes.push(cls);
         }
     }
 
