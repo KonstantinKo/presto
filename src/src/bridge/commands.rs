@@ -548,11 +548,11 @@ pub async fn enable_autostart() -> Result<(), BridgeError> {
 #[cfg(all(test, target_arch = "wasm32"))]
 mod tests {
     use super::{
-        add_session_tag, delete_tag, enable_autostart, get_stats_history, load_manual_sessions,
-        load_session_data, load_settings, load_tags, load_tasks, register_global_shortcuts,
-        reset_all_data, save_daily_stats, save_manual_sessions, save_session_data, save_settings,
-        save_tag, save_tasks, start_activity_monitoring, stop_activity_monitoring,
-        update_activity_timeout,
+        add_session_tag, delete_tag, disable_autostart, enable_autostart, get_stats_history,
+        load_manual_sessions, load_session_data, load_settings, load_tags, load_tasks,
+        register_global_shortcuts, reset_all_data, save_daily_stats, save_manual_sessions,
+        save_session_data, save_settings, save_tag, save_tasks, start_activity_monitoring,
+        stop_activity_monitoring, update_activity_timeout,
     };
     use crate::bridge::error::BridgeError;
     use crate::bridge::session_type::SessionType;
@@ -1078,6 +1078,28 @@ mod tests {
     async fn enable_autostart_round_trip_signature_pinned() {
         async fn assert_signature() -> Result<(), BridgeError> {
             enable_autostart().await
+        }
+        let _ = assert_signature().await;
+    }
+
+    #[wasm_bindgen_test]
+    async fn disable_autostart_round_trip_short_circuits_when_bridge_absent() {
+        let result = disable_autostart().await;
+        match result {
+            Err(BridgeError::BridgeUnavailable) => {}
+            other => panic!("expected BridgeUnavailable, got {other:?}"),
+        }
+    }
+
+    /// Compile-time signature pin per contracts/tauri-bridge.md row 21:
+    /// `disable_autostart() -> Result<(), BridgeError>`.
+    /// No-arg setter; the Tauri-side handler delegates to the autolaunch
+    /// plugin's `AutoLaunchManager::disable()`. Idempotent — calling
+    /// `disable` when autostart is already off is a successful no-op.
+    #[wasm_bindgen_test]
+    async fn disable_autostart_round_trip_signature_pinned() {
+        async fn assert_signature() -> Result<(), BridgeError> {
+            disable_autostart().await
         }
         let _ = assert_signature().await;
     }
