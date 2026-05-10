@@ -424,6 +424,51 @@ impl TimerState {
         vec![TimerEvent::ManualSessionRecorded { duration_secs }]
     }
 
+    /// Adjust the displayed remaining time by `delta_secs` seconds.
+    ///
+    /// Mirrors the JS-era `adjustTimer` flow at
+    /// `pomodoro-timer.js:adjustTimer` (the `-5/+5` right-rail
+    /// affordance — visible on the visual-regression baseline).
+    /// `delta_secs > 0` adds time, `< 0` subtracts. The remaining
+    /// time is clamped to the inclusive range `[1, current mode
+    /// duration]` so a `-5` press near zero doesn't roll the
+    /// countdown negative and a `+5` press at full duration
+    /// doesn't bloat past the configured mode duration (the JS-era
+    /// `adjustTimer` enforces both clamps).
+    ///
+    /// When the timer is running, this rebases the wall-clock
+    /// anchor to "now" with the new remaining time as the duration
+    /// snapshot — the next `tick()` thus measures elapsed time
+    /// against the post-adjust baseline. This preserves drift
+    /// compensation (Principle I): the wall-clock anchor +
+    /// duration-snapshot pair stays in lock-step. Idle / paused
+    /// timers leave the anchor untouched (it's already cleared).
+    ///
+    /// `current_session_elapsed_secs` is unaffected: the user has
+    /// already worked the elapsed time, the adjust button only
+    /// shifts the *future* portion of the session.
+    pub fn adjust_remaining_secs(&mut self, delta_secs: i32, clock: &dyn Clock) {
+        let max_secs = i64::from(self.durations.for_mode(self.current_mode));
+        let proposed = self.time_remaining_secs.saturating_add(i64::from(delta_secs));
+        // Floor at 1 second (the JS-era clamp prevents the display
+        // from showing 0:00 outside the natural completion path).
+        // Ceil at the current mode's full duration so a +5 press at
+        // a full focus duration doesn't bloat the countdown past
+        // the configured limit.
+        let clamped = proposed.clamp(1, max_secs);
+        self.time_remaining_secs = clamped;
+
+        // Re-anchor the wall clock when running so the next tick
+        // computes elapsed time against the adjusted baseline. The
+        // anchor is touched ONLY when running — paused / idle
+        // states already cleared the anchor in pause()/reset() and
+        // resume() will re-anchor on the next start.
+        if self.is_running {
+            self.timer_start_ms = Some(clock.now_ms());
+            self.timer_duration_secs = Some(self.time_remaining_secs);
+        }
+    }
+
     /// Consume an `ActivitySignal` from the bridge layer.
     ///
     /// Idle while running a focus session triggers auto-pause.
@@ -1265,6 +1310,78 @@ mod tests {
             state.time_remaining_secs(),
             remaining_before_pause - 1,
             "post-resume countdown advances 1 second per tick"
+        );
+    }
+
+    /// `adjust_remaining_secs(+300)` adds 5 minutes to an idle timer
+    /// and clamps at the current mode's full duration. The JS-era
+    /// right-rail `+5` press is the visual-regression baseline's
+    /// `#timer-plus-btn`; the engine method is the post-Phase-4d
+    /// API that closes that gap.
+    #[test]
+    fn adjust_remaining_adds_seconds_when_idle() {
+        let clock = MockClock::new(0);
+        let mut state = TimerState::new(Durations::default()); // focus 1500
+        // Knock the displayed remaining down to 1200 first so the
+        // +300 doesn't immediately saturate against the cap.
+        state.adjust_remaining_secs(-300, &clock);
+        assert_eq!(state.time_remaining_secs(), 1200);
+        state.adjust_remaining_secs(300, &clock);
+        assert_eq!(state.time_remaining_secs(), 1500);
+        // A second +300 saturates against the focus cap.
+        state.adjust_remaining_secs(300, &clock);
+        assert_eq!(
+            state.time_remaining_secs(),
+            1500,
+            "+5 at full duration must clamp at the mode cap",
+        );
+    }
+
+    /// `adjust_remaining_secs(-300)` subtracts 5 minutes and floors
+    /// at 1 second so a press near zero doesn't roll the countdown
+    /// negative. Mirrors the JS-era `adjustTimer` floor at
+    /// `pomodoro-timer.js:adjustTimer`.
+    #[test]
+    fn adjust_remaining_subtracts_and_clamps_above_zero() {
+        let clock = MockClock::new(0);
+        let mut state = TimerState::new(Durations::default());
+        // Drive the remaining time near zero and confirm the floor.
+        for _ in 0..6 {
+            state.adjust_remaining_secs(-300, &clock);
+        }
+        assert_eq!(
+            state.time_remaining_secs(),
+            1,
+            "-5 below 1s must clamp to 1s, not roll negative",
+        );
+    }
+
+    /// While running, `adjust_remaining_secs` re-anchors the wall
+    /// clock so the next `tick()` measures elapsed time against the
+    /// adjusted remaining — Principle I drift compensation stays
+    /// correct after the user shifts the displayed remaining time.
+    #[test]
+    fn adjust_remaining_rebases_anchor_when_running() {
+        let clock = MockClock::new(10_000);
+        let mut state = TimerState::new(Durations::default());
+        state.start(&clock).unwrap();
+        // Advance 5 seconds of wall time → displayed remaining is
+        // 1500 - 5 = 1495 after the next tick.
+        clock.advance(5_000);
+        let _ = state.tick(&clock);
+        assert_eq!(state.time_remaining_secs(), 1495);
+        // +5: 1495 + 300 = 1795, but clamped at 1500 (focus cap).
+        state.adjust_remaining_secs(300, &clock);
+        assert_eq!(state.time_remaining_secs(), 1500);
+        // Advance another 1 second → next tick decrements from
+        // the post-adjust baseline (1500 → 1499), proving the
+        // anchor was rebased.
+        clock.advance(1_000);
+        let _ = state.tick(&clock);
+        assert_eq!(
+            state.time_remaining_secs(),
+            1499,
+            "post-adjust tick must measure against the rebased anchor",
         );
     }
 }
