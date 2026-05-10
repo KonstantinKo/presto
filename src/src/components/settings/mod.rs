@@ -243,7 +243,7 @@ pub fn SettingsView(
                         class:active=is_active(SettingsTab::Theme)
                         id="category-theme"
                     >
-                        <theme::ThemeSettings/>
+                        <theme::ThemeSettings settings=settings toast=toast/>
                     </div>
                     <div
                         class="settings-category"

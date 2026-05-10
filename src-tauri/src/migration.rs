@@ -154,11 +154,22 @@ pub(super) fn import_settings(
     }
     let Some(legacy_settings) = payload.settings.as_ref() else {
         // No settings.json equivalent in the legacy payload; nothing
-        // to write. The four bare preference flags don't yet have
-        // homes in `AppSettings`; absorb them as best-effort.
+        // to write.
         return Ok(());
     };
-    helpers::write_settings_to(app_data_dir, legacy_settings)?;
+    // Fold the legacy bare-preference flags into the `appearance` block.
+    // The JS-era `theme_preference` / `timer_theme_preference` were stored
+    // as separate localStorage keys outside the main settings object; the
+    // payload carries them alongside `settings` so the import handler can
+    // merge them into the post-cutover `appearance` block.
+    let mut merged = legacy_settings.clone();
+    if let Some(ref theme) = payload.theme_preference {
+        merged.appearance.theme.clone_from(theme);
+    }
+    if let Some(ref timer_theme) = payload.timer_theme_preference {
+        merged.appearance.timer_theme.clone_from(timer_theme);
+    }
+    helpers::write_settings_to(app_data_dir, &merged)?;
     Ok(())
 }
 
@@ -388,6 +399,49 @@ mod tests {
         };
         super::import_settings(dir.path(), &payload).unwrap();
         assert!(!dir.path().join("settings.json").exists());
+    }
+
+    #[test]
+    fn import_settings_folds_theme_preference_into_appearance() {
+        let dir = tempdir().unwrap();
+        let payload = LegacySettingsPayload {
+            settings: Some(AppSettings::default()),
+            theme_preference: Some("dark".to_string()),
+            timer_theme_preference: Some("pipboy".to_string()),
+            auto_check_updates: None,
+        };
+        super::import_settings(dir.path(), &payload).unwrap();
+        let json = std::fs::read_to_string(dir.path().join("settings.json")).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
+        assert_eq!(
+            parsed["appearance"]["theme"].as_str().unwrap(),
+            "dark",
+            "theme_preference must win over default"
+        );
+        assert_eq!(
+            parsed["appearance"]["timer_theme"].as_str().unwrap(),
+            "pipboy",
+            "timer_theme_preference must win over default"
+        );
+    }
+
+    #[test]
+    fn import_settings_no_theme_prefs_keeps_defaults() {
+        let dir = tempdir().unwrap();
+        let payload = LegacySettingsPayload {
+            settings: Some(AppSettings::default()),
+            theme_preference: None,
+            timer_theme_preference: None,
+            auto_check_updates: None,
+        };
+        super::import_settings(dir.path(), &payload).unwrap();
+        let json = std::fs::read_to_string(dir.path().join("settings.json")).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed["appearance"]["theme"].as_str().unwrap(), "auto");
+        assert_eq!(
+            parsed["appearance"]["timer_theme"].as_str().unwrap(),
+            "espresso"
+        );
     }
 
     // ── import_history ──────────────────────────────────────────────────────

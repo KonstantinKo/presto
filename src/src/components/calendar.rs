@@ -39,6 +39,7 @@
 use chrono::{DateTime, Datelike, Days, Months, Utc};
 use leptos::prelude::*;
 
+use crate::bridge::session_type::SessionType;
 use crate::bridge::types::{ManualSession, Settings};
 use crate::engine::clock::Clock;
 use crate::engine::date_format::format_session_date;
@@ -197,6 +198,50 @@ fn build_month_grid(anchor: DateTime<Utc>) -> Vec<DateTime<Utc>> {
         .collect()
 }
 
+/// Return the seven `format_session_date` strings for the Mon–Sun week
+/// containing `anchor`. Used to filter sessions by current week.
+fn week_date_set(anchor: DateTime<Utc>) -> [String; 7] {
+    let start = start_of_week_monday(anchor);
+    [
+        format_session_date(start.timestamp_millis()),
+        format_session_date((start + Days::new(1)).timestamp_millis()),
+        format_session_date((start + Days::new(2)).timestamp_millis()),
+        format_session_date((start + Days::new(3)).timestamp_millis()),
+        format_session_date((start + Days::new(4)).timestamp_millis()),
+        format_session_date((start + Days::new(5)).timestamp_millis()),
+        format_session_date((start + Days::new(6)).timestamp_millis()),
+    ]
+}
+
+/// Sum of `duration` (minutes) for Focus sessions whose `date` falls in
+/// `week_dates`. Drives `#total-focus-week`.
+fn weekly_focus_minutes(sessions: &[ManualSession], week_dates: &[String; 7]) -> u32 {
+    sessions
+        .iter()
+        .filter(|s| s.session_type == SessionType::Focus && week_dates.contains(&s.date))
+        .map(|s| s.duration)
+        .sum()
+}
+
+/// Count of Focus sessions whose `date` falls in `week_dates`. Drives
+/// `#weekly-sessions`.
+fn weekly_sessions_count(sessions: &[ManualSession], week_dates: &[String; 7]) -> u32 {
+    sessions
+        .iter()
+        .filter(|s| s.session_type == SessionType::Focus && week_dates.contains(&s.date))
+        .fold(0u32, |acc, _| acc.saturating_add(1))
+}
+
+/// Sum of `duration` (minutes) for all session types whose `date` falls in
+/// `week_dates`. Drives `#weekly-focus-time`.
+fn weekly_total_minutes(sessions: &[ManualSession], week_dates: &[String; 7]) -> u32 {
+    sessions
+        .iter()
+        .filter(|s| week_dates.contains(&s.date))
+        .map(|s| s.duration)
+        .sum()
+}
+
 /// Calendar view — renders the week-range navigation bar + the
 /// month grid backed by a `RwSignal<DateTime<Utc>>` cursor. Click
 /// handlers shift the cursor by one week or one month; derived
@@ -278,6 +323,26 @@ pub fn CalendarView() -> impl IntoView {
     // the `weekly-sessions` count (driven by `sessions.len()`).
     let _ = weekly_goal;
 
+    // Focus Weekly Summary metric signals — each reads both `cursor`
+    // (week bounds) and `sessions` (source rows) so they re-derive
+    // whenever the user navigates weeks or completes a session.
+    let weekly_focus = Signal::derive(move || {
+        let dates = week_date_set(cursor.get());
+        sessions.with(|ss| weekly_focus_minutes(ss, &dates))
+    });
+    let avg_focus_day = Signal::derive(move || {
+        let dates = week_date_set(cursor.get());
+        sessions.with(|ss| weekly_focus_minutes(ss, &dates)) / 7
+    });
+    let weekly_sessions_sig = Signal::derive(move || {
+        let dates = week_date_set(cursor.get());
+        sessions.with(|ss| weekly_sessions_count(ss, &dates))
+    });
+    let weekly_total = Signal::derive(move || {
+        let dates = week_date_set(cursor.get());
+        sessions.with(|ss| weekly_total_minutes(ss, &dates))
+    });
+
     view! {
         <div class="view-container view-section" id="calendar-view">
             <h1>"Calendar & Statistics"</h1>
@@ -312,7 +377,9 @@ pub fn CalendarView() -> impl IntoView {
                                     <i class="ri-subtract-line"></i>
                                     <span>"0%"</span>
                                 </div>
-                                <div class="metric-value" id="total-focus-week">"0m"</div>
+                                <div class="metric-value" id="total-focus-week">
+                                    {move || format!("{}m", weekly_focus.get())}
+                                </div>
                                 <div class="metric-label">"Weekly focus time"</div>
                             </div>
                             <div class="focus-metric">
@@ -320,7 +387,9 @@ pub fn CalendarView() -> impl IntoView {
                                     <i class="ri-subtract-line"></i>
                                     <span>"0%"</span>
                                 </div>
-                                <div class="metric-value" id="avg-focus-day">"0m"</div>
+                                <div class="metric-value" id="avg-focus-day">
+                                    {move || format!("{}m", avg_focus_day.get())}
+                                </div>
                                 <div class="metric-label">"Average focus/day"</div>
                             </div>
                             <div class="focus-metric">
@@ -328,7 +397,9 @@ pub fn CalendarView() -> impl IntoView {
                                     <i class="ri-subtract-line"></i>
                                     <span>"0%"</span>
                                 </div>
-                                <div class="metric-value" id="weekly-sessions">"0"</div>
+                                <div class="metric-value" id="weekly-sessions">
+                                    {move || weekly_sessions_sig.get().to_string()}
+                                </div>
                                 <div class="metric-label">"Sessions this week"</div>
                             </div>
                             <div class="focus-metric">
@@ -336,7 +407,9 @@ pub fn CalendarView() -> impl IntoView {
                                     <i class="ri-subtract-line"></i>
                                     <span>"0%"</span>
                                 </div>
-                                <div class="metric-value" id="weekly-focus-time">"0m"</div>
+                                <div class="metric-value" id="weekly-focus-time">
+                                    {move || format!("{}m", weekly_total.get())}
+                                </div>
                                 <div class="metric-label">"Weekly total time"</div>
                             </div>
                         </div>
@@ -564,8 +637,12 @@ pub fn CalendarView() -> impl IntoView {
 mod tests {
     use super::{
         build_month_grid, format_month_label, format_week_range, month_full, month_short,
-        start_of_week_monday, start_of_week_sunday,
+        start_of_week_monday, start_of_week_sunday, week_date_set, weekly_focus_minutes,
+        weekly_sessions_count, weekly_total_minutes,
     };
+    use crate::bridge::session_type::SessionType;
+    use crate::bridge::types::ManualSession;
+    use crate::engine::date_format::format_session_date;
     use chrono::{DateTime, Datelike, TimeZone, Utc};
 
     /// T200 — visual-regression / selector contract pin for the
@@ -694,5 +771,75 @@ mod tests {
             assert_ne!(month_short(m), "???", "month_short missing {m}");
             assert_ne!(month_full(m), "Unknown", "month_full missing {m}");
         }
+    }
+
+    fn make_session(date: &str, duration: u32, session_type: SessionType) -> ManualSession {
+        ManualSession {
+            id: "test-id".to_string(),
+            session_type,
+            duration,
+            start_time: "09:00".to_string(),
+            end_time: "09:25".to_string(),
+            notes: None,
+            created_at: "2026-05-04T09:00:00Z".to_string(),
+            date: date.to_string(),
+            tags: None,
+        }
+    }
+
+    #[test]
+    fn weekly_metrics_are_zero_for_empty_list() {
+        let dates = week_date_set(day(2026, 5, 9));
+        assert_eq!(weekly_focus_minutes(&[], &dates), 0);
+        assert_eq!(weekly_sessions_count(&[], &dates), 0);
+        assert_eq!(weekly_total_minutes(&[], &dates), 0);
+    }
+
+    #[test]
+    fn weekly_focus_minutes_sums_in_week_focus_sessions() {
+        let anchor = day(2026, 5, 9); // Sat → week Mon May 4 – Sun May 10
+        let dates = week_date_set(anchor);
+        let monday_date = format_session_date(day(2026, 5, 4).timestamp_millis());
+        let sessions = vec![
+            make_session(&monday_date, 25, SessionType::Focus),
+            make_session(&monday_date, 25, SessionType::Focus),
+        ];
+        assert_eq!(weekly_focus_minutes(&sessions, &dates), 50);
+    }
+
+    #[test]
+    fn weekly_metrics_exclude_out_of_week_sessions() {
+        let dates = week_date_set(day(2026, 5, 9)); // Week May 4-10
+                                                    // May 3 is the Sunday of the prior week — outside the Mon-Sun range.
+        let prev_date = format_session_date(day(2026, 5, 3).timestamp_millis());
+        let sessions = vec![make_session(&prev_date, 25, SessionType::Focus)];
+        assert_eq!(weekly_focus_minutes(&sessions, &dates), 0);
+        assert_eq!(weekly_sessions_count(&sessions, &dates), 0);
+        assert_eq!(weekly_total_minutes(&sessions, &dates), 0);
+    }
+
+    #[test]
+    fn weekly_total_includes_non_focus_sessions() {
+        let dates = week_date_set(day(2026, 5, 9));
+        let monday_date = format_session_date(day(2026, 5, 4).timestamp_millis());
+        let sessions = vec![
+            make_session(&monday_date, 25, SessionType::Focus),
+            make_session(&monday_date, 5, SessionType::Break),
+        ];
+        // weekly_focus only counts Focus; weekly_total counts all.
+        assert_eq!(weekly_focus_minutes(&sessions, &dates), 25);
+        assert_eq!(weekly_total_minutes(&sessions, &dates), 30);
+    }
+
+    #[test]
+    fn weekly_sessions_count_counts_focus_only() {
+        let dates = week_date_set(day(2026, 5, 9));
+        let monday_date = format_session_date(day(2026, 5, 4).timestamp_millis());
+        let sessions = vec![
+            make_session(&monday_date, 25, SessionType::Focus),
+            make_session(&monday_date, 5, SessionType::Break),
+            make_session(&monday_date, 20, SessionType::LongBreak),
+        ];
+        assert_eq!(weekly_sessions_count(&sessions, &dates), 1);
     }
 }

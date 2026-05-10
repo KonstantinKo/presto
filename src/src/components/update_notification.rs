@@ -33,7 +33,17 @@
 
 use leptos::prelude::*;
 
+use crate::bridge::types::Settings;
 use crate::managers::update::UpdateInfo;
+
+/// Deduplicating push: add `version` to `list` only if not already
+/// present. Used by the "Skip release" handler to avoid duplicating
+/// entries in `settings.skipped_versions`.
+fn push_skipped(list: &mut Vec<String>, version: &str) {
+    if !list.contains(&version.to_string()) {
+        list.push(version.to_string());
+    }
+}
 
 /// Update notification banner.
 ///
@@ -42,8 +52,15 @@ use crate::managers::update::UpdateInfo;
 ///   `UpdateManager`. The component reads the variant to decide
 ///   whether to add the `.visible` class; the version text
 ///   projects the `Available::version` slot.
+/// - `settings`: shared `RwSignal<Settings>`. "Skip release" handler
+///   pushes the skipped version onto `settings.skipped_versions`
+///   (deduplicated) so the `UPDATE_AVAILABLE` listener in `app.rs`
+///   can filter repeat notifications.
 #[component]
-pub fn UpdateNotification(update_info: RwSignal<UpdateInfo>) -> impl IntoView {
+pub fn UpdateNotification(
+    update_info: RwSignal<UpdateInfo>,
+    settings: RwSignal<Settings>,
+) -> impl IntoView {
     // Local "user closed it" flag. The JS-era surface at
     // `src/components/update-notification.js` retains the dismissal
     // across navigations within the same launch (the spec at
@@ -73,6 +90,20 @@ pub fn UpdateNotification(update_info: RwSignal<UpdateInfo>) -> impl IntoView {
 
     let on_close = move |_| {
         dismissed.set(true);
+    };
+
+    // "Skip release" handler: dismiss AND record the version in
+    // settings.skipped_versions so the UPDATE_AVAILABLE listener in
+    // app.rs suppresses repeat banners for the same version.
+    let on_skip = move |_| {
+        dismissed.set(true);
+        let version = update_info.with(|info| match info {
+            UpdateInfo::Available { version, .. } => Some(version.clone()),
+            UpdateInfo::NoUpdate => None,
+        });
+        if let Some(v) = version {
+            settings.update(|s| push_skipped(&mut s.skipped_versions, &v));
+        }
     };
 
     view! {
@@ -112,7 +143,7 @@ pub fn UpdateNotification(update_info: RwSignal<UpdateInfo>) -> impl IntoView {
                     <button
                         class="update-btn update-btn-secondary"
                         data-action="dismiss"
-                        on:click=on_close
+                        on:click=on_skip
                     >"Skip release"</button>
                 </div>
                 <button
@@ -130,6 +161,29 @@ pub fn UpdateNotification(update_info: RwSignal<UpdateInfo>) -> impl IntoView {
 
 #[cfg(test)]
 mod tests {
+    use super::push_skipped;
+
+    #[test]
+    fn push_skipped_appends_to_empty_list() {
+        let mut list = Vec::new();
+        push_skipped(&mut list, "0.5.0");
+        assert_eq!(list, vec!["0.5.0"]);
+    }
+
+    #[test]
+    fn push_skipped_deduplicates() {
+        let mut list = vec!["0.5.0".to_string()];
+        push_skipped(&mut list, "0.5.0");
+        assert_eq!(list.len(), 1, "duplicate must not be added");
+    }
+
+    #[test]
+    fn push_skipped_appends_distinct_versions() {
+        let mut list = vec!["0.5.0".to_string()];
+        push_skipped(&mut list, "0.5.1");
+        assert_eq!(list, vec!["0.5.0", "0.5.1"]);
+    }
+
     /// T214 — selector contract pin. Sourced from
     /// `tests/e2e/update-notification.spec.js`.
     #[test]
