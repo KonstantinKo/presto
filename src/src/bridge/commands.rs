@@ -203,7 +203,8 @@ pub async fn save_tasks(tasks: Vec<Task>) -> Result<(), BridgeError> {
 #[cfg(all(test, target_arch = "wasm32"))]
 mod tests {
     use super::{
-        get_stats_history, load_session_data, save_daily_stats, save_session_data, save_tasks,
+        get_stats_history, load_session_data, load_tasks, save_daily_stats, save_session_data,
+        save_tasks,
     };
     use crate::bridge::error::BridgeError;
     use crate::bridge::types::{Session, Task};
@@ -345,5 +346,25 @@ mod tests {
             save_tasks(t).await
         }
         let _ = assert_signature(sample_tasks()).await;
+    }
+
+    #[wasm_bindgen_test]
+    async fn load_tasks_round_trip_short_circuits_when_bridge_absent() {
+        let result = load_tasks().await;
+        match result {
+            Err(BridgeError::BridgeUnavailable) => {}
+            other => panic!("expected BridgeUnavailable, got {other:?}"),
+        }
+    }
+
+    /// Compile-time signature pin per contracts/tauri-bridge.md row 6:
+    /// `load_tasks() -> Result<Vec<Task>, BridgeError>`.
+    /// Returns an empty `Vec` for the no-tasks-file cold-start case.
+    #[wasm_bindgen_test]
+    async fn load_tasks_round_trip_signature_pinned() {
+        async fn assert_signature() -> Result<Vec<Task>, BridgeError> {
+            load_tasks().await
+        }
+        let _ = assert_signature().await;
     }
 }
