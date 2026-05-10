@@ -656,6 +656,40 @@ pub async fn update_tray_menu(
     .await
 }
 
+// ---------------------------------------------------------------------------
+// Export
+// ---------------------------------------------------------------------------
+
+/// Write a base64-encoded XLSX payload to disk. Tauri-side handler:
+/// `write_excel_file(path: String, data: String) -> Result<(), BridgeError>`
+/// at `src-tauri/src/lib.rs:1219`.
+///
+/// **Cutover-period parity only.** Deprecated by `export_sessions_xlsx`
+/// (Phase 1D / T097), which moves the workbook construction Rust-side
+/// using `rust_xlsxwriter` and accepts a typed `Vec<ManualSession>`
+/// rather than a base64 blob. This wrapper exists so the JS-era export
+/// path can compile against the new bridge during the transition; it
+/// is removed in Phase 6 cleanup along with the Tauri-side handler.
+///
+/// `data` is the standard-base64 encoding of the XLSX bytes; the
+/// Tauri-side handler decodes via `base64::engine::general_purpose::STANDARD`
+/// and writes to `path` via `std::fs::write`.
+///
+/// # Errors
+/// Returns `BridgeError::BridgeUnavailable` when the Tauri JS bridge is
+/// not present. Returns `BridgeError::InvalidArgument { field: "data",
+/// reason: <base64 decode error> }` if `data` is not valid base64
+/// (Tauri-side validation per `decode_and_write_file`). Returns
+/// `BridgeError::Internal` if the filesystem write to `path` fails.
+pub async fn write_excel_file(path: String, data: String) -> Result<(), BridgeError> {
+    #[derive(Serialize)]
+    struct Args {
+        path: String,
+        data: String,
+    }
+    invoke_serde("write_excel_file", &Args { path, data }).await
+}
+
 // Tests gated on `wasm32` because every wrapper-test is a
 // `#[wasm_bindgen_test]` — running them via `cargo test` on the host
 // target would produce dead-code lint failures (the host-side
