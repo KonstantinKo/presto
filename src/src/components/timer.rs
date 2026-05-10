@@ -164,13 +164,19 @@ pub fn TimerView() -> impl IntoView {
     let on_play_pause = move |_| {
         engine.update(|state| {
             if state.is_running() {
-                // No `pause()` API on the engine yet (Phase 2 ships
-                // start/skip/reset; the JS-era `pause()` is mapped
-                // to `reset()`'s "stop running, clear anchor" half
-                // for now — full pause/resume parity lands in a
-                // later refinement). This preserves the e2e flow:
-                // click while running → idle, `#play-icon` visible.
-                state.reset();
+                // Manual pause via the engine's public API. Unlike
+                // the earlier `reset()` workaround, this preserves
+                // `current_session_elapsed_secs` across the pause
+                // window so the persistence layer records the real
+                // session duration on the eventual completion or
+                // skip. See `engine::timer::TimerState::pause`.
+                let _ = state.pause(&BrowserClock);
+            } else if state.is_paused() || state.is_auto_paused() {
+                // Resume from manual or smart-pause through the
+                // single `resume()` entrypoint (mirrors the JS-era
+                // `resumeTimer` behaviour where the play button
+                // unwinds either pause variant).
+                let _ = state.resume(&BrowserClock);
             } else {
                 let _ = state.start(&BrowserClock);
             }
