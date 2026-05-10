@@ -30,6 +30,14 @@ repo, read these in order:
 - **Tauri bridge mock**: `tests/e2e/fixtures/tauriMock.js` mirrors every
   Tauri command reachable from the frontend. Adding a command means
   extending the mock first; then the test; then the real call site.
+- **Bridge availability**: frontend code MUST gracefully short-circuit
+  or degrade when `window.__TAURI_INTERNALS__` is absent (vite/trunk
+  dev server, e2e mock context). Don't assume the bridge is always
+  there.
+- **IPC is `invoke()` + `listen()` only.** No custom postMessage
+  protocols, no shared `window.*` globals as channels, no DOM CustomEvent
+  pseudo-RPCs. New IPC mechanisms are constitution amendments, not
+  per-feature decisions.
 
 ## Lints and quality gates
 
@@ -67,6 +75,16 @@ The full hook configuration is in `.specify/extensions.yml`. Slash
 commands are installed under `.claude/skills/speckit-*/SKILL.md`. Use
 the **hyphenated** form (`/speckit-constitution`, `/speckit-plan`); the
 public docs are wrong about dots.
+
+## Test-first commit ordering
+
+For Principle V scope (timer engine, manager state machines, persistence
+helpers, time-keeping math): **the failing-test commit precedes the
+implementation commit.** A single commit that adds both the test and
+the passing implementation is rejected — the diff has to show RED
+first, then GREEN. UI plumbing and trivial CRUD are out of Principle V
+scope and don't need this ordering; they're covered by the e2e suite
+end-to-end.
 
 ## Things not to do
 

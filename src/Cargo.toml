@@ -1,0 +1,67 @@
+[package]
+name = "presto-web"
+version = "0.4.4"
+description = "Leptos (CSR + WASM) frontend for the presto pomodoro timer"
+authors = ["Konstantin Koss"]
+edition = "2021"
+publish = false
+
+[[bin]]
+name = "presto-web"
+path = "src/main.rs"
+
+[lints]
+workspace = true
+
+[dependencies]
+leptos = { version = "0.7", features = ["csr"] }
+wasm-bindgen = "0.2"
+wasm-bindgen-futures = "0.4"
+js-sys = "0.3"
+console_error_panic_hook = "0.1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+serde-wasm-bindgen = "0.6"
+gloo-storage = "0.3"
+thiserror = "1"
+chrono = { version = "0.4", features = ["alloc", "serde", "wasmbind"], default-features = false }
+
+[dependencies.web-sys]
+version = "0.3"
+features = [
+    "Window",
+    "Document",
+    "Element",
+    "HtmlElement",
+    "Node",
+    # `EventTarget` + `MouseEvent` power the document-level close-on-
+    # outside-click listener for the tag-dropdown popover in
+    # `components::timer`. Mirrors the JS-era
+    # `document.addEventListener("click", ...)` at the deleted
+    # `src/managers/tag-manager.js` that closed the popover when the
+    # user clicked outside `#timer-status` / `#tag-dropdown-menu`.
+    "EventTarget",
+    "MouseEvent",
+    # `KeyboardEvent` powers the document-level start/stop keyboard
+    # shortcut listener for the tag-dropdown popover in
+    # `components::timer`. Mirrors the JS-era
+    # `pomodoro-timer.js:setupKeyboardShortcuts` Space-key fallback
+    # exercised by `settings-shortcuts.spec.js`.
+    "KeyboardEvent",
+    # `Storage` powers the Phase 1E transition-only legacy localStorage
+    # migration (`bridge::storage::migrate_legacy_localstorage`); each
+    # per-domain reader probes `window().local_storage()` for one of
+    # the 12 preserved JS-era keys per data-model.md §"Legacy
+    # localStorage migration". Slated for removal alongside the
+    # migration code one minor version after cutover.
+    "Storage",
+    # `MediaQueryList` powers `theme::loader::system_prefers_dark`
+    # (Phase 5 T224 — follow-system-theme via the
+    # `prefers-color-scheme: dark` media query). Mirrors the JS-era
+    # `window.matchMedia(...).matches` read in the now-deleted
+    # `src/managers/theme-manager.js` (removed in Phase 6 T238).
+    "MediaQueryList",
+]
+
+[dev-dependencies]
+wasm-bindgen-test = "0.3"

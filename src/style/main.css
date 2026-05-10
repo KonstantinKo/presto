@@ -1,0 +1,41 @@
+/* Main CSS Entry Point - Imports all modular CSS files */
+
+/* Base styles and CSS variables */
+@import 'variables.css';
+
+/* Timer themes */
+@import 'themes/espresso.css';
+@import 'themes/pommodore64.css';
+@import 'themes/pipboy.css';
+
+/* Shared components for common patterns */
+@import 'shared-components.css';
+
+/* Core component styles */
+@import 'timer.css';
+@import 'controls.css';
+@import 'progress.css';
+@import 'tasks.css';
+@import 'statistics.css';
+@import 'smart-indicator.css';
+
+/* Layout and navigation */
+@import 'layout.css';
+@import 'sidebar.css';
+
+/* Views and pages */
+@import 'calendar.css';
+@import 'settings.css';
+@import 'team.css';
+@import 'timeline.css';
+
+/* Interactive elements */
+@import 'modals.css';
+@import 'notifications.css';
+@import 'auth.css';
+
+/* Effects and animations */
+@import 'animations.css';
+
+/* Responsive design */
+@import 'responsive.css';

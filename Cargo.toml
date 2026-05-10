@@ -1,0 +1,40 @@
+[workspace]
+resolver = "2"
+members = [
+    "src",
+    "src-tauri",
+    "tools/build-themes",
+    "tools/externalize-boot",
+]
+
+# Workspace-level lints. Members opt in via `[lints] workspace = true`.
+# Per spec 001 plan.md §III and F10: pedantic-deny is the formal stance
+# post-cutover; this overrides the constitution's "warn-now" line.
+[workspace.lints.rust]
+unsafe_code = "deny"
+unreachable_pub = "warn"
+rust_2018_idioms = { level = "warn", priority = -1 }
+
+[workspace.lints.clippy]
+all = { level = "deny", priority = -1 }
+pedantic = { level = "deny", priority = -1 }
+nursery = { level = "deny", priority = -1 }
+dbg_macro = "deny"
+todo = "deny"
+print_stdout = "deny"
+print_stderr = "deny"
+
+# Build profiles for the workspace. Lifted from src-tauri/Cargo.toml as
+# part of the Phase 0 workspace conversion (Cargo silently ignores
+# `[profile.*]` in non-root member manifests).
+[profile.dev]
+opt-level = 0
+debug = true
+split-debuginfo = "unpacked"
+
+[profile.release]
+opt-level = "s"   # Optimise for size over speed
+lto = "thin"      # Lightweight link-time optimisation
+codegen-units = 1
+panic = "abort"
+strip = true

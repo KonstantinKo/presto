@@ -8,7 +8,6 @@
 /**
  * Browser-context init script installed via addInitScript before any page navigation.
  * It runs before all page scripts and installs:
- * - window.supabase mock (so auth-manager doesn't timeout waiting for the CDN)
  * - window.__TAURI__ mock with in-memory command handlers
  * - window.__E2E_TEST_HARNESS__ for test harness access
  *
@@ -22,75 +21,11 @@ const TAURI_MOCK_INIT_SCRIPT = `
     window.__E2E_CONFIG__ = {};
   }
 
-  // --- Supabase mock ---
-  // waitForSupabase() in src/utils/supabase.js polls window.supabase; provide it
-  // immediately so auth-manager resolves without the 5-second CDN timeout.
-  var _authCallbacks = [];
-  window.supabase = {
-    createClient: function (url, key, opts) {
-      return {
-        auth: {
-          getSession: async function () {
-            return { data: { session: null }, error: null };
-          },
-          onAuthStateChange: function (callback) {
-            _authCallbacks.push(callback);
-            return {
-              data: {
-                subscription: {
-                  unsubscribe: function () {
-                    _authCallbacks = _authCallbacks.filter(function (c) {
-                      return c !== callback;
-                    });
-                  },
-                },
-              },
-            };
-          },
-          signInWithPassword: async function (creds) {
-            var user = {
-              id: "mock-user-id",
-              email: creds.email || "test@example.com",
-              user_metadata: { full_name: "Test User", name: "Test User" },
-            };
-            var session = {
-              user: user,
-              access_token: "mock-access-token",
-              refresh_token: "mock-refresh-token",
-            };
-            setTimeout(function () {
-              _authCallbacks.forEach(function (cb) {
-                try { cb("SIGNED_IN", session); } catch (e) {}
-              });
-            }, 80);
-            return { data: { session: session, user: user }, error: null };
-          },
-          signUp: async function () {
-            return { data: null, error: { message: "Registration not mocked in E2E tests" } };
-          },
-          signInWithOAuth: async function () {
-            return { data: null, error: { message: "OAuth not mocked in E2E tests" } };
-          },
-          signOut: async function () {
-            setTimeout(function () {
-              _authCallbacks.forEach(function (cb) {
-                try { cb("SIGNED_OUT", null); } catch (e) {}
-              });
-            }, 80);
-            return { error: null };
-          },
-          getUser: async function () {
-            return { data: { user: null }, error: null };
-          },
-          setSession: async function () {
-            return { data: { session: null }, error: null };
-          },
-        },
-      };
-    },
-  };
-
-  // Set guest mode and mark auth as seen so auth-manager skips the sign-in overlay
+  // Seed localStorage flags consumed by storage-migration import path.
+  // presto-guest-mode: read by import_legacy_user_state_from_storage to persist
+  // guest status across the 0.4.x → 0.5.x cutover.
+  // presto-auth-seen: read by import_legacy_user_state_from_storage to detect
+  // whether the user has previously seen and dismissed the auth modal.
   localStorage.setItem("presto-guest-mode", "true");
   localStorage.setItem("presto-auth-seen", "true");
 
@@ -100,10 +35,9 @@ const TAURI_MOCK_INIT_SCRIPT = `
     manualSessions: [],
     settings: {},
     sessionData: {
-      completedPomodoros: 0,
-      currentSession: 1,
-      totalFocusTime: 0,
-      currentMode: "focus",
+      completed_pomodoros: 0,
+      current_session: 1,
+      total_focus_time: 0,
     },
     history: [],
     autostartEnabled: false,
@@ -189,14 +123,6 @@ const TAURI_MOCK_INIT_SCRIPT = `
             return;
           }
 
-          case "delete_manual_session": {
-            var sessId = args && args.id;
-            _state.manualSessions = _state.manualSessions.filter(function (s) {
-              return s.id !== sessId;
-            });
-            return;
-          }
-
           case "is_autostart_enabled":
             return _state.autostartEnabled;
 
@@ -216,13 +142,16 @@ const TAURI_MOCK_INIT_SCRIPT = `
             return;
           }
 
-          case "append_daily_stats":
+          case "save_daily_stats":
+            // Rust handler signature: (session: PomodoroSession, app) -> Result<(), String>
             return;
 
-          case "load_history":
+          case "get_stats_history":
+            // Rust handler signature: (app) -> Result<Vec<PomodoroSession>, String>
             return _state.history.slice();
 
-          case "delete_all_data": {
+          case "reset_all_data": {
+            // Rust handler signature: (app) -> Result<(), String>
             _state.tags = [
               {
                 id: "default-focus",
@@ -238,8 +167,131 @@ const TAURI_MOCK_INIT_SCRIPT = `
             return;
           }
 
-          case "write_excel_file":
+          case "start_activity_monitoring":
+            // Rust handler signature: (app, timeout_seconds: u64) -> Result<(), String>
+            return;
+
+          case "stop_activity_monitoring":
+            // Rust handler signature: () -> Result<(), String>
+            return;
+
+          case "update_activity_timeout":
+            // Rust handler signature: (timeout_seconds: u64) -> Result<(), String>
+            return;
+
+          case "update_tray_icon":
+            // Rust handler signature: (app, timer_text, is_running, session_mode,
+            //                         current_session, total_sessions, mode_icon)
+            //                         -> Result<(), String>
+            return;
+
+          case "update_tray_menu":
+            // Rust handler signature: (app, is_running, is_paused, current_mode)
+            //                         -> Result<(), String>
+            return;
+
+          case "track_event":
+            // Spec 001-leptos-migration T084 (mock-first per FR-010 / Principle VI):
+            // Replaces the JS @aptabase/tauri shim. Tauri-side handler at
+            // src-tauri/src/lib.rs gates on settings.analytics_enabled before
+            // calling tauri_plugin_aptabase. The mock is a no-op because the
+            // e2e suite never asserts on Aptabase delivery — it asserts on the
+            // call shape (name + props) when needed via a spy installed by
+            // individual specs.
+            return;
+
+          case "supabase_sign_in_with_password":
+            // Spec 001-leptos-migration T087 (mock-first per FR-010): replaces
+            // the supabase-js auth path with a Rust REST adapter. The mock
+            // shape mirrors AuthSession (data-model.md 'Session'):
+            // { access_token, refresh_token, user: { id, email, user_metadata } }.
+            //
+            // Phase 4e R-003: user_metadata.full_name = "Test User" is
+            // load-bearing for auth.spec.js:29 toHaveText("Test User").
+            // Pre-Phase-4e the AuthModal synthesised this metadata locally;
+            // now it is the bridge-returned metadata that drives the display
+            // name, so the mock must produce the same shape a real Supabase
+            // server would return for a user with that profile.
+            return {
+              access_token: "mock-access-token",
+              refresh_token: "mock-refresh-token",
+              user: {
+                id: "mock-user-id",
+                email: (args && args.email) || "test@example.com",
+                user_metadata: { full_name: "Test User" },
+              },
+            };
+
+          case "supabase_sign_out":
+            // Tauri-side handler revokes the refresh token via Supabase REST
+            // /auth/v1/logout and clears the Rust-side persisted session.
+            // Mock no-op: the e2e suite asserts on the call shape, not on
+            // server-side revocation.
+            return;
+
+          case "supabase_get_session":
+            // Returns the currently persisted session or null. The mock
+            // returns null by default so the cold-start path (no signed-in
+            // user) is the e2e default; specs that need a signed-in user
+            // install a spec-level override that returns a populated session.
             return null;
+
+          case "supabase_refresh_session":
+            // Tauri-side handler swaps the refresh token at the Supabase
+            // /auth/v1/token?grant_type=refresh_token endpoint. Mock returns
+            // a pseudo-refreshed AuthSession so the consumer's branching
+            // (refresh succeeded vs. failed) can be exercised end-to-end.
+            return {
+              access_token: "mock-refreshed-access-token",
+              refresh_token: "mock-refreshed-refresh-token",
+              user: {
+                id: "mock-user-id",
+                email: "test@example.com",
+                user_metadata: {},
+              },
+            };
+
+          case "export_sessions_xlsx":
+            // Spec 001-leptos-migration T096 (mock-first per FR-010):
+            // replaces the JS 'xlsx' library's writeFile() path with a
+            // Tauri-side rust_xlsxwriter call that builds the workbook
+            // server-side from a typed Vec<ManualSession>. Mock no-op:
+            // the e2e suite asserts on the call shape (path + sessions
+            // length), not on the file's bytes (which the host-side
+            // integration test in src-tauri/tests/ covers).
+            return;
+
+          case "is_legacy_migration_complete":
+            // R-006: sentinel gate. The mock returns true so the e2e startup
+            // short-circuits the 7-call migration block (no legacy data to migrate
+            // in the test harness). Tests that need to exercise the migration path
+            // can install a per-spec override via addInitScript that returns false.
+            return true;
+
+          case "mark_legacy_migration_complete":
+            // R-006: sentinel write. No-op in tests — the sentinel file lives in
+            // the Tauri app-data dir which doesn't exist in the e2e harness.
+            return;
+
+          case "import_legacy_supabase_session":
+          case "import_legacy_settings":
+          case "import_legacy_history":
+          case "import_legacy_tasks":
+          case "import_legacy_tags":
+          case "import_legacy_manual_sessions":
+          case "import_legacy_user_state":
+            // Spec 001-leptos-migration T099 (mock-first per FR-010 /
+            // Principle VI). Transition-only commands per
+            // contracts/tauri-bridge.md §"Transition-only commands":
+            // they migrate JS-era localStorage payloads into the
+            // Rust-side authoritative stores on first post-cutover
+            // launch. Each is idempotent (handler skips when the
+            // Rust-side store already has data). The e2e harness has
+            // no legacy data to migrate (the mock starts each test
+            // with a clean Rust-side state), so the no-op return
+            // faithfully models the cutover-launch path. Sunset:
+            // removed one minor version after cutover.
+            return;
 
           case "plugin:updater|check": {
             // Read config lazily so override scripts that run after this init script
@@ -278,7 +330,6 @@ const TAURI_MOCK_INIT_SCRIPT = `
           case "plugin:oauth|cancel":
             return;
 
-          case "open_url":
           case "plugin:opener|open_url":
             return;
 
@@ -335,6 +386,26 @@ const TAURI_MOCK_INIT_SCRIPT = `
     },
   };
 
+  // --- window.__TAURI_INTERNALS__ shim (Phase 6 T241) ---
+  //
+  // The Leptos bridge wrappers in src/src/bridge/commands.rs are bound
+  // to window.__TAURI_INTERNALS__.invoke(cmd, args), not the higher-level
+  // window.__TAURI__.core.invoke. Both globals exist in a real Tauri 2.x
+  // webview; the JS-era app only consumed __TAURI__, so this fixture only
+  // installed that one. Post-cutover the WASM bundle is the only client,
+  // and it goes through __TAURI_INTERNALS__ — so we proxy the lower-level
+  // probe to the same dispatcher the __TAURI__.core.invoke shim above
+  // uses.
+  //
+  // Tauri's real __TAURI_INTERNALS__.invoke signature is
+  // (cmd: string, args: object) => Promise<unknown> — same shape as
+  // __TAURI__.core.invoke; we simply forward.
+  window.__TAURI_INTERNALS__ = {
+    invoke: function (cmd, args) {
+      return window.__TAURI__.core.invoke(cmd, args);
+    },
+  };
+
   // Expose harness for fixture-level introspection
   window.__E2E_TEST_HARNESS__ = {
     state: _state,
@@ -364,6 +435,25 @@ export async function applyTauriMock(page) {
 if (!window.__E2E_CONFIG__) window.__E2E_CONFIG__ = {};
 window.__E2E_CONFIG__.enableUpdateTestMode = true;
 localStorage.setItem('presto_force_update_test', 'true');
+// Phase 6 (T241): the JS-era surface read these flags from inside
+// UpdateManagerV2.simulateUpdate(); the Leptos port's UpdateManager
+// only consumes the canonical tauri://update-available event. So we
+// emit that event into the mock event bus shortly after page load —
+// the Leptos crate's UPDATE_AVAILABLE listener (app.rs spawn_local)
+// catches it and lifts UpdateInfo::Available, the banner adds
+// .visible. Delay matches the JS-era ~5s startup pause so the spec's
+// 12s timeout still has plenty of head-room.
+window.addEventListener('TrunkApplicationStarted', function () {
+  setTimeout(function () {
+    if (window.__TAURI__ && window.__TAURI__.event) {
+      window.__TAURI__.event.emit('tauri://update-available', {
+        version: '0.4.5',
+        currentVersion: '0.4.4',
+        body: null,
+      });
+    }
+  }, 100);
+});
 `,
       });
     },

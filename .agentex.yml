@@ -21,22 +21,47 @@ prompts:
 # Each section runs in sequence; format commands declare an autofix.
 qa:
   setup:
-    - npm ci
+    # Phase 0 baseline (spec 001-leptos-migration T008): workspace-frozen
+    # fetch validates the repo-root Cargo.lock before any `cargo build`
+    # downstream tries to mutate it. Phase 6 (T241) moved the JS scope to
+    # tests/e2e/ — the e2e suite is the only surviving npm consumer.
+    - cargo fetch --locked
+    - cd tests/e2e && npm ci
 
   test:
-    - cd src-tauri && cargo build --all-targets
-    - cd src-tauri && cargo test
-    - npm test
+    - cargo build --workspace --frozen --all-targets
+    - cargo test --workspace --frozen
+    # Trunk-served e2e + visual-regression run is the post-cutover gate
+    # (spec 001-leptos-migration FR-003 / FR-004 / SC-001 / SC-002). The
+    # visual-regression suite refuses to re-capture baselines (Principle IV).
+    - cd tests/e2e && npx playwright install --with-deps chromium
+    - cd tests/e2e && npx playwright test
 
   lint:
-    - cd src-tauri && cargo clippy --all-targets -- -D warnings
-    - npx eslint "src/**/*.{js,mjs,cjs}" "tests/**/*.{js,mjs,cjs}" "*.js" "*.mjs" "*.cjs" --no-error-on-unmatched-pattern
-    - npx tsc --noEmit -p .
+    - cargo clippy --workspace --all-targets --frozen -- -D warnings -W clippy::pedantic
+    # Mock drift gate (spec 001-leptos-migration T021): every #[tauri::command]
+    # handler in src-tauri/src/lib.rs must have a matching `case "<name>":` in
+    # tests/e2e/fixtures/tauriMock.js, and vice versa. Phase-6 deletions and
+    # plugin-injected commands are exempt. See scripts/check-mock-drift.sh
+    # header for the full exemption list.
+    - bash scripts/check-mock-drift.sh
+    # Engine purity gate (T246, Principle I): no `web_sys` / `web-sys`
+    # references under src/src/engine/. The engine is a pure Rust state
+    # machine; DOM input enters via the bridge layer.
+    - bash scripts/check-engine-purity.sh
+    # Baseline-cap gate (T244, Principle IV): at most 2 visual-regression
+    # baseline PNGs may change in a single PR. >2 escalates to a
+    # constitution-amendment-or-spec-revision discussion.
+    - bash scripts/check-baseline-cap.sh
+    # Lockfile-drift gate (T248, Principle IX): manifest-without-lockfile
+    # changes between origin/main and HEAD fail-closed. Mirrors the
+    # pre-commit hook under .githooks/pre-commit.
+    # Ensure origin/main is resolvable in shallow clones / fresh CI workers.
+    - git rev-parse origin/main >/dev/null 2>&1 || git fetch --no-tags --prune origin main
+    - LOCKFILE_BASE_REF=origin/main bash scripts/check-lockfile-drift.sh
 
   format:
-    - command: cd src-tauri && cargo fmt -- --check
-      autofix: cd src-tauri && cargo fmt
-    - command: npx prettier --check .
-      autofix: npx prettier --write .
+    - command: cargo fmt --all -- --check
+      autofix: cargo fmt --all
 
 # Claude Code slash commands are available in .claude/commands/

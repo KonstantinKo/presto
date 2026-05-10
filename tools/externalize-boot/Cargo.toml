@@ -1,0 +1,14 @@
+[package]
+name = "presto-externalize-boot"
+version = "0.0.0"
+description = "Trunk post-build hook: extract the inline <script type=\"module\"> Trunk emits and split it into an external boot.js so the production CSP can use script-src 'self' instead of a per-build sha384 hash."
+authors = ["Konstantin Koss"]
+edition = "2021"
+publish = false
+
+[[bin]]
+name = "presto-externalize-boot"
+path = "src/main.rs"
+
+[lints]
+workspace = true

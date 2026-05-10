@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+# Pre-commit hook (spec 001-leptos-migration T248).
+#
+# Runs the local fail-closed gates that match CI:
+#   * Lockfile drift (Principle IX — Cargo.toml ↔ Cargo.lock,
+#     tests/e2e/package.json ↔ tests/e2e/package-lock.json).
+#   * Engine purity (Principle I — no `web_sys` / `web-sys` under
+#     src/src/engine/).
+#
+# Other heavier gates (`cargo fmt --check`, `cargo clippy --frozen`, the
+# mock-drift gate, the baseline-cap gate, the full e2e suite) are reserved
+# for CI; running them on every commit would slow developer flow without
+# changing CI outcomes. The two gates here are the ones that prevent loud,
+# hard-to-bisect drift in `main` (the kind that wedges everyone else's CI).
+#
+# To install: `git config core.hooksPath .githooks` (or run
+# `scripts/install-git-hooks.sh`). The hook is committed under .githooks/
+# rather than .git/hooks/ so it travels with the repo.
+#
+# To bypass (DO NOT do this without a Constitution amendment): the
+# repository forbids `--no-verify` per Principle III's defensive-code rule
+# (silent skips are exactly what the lints exist to reject).
+
+set -euo pipefail
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+cd "${REPO_ROOT}"
+
+failed=0
+
+if ! bash scripts/check-lockfile-drift.sh; then
+  failed=1
+fi
+
+if ! bash scripts/check-engine-purity.sh; then
+  failed=1
+fi
+
+if [[ ${failed} -ne 0 ]]; then
+  echo "" >&2
+  echo "pre-commit: one or more gates failed; commit aborted." >&2
+  echo "pre-commit: fix the issues above and re-stage; do NOT use --no-verify." >&2
+  exit 1
+fi
+
+exit 0
