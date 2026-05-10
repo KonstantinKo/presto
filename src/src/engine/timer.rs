@@ -82,7 +82,34 @@ impl TimerState {
 mod tests {
     use super::TimerState;
     use crate::bridge::timer_mode::TimerMode;
+    use crate::engine::clock::Clock;
     use crate::engine::durations::Durations;
+    use core::cell::Cell;
+
+    /// Deterministic test clock. `set(t)` jumps to absolute `t`,
+    /// `advance(ms)` steps forward. Drift-compensation tests
+    /// (T128) jump non-monotonically to simulate OS suspend.
+    struct MockClock {
+        now: Cell<i64>,
+    }
+
+    impl MockClock {
+        fn new(start_ms: i64) -> Self {
+            Self {
+                now: Cell::new(start_ms),
+            }
+        }
+
+        fn advance(&self, delta_ms: i64) {
+            self.now.set(self.now.get() + delta_ms);
+        }
+    }
+
+    impl Clock for MockClock {
+        fn now_ms(&self) -> i64 {
+            self.now.get()
+        }
+    }
 
     /// T120: a freshly-constructed `TimerState` is in `Focus` mode with
     /// the focus duration's worth of time remaining and zero
@@ -94,5 +121,29 @@ mod tests {
         assert_eq!(state.current_mode(), TimerMode::Focus);
         assert_eq!(state.time_remaining_secs(), 25 * 60);
         assert_eq!(state.completed_pomodoros(), 0);
+    }
+
+    /// T122: after `start()` then a `tick()` 25 minutes later, the
+    /// engine emits `PomodoroCompleted` and increments
+    /// `completed_pomodoros`. Mirrors `completeSession` in
+    /// `src/core/pomodoro-timer.js:1152` plus the
+    /// `updateTimerWithAccuracy` trigger at line 777.
+    #[test]
+    fn focus_completes_after_25min_emits_pomodoro_completed() {
+        let clock = MockClock::new(0);
+        let mut state = TimerState::new(Durations::default());
+        state.start(&clock).expect("start");
+
+        // Advance the wall clock 25 minutes.
+        clock.advance(25 * 60 * 1000);
+        let events = state.tick(&clock);
+
+        assert!(
+            events
+                .iter()
+                .any(|e| matches!(e, super::TimerEvent::PomodoroCompleted { .. })),
+            "expected PomodoroCompleted in {events:?}"
+        );
+        assert_eq!(state.completed_pomodoros(), 1);
     }
 }
