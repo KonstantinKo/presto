@@ -231,23 +231,23 @@ Per principle, Roman numeral + name (per plan-template.md):
 
 > Each command has a wasm-bindgen-test in `src/src/bridge/storage.rs` (managers/auth.rs for the Supabase one; see plan.md §Testing strategy) that exercises the migration with mocked `localStorage` and asserts the matching Tauri command receives the expected payload (idempotent — second run is a no-op).
 
-- [ ] T099 [US1] Add 7 `case "import_legacy_*":` returning `undefined` mock entries (`supabase_session`, `settings`, `history`, `tasks`, `tags`, `manual_sessions`, `user_state`) to `tauriMock.js` — done-signal: e2e suite continues to pass.
-- [ ] T100 [T:RED] [US1] `bridge::storage::tests::imports_legacy_settings` — done-signal: fails.
-- [ ] T101 [T:GREEN] [US1] Implement Tauri handler `import_legacy_settings(payload) -> Result<(), BridgeError>` (idempotent skip if `AppSettings` already on disk) and Leptos `bridge::storage` reader for `pomodoro-settings` / `theme-preference` / `timer-theme-preference` / `presto_auto_check_updates` localStorage keys — done-signal: passes.
-- [ ] T102 [T:RED] [US1] `bridge::storage::tests::imports_legacy_history` — done-signal: fails.
-- [ ] T103 [T:GREEN] [US1] Implement Tauri handler `import_legacy_history(payload)` + Leptos reader for `pomodoro-history` — done-signal: passes.
-- [ ] T104 [T:RED] [US1] `bridge::storage::tests::imports_legacy_tasks` — done-signal: fails.
-- [ ] T105 [T:GREEN] [US1] Implement Tauri handler `import_legacy_tasks(payload)` + Leptos reader for `pomodoro-tasks` — done-signal: passes.
-- [ ] T106 [T:RED] [US1] `bridge::storage::tests::imports_legacy_tags` — done-signal: fails.
-- [ ] T107 [T:GREEN] [US1] Implement Tauri handler `import_legacy_tags(payload)` + Leptos reader for `presto-tags` — done-signal: passes.
-- [ ] T108 [T:RED] [US1] `bridge::storage::tests::imports_legacy_manual_sessions` — done-signal: fails.
-- [ ] T109 [T:GREEN] [US1] Implement Tauri handler `import_legacy_manual_sessions(payload)` + Leptos reader for `presto_manual_sessions` — done-signal: passes.
-- [ ] T110 [T:RED] [US1] `bridge::storage::tests::imports_legacy_user_state` — done-signal: fails.
-- [ ] T111 [T:GREEN] [US1] Implement Tauri handler `import_legacy_user_state(payload)` + Leptos reader for `presto-guest-mode` / `presto-auth-seen` / `presto-skipped-versions` / `pomodoro-session` — done-signal: passes.
-- [ ] T112 [T:RED] [US1] `managers/auth::tests::imports_legacy_supabase_session_from_localstorage` (per plan.md §Testing strategy named test) — done-signal: fails.
-- [ ] T113 [T:GREEN] [US1] Implement Tauri handler `import_legacy_supabase_session(payload: SupabaseSessionPayload)` and Leptos reader for `sb-<project-ref>-auth-token` localStorage key; idempotency gate per research.md §6 step 4 — done-signal: passes.
-- [ ] T114 [T:RED] [US1] `bridge::storage::tests::migrate_legacy_localstorage_idempotent` (full entry-point coverage; second-launch is a no-op; partial-failure preserves the localStorage key) — done-signal: fails.
-- [ ] T115 [T:GREEN] [US1] Implement single Leptos entry point `bridge::storage::migrate_legacy_localstorage()` that runs from `app.rs` startup, dispatching to each per-domain reader, idempotent — done-signal: passes.
+- [x] T099 [US1] Add 7 `case "import_legacy_*":` returning `undefined` mock entries (`supabase_session`, `settings`, `history`, `tasks`, `tags`, `manual_sessions`, `user_state`) to `tauriMock.js` — done-signal: e2e suite continues to pass.
+- [x] T100 [T:RED] [US1] `bridge::storage::tests::imports_legacy_settings` — done-signal: fails.
+- [x] T101 [T:GREEN] [US1] Implement Tauri handler `import_legacy_settings(payload) -> Result<(), BridgeError>` (idempotent skip if `AppSettings` already on disk) and Leptos `bridge::storage` reader for `pomodoro-settings` / `theme-preference` / `timer-theme-preference` / `presto_auto_check_updates` localStorage keys — done-signal: passes.
+- [x] T102 [T:RED] [US1] `bridge::storage::tests::imports_legacy_history` — done-signal: fails.
+- [x] T103 [T:GREEN] [US1] Implement Tauri handler `import_legacy_history(payload)` + Leptos reader for `pomodoro-history` — done-signal: passes.
+- [x] T104 [T:RED] [US1] `bridge::storage::tests::imports_legacy_tasks` — done-signal: fails.
+- [x] T105 [T:GREEN] [US1] Implement Tauri handler `import_legacy_tasks(payload)` + Leptos reader for `pomodoro-tasks` — done-signal: passes.
+- [x] T106 [T:RED] [US1] `bridge::storage::tests::imports_legacy_tags` — done-signal: fails.
+- [x] T107 [T:GREEN] [US1] Implement Tauri handler `import_legacy_tags(payload)` + Leptos reader for `presto-tags` — done-signal: passes.
+- [x] T108 [T:RED] [US1] `bridge::storage::tests::imports_legacy_manual_sessions` — done-signal: fails.
+- [x] T109 [T:GREEN] [US1] Implement Tauri handler `import_legacy_manual_sessions(payload)` + Leptos reader for `presto_manual_sessions` — done-signal: passes.
+- [x] T110 [T:RED] [US1] `bridge::storage::tests::imports_legacy_user_state` — done-signal: fails.
+- [x] T111 [T:GREEN] [US1] Implement Tauri handler `import_legacy_user_state(payload)` + Leptos reader for `presto-guest-mode` / `presto-auth-seen` / `presto-skipped-versions` / `pomodoro-session` — done-signal: passes.
+- [x] T112 [T:RED] [US1] `managers/auth::tests::imports_legacy_supabase_session_from_localstorage` (per plan.md §Testing strategy named test) — done-signal: fails.
+- [x] T113 [T:GREEN] [US1] Implement Tauri handler `import_legacy_supabase_session(payload: SupabaseSessionPayload)` and Leptos reader for `sb-<project-ref>-auth-token` localStorage key; idempotency gate per research.md §6 step 4 — done-signal: passes.
+- [x] T114 [T:RED] [US1] `bridge::storage::tests::migrate_legacy_localstorage_idempotent` (full entry-point coverage; second-launch is a no-op; partial-failure preserves the localStorage key) — done-signal: fails.
+- [x] T115 [T:GREEN] [US1] Implement single Leptos entry point `bridge::storage::migrate_legacy_localstorage()` that runs from `app.rs` startup, dispatching to each per-domain reader, idempotent — done-signal: passes.
 
 ### Phase 1F — Events module (`bridge::events`)
 
