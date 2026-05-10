@@ -351,23 +351,23 @@ Per principle, Roman numeral + name (per plan-template.md):
 
 ### managers/tag (6 tasks)
 
-- [ ] T161 [T:RED] [US1] `managers::tag::tests::create_returns_new_tag_with_id` — done-signal: fails.
-- [ ] T162 [T:GREEN] [US1] Implement `Tag::create` calling `bridge::commands::save_tag` — done-signal: passes.
-- [ ] T163 [T:RED] [US1] `managers::tag::tests::delete_removes_from_list` — done-signal: fails.
-- [ ] T164 [T:GREEN] [US1] Implement `Tag::delete` calling `bridge::commands::delete_tag` — done-signal: passes.
-- [ ] T165 [T:RED] [US1] `managers::tag::tests::list_reduction_handles_loaded_set` — done-signal: fails.
-- [ ] T166 [T:GREEN] [US1] Implement `Tag::list_reduction` — done-signal: passes.
+- [x] T161 [T:RED] [US1] `managers::tag::tests::create_returns_new_tag_with_id` — done-signal: fails.
+- [x] T162 [T:GREEN] [US1] Implement `Tag::create` calling `bridge::commands::save_tag` — done-signal: passes.
+- [x] T163 [T:RED] [US1] `managers::tag::tests::delete_removes_from_list` — done-signal: fails.
+- [x] T164 [T:GREEN] [US1] Implement `Tag::delete` calling `bridge::commands::delete_tag` — done-signal: passes.
+- [x] T165 [T:RED] [US1] `managers::tag::tests::list_reduction_handles_loaded_set` — done-signal: fails.
+- [x] T166 [T:GREEN] [US1] Implement `Tag::list_reduction` — done-signal: passes.
 
 ### managers/session (8 tasks)
 
-- [ ] T167 [T:RED] [US1] `managers::session::tests::manual_session_create_round_trips_via_bridge` — done-signal: fails.
-- [ ] T168 [T:GREEN] [US1] Implement `Session::create_manual` calling `bridge::commands::save_manual_sessions` — done-signal: passes.
-- [ ] T169 [T:RED] [US1] `managers::session::tests::manual_session_update_replaces_by_id` — done-signal: fails.
-- [ ] T170 [T:GREEN] [US1] Implement `Session::update_manual` — done-signal: passes.
-- [ ] T171 [T:RED] [US1] `managers::session::tests::manual_session_delete_removes_by_id` — done-signal: fails.
-- [ ] T172 [T:GREEN] [US1] Implement `Session::delete_manual` (via bulk re-save with the entry omitted, matching the deleted `delete_manual_session` JS path) — done-signal: passes.
-- [ ] T173 [T:RED] [US1] `managers::session::tests::list_by_date_groups_correctly` (date grouping uses `engine::date_format`) — done-signal: fails.
-- [ ] T174 [T:GREEN] [US1] Implement `Session::list_by_date` — done-signal: passes.
+- [x] T167 [T:RED] [US1] `managers::session::tests::manual_session_create_round_trips_via_bridge` — done-signal: fails.
+- [x] T168 [T:GREEN] [US1] Implement `Session::create_manual` calling `bridge::commands::save_manual_sessions` — done-signal: passes.
+- [x] T169 [T:RED] [US1] `managers::session::tests::manual_session_update_replaces_by_id` — done-signal: fails.
+- [x] T170 [T:GREEN] [US1] Implement `Session::update_manual` — done-signal: passes.
+- [x] T171 [T:RED] [US1] `managers::session::tests::manual_session_delete_removes_by_id` — done-signal: fails.
+- [x] T172 [T:GREEN] [US1] Implement `Session::delete_manual` (via bulk re-save with the entry omitted, matching the deleted `delete_manual_session` JS path) — done-signal: passes.
+- [x] T173 [T:RED] [US1] `managers::session::tests::list_by_date_groups_correctly` (date grouping uses `engine::date_format`) — done-signal: fails.
+- [x] T174 [T:GREEN] [US1] Implement `Session::list_by_date` — done-signal: passes.
 
 ### managers/auth (8 tasks)
 
