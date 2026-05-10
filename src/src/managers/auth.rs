@@ -385,6 +385,55 @@ mod tests {
         assert!(!mgr.is_authenticated());
         assert!(!mgr.is_guest());
     }
+
+    /// T181 [RED]: `continue_as_guest` writes
+    /// `presto-guest-mode = "true"` to the store and lifts the
+    /// manager into `AuthState::Guest`. Per data-model.md
+    /// §`AuthState` transition table: `Unauthenticated → Guest` on
+    /// user "continue as guest" action (writes `presto-guest-mode
+    /// = "true"`). Mirrors the JS-side `continueAsGuest` flow at
+    /// `auth-manager.js:89-95`.
+    ///
+    /// The persisted-flag write is load-bearing because the next
+    /// launch's projection (T176 `project_from_store`) must land
+    /// `Guest` based on this exact localStorage write — no other
+    /// signal carries the choice across launches.
+    ///
+    /// The test exercises the round-trip in two halves:
+    /// 1. Calling `continue_as_guest` lifts the manager state to
+    ///    `Guest` AND writes the flag.
+    /// 2. A fresh manager built around a store that read-back
+    ///    `"true"` projects to `Guest` — i.e., the flag survived.
+    ///
+    /// Done-signal: this test currently fails because
+    /// `AuthManager::continue_as_guest` does not yet exist. T182
+    /// GREEN attaches it.
+    #[test]
+    fn continue_as_guest_writes_localstorage_flag() {
+        let store = super::InMemoryGuestModeStore::new();
+        // Capture the initial empty state.
+        assert!(!super::GuestModeStore::is_guest(&store));
+
+        let mut mgr = super::AuthManager::new(store);
+        assert!(matches!(mgr.state(), AuthState::Unauthenticated));
+
+        mgr.continue_as_guest();
+        assert!(matches!(mgr.state(), AuthState::Guest));
+        assert!(mgr.is_guest());
+
+        // Synthesise a "next launch" by constructing a fresh manager
+        // around a fresh store seeded with `true` (the on-disk
+        // projection of the JS-era `localStorage.getItem(...) ===
+        // "true"` round-trip). Re-projection must land Guest.
+        let next_launch_store = super::InMemoryGuestModeStore::with_initial(true);
+        let mut next_mgr = super::AuthManager::new(next_launch_store);
+        next_mgr.project_from_store();
+        assert!(
+            matches!(next_mgr.state(), AuthState::Guest),
+            "post-continue_as_guest re-projection must land Guest; got {:?}",
+            next_mgr.state(),
+        );
+    }
 }
 
 // ---------------------------------------------------------------------------
