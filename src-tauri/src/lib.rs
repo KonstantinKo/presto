@@ -703,12 +703,6 @@ async fn show_app_window(app: AppHandle) {
 }
 
 #[tauri::command]
-async fn show_window(app: AppHandle) -> Result<(), BridgeError> {
-    show_app_window(app).await;
-    Ok(())
-}
-
-#[tauri::command]
 async fn save_settings(settings: AppSettings, app: AppHandle) -> Result<(), BridgeError> {
     let app_data_dir = app
         .path()
@@ -895,7 +889,6 @@ pub fn run() {
                 save_daily_stats,
                 update_tray_icon,
                 update_tray_menu,
-                show_window,
                 save_settings,
                 load_settings,
                 register_global_shortcuts,
