@@ -62,11 +62,48 @@
   position: relative;
   background: var(--setting-item-bg);
   border: 2px solid transparent;
+  min-height: 38px;
+  font-size: 0.95rem;
+  color: var(--accent-color);
 }
 
 .calendar-day:hover {
   background: var(--setting-item-hover-bg);
   transform: scale(1.05);
+}
+
+/* Out-of-month padding cells render blank — the visual-regression
+   baseline shows empty padding before May 1 and after May 31. The
+   cell still occupies its grid slot so the alignment stays a 7-col
+   grid; only the day-number is omitted. */
+.calendar-day.other-month {
+  background: transparent;
+  border-color: transparent;
+  cursor: default;
+  pointer-events: none;
+}
+
+.calendar-day.other-month:hover {
+  background: transparent;
+  transform: none;
+}
+
+/* Day-of-week header row (Sun Mon Tue ...). Same 7-column grid
+   as `.calendar-grid`, but the cells are auto-height (no
+   `min-height`) so the row reads as a slim header. */
+.calendar-grid.calendar-day-names {
+  margin-top: 0.5rem;
+  margin-bottom: 0.25rem;
+}
+
+.calendar-grid.calendar-day-names .day-name {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 0;
+  padding: 0.25rem 0;
+  border: none;
+  background: transparent;
 }
 
 .calendar-day.today {
