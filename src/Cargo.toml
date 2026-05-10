@@ -24,7 +24,7 @@ serde_json = "1"
 serde-wasm-bindgen = "0.6"
 gloo-storage = "0.3"
 thiserror = "1"
-chrono = { version = "0.4", features = ["serde", "wasmbind"], default-features = false }
+chrono = { version = "0.4", features = ["alloc", "serde", "wasmbind"], default-features = false }
 
 [dependencies.web-sys]
 version = "0.3"

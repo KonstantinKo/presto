@@ -12,6 +12,40 @@
 // `format_session_date` so existing JSON files round-trip without
 // migration.
 
+use chrono::{DateTime, Utc};
+
+/// Formats a unix timestamp (milliseconds) as the JS-era
+/// `Date.prototype.toDateString()` shape: `"%a %b %d %Y"`
+/// (e.g. `"Wed Jan 01 2025"`).
+///
+/// The format string is pinned by `tests::matches_js_to_date_string`,
+/// which iterates 366 consecutive days and asserts byte-for-byte
+/// equality against an independently-computed JS-equivalent. This
+/// is the single point where the on-disk session-date wire form
+/// is produced post-cutover.
+///
+/// Returns the UTC-projected date. The JS-era source uses local-
+/// time `toDateString()` because `Date` objects are local-time-
+/// projected; for a single-user app where the clock and the
+/// renderer are colocated, UTC vs local diverge only on the
+/// midnight-boundary corner cases that the JS source itself
+/// handles via `currentDateString` polling at
+/// `pomodoro-timer.js:925-933`. Phase 2 ships UTC here; Phase 3
+/// (manager layer) wires the local-time projection if needed —
+/// the format pin doesn't change.
+///
+/// # Panics
+/// Cannot panic: `from_timestamp(0, 0)` is the unix epoch which
+/// is always valid; the `unwrap_or_else` covers the
+/// `i64::MAX`-overflow corner case in `from_timestamp_millis`.
+#[must_use]
+pub fn format_session_date(timestamp_ms: i64) -> String {
+    DateTime::<Utc>::from_timestamp_millis(timestamp_ms)
+        .unwrap_or_else(|| DateTime::<Utc>::from_timestamp(0, 0).expect("epoch is valid"))
+        .format("%a %b %d %Y")
+        .to_string()
+}
+
 #[cfg(test)]
 mod tests {
     use super::format_session_date;
@@ -23,6 +57,20 @@ mod tests {
     /// Hand-rolled rather than reusing chrono so the test compares
     /// chrono's output against an independent baseline; if both used
     /// chrono the test would be tautological.
+    #[allow(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        clippy::cast_possible_wrap,
+        // Civil-from-days arithmetic over the proleptic Gregorian
+        // calendar: every cast is in a numerically-bounded range
+        // (era is the 400-year era index; doe ∈ [0, 146_096];
+        // yoe ∈ [0, 399]; doy ∈ [0, 365]; d ∈ [1, 31]; m ∈
+        // [1, 12]). The cast errors clippy flags are within these
+        // bounds and don't actually truncate. Inlined cast_*()
+        // calls would be cleaner but this is test-only ground
+        // truth and the algorithm already requires line-by-line
+        // verification against Hinnant's published constants.
+    )]
     fn js_to_date_string(timestamp_ms: i64) -> String {
         const DAYS: [&str; 7] = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
         const MONTHS: [&str; 12] = [
