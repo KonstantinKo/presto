@@ -848,15 +848,6 @@ async fn load_manual_sessions(app: AppHandle) -> Result<Vec<ManualSession>, Brid
 }
 
 #[tauri::command]
-async fn save_manual_session(session: ManualSession, app: AppHandle) -> Result<(), BridgeError> {
-    let app_data_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| BridgeError::Internal { msg: format!("Failed to get app data directory: {e}") })?;
-    helpers::upsert_manual_session_in(&app_data_dir, session).map_err(BridgeError::from)
-}
-
-#[tauri::command]
 async fn delete_manual_session(session_id: String, app: AppHandle) -> Result<(), BridgeError> {
     let app_data_dir = app
         .path()
@@ -948,7 +939,6 @@ pub fn run() {
                 is_autostart_enabled,
                 save_manual_sessions,
                 load_manual_sessions,
-                save_manual_session,
                 delete_manual_session,
                 get_manual_sessions_for_date,
                 load_tags,
