@@ -714,6 +714,50 @@ mod tests {
         );
     }
 
+    /// T142: `skip()` advances to the next mode WITHOUT emitting
+    /// `PomodoroCompleted`. This matters because the
+    /// persistence layer treats `PomodoroCompleted` as the
+    /// "save this session" trigger; a skipped session is recorded
+    /// only if it ran for at least 1 minute (per
+    /// `pomodoro-timer.js:1088-1090`), and that gating happens
+    /// outside the engine. The skip-event itself is distinct so
+    /// the bridge layer can disambiguate.
+    ///
+    /// Mirrors `skipSession` at `pomodoro-timer.js:974-1150`.
+    /// The `completedPomodoros++` increment IS part of the JS
+    /// skip path (line 1071), so the engine mirrors that — only
+    /// the `PomodoroCompleted` event is suppressed in favour of
+    /// `SessionSkipped`.
+    #[test]
+    fn skip_advances_to_next_mode_without_emitting_completed() {
+        let clock = MockClock::new(0);
+        let mut state = TimerState::new(Durations::default());
+        state.start(&clock).expect("start");
+        clock.advance(60_000);
+        state.tick(&clock);
+        assert_eq!(state.current_mode(), TimerMode::Focus);
+        assert_eq!(state.completed_pomodoros(), 0);
+
+        let events = state.skip();
+
+        assert_eq!(state.current_mode(), TimerMode::Break);
+        assert_eq!(state.completed_pomodoros(), 1);
+        assert_eq!(state.time_remaining_secs(), 5 * 60);
+        assert!(!state.is_running());
+        assert!(
+            events
+                .iter()
+                .any(|e| matches!(e, super::TimerEvent::SessionSkipped { .. })),
+            "expected SessionSkipped in {events:?}"
+        );
+        assert!(
+            !events
+                .iter()
+                .any(|e| matches!(e, super::TimerEvent::PomodoroCompleted { .. })),
+            "PomodoroCompleted must NOT fire on skip; events={events:?}"
+        );
+    }
+
     /// T140: `reset()` returns the engine to its initial state —
     /// idle in `Focus` mode with the focus duration's worth of
     /// time remaining and the per-session elapsed accumulator
