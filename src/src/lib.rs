@@ -17,6 +17,7 @@
 // phases. Today there are no other consumers — but the lib root is the
 // correct shape for Phase 1C onwards when bridge wrappers grow.
 
+pub mod app;
 pub mod bridge;
 pub mod components;
 pub mod engine;
