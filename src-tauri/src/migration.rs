@@ -619,6 +619,39 @@ mod tests {
         assert!(!dir.path().join("session.json").exists());
     }
 
+    /// T111 named-test (per F4 idempotency design). Two-call no-op:
+    /// after the first import writes the sentinel + session, the
+    /// second invocation must not re-write the session.json (even
+    /// with a different active_session payload).
+    #[test]
+    fn import_user_state_is_idempotent_across_two_calls() {
+        let dir = tempdir().unwrap();
+        let payload = LegacyUserStatePayload {
+            guest_mode: Some(true),
+            auth_seen: Some(true),
+            skipped_versions: vec!["1.2.3".to_string()],
+            active_session: Some(sample_session()),
+        };
+        import_user_state(dir.path(), &payload).unwrap();
+        let first_session = std::fs::read(dir.path().join("session.json")).unwrap();
+        // Second call with a different active_session must NOT
+        // overwrite — the sentinel guarantees idempotency.
+        let payload2 = LegacyUserStatePayload {
+            guest_mode: Some(false),
+            auth_seen: Some(false),
+            skipped_versions: vec![],
+            active_session: Some(PomodoroSession {
+                completed_pomodoros: 99,
+                total_focus_time: 99,
+                current_session: 99,
+                date: "should-not-write".to_string(),
+            }),
+        };
+        import_user_state(dir.path(), &payload2).unwrap();
+        let second_session = std::fs::read(dir.path().join("session.json")).unwrap();
+        assert_eq!(first_session, second_session);
+    }
+
     // ── import_supabase_session ─────────────────────────────────────────────
 
     fn sample_supabase_payload() -> SupabaseSessionPayload {
