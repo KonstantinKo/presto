@@ -236,6 +236,29 @@ pub async fn save_manual_sessions(sessions: Vec<ManualSession>) -> Result<(), Br
     invoke_serde("save_manual_sessions", &Args { sessions }).await
 }
 
+/// Read the persisted manual-session entries. Tauri-side handler:
+/// `load_manual_sessions() -> Result<Vec<ManualSession>, BridgeError>`
+/// at `src-tauri/src/lib.rs:755`.
+///
+/// Returns an empty `Vec` if no manual-sessions file exists yet (the
+/// Tauri-side helper at `helpers::read_manual_sessions_from` treats
+/// `NotFound` as empty — a cold-start convention, not an error).
+///
+/// The closed-domain `SessionType` enum is enforced on the deserialise
+/// side: a wire shape carrying `session_type: "<unknown variant>"`
+/// surfaces as `BridgeError::SerdeRoundtrip` rather than being silently
+/// dropped (FR-013 closed-domain promise).
+///
+/// # Errors
+/// Returns `BridgeError::BridgeUnavailable` when the Tauri JS bridge is
+/// not present. Otherwise returns whatever variant the Tauri-side handler
+/// maps its filesystem failure to (typically `BridgeError::Internal`),
+/// or `BridgeError::SerdeRoundtrip` if a stored record carries an
+/// unknown `session_type` variant.
+pub async fn load_manual_sessions() -> Result<Vec<ManualSession>, BridgeError> {
+    invoke_serde("load_manual_sessions", &serde_json::Value::Null).await
+}
+
 // Tests gated on `wasm32` because every wrapper-test is a
 // `#[wasm_bindgen_test]` — running them via `cargo test` on the host
 // target would produce dead-code lint failures (the host-side
