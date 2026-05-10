@@ -104,6 +104,40 @@ impl SettingsManager {
     pub async fn load() -> Self {
         Self::from_loaded_or_default(commands::load_settings().await)
     }
+
+    /// Serialise the current settings as a JSON document, matching the
+    /// wire shape `bridge::commands::save_settings` will hand to the
+    /// Tauri side. Pure helper — used by tests + by the async `save()`
+    /// wrapper for diagnostics. The legacy `hide_status_bar` field is
+    /// not emitted (the derived `Serialize` on `Settings` has no field
+    /// for it), satisfying the FR-005 idempotent migration's second
+    /// half: once read, the legacy shape is gone from disk on next save.
+    ///
+    /// # Errors
+    /// Returns `serde_json::Error` if any nested value resists
+    /// serialisation. In practice this never happens for the shapes
+    /// we control, but we surface the error rather than panic so the
+    /// caller can decide whether to retry or fall back.
+    pub fn save_payload_json(&self) -> Result<String, serde_json::Error> {
+        serde_json::to_string(&self.state)
+    }
+
+    /// Async save path: hand the current settings to
+    /// `bridge::commands::save_settings`. Per Principle VI, the manager
+    /// reaches the Tauri side only through the typed bridge wrapper.
+    /// Mirrors the JS-side `SettingsManager.saveSettings` flow at
+    /// `src/managers/settings-manager.js` (the bridge invocation; the
+    /// JS-side debounce is a UI concern that lives in the components
+    /// layer in Phase 4).
+    ///
+    /// # Errors
+    /// Returns whatever `bridge::commands::save_settings` returns —
+    /// `BridgeError::BridgeUnavailable` when the Tauri JS bridge is
+    /// not present, or whichever variant the Tauri-side handler maps
+    /// its filesystem failure to.
+    pub async fn save(&self) -> Result<(), BridgeError> {
+        commands::save_settings(self.state.clone()).await
+    }
 }
 
 #[cfg(test)]
