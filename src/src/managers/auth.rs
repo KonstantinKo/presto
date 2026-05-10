@@ -171,6 +171,35 @@ impl<S: GuestModeStore> AuthManager<S> {
         matches!(self.state, AuthState::Guest)
     }
 
+    /// Promote the manager to `SignedIn` after a successful
+    /// `bridge::commands::supabase_sign_in_with_password` round-trip.
+    /// Mirrors the JS-side `signInWithEmail` success branch at
+    /// `auth-manager.js:110-125` minus the explicit listener fan-out
+    /// (the components layer subscribes to state changes via Leptos
+    /// signals in Phase 4).
+    ///
+    /// Clears the `presto-guest-mode` flag — a signed-in user is
+    /// no longer a guest, matching the JS-era `auth-manager.js:51-55`
+    /// `SIGNED_IN` listener that does the same `removeItem` call. The
+    /// async bridge call is the caller's responsibility (the manager
+    /// stays synchronous so the state-machine logic is host-testable
+    /// per Principle V; the components layer pairs `await
+    /// commands::supabase_sign_in_with_password(...)` with
+    /// `mgr.complete_sign_in(session)`).
+    ///
+    /// Per Principle II, the credentials never appear in the
+    /// manager's debug output — the `AuthSession` arrives already
+    /// past the bridge boundary, so neither email nor password is
+    /// passed in to this method.
+    ///
+    /// Spec 001-leptos-migration §Phase 3c T178.
+    pub fn complete_sign_in(&mut self, session: crate::bridge::types::AuthSession) {
+        self.state = AuthState::SignedIn {
+            user: session.user,
+        };
+        self.store.clear_guest();
+    }
+
     /// Cold-start projection: if the `presto-guest-mode` flag is
     /// `true` in the supplied store, lift `Unauthenticated → Guest`;
     /// otherwise leave the state unchanged. Pure helper — the wasm
