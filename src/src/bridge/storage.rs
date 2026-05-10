@@ -401,4 +401,17 @@ mod tests {
         let result = assert_signature().await;
         assert!(result.is_ok(), "cold-start no-op contract: {result:?}");
     }
+
+    /// T110 (RED). Pin user-state reader contract. The reader walks
+    /// four bare keys (`presto-guest-mode`, `presto-auth-seen`,
+    /// `presto-skipped-versions`, `pomodoro-session`) and dispatches
+    /// to `import_legacy_user_state`.
+    #[wasm_bindgen_test]
+    async fn imports_legacy_user_state() {
+        async fn assert_signature() -> Result<(), super::super::error::BridgeError> {
+            super::import_legacy_user_state_from_storage().await
+        }
+        let result = assert_signature().await;
+        assert!(result.is_ok(), "cold-start no-op contract: {result:?}");
+    }
 }
