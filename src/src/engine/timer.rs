@@ -331,6 +331,58 @@ mod tests {
         state.tick(clock);
     }
 
+    /// T128: drift compensation recovers after an OS-suspend gap.
+    /// SC-005, AS-1.3. Mirrors `updateTimerWithAccuracy` at
+    /// `pomodoro-timer.js:730-789`, which computes elapsed time
+    /// from the wall-clock anchor `timerStartTime` rather than
+    /// counting tick callbacks (background-throttling robustness),
+    /// AND maintains a `currentSessionElapsedTime` accumulator
+    /// (line 745-749) that's later used for saving the completed
+    /// session record.
+    ///
+    /// Scenario: timer started, 1 second of regular ticks elapse,
+    /// then the OS suspends the process for 90 seconds. On
+    /// resumption a single `tick` fires; the engine must report
+    /// 91 seconds elapsed (1 + 90), not 1 + 1 = 2, AND must
+    /// accumulate the 91 seconds of focus work into
+    /// `current_session_elapsed_secs` so the persistence layer
+    /// records the real session duration.
+    #[test]
+    fn drift_compensation_recovers_90s_of_os_suspend() {
+        let clock = MockClock::new(0);
+        let mut state = TimerState::new(Durations::default());
+        state.start(&clock).expect("start");
+
+        // 1 regular tick — 1 second elapsed.
+        clock.advance(1_000);
+        state.tick(&clock);
+        assert_eq!(state.time_remaining_secs(), 25 * 60 - 1);
+        assert_eq!(
+            state.current_session_elapsed_secs(),
+            1,
+            "first tick should accumulate 1 second of focus work"
+        );
+
+        // OS suspends for 90 seconds. No ticks fire during the
+        // suspension. On resumption a single tick fires.
+        clock.advance(90_000);
+        state.tick(&clock);
+
+        // Wall-clock anchor: 91 seconds elapsed since start.
+        assert_eq!(state.time_remaining_secs(), 25 * 60 - 91);
+        // Accumulator: the 90 lost seconds count as focus work
+        // because the user was meant to be focusing during the
+        // suspend gap (per the JS source's continuous
+        // accumulation at `pomodoro-timer.js:745-749`).
+        assert_eq!(
+            state.current_session_elapsed_secs(),
+            91,
+            "accumulator should track wall-clock work, not tick count"
+        );
+        assert_eq!(state.completed_pomodoros(), 0);
+        assert!(state.is_running());
+    }
+
     /// T126: every fourth focus completion enters `LongBreak` instead
     /// of `Break`. Mirrors the `completedPomodoros % 4 === 0`
     /// branch at `pomodoro-timer.js:1195-1199`. Time remaining
