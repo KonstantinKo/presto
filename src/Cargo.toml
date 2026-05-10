@@ -33,6 +33,13 @@ features = [
     "Document",
     "Element",
     "HtmlElement",
+    # `Storage` powers the Phase 1E transition-only legacy localStorage
+    # migration (`bridge::storage::migrate_legacy_localstorage`); each
+    # per-domain reader probes `window().local_storage()` for one of
+    # the 12 preserved JS-era keys per data-model.md §"Legacy
+    # localStorage migration". Slated for removal alongside the
+    # migration code one minor version after cutover.
+    "Storage",
 ]
 
 [dev-dependencies]

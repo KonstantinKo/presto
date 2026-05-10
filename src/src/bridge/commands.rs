@@ -33,8 +33,9 @@ use super::availability::bridge_available;
 use super::error::BridgeError;
 use super::timer_mode::TimerMode;
 use super::types::{
-    AuthSession, ManualSession, Session, SessionTag, Settings, ShortcutSettings, Tag, Task,
-    UpdateTrayIconArgs,
+    AuthSession, LegacyHistoryPayload, LegacyManualSessionsPayload, LegacySettingsPayload,
+    LegacyTagsPayload, LegacyTasksPayload, LegacyUserStatePayload, ManualSession, Session,
+    SessionTag, Settings, ShortcutSettings, SupabaseSessionPayload, Tag, Task, UpdateTrayIconArgs,
 };
 
 #[wasm_bindgen]
@@ -927,6 +928,182 @@ pub async fn export_sessions_xlsx(
         sessions: Vec<ManualSession>,
     }
     invoke_serde("export_sessions_xlsx", &Args { path, sessions }).await
+}
+
+// ---------------------------------------------------------------------------
+// Transition-only commands — legacy localStorage migration (Phase 1E).
+//
+// Spec 001-leptos-migration §Phase 1E T099-T115; data-model.md
+// §"Legacy localStorage migration"; contracts/tauri-bridge.md
+// §"Transition-only commands". Each `import_legacy_*` wrapper hands a
+// JS-era payload to the matching Tauri-side handler, which is
+// idempotent (skips when the Rust-side authoritative store already
+// has data). Sunset: removed one minor version after cutover.
+//
+// Per Principle II (Local-First, Privacy-Default), the wrappers MUST
+// NOT log payload contents — only the call shape. Logging happens
+// (if at all) at the reader layer in `bridge::storage`, where it
+// emits key counts only.
+// ---------------------------------------------------------------------------
+
+/// Hand the JS-era `pomodoro-settings` + `theme-preference` +
+/// `timer-theme-preference` + `presto_auto_check_updates`
+/// localStorage payload to the Tauri-side authoritative store.
+///
+/// Tauri-side handler: `import_legacy_settings(payload:
+/// LegacySettingsPayload) -> Result<(), BridgeError>` at
+/// `src-tauri/src/migration.rs`. Idempotent: short-circuits with
+/// `Ok(())` if `settings.json` already exists in the app-data dir.
+///
+/// # Errors
+/// Returns `BridgeError::BridgeUnavailable` when the Tauri JS bridge
+/// is not present. Returns `BridgeError::Internal` for filesystem
+/// errors writing the imported settings file.
+pub async fn import_legacy_settings(payload: LegacySettingsPayload) -> Result<(), BridgeError> {
+    #[derive(Serialize)]
+    struct Args {
+        payload: LegacySettingsPayload,
+    }
+    invoke_serde("import_legacy_settings", &Args { payload }).await
+}
+
+/// Hand the JS-era `pomodoro-history` localStorage payload to the
+/// Tauri-side authoritative store.
+///
+/// Tauri-side handler: `import_legacy_history(payload:
+/// LegacyHistoryPayload) -> Result<(), BridgeError>` at
+/// `src-tauri/src/migration.rs`. Idempotent: short-circuits with
+/// `Ok(())` if `history.json` already exists in the app-data dir.
+///
+/// # Errors
+/// Returns `BridgeError::BridgeUnavailable` when the Tauri JS bridge
+/// is not present. Returns `BridgeError::Internal` for filesystem
+/// errors writing the imported history file.
+pub async fn import_legacy_history(payload: LegacyHistoryPayload) -> Result<(), BridgeError> {
+    #[derive(Serialize)]
+    struct Args {
+        payload: LegacyHistoryPayload,
+    }
+    invoke_serde("import_legacy_history", &Args { payload }).await
+}
+
+/// Hand the JS-era `pomodoro-tasks` localStorage payload to the
+/// Tauri-side authoritative store.
+///
+/// Tauri-side handler: `import_legacy_tasks(payload:
+/// LegacyTasksPayload) -> Result<(), BridgeError>` at
+/// `src-tauri/src/migration.rs`. Idempotent: short-circuits with
+/// `Ok(())` if `tasks.json` already exists in the app-data dir.
+///
+/// # Errors
+/// Returns `BridgeError::BridgeUnavailable` when the Tauri JS bridge
+/// is not present. Returns `BridgeError::Internal` for filesystem
+/// errors writing the imported tasks file.
+pub async fn import_legacy_tasks(payload: LegacyTasksPayload) -> Result<(), BridgeError> {
+    #[derive(Serialize)]
+    struct Args {
+        payload: LegacyTasksPayload,
+    }
+    invoke_serde("import_legacy_tasks", &Args { payload }).await
+}
+
+/// Hand the JS-era `presto-tags` localStorage payload to the
+/// Tauri-side authoritative store.
+///
+/// Tauri-side handler: `import_legacy_tags(payload:
+/// LegacyTagsPayload) -> Result<(), BridgeError>` at
+/// `src-tauri/src/migration.rs`. Idempotent: short-circuits with
+/// `Ok(())` if `tags.json` already exists in the app-data dir.
+/// Note: the Rust-side `read_tags_from` helper bootstraps a default
+/// "Focus" tag on cold start, so this idempotency check uses the
+/// presence of the file on disk (not the bootstrap-populated vec)
+/// to distinguish "user has imported" from "first launch".
+///
+/// # Errors
+/// Returns `BridgeError::BridgeUnavailable` when the Tauri JS bridge
+/// is not present. Returns `BridgeError::Internal` for filesystem
+/// errors writing the imported tags file.
+pub async fn import_legacy_tags(payload: LegacyTagsPayload) -> Result<(), BridgeError> {
+    #[derive(Serialize)]
+    struct Args {
+        payload: LegacyTagsPayload,
+    }
+    invoke_serde("import_legacy_tags", &Args { payload }).await
+}
+
+/// Hand the JS-era `presto_manual_sessions` localStorage payload to
+/// the Tauri-side authoritative store.
+///
+/// Tauri-side handler: `import_legacy_manual_sessions(payload:
+/// LegacyManualSessionsPayload) -> Result<(), BridgeError>` at
+/// `src-tauri/src/migration.rs`. Idempotent: short-circuits with
+/// `Ok(())` if `manual_sessions.json` already exists in the app-data
+/// dir.
+///
+/// # Errors
+/// Returns `BridgeError::BridgeUnavailable` when the Tauri JS bridge
+/// is not present. Returns `BridgeError::Internal` for filesystem
+/// errors writing the imported manual sessions file.
+pub async fn import_legacy_manual_sessions(
+    payload: LegacyManualSessionsPayload,
+) -> Result<(), BridgeError> {
+    #[derive(Serialize)]
+    struct Args {
+        payload: LegacyManualSessionsPayload,
+    }
+    invoke_serde("import_legacy_manual_sessions", &Args { payload }).await
+}
+
+/// Hand the JS-era user-state flags (`presto-guest-mode`,
+/// `presto-auth-seen`, `presto-skipped-versions`, `pomodoro-session`)
+/// to the Tauri-side authoritative store.
+///
+/// Tauri-side handler: `import_legacy_user_state(payload:
+/// LegacyUserStatePayload) -> Result<(), BridgeError>` at
+/// `src-tauri/src/migration.rs`. Idempotent: skips folding flags into
+/// `AppSettings` when the user-state slice has already been
+/// imported (tracked via a sentinel marker file in the app-data
+/// dir; see migration.rs for the per-flag disposition).
+///
+/// # Errors
+/// Returns `BridgeError::BridgeUnavailable` when the Tauri JS bridge
+/// is not present. Returns `BridgeError::Internal` for filesystem
+/// errors writing the sentinel marker file or the active-session
+/// file.
+pub async fn import_legacy_user_state(
+    payload: LegacyUserStatePayload,
+) -> Result<(), BridgeError> {
+    #[derive(Serialize)]
+    struct Args {
+        payload: LegacyUserStatePayload,
+    }
+    invoke_serde("import_legacy_user_state", &Args { payload }).await
+}
+
+/// Hand the JS-era Supabase auth token (`sb-<project-ref>-auth-token`
+/// localStorage payload) to the Tauri-side persistent session store.
+///
+/// Tauri-side handler: `import_legacy_supabase_session(payload:
+/// SupabaseSessionPayload) -> Result<(), BridgeError>` at
+/// `src-tauri/src/migration.rs`. Idempotent: short-circuits with
+/// `Ok(())` if a Rust-side session file already exists.
+///
+/// Per research.md §6 step 4 the handler ignores the legacy
+/// `expires_at` field (the Rust-side post-cutover session re-derives
+/// expiry from the JWT on next refresh).
+///
+/// # Errors
+/// Returns `BridgeError::BridgeUnavailable` when the Tauri JS bridge
+/// is not present. Returns `BridgeError::Internal` for filesystem
+/// errors writing the imported session file.
+pub async fn import_legacy_supabase_session(
+    payload: SupabaseSessionPayload,
+) -> Result<(), BridgeError> {
+    #[derive(Serialize)]
+    struct Args {
+        payload: SupabaseSessionPayload,
+    }
+    invoke_serde("import_legacy_supabase_session", &Args { payload }).await
 }
 
 // Tests gated on `wasm32` because every wrapper-test is a

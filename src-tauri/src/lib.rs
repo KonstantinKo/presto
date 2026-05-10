@@ -17,6 +17,7 @@ use tauri_plugin_oauth::start;
 mod auth;
 mod exports;
 mod helpers;
+mod migration;
 
 // `BridgeError` — typed return variant for every Tauri command.
 //
@@ -882,7 +883,14 @@ pub fn run() {
                 supabase_sign_out,
                 supabase_get_session,
                 supabase_refresh_session,
-                export_sessions_xlsx
+                export_sessions_xlsx,
+                import_legacy_settings,
+                import_legacy_history,
+                import_legacy_tasks,
+                import_legacy_tags,
+                import_legacy_manual_sessions,
+                import_legacy_user_state,
+                import_legacy_supabase_session
             ])
             .setup(|app| {
                 let initial_settings = load_settings_sync(app.handle());
@@ -1372,6 +1380,96 @@ async fn export_sessions_xlsx(
     sessions: Vec<ManualSession>,
 ) -> Result<(), BridgeError> {
     exports::export(std::path::Path::new(&path), &sessions)
+}
+
+// ── Phase 1E (T101-T113) — transition-only legacy localStorage migration.
+//
+// Each handler delegates to `migration::*` for idempotency + persistence.
+// Per Principle II we do NOT log payload contents — only the call shape.
+// Sunset: removed one minor version after cutover (Principle VII).
+
+#[tauri::command]
+async fn import_legacy_settings(
+    payload: migration::LegacySettingsPayload,
+    app: AppHandle,
+) -> Result<(), BridgeError> {
+    let app_data_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| BridgeError::Internal { msg: format!("Failed to get app data directory: {e}") })?;
+    migration::import_settings(&app_data_dir, &payload)
+}
+
+#[tauri::command]
+async fn import_legacy_history(
+    payload: migration::LegacyHistoryPayload,
+    app: AppHandle,
+) -> Result<(), BridgeError> {
+    let app_data_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| BridgeError::Internal { msg: format!("Failed to get app data directory: {e}") })?;
+    migration::import_history(&app_data_dir, &payload)
+}
+
+#[tauri::command]
+async fn import_legacy_tasks(
+    payload: migration::LegacyTasksPayload,
+    app: AppHandle,
+) -> Result<(), BridgeError> {
+    let app_data_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| BridgeError::Internal { msg: format!("Failed to get app data directory: {e}") })?;
+    migration::import_tasks(&app_data_dir, &payload)
+}
+
+#[tauri::command]
+async fn import_legacy_tags(
+    payload: migration::LegacyTagsPayload,
+    app: AppHandle,
+) -> Result<(), BridgeError> {
+    let app_data_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| BridgeError::Internal { msg: format!("Failed to get app data directory: {e}") })?;
+    migration::import_tags(&app_data_dir, &payload)
+}
+
+#[tauri::command]
+async fn import_legacy_manual_sessions(
+    payload: migration::LegacyManualSessionsPayload,
+    app: AppHandle,
+) -> Result<(), BridgeError> {
+    let app_data_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| BridgeError::Internal { msg: format!("Failed to get app data directory: {e}") })?;
+    migration::import_manual_sessions(&app_data_dir, &payload)
+}
+
+#[tauri::command]
+async fn import_legacy_user_state(
+    payload: migration::LegacyUserStatePayload,
+    app: AppHandle,
+) -> Result<(), BridgeError> {
+    let app_data_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| BridgeError::Internal { msg: format!("Failed to get app data directory: {e}") })?;
+    migration::import_user_state(&app_data_dir, &payload)
+}
+
+#[tauri::command]
+async fn import_legacy_supabase_session(
+    payload: migration::SupabaseSessionPayload,
+    app: AppHandle,
+) -> Result<(), BridgeError> {
+    let app_data_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| BridgeError::Internal { msg: format!("Failed to get app data directory: {e}") })?;
+    migration::import_supabase_session(&app_data_dir, &payload)
 }
 
 #[tauri::command]
