@@ -31,7 +31,7 @@ use wasm_bindgen_futures::JsFuture;
 
 use super::availability::bridge_available;
 use super::error::BridgeError;
-use super::types::{ManualSession, Session, SessionTag, Settings, Tag, Task};
+use super::types::{ManualSession, Session, SessionTag, Settings, ShortcutSettings, Tag, Task};
 
 #[wasm_bindgen]
 extern "C" {
@@ -409,6 +409,37 @@ pub async fn load_settings() -> Result<Settings, BridgeError> {
 /// maps its filesystem failure to (typically `BridgeError::Internal`).
 pub async fn reset_all_data() -> Result<(), BridgeError> {
     invoke_serde("reset_all_data", &serde_json::Value::Null).await
+}
+
+// ---------------------------------------------------------------------------
+// Global shortcuts
+// ---------------------------------------------------------------------------
+
+/// Replace every global keyboard shortcut binding with the supplied
+/// `ShortcutSettings`.
+///
+/// Tauri-side handler:
+/// `register_global_shortcuts(shortcuts: ShortcutSettings) -> Result<(), BridgeError>`
+/// at `src-tauri/src/lib.rs:652`.
+///
+/// The handler unregisters all existing shortcuts before installing the
+/// new bindings, then emits a `shortcuts-updated` event so the
+/// Leptos-side `managers::settings` slice can refresh its local state.
+/// The deleted bulk `unregister_global_shortcuts` command (Principle
+/// VII) is replaced JS-side by re-calling this command with all-`None`
+/// bindings, so no separate wrapper exists.
+///
+/// # Errors
+/// Returns `BridgeError::BridgeUnavailable` when the Tauri JS bridge is
+/// not present. Otherwise returns whatever variant the Tauri-side handler
+/// maps its plugin failure to (typically `BridgeError::Internal` for an
+/// invalid shortcut spec or for the global-shortcut plugin's own errors).
+pub async fn register_global_shortcuts(shortcuts: ShortcutSettings) -> Result<(), BridgeError> {
+    #[derive(Serialize)]
+    struct Args {
+        shortcuts: ShortcutSettings,
+    }
+    invoke_serde("register_global_shortcuts", &Args { shortcuts }).await
 }
 
 // Tests gated on `wasm32` because every wrapper-test is a
