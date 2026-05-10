@@ -893,6 +893,42 @@ pub async fn supabase_refresh_session(
     invoke_serde("supabase_refresh_session", &Args { refresh_token }).await
 }
 
+/// Build an XLSX workbook from `sessions` and write it to `path`.
+///
+/// Tauri-side handler: `export_sessions_xlsx(path: String, sessions:
+/// Vec<ManualSession>) -> Result<(), BridgeError>` at `src-tauri/src/lib.rs`.
+/// The handler delegates to `rust_xlsxwriter` (write-only; sufficient
+/// because we never read .xlsx files), constructing the workbook
+/// server-side rather than over the bridge — less data crossing IPC,
+/// no JS xlsx library in the WASM bundle.
+///
+/// Replaces the JS `xlsx` library's `writeFile()` path. The deprecated
+/// `write_excel_file` (which takes a pre-built base64 blob from the
+/// JS xlsx library) stays for cutover-period parity until Phase 6.
+///
+/// `path` is the user-chosen save location (typically obtained via
+/// the Tauri dialog plugin's `save()` call site-side; the wrapper
+/// does not pre-validate the extension or directory existence — the
+/// handler's `rust_xlsxwriter::Workbook::save` surfaces filesystem
+/// errors via `BridgeError::Internal`).
+///
+/// # Errors
+/// Returns `BridgeError::BridgeUnavailable` when the Tauri JS bridge is
+/// not present. Returns `BridgeError::Internal` for filesystem errors,
+/// `rust_xlsxwriter` errors, or row/column index overflows on
+/// pathologically large session lists.
+pub async fn export_sessions_xlsx(
+    path: String,
+    sessions: Vec<ManualSession>,
+) -> Result<(), BridgeError> {
+    #[derive(Serialize)]
+    struct Args {
+        path: String,
+        sessions: Vec<ManualSession>,
+    }
+    invoke_serde("export_sessions_xlsx", &Args { path, sessions }).await
+}
+
 // Tests gated on `wasm32` because every wrapper-test is a
 // `#[wasm_bindgen_test]` — running them via `cargo test` on the host
 // target would produce dead-code lint failures (the host-side
@@ -1817,7 +1853,7 @@ mod tests {
 
     // -----------------------------------------------------------------------
     // Phase 1D — export_sessions_xlsx (T096-T098). Replaces the JS `xlsx`
-    // library's writeFile() with a Tauri-side `rust_xlsxwriter` call that
+    // library's `writeFile()` with a Tauri-side `rust_xlsxwriter` call that
     // builds the workbook server-side from a typed `Vec<ManualSession>`
     // — less data crossing the bridge, no JS xlsx dep in the bundle.
     // -----------------------------------------------------------------------

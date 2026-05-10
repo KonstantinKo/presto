@@ -15,6 +15,7 @@ use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut};
 use tauri_plugin_oauth::start;
 
 mod auth;
+mod exports;
 mod helpers;
 
 // `BridgeError` — typed return variant for every Tauri command.
@@ -880,7 +881,8 @@ pub fn run() {
                 supabase_sign_in_with_password,
                 supabase_sign_out,
                 supabase_get_session,
-                supabase_refresh_session
+                supabase_refresh_session,
+                export_sessions_xlsx
             ])
             .setup(|app| {
                 let initial_settings = load_settings_sync(app.handle());
@@ -1353,6 +1355,23 @@ async fn supabase_refresh_session(
     })?;
     auth::persist_session(&app_data_dir, &session)?;
     Ok(session)
+}
+
+// `export_sessions_xlsx` — Phase 1D T098.
+//
+// Replaces the JS `xlsx` library's writeFile() path with a Tauri-side
+// `rust_xlsxwriter` call that builds the workbook from typed
+// `ManualSession` records and writes it to `path`. Per research.md §8,
+// rust_xlsxwriter is write-only (we never read .xlsx files) and lighter
+// than umya-spreadsheet. The deprecated `write_excel_file` command is
+// kept for cutover-period parity but unused by the post-cutover Leptos
+// crate; it's removed in Phase 6.
+#[tauri::command]
+async fn export_sessions_xlsx(
+    path: String,
+    sessions: Vec<ManualSession>,
+) -> Result<(), BridgeError> {
+    exports::export(std::path::Path::new(&path), &sessions)
 }
 
 #[tauri::command]
