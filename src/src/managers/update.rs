@@ -51,6 +51,65 @@ pub enum UpdateInfo {
     },
 }
 
+/// Update-manager state machine. Wraps `UpdateInfo` and consumes the
+/// `bridge::types::UpdateAvailablePayload` event payload published by
+/// `tauri-plugin-updater` (the E10 `tauri://update-available`
+/// event).
+///
+/// Phase 3c lands the cold-start state + the event-consumption path
+/// (T183-T184); the polling-cadence pin lands in T185-T186. The
+/// actual subscription to the event bus lives in the components
+/// layer (Phase 4) — this manager exposes the typed
+/// `handle_event(payload)` entry point that the listener trampoline
+/// calls per emit, keeping the state-machine logic host-testable
+/// per Principle V.
+#[derive(Debug, Clone, Default)]
+pub struct UpdateManager {
+    info: UpdateInfo,
+}
+
+impl UpdateManager {
+    /// Construct a manager rooted at `UpdateInfo::NoUpdate`. Mirrors
+    /// the JS-era cold-start at `update-manager-global.js:9`
+    /// (`this.updateAvailable = false`).
+    #[must_use]
+    pub const fn new() -> Self {
+        Self {
+            info: UpdateInfo::NoUpdate,
+        }
+    }
+
+    /// Borrow the current `UpdateInfo`. Used by the components layer
+    /// (Phase 4) to drive the upgrade-banner render and by tests to
+    /// pin the post-event state shape.
+    #[must_use]
+    pub const fn info(&self) -> &UpdateInfo {
+        &self.info
+    }
+
+    /// Consume an `UpdateAvailablePayload` from the
+    /// `tauri://update-available` event and lift the manager to
+    /// `UpdateInfo::Available { version, notes }`. Mirrors the
+    /// JS-era `currentUpdate = update; updateAvailable = true`
+    /// pair at `update-manager-global.js:115-118` minus the DOM
+    /// effects (Phase 4 components own the banner render).
+    ///
+    /// Idempotent: re-emit of the same version overwrites the
+    /// stored `notes` blob (matches the JS-era behaviour where the
+    /// updater plugin's emit always wins) — no de-dup here because
+    /// the per-version skip / install decisions live above the
+    /// manager (the components layer fans the state change out to
+    /// the user-driven prompt).
+    ///
+    /// Spec 001-leptos-migration §Phase 3c T184.
+    pub fn handle_event(&mut self, payload: crate::bridge::types::UpdateAvailablePayload) {
+        self.info = UpdateInfo::Available {
+            version: payload.version,
+            notes: payload.body,
+        };
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::UpdateInfo;
@@ -69,5 +128,35 @@ mod tests {
     fn updateinfo_no_update_default() {
         let mgr = super::UpdateManager::new();
         assert_eq!(*mgr.info(), UpdateInfo::NoUpdate);
+    }
+
+    /// T184 [GREEN] complement: a `handle_event(payload)` call lifts
+    /// the manager from `NoUpdate → Available { version, notes }`.
+    /// Pins the `UpdateAvailablePayload → UpdateInfo` projection:
+    /// `version` carries through unchanged; `body` re-shapes to
+    /// `notes` (matching data-model.md §`UpdateInfo`'s `notes` field
+    /// name, which differs from the upstream plugin's `body` for
+    /// post-cutover clarity).
+    #[test]
+    fn handle_event_lifts_no_update_to_available() {
+        use crate::bridge::types::UpdateAvailablePayload;
+
+        let mut mgr = super::UpdateManager::new();
+        assert_eq!(*mgr.info(), UpdateInfo::NoUpdate);
+
+        let payload = UpdateAvailablePayload {
+            version: "0.4.5".to_string(),
+            body: Some("- bug fixes".to_string()),
+            date: None,
+        };
+        mgr.handle_event(payload);
+
+        match mgr.info() {
+            UpdateInfo::Available { version, notes } => {
+                assert_eq!(version, "0.4.5");
+                assert_eq!(notes.as_deref(), Some("- bug fixes"));
+            }
+            other @ UpdateInfo::NoUpdate => panic!("expected Available, got {other:?}"),
+        }
     }
 }
