@@ -920,7 +920,6 @@ pub fn run() {
                 load_tags,
                 save_tag,
                 delete_tag,
-                load_session_tags,
                 save_session_tags,
                 add_session_tag,
                 write_excel_file,
@@ -1145,15 +1144,6 @@ async fn delete_tag(tag_id: String, app: AppHandle) -> Result<(), BridgeError> {
         .app_data_dir()
         .map_err(|e| BridgeError::Internal { msg: format!("Failed to get app data directory: {e}") })?;
     helpers::delete_tag_in(&app_data_dir, &tag_id).map_err(BridgeError::from)
-}
-
-#[tauri::command]
-async fn load_session_tags(app: AppHandle) -> Result<Vec<SessionTag>, BridgeError> {
-    let app_data_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| BridgeError::Internal { msg: format!("Failed to get app data directory: {e}") })?;
-    helpers::read_session_tags_from(&app_data_dir).map_err(BridgeError::from)
 }
 
 #[tauri::command]
