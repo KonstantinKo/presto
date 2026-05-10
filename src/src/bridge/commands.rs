@@ -555,6 +555,30 @@ pub async fn disable_autostart() -> Result<(), BridgeError> {
     invoke_serde("disable_autostart", &serde_json::Value::Null).await
 }
 
+/// Read whether launch-on-login is currently enabled. Tauri-side handler:
+/// `is_autostart_enabled() -> Result<bool, BridgeError>`
+/// at `src-tauri/src/lib.rs:729`.
+///
+/// Read-only counterpart to `enable_autostart` / `disable_autostart`;
+/// delegates to `AutoLaunchManager::is_enabled()`.
+///
+/// **Short-circuit policy (Phase 1C)**: when the Tauri JS bridge is
+/// absent the wrapper returns `Err(BridgeError::BridgeUnavailable)`,
+/// matching the uniform shape used by the other 25 wrappers in this
+/// phase. The contract (tauri-bridge.md §"Error handling") notes an
+/// eventual Phase 1G refinement where read-only commands may instead
+/// return a sentinel `Ok(false)`; that is a separate task and out of
+/// scope here. Consumers that need a sentinel can adapt at the call
+/// site with `.unwrap_or(false)`.
+///
+/// # Errors
+/// Returns `BridgeError::BridgeUnavailable` when the Tauri JS bridge is
+/// not present. Plugin failures (rare; e.g., the underlying autolaunch
+/// API is unavailable) surface as `BridgeError::Internal`.
+pub async fn is_autostart_enabled() -> Result<bool, BridgeError> {
+    invoke_serde("is_autostart_enabled", &serde_json::Value::Null).await
+}
+
 // Tests gated on `wasm32` because every wrapper-test is a
 // `#[wasm_bindgen_test]` — running them via `cargo test` on the host
 // target would produce dead-code lint failures (the host-side
