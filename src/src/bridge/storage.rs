@@ -432,4 +432,29 @@ mod tests {
         let result = assert_signature().await;
         assert!(result.is_ok(), "cold-start no-op contract: {result:?}");
     }
+
+    /// T114 (RED). Pin the single Leptos-side entry point
+    /// `migrate_legacy_localstorage()` per data-model.md §"Legacy
+    /// localStorage migration": one call, runs at first post-cutover
+    /// launch from app.rs, dispatches to each per-domain reader.
+    /// Idempotent — a second-launch call must be a no-op even on the
+    /// same process.
+    ///
+    /// This test fails at the RED phase because the entry point does
+    /// not exist yet (compile error: unresolved import). T115 GREEN
+    /// adds the orchestration.
+    #[wasm_bindgen_test]
+    async fn migrate_legacy_localstorage_idempotent() {
+        // First call: cold-start (no localStorage entries under
+        // `wasm-pack test --node`) is a successful no-op.
+        let first = super::migrate_legacy_localstorage().await;
+        assert!(first.is_ok(), "first-launch contract: {first:?}");
+        // Second call on the same process: identical result. The
+        // entry point's idempotency comes from the per-domain
+        // readers' "absent localStorage = no-op" branches; this test
+        // pins that the entry point doesn't accumulate state across
+        // calls (e.g., a once-cell that flips Err the second time).
+        let second = super::migrate_legacy_localstorage().await;
+        assert!(second.is_ok(), "second-launch contract: {second:?}");
+    }
 }
