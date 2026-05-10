@@ -3814,6 +3814,10 @@ name = "presto-build-themes"
 version = "0.0.0"
 
 [[package]]
+name = "presto-externalize-boot"
+version = "0.0.0"
+
+[[package]]
 name = "presto-web"
 version = "0.4.4"
 dependencies = [

@@ -27,3 +27,17 @@ watch = ["src", "style", "assets", "index.html", "Trunk.toml"]
 stage = "pre_build"
 command = "cargo"
 command_arguments = ["run", "-p", "presto-build-themes"]
+
+# Phase 4e R-001: Trunk emits an inline `<script type="module">` whose
+# sha-384 hash drifts on every build (the body embeds the wasm-bindgen
+# JS filename which itself carries a content hash). The production CSP
+# at `src-tauri/tauri.conf.json` cannot pin a stable hash for that
+# inline script, so this post-build hook extracts the inline script
+# into `dist/boot.js` and rewrites the HTML to load it via a `src=`
+# reference. With the script no longer inline, the production CSP can
+# use `script-src 'self' 'wasm-unsafe-eval'` (the latter is required
+# by every WASM-loading browser regardless of the script source).
+[[hooks]]
+stage = "post_build"
+command = "cargo"
+command_arguments = ["run", "-p", "presto-externalize-boot"]

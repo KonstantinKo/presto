@@ -4,6 +4,7 @@ members = [
     "src",
     "src-tauri",
     "tools/build-themes",
+    "tools/externalize-boot",
 ]
 
 # Workspace-level lints. Members opt in via `[lints] workspace = true`.
