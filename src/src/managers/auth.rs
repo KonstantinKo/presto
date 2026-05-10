@@ -252,6 +252,54 @@ mod tests {
         assert!(!mgr.is_authenticated());
         assert!(!mgr.is_guest());
     }
+
+    /// T177 [RED]: `complete_sign_in(session)` transitions
+    /// `Unauthenticated → SignedIn { user: session.user }` per
+    /// data-model.md §`AuthState` transitions table.
+    ///
+    /// Mirrors the JS-side `signInWithEmail` success branch at
+    /// `auth-manager.js:110-125` — when the Supabase API returns a
+    /// session, `currentUser` is set and the listener fires
+    /// `"authenticated"`. The Rust port collapses listener fan-out
+    /// into the state-change return because Phase 4 components
+    /// observe state via Leptos signals, not callbacks.
+    ///
+    /// Per Principle II, the credentials never enter the manager —
+    /// `complete_sign_in` takes the already-authenticated
+    /// `AuthSession` (the bridge boundary owns the email/password
+    /// hand-off). PII never appears in manager debug output.
+    ///
+    /// Done-signal: this test currently fails because
+    /// `AuthManager::complete_sign_in` does not yet exist. T178
+    /// GREEN attaches it.
+    #[test]
+    fn sign_in_transition_unauthenticated_to_signed_in() {
+        let store = super::InMemoryGuestModeStore::new();
+        let mut mgr = super::AuthManager::new(store);
+
+        let session = crate::bridge::types::AuthSession {
+            access_token: "access-token-redacted".to_string(),
+            refresh_token: "refresh-token-redacted".to_string(),
+            user: crate::bridge::types::AuthUser {
+                id: "user-uuid-1".to_string(),
+                email: "test@example.com".to_string(),
+                user_metadata: serde_json::json!({}),
+            },
+        };
+
+        assert!(matches!(mgr.state(), AuthState::Unauthenticated));
+        mgr.complete_sign_in(session);
+
+        match mgr.state() {
+            AuthState::SignedIn { user } => {
+                assert_eq!(user.id, "user-uuid-1");
+                assert_eq!(user.email, "test@example.com");
+            }
+            other => panic!("expected SignedIn, got {other:?}"),
+        }
+        assert!(mgr.is_authenticated());
+        assert!(!mgr.is_guest());
+    }
 }
 
 // ---------------------------------------------------------------------------
