@@ -31,6 +31,7 @@
 // Tags (T201) follow. Phase 4b extends with the settings shell + 8
 // tabs (T204-T212), the auth modal (T213), the update banner
 // (T214), the team panel (T215), and the App router (T216-T218).
+pub mod auth_modal;
 pub mod calendar;
 pub mod history;
 pub mod settings;
