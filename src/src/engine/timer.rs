@@ -31,6 +31,12 @@ pub enum TimerEvent {
     /// Mirrors the `autoPauseTimer` body at
     /// `pomodoro-timer.js:524-562`.
     AutoPaused,
+    /// Smart-pause auto-resumed — user activity observed while
+    /// auto-paused. Mirrors `resumeFromAutoPause` at
+    /// `pomodoro-timer.js:564-626`. The wall-clock anchor is
+    /// re-recorded on emit so the suspend gap is not charged
+    /// against the session.
+    AutoResumed,
 }
 
 /// Pomodoro state machine.
@@ -197,13 +203,18 @@ impl TimerState {
     /// Consume an `ActivitySignal` from the bridge layer.
     ///
     /// Idle while running a focus session triggers auto-pause.
-    /// Active while auto-paused triggers auto-resume (T134-T135).
-    /// Returns the events fired by the transition (empty `Vec` if
-    /// the signal didn't transition state).
+    /// Active while auto-paused triggers auto-resume with a fresh
+    /// wall-clock anchor (the suspend gap is NOT charged against
+    /// the session). Returns the events fired by the transition
+    /// (empty `Vec` if the signal didn't transition state).
     ///
     /// Mirrors `handleUserActivity` + `autoPauseTimer` +
     /// `resumeFromAutoPause` at `pomodoro-timer.js:440-626`.
-    pub fn observe_activity(&mut self, signal: ActivitySignal) -> Vec<TimerEvent> {
+    pub fn observe_activity(
+        &mut self,
+        signal: ActivitySignal,
+        clock: &dyn Clock,
+    ) -> Vec<TimerEvent> {
         let mut events = Vec::new();
         match signal {
             ActivitySignal::Idle => {
@@ -218,7 +229,19 @@ impl TimerState {
                 }
             }
             ActivitySignal::Active => {
-                // Auto-resume path lands in T135.
+                if self.is_auto_paused {
+                    self.is_auto_paused = false;
+                    self.is_running = true;
+                    // Re-anchor the wall clock to "now" with the
+                    // current `time_remaining` snapshot so the
+                    // auto-pause gap doesn't leak into the next
+                    // tick's elapsed computation. Mirrors
+                    // `pomodoro-timer.js:590-591` (`timerStartTime
+                    // = Date.now()`, `timerDuration = timeRemaining`).
+                    self.timer_start_ms = Some(clock.now_ms());
+                    self.timer_duration_secs = Some(self.time_remaining_secs);
+                    events.push(TimerEvent::AutoResumed);
+                }
             }
         }
         events
@@ -458,7 +481,7 @@ mod tests {
         clock.advance(1_000);
         state.tick(&clock);
 
-        let events = state.observe_activity(ActivitySignal::Idle);
+        let events = state.observe_activity(ActivitySignal::Idle, &clock);
 
         assert!(state.is_auto_paused());
         assert!(!state.is_running());
@@ -486,14 +509,14 @@ mod tests {
         clock.advance(60_000);
         state.tick(&clock);
         // Auto-pause.
-        state.observe_activity(ActivitySignal::Idle);
+        state.observe_activity(ActivitySignal::Idle, &clock);
         assert!(state.is_auto_paused());
         let elapsed_at_pause = state.current_session_elapsed_secs();
         let remaining_at_pause = state.time_remaining_secs();
 
         // 5 minutes of inactivity tick by, then user moves.
         clock.advance(5 * 60 * 1000);
-        let events = state.observe_activity(ActivitySignal::Active);
+        let events = state.observe_activity(ActivitySignal::Active, &clock);
 
         assert!(!state.is_auto_paused());
         assert!(state.is_running());
