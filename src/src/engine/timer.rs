@@ -94,6 +94,11 @@ pub struct TimerState {
     /// distinguishes the two so the resume affordance is correct
     /// (manual resume vs. activity-driven auto-resume).
     is_auto_paused: bool,
+    /// Cap on the number of focus pomodoros allowed in this run.
+    /// Once `completed_pomodoros == total_sessions`, further
+    /// `start()` calls return `MaxSessionCapReached`. Mirrors
+    /// `totalSessions` at `pomodoro-timer.js:31` (default 10).
+    total_sessions: u32,
 }
 
 impl TimerState {
@@ -115,6 +120,7 @@ impl TimerState {
             current_session_elapsed_secs: 0,
             smart_pause_enabled: false,
             is_auto_paused: false,
+            total_sessions: 10,
         }
     }
 
@@ -200,6 +206,20 @@ impl TimerState {
         self.is_auto_paused
     }
 
+    /// Configured max-session cap. Mirrors `totalSessions` at
+    /// `pomodoro-timer.js:31`.
+    #[must_use]
+    pub const fn total_sessions(&self) -> u32 {
+        self.total_sessions
+    }
+
+    /// Updates the max-session cap. Settings load applies this at
+    /// boot; the UI's "more sessions" affordance can also bump it
+    /// at runtime.
+    pub const fn set_total_sessions(&mut self, total: u32) {
+        self.total_sessions = total;
+    }
+
     /// Consume an `ActivitySignal` from the bridge layer.
     ///
     /// Idle while running a focus session triggers auto-pause.
@@ -255,11 +275,24 @@ impl TimerState {
     /// per `pomodoro-timer.js:730-789`). No-op if already running.
     ///
     /// # Errors
-    /// Currently infallible; returns `Result` so future
-    /// preconditions (e.g. max-session cap, T136-T137) compose.
+    /// Returns `TimerError::MaxSessionCapReached` when attempting
+    /// to start a new focus session after the configured
+    /// `total_sessions` cap has been hit. Mirrors `totalSessions`
+    /// at `pomodoro-timer.js:31`.
     pub fn start(&mut self, clock: &dyn Clock) -> Result<(), TimerError> {
         if self.is_running {
             return Ok(());
+        }
+        // Cap-check: refuse a fresh focus start once the total has
+        // been reached. The engine still permits in-progress
+        // breaks to start (the cap is per focus session, not per
+        // mode start) — the test exercises the focus-start
+        // boundary because that's where the user-visible "no more
+        // sessions" affordance fires.
+        if self.current_mode == TimerMode::Focus
+            && self.completed_pomodoros >= self.total_sessions
+        {
+            return Err(TimerError::MaxSessionCapReached);
         }
         let now = clock.now_ms();
         self.is_running = true;
@@ -353,13 +386,19 @@ impl TimerState {
 
 /// Error variants returned by the public state-machine methods.
 ///
-/// Currently empty; a placeholder for the max-session-cap (T136-T137)
-/// and disallowed-transition errors that later commits attach.
-/// The variant set is intentionally extensible — keeping the type
-/// non-exhaustive so consumers must `match` with a fallback arm.
+/// The variant set is intentionally extensible — `non_exhaustive`
+/// requires consumers to `match` with a fallback arm so adding
+/// future variants doesn't break call sites.
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
-pub enum TimerError {}
+pub enum TimerError {
+    /// Attempted to start a focus session after the configured
+    /// max-session cap (`total_sessions`) was reached. The
+    /// caller's contract is to prompt the user to either reset
+    /// the run or bump the cap. Mirrors `totalSessions` at
+    /// `pomodoro-timer.js:31`.
+    MaxSessionCapReached,
+}
 
 #[cfg(test)]
 mod tests {
