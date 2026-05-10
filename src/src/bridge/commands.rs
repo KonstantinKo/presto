@@ -145,7 +145,7 @@ pub async fn load_session_data() -> Result<Option<Session>, BridgeError> {
 // `quickstart.md` line 105 and tasks.md T030/T032 done-signals.
 #[cfg(all(test, target_arch = "wasm32"))]
 mod tests {
-    use super::{load_session_data, save_session_data};
+    use super::{get_stats_history, load_session_data, save_session_data};
     use crate::bridge::error::BridgeError;
     use crate::bridge::types::Session;
     use wasm_bindgen_test::wasm_bindgen_test;
@@ -205,6 +205,25 @@ mod tests {
     async fn load_session_data_round_trip_signature_pinned() {
         async fn assert_signature() -> Result<Option<Session>, BridgeError> {
             load_session_data().await
+        }
+        let _ = assert_signature().await;
+    }
+
+    #[wasm_bindgen_test]
+    async fn get_stats_history_round_trip_short_circuits_when_bridge_absent() {
+        let result = get_stats_history().await;
+        match result {
+            Err(BridgeError::BridgeUnavailable) => {}
+            other => panic!("expected BridgeUnavailable, got {other:?}"),
+        }
+    }
+
+    /// Compile-time signature pin per contracts/tauri-bridge.md row 3:
+    /// `get_stats_history() -> Result<Vec<Session>, BridgeError>`.
+    #[wasm_bindgen_test]
+    async fn get_stats_history_round_trip_signature_pinned() {
+        async fn assert_signature() -> Result<Vec<Session>, BridgeError> {
+            get_stats_history().await
         }
         let _ = assert_signature().await;
     }
