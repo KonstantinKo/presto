@@ -414,4 +414,22 @@ mod tests {
         let result = assert_signature().await;
         assert!(result.is_ok(), "cold-start no-op contract: {result:?}");
     }
+
+    /// T112 (RED). Pin the Supabase session reader contract.
+    /// `imports_legacy_supabase_session_from_localstorage` is the
+    /// named test in plan.md §"Testing strategy"; the planned home
+    /// (`managers/auth::tests`) does not yet exist (Phase 3 lands
+    /// `managers/`), so the test currently lives here in
+    /// `bridge::storage::tests` next to its sibling per-domain
+    /// readers — Phase 3 may relocate it. The reader scans
+    /// `sb-*-auth-token` localStorage keys per supabase-js's own
+    /// discovery shape.
+    #[wasm_bindgen_test]
+    async fn imports_legacy_supabase_session_from_localstorage() {
+        async fn assert_signature() -> Result<(), super::super::error::BridgeError> {
+            super::import_legacy_supabase_session_from_storage().await
+        }
+        let result = assert_signature().await;
+        assert!(result.is_ok(), "cold-start no-op contract: {result:?}");
+    }
 }
