@@ -219,11 +219,12 @@ pub async fn load_tasks() -> Result<Vec<Task>, BridgeError> {
 #[cfg(all(test, target_arch = "wasm32"))]
 mod tests {
     use super::{
-        get_stats_history, load_session_data, load_tasks, save_daily_stats, save_session_data,
-        save_tasks,
+        get_stats_history, load_session_data, load_tasks, save_daily_stats,
+        save_manual_sessions, save_session_data, save_tasks,
     };
     use crate::bridge::error::BridgeError;
-    use crate::bridge::types::{Session, Task};
+    use crate::bridge::session_type::SessionType;
+    use crate::bridge::types::{ManualSession, Session, Task};
     use wasm_bindgen_test::wasm_bindgen_test;
 
     fn sample_session() -> Session {
@@ -252,6 +253,20 @@ mod tests {
                 completed_at: Some("2026-05-10T08:30:00Z".to_string()),
             },
         ]
+    }
+
+    fn sample_manual_sessions() -> Vec<ManualSession> {
+        vec![ManualSession {
+            id: "ms-1".to_string(),
+            session_type: SessionType::LongBreak,
+            duration: 15,
+            start_time: "10:00".to_string(),
+            end_time: "10:15".to_string(),
+            notes: Some("walk".to_string()),
+            created_at: "2026-05-10T10:15:00Z".to_string(),
+            date: "Sat May 10 2026".to_string(),
+            tags: None,
+        }]
     }
 
     /// Under `wasm-pack test --node`, no `__TAURI_INTERNALS__` is installed,
@@ -382,5 +397,27 @@ mod tests {
             load_tasks().await
         }
         let _ = assert_signature().await;
+    }
+
+    #[wasm_bindgen_test]
+    async fn save_manual_sessions_round_trip_short_circuits_when_bridge_absent() {
+        let result = save_manual_sessions(sample_manual_sessions()).await;
+        match result {
+            Err(BridgeError::BridgeUnavailable) => {}
+            other => panic!("expected BridgeUnavailable, got {other:?}"),
+        }
+    }
+
+    /// Compile-time signature pin per contracts/tauri-bridge.md row 7:
+    /// `save_manual_sessions(sessions: Vec<ManualSession>) -> Result<(), BridgeError>`.
+    /// Pins that `ManualSession.session_type` is the closed-domain
+    /// `SessionType` enum (Phase 1A T029) — a string drift here would
+    /// stop compiling.
+    #[wasm_bindgen_test]
+    async fn save_manual_sessions_round_trip_signature_pinned() {
+        async fn assert_signature(s: Vec<ManualSession>) -> Result<(), BridgeError> {
+            save_manual_sessions(s).await
+        }
+        let _ = assert_signature(sample_manual_sessions()).await;
     }
 }
