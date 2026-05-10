@@ -506,6 +506,7 @@ mod tests {
         load_settings, load_tags, load_tasks, register_global_shortcuts, reset_all_data,
         save_daily_stats, save_manual_sessions, save_session_data, save_settings, save_tag,
         save_tasks, start_activity_monitoring, stop_activity_monitoring,
+        update_activity_timeout,
     };
     use crate::bridge::error::BridgeError;
     use crate::bridge::session_type::SessionType;
@@ -986,5 +987,29 @@ mod tests {
             stop_activity_monitoring().await
         }
         let _ = assert_signature().await;
+    }
+
+    #[wasm_bindgen_test]
+    async fn update_activity_timeout_round_trip_short_circuits_when_bridge_absent() {
+        let result = update_activity_timeout(45).await;
+        match result {
+            Err(BridgeError::BridgeUnavailable) => {}
+            other => panic!("expected BridgeUnavailable, got {other:?}"),
+        }
+    }
+
+    /// Compile-time signature pin per contracts/tauri-bridge.md row 19:
+    /// `update_activity_timeout(timeout_seconds: u64) -> Result<(), BridgeError>`.
+    /// `u64` matches the Tauri-side handler exactly. Distinct from
+    /// `start_activity_monitoring` in that the Tauri-side handler returns
+    /// `BridgeError::Internal { msg: "Activity monitor not initialized" }`
+    /// when no monitor is currently installed (rather than absorbing the
+    /// call); the wrapper surfaces that variant unchanged.
+    #[wasm_bindgen_test]
+    async fn update_activity_timeout_round_trip_signature_pinned() {
+        async fn assert_signature(t: u64) -> Result<(), BridgeError> {
+            update_activity_timeout(t).await
+        }
+        let _ = assert_signature(45).await;
     }
 }
