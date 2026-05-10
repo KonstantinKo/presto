@@ -42,6 +42,12 @@ features = [
     # user clicked outside `#timer-status` / `#tag-dropdown-menu`.
     "EventTarget",
     "MouseEvent",
+    # `KeyboardEvent` powers the document-level start/stop keyboard
+    # shortcut listener for the tag-dropdown popover in
+    # `components::timer`. Mirrors the JS-era
+    # `pomodoro-timer.js:setupKeyboardShortcuts` Space-key fallback
+    # exercised by `settings-shortcuts.spec.js`.
+    "KeyboardEvent",
     # `Storage` powers the Phase 1E transition-only legacy localStorage
     # migration (`bridge::storage::migrate_legacy_localstorage`); each
     # per-domain reader probes `window().local_storage()` for one of

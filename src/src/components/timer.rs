@@ -255,6 +255,65 @@ pub fn TimerView() -> impl IntoView {
         tag_dropdown_open.update(|v| *v = !*v);
     };
 
+    // Document-level keydown handler. Mirrors the JS-era
+    // `pomodoro-timer.js:setupKeyboardShortcuts` flow: pressing the
+    // configured `start_stop` shortcut (the Space key by default
+    // per `settings-shortcuts.spec.js`) routes through the same
+    // start / pause toggle as the play/pause button. The handler
+    // skips when a form input is focused so typing in the
+    // settings-shortcuts recorder doesn't double-fire.
+    Effect::new(move |_| {
+        let Some(window) = web_sys::window() else { return };
+        let Some(document) = window.document() else { return };
+        let closure = wasm_bindgen::closure::Closure::<dyn FnMut(web_sys::KeyboardEvent)>::new(
+            move |ev: web_sys::KeyboardEvent| {
+                // Skip when typing in a form field — the JS-era
+                // surface ignored shortcuts when the active element
+                // was an `<input>`/`<textarea>`/contenteditable so
+                // the shortcut-recorder + tag-name input flows
+                // didn't trip the start/stop toggle.
+                if let Some(active) = web_sys::window()
+                    .and_then(|w| w.document())
+                    .and_then(|d| d.active_element())
+                {
+                    let tag = active.tag_name();
+                    if matches!(tag.to_uppercase().as_str(), "INPUT" | "TEXTAREA" | "SELECT") {
+                        return;
+                    }
+                }
+                let key = ev.key();
+                let configured = settings.with_untracked(|s| s.shortcuts.start_stop.clone());
+                let matches_shortcut = configured
+                    .as_deref()
+                    .is_some_and(|expected| key == expected);
+                // Hardcoded Space fallback so the JS-era
+                // `pomodoro-timer.js` parity holds even when no
+                // shortcut is configured. `settings-shortcuts.spec.js`
+                // records " " as the captured value, so the
+                // configured branch above also handles it; the
+                // fallback covers the cold-start path.
+                let matches_space = ev.code() == "Space";
+                if matches_shortcut || matches_space {
+                    ev.prevent_default();
+                    engine.update(|state| {
+                        if state.is_running() {
+                            let _ = state.pause(&BrowserClock);
+                        } else if state.is_paused() || state.is_auto_paused() {
+                            let _ = state.resume(&BrowserClock);
+                        } else {
+                            let _ = state.start(&BrowserClock);
+                        }
+                    });
+                }
+            },
+        );
+        let _ = document.add_event_listener_with_callback(
+            "keydown",
+            closure.as_ref().unchecked_ref(),
+        );
+        closure.forget();
+    });
+
     // Close-on-outside-click. Matches the JS-era `document.addEventListener("click", ...)`
     // dismissal: any click NOT inside `#timer-status` or
     // `#tag-dropdown-menu` closes the popover. The tags.spec.js +
