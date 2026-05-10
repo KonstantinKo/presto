@@ -89,8 +89,10 @@ fn render_themes_rs(stems: &[String]) -> String {
     out.push_str("// `src/Trunk.toml`). Re-run `cargo run -p presto-build-themes` to\n");
     out.push_str("// regenerate locally. Spec 001-leptos-migration §Phase 5 (T219-T220).\n");
     out.push('\n');
-    out.push_str("/// Alphabetised list of every theme stem (filename without the\n");
-    out.push_str("/// `.css` suffix) discovered in `src/style/themes/`. Consumed by\n");
+    out.push_str("/// Alphabetised list of every theme stem.\n");
+    out.push_str("///\n");
+    out.push_str("/// Stem = filename without the `.css` suffix, discovered in\n");
+    out.push_str("/// `src/style/themes/`. Consumed by\n");
     out.push_str("/// `components::settings::theme::ThemeSettings` to render one\n");
     out.push_str("/// `<button data-timer-theme=\"...\">` per stem.\n");
     out.push_str("pub const ALL_THEMES: &[&str] = &[");
@@ -104,8 +106,10 @@ fn render_themes_rs(stems: &[String]) -> String {
     }
     out.push_str("];\n");
     out.push('\n');
-    out.push_str("/// Default theme applied at first launch. The first stem\n");
-    out.push_str("/// alphabetically — empty string when the catalogue is empty.\n");
+    out.push_str("/// Default theme applied at first launch.\n");
+    out.push_str("///\n");
+    out.push_str("/// The first stem alphabetically — empty string when the\n");
+    out.push_str("/// catalogue is empty.\n");
     out.push_str("pub const DEFAULT_THEME: &str = \"");
     if let Some(first) = stems.first() {
         out.push_str(first);

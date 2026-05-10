@@ -22,3 +22,4 @@ pub mod bridge;
 pub mod components;
 pub mod engine;
 pub mod managers;
+pub mod theme;
