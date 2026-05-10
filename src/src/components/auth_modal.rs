@@ -21,11 +21,11 @@
 //
 // Per Principle II (Local-First, Privacy-Default), the cold-start
 // state is `AuthState::Unauthenticated` — the user must explicitly
-// choose between sign-in (this overlay) and "Continue as Guest"
-// (which the JS-era auth-overlay also exposes; the Rust port keeps
-// the sign-in form here and adds the guest path as a sibling
-// button). The overlay is only visible when the user clicks
-// `#user-sign-in`; on cold start the modal is hidden.
+// choose between sign-in (this overlay) and "Continue as Guest".
+// The overlay carries the `#continue-guest` button (JS-era parity at
+// `src/main.js:470-473`) which lifts state to `AuthState::Guest`
+// without a bridge dispatch. The overlay is only visible when the
+// user clicks `#user-sign-in`; on cold start the modal is hidden.
 //
 // Per Principle VI, sign-in dispatches via
 // `bridge::commands::supabase_sign_in_with_password`; on success
@@ -205,6 +205,33 @@ pub fn AuthModal(auth_state: RwSignal<AuthState>) -> impl IntoView {
                     <p>"Your productivity companion is ready to help you stay focused."</p>
                 </div>
                 <div class="auth-content">
+                    // Guest column (Principle II first-class path).
+                    // Mirrors the JS-era `#continue-guest` button at
+                    // `src/main.js:470-473`; clicking it dismisses
+                    // the overlay and lifts state into
+                    // `AuthState::Guest`. No bridge dispatch — the
+                    // guest-mode flag is owned by the AuthManager.
+                    <div class="auth-column auth-guest">
+                        <div class="guest-section">
+                            <div class="guest-icon">
+                                <i class="ri-user-line"></i>
+                            </div>
+                            <h3>"Continue as Guest"</h3>
+                            <p>
+                                "Try Presto without creating an account. Your data stays local."
+                            </p>
+                            <button
+                                class="auth-btn guest-btn"
+                                id="continue-guest"
+                                on:click=move |_| {
+                                    auth_state.set(AuthState::Guest);
+                                    overlay_open.set(false);
+                                }
+                            >
+                                "Continue as Guest"
+                            </button>
+                        </div>
+                    </div>
                     <div class="auth-column auth-main">
                         <h2>"Sign in to sync your data"</h2>
                         <form id="auth-form" class="email-auth" on:submit=on_form_submit>
@@ -292,6 +319,9 @@ mod tests {
 
     /// T212 — selector contract pin. Sourced from
     /// `tests/e2e/auth.spec.js`. Drift here breaks the e2e run.
+    /// `continue-guest` is the T213 Principle-II addition (no e2e
+    /// spec exercises it yet; pinned here to keep the JS-era
+    /// `src/main.js:470` contract from drifting).
     #[test]
     fn auth_modal_selector_contract_documented() {
         const REQUIRED_IDS: &[&str] = &[
@@ -304,6 +334,7 @@ mod tests {
             "auth-form",
             "email",
             "password",
+            "continue-guest",
         ];
         let mut seen: Vec<&str> = Vec::with_capacity(REQUIRED_IDS.len());
         for id in REQUIRED_IDS {
