@@ -81,6 +81,45 @@ impl TagManager {
     pub async fn save_new(&self, tag: Tag) -> Result<(), BridgeError> {
         commands::save_tag(tag).await
     }
+
+    /// Remove the tag with the matching `id` from the in-memory
+    /// list. Pure mutation — delete-of-unknown-id is a no-op
+    /// (mirrors the JS-side `this.tags.filter(t => t.id !== id)`
+    /// semantics at `src/managers/tag-manager.js:332`). The
+    /// matching async `delete_persisted` hop reaches the Tauri
+    /// side through `bridge::commands::delete_tag`. Spec
+    /// 001-leptos-migration §Phase 3b T164.
+    pub fn delete(&mut self, tag_id: &str) {
+        self.tags.retain(|t| t.id != tag_id);
+    }
+
+    /// Look up a tag by its `id`. Returns `None` if no such tag is
+    /// in the list. Used by the components layer (Phase 4) to
+    /// resolve `currentTags` membership and by the
+    /// `delete_removes_from_list` test pin.
+    #[must_use]
+    pub fn find_by_id(&self, id: &str) -> Option<&Tag> {
+        self.tags.iter().find(|t| t.id == id)
+    }
+
+    /// Async persist-delete path: hand `tag_id` to
+    /// `bridge::commands::delete_tag` (per Principle VI — managers
+    /// reach the Tauri side only through the typed bridge wrapper).
+    /// Mirrors the JS-side `await invoke("delete_tag", { tag_id })`
+    /// at `src/managers/tag-manager.js:329`.
+    ///
+    /// Per the JS-era flow, the in-memory `tags` list is mutated by
+    /// `delete()` synchronously and the persist call is best-effort
+    /// — the on-disk store catches up after the async hop.
+    ///
+    /// # Errors
+    /// Returns whatever `bridge::commands::delete_tag` returns —
+    /// `BridgeError::BridgeUnavailable` when the Tauri JS bridge is
+    /// not present, or whichever variant the Tauri-side handler
+    /// maps its filesystem failure to.
+    pub async fn delete_persisted(&self, tag_id: String) -> Result<(), BridgeError> {
+        commands::delete_tag(tag_id).await
+    }
 }
 
 #[cfg(test)]
