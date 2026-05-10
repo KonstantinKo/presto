@@ -38,7 +38,15 @@
 // `view!` / `mount_to_body` — annotating each component with
 // `#[must_use]` would be noise that contradicts the Leptos call
 // pattern (`<TimerView/>` inside `view!` doesn't bind a result).
-#![allow(clippy::must_use_candidate)]
+// `clippy::too_many_lines` is silenced because Phase 4c folded
+// settings-context wiring, the tag-dropdown popover, the document-
+// level keydown + click-outside listeners, the engine-completion ->
+// session-log push, and the auto-start-on-completion branch into
+// the single TimerView body. Splitting the view body across helper
+// fns would fragment the JSX-style DOM tree without aiding
+// readability — the alternative (a Manager struct + slot-prop
+// bridge) is the post-merge plan's larger refactor.
+#![allow(clippy::must_use_candidate, clippy::too_many_lines)]
 
 use leptos::prelude::*;
 use wasm_bindgen::JsCast;
@@ -54,7 +62,7 @@ use crate::engine::timer::TimerState;
 /// `tags.spec.js:17` (which clicks `.emoji-option[data-icon="🎯"]`).
 /// The set is duplicated from `components::tags::ICON_OPTIONS`
 /// because the standalone `TagsView` is no longer mounted alongside
-/// the in-timer popover; once the standalone TagsView is reaped the
+/// the in-timer popover; once the standalone `TagsView` is reaped the
 /// catalogue lives in one place.
 const ICON_OPTIONS: &[&str] = &["\u{1f9e0}", "\u{1f4aa}", "\u{1f3af}", "\u{26a1}", "\u{1f525}"];
 
@@ -120,8 +128,8 @@ fn pad_two(value: u32) -> String {
 }
 
 /// Synthesise a `ManualSession` for a just-completed focus session.
-/// Used by the engine-completion hook in TimerView so the
-/// CalendarView's `#sessions-table-body` shows today's auto-saved
+/// Used by the engine-completion hook in `TimerView` so the
+/// `CalendarView`'s `#sessions-table-body` shows today's auto-saved
 /// rows. Today's behaviour is in-memory only; Phase 4c attaches the
 /// `bridge::commands::save_manual_sessions` hop alongside this so
 /// the rows survive a process restart.
@@ -151,7 +159,7 @@ fn synth_completed_session(now_ms: i64, focus_duration_secs: u32) -> ManualSessi
 /// e2e iteration (see `pomodoro-timer.js:debug` flow); preserve
 /// that behaviour so `settings-advanced.spec.js:37` ("00 / 03")
 /// resolves once the debug toggle flips.
-fn durations_from_settings(settings: &Settings) -> Durations {
+const fn durations_from_settings(settings: &Settings) -> Durations {
     if settings.advanced.debug_mode {
         return Durations {
             focus: 3,

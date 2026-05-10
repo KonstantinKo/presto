@@ -108,16 +108,13 @@ pub fn App() -> impl IntoView {
     let is_settings =
         Signal::derive(move || nav.with(|n| matches!(n.current(), NavView::Settings(_))));
     let is_tasks = Signal::derive(move || nav.with(|n| matches!(n.current(), NavView::Tasks)));
-    // `NavView::History` is reachable via NavigationManager but
-    // not mounted by the App router; CalendarView owns the
-    // sessions-table surface today (see route block below).
-    let _is_history_unused: () = ();
-    // `NavView::Tags` is reachable through the navigation manager
-    // but the App router does not mount a standalone TagsView (see
-    // the route block below for the rationale). The variant is
-    // preserved on `NavView` so navigation history serialization
-    // stays stable.
-    let _is_tags_unused: () = ();
+    // `NavView::History` and `NavView::Tags` are reachable through
+    // the navigation manager but the App router does not mount their
+    // standalone views (see the route block below for the rationale
+    // — both surfaces are duplicates of selectors owned by other
+    // views and would otherwise trip Playwright's strict-mode locator
+    // resolution). The variants stay on `NavView` so navigation
+    // history serialization stays stable.
 
     let active_settings_tab = Signal::derive(move || {
         nav.with(|n| match n.current() {

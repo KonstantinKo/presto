@@ -29,7 +29,12 @@
 //
 // Lint allowance: `clippy::must_use_candidate` is silenced module-
 // wide for the same reason as on `timer.rs` etc.
-#![allow(clippy::must_use_candidate)]
+// `clippy::too_many_lines` is silenced because the view body is a
+// single Leptos `view!` macro expansion (calendar grid + focus
+// summary card + sessions table + edit modal) plus a small
+// click-handler / signal cluster; splitting it would fragment the
+// JSX-style DOM tree across helper fns without aiding readability.
+#![allow(clippy::must_use_candidate, clippy::too_many_lines)]
 
 use chrono::{DateTime, Datelike, Days, Months, Utc};
 use leptos::prelude::*;
@@ -343,9 +348,11 @@ pub fn CalendarView() -> impl IntoView {
                                 each=move || sessions.get()
                                 key=|row| row.id.clone()
                                 children=move |row| {
-                                    let time_range = format!("{} – {}", row.start_time, row.end_time);
+                                    let start_time = row.start_time;
+                                    let end_time = row.end_time;
+                                    let time_range = format!("{start_time} – {end_time}");
                                     let duration = row.duration;
-                                    let duration_text = format!("{} min", duration);
+                                    let duration_text = format!("{duration} min");
                                     view! {
                                         <tr class="session-row" role="row">
                                             <td>{time_range}</td>

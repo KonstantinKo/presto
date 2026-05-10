@@ -363,7 +363,7 @@ impl TimerState {
     /// the JS-era behaviour where mid-session settings tweaks don't
     /// truncate the running session).
     ///
-    /// Used by Phase 4c's TimerView ↔ `RwSignal<Settings>` bridge so
+    /// Used by Phase 4c's `TimerView` ↔ `RwSignal<Settings>` bridge so
     /// `settings-general.spec.js` (focus-duration 25 → 5) and
     /// `settings-advanced.spec.js` (debug-mode → 3-second timers)
     /// see the timer display update without a process restart.
