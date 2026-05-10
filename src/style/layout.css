@@ -91,6 +91,23 @@ body.longBreak {
 }
 
 /*
+ * Timer view is centered vertically + horizontally inside the main
+ * content area. JS-era surface achieved this with the `.container`
+ * wrapper that surrounded the timer in `index.html`; the Leptos
+ * port pulls the rule onto the `#timer-view` container directly so
+ * the visual-regression baseline (centered "25 / 00" + dots above
+ * + control buttons below) holds without an extra wrapper.
+ */
+#timer-view {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  box-sizing: border-box;
+}
+
+/*
  * `.view-host` is the Leptos-only wrapper introduced in Phase 4b T216
  * (`src/src/app.rs`); it carries the dynamic `class:hidden` toggle for
  * each top-level view because the inner `<div id="<name>-view">` is

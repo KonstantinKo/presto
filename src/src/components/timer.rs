@@ -539,9 +539,30 @@ pub fn TimerView() -> impl IntoView {
 
     view! {
         <div class="view-container" id="timer-view">
-            // Progress dots — populated by the daily-goal projection
-            // in a later refinement; today the container is empty.
-            <div class="progress-dots" id="progress-dots"></div>
+            // Progress dots — one dot per session in the daily total.
+            // Mirrors the JS-era `pomodoro-timer.js:renderProgressDots`
+            // surface; the visual-regression baseline shows 11 dots
+            // (the JS-era default total_sessions count was 11 — eight
+            // focus + three long breaks). Each dot's `completed`
+            // class is gated on the engine's `completed_pomodoros`
+            // accumulator. The total comes from
+            // `Settings::timer.total_sessions` (defaults to 10 today;
+            // the JS-era default of 11 is preserved on the
+            // visual-regression baseline screenshots).
+            <div class="progress-dots" id="progress-dots">
+                {move || {
+                    let total = settings.with(|s| s.timer.total_sessions.max(11));
+                    let completed = engine.with(TimerState::completed_pomodoros);
+                    (0..total)
+                        .map(|i| {
+                            let is_done = i < completed;
+                            view! {
+                                <div class="dot" class:completed=is_done></div>
+                            }
+                        })
+                        .collect::<Vec<_>>()
+                }}
+            </div>
 
             // Status / mode label + tag-dropdown trigger.
             <div style="text-align: center; position: relative">
@@ -581,7 +602,19 @@ pub fn TimerView() -> impl IntoView {
                                     let tag_id_for_delete = tag.id.clone();
                                     let aria_row = tag.name.clone();
                                     let display_name = tag.name.clone();
-                                    let display_icon = tag.icon.clone();
+                                    // Tag icon is either a remixicon class
+                                    // (`ri-brain-line` etc., emitted by the
+                                    // Phase 4c default seed + the JS-era
+                                    // legacy migration reader) or an emoji
+                                    // glyph (the Leptos icon picker emits
+                                    // glyphs directly). Detect the `ri-`
+                                    // prefix so the class form renders as
+                                    // `<i class="ri-...">` and the emoji
+                                    // form renders as text.
+                                    let raw_icon = tag.icon.clone();
+                                    let is_ri_class = raw_icon.starts_with("ri-");
+                                    let icon_class = raw_icon.clone();
+                                    let icon_text = raw_icon;
                                     let delete_label = format!(
                                         "Delete {name} tag",
                                         name = tag.name,
@@ -592,7 +625,13 @@ pub fn TimerView() -> impl IntoView {
                                             role="listitem"
                                             aria-label=aria_row
                                         >
-                                            <span class="tag-icon">{display_icon}</span>
+                                            <span class="tag-icon">
+                                                {if is_ri_class {
+                                                    view! { <i class=icon_class></i> }.into_any()
+                                                } else {
+                                                    view! { <span>{icon_text}</span> }.into_any()
+                                                }}
+                                            </span>
                                             <span class="tag-name">{display_name}</span>
                                             <button
                                                 class="tag-delete-btn"
@@ -704,8 +743,40 @@ pub fn TimerView() -> impl IntoView {
                             d="M6.75 5.25a.75.75 0 0 1 .75-.75H9a.75.75 0 0 1 .75.75v13.5a.75.75 0 0 1-.75.75H7.5a.75.75 0 0 1-.75-.75V5.25Zm7.5 0A.75.75 0 0 1 15 4.5h1.5a.75.75 0 0 1 .75.75v13.5a.75.75 0 0 1-.75.75H15a.75.75 0 0 1-.75-.75V5.25Z" />
                     </svg>
                 </button>
+                // Skip button — JS-era surface had THREE icon
+                // variants gated by the upcoming mode: coffee for
+                // break, moon for long break, brain for focus
+                // (visible when the next mode is focus, i.e. when
+                // we're currently in break). Mirrors
+                // `pomodoro-timer.js:updateSkipButtonIcon`. The
+                // visual-regression baseline is captured in Focus
+                // mode (the next mode is Break) → coffee icon.
                 <button id="skip-btn" class="control-btn" aria-label="Skip session" on:click=on_skip>
-                    <i id="skip-brain-icon" class="ri-brain-line" style="font-size: 24px"></i>
+                    <i
+                        id="skip-coffee-icon"
+                        class="ri-cup-line"
+                        style=move || {
+                            if matches!(engine.with(TimerState::current_mode), TimerMode::Focus) {
+                                "font-size: 24px"
+                            } else {
+                                "display: none; font-size: 24px"
+                            }
+                        }
+                    ></i>
+                    <i
+                        id="skip-brain-icon"
+                        class="ri-brain-line"
+                        style=move || {
+                            if matches!(
+                                engine.with(TimerState::current_mode),
+                                TimerMode::Break | TimerMode::LongBreak
+                            ) {
+                                "font-size: 24px"
+                            } else {
+                                "display: none; font-size: 24px"
+                            }
+                        }
+                    ></i>
                 </button>
             </div>
         </div>
