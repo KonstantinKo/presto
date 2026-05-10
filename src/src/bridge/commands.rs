@@ -161,7 +161,9 @@ pub async fn get_stats_history() -> Result<Vec<Session>, BridgeError> {
 // `quickstart.md` line 105 and tasks.md T030/T032 done-signals.
 #[cfg(all(test, target_arch = "wasm32"))]
 mod tests {
-    use super::{get_stats_history, load_session_data, save_session_data};
+    use super::{
+        get_stats_history, load_session_data, save_daily_stats, save_session_data,
+    };
     use crate::bridge::error::BridgeError;
     use crate::bridge::types::Session;
     use wasm_bindgen_test::wasm_bindgen_test;
@@ -242,5 +244,27 @@ mod tests {
             get_stats_history().await
         }
         let _ = assert_signature().await;
+    }
+
+    #[wasm_bindgen_test]
+    async fn save_daily_stats_round_trip_short_circuits_when_bridge_absent() {
+        let result = save_daily_stats(sample_session()).await;
+        match result {
+            Err(BridgeError::BridgeUnavailable) => {}
+            other => panic!("expected BridgeUnavailable, got {other:?}"),
+        }
+    }
+
+    /// Compile-time signature pin per contracts/tauri-bridge.md row 4:
+    /// `save_daily_stats(session: Session) -> Result<(), BridgeError>`.
+    /// Same shape as `save_session_data` (a one-arg `Session` write) but a
+    /// distinct command — the handler appends to a daily-stats file on
+    /// disk rather than overwriting the live-session file.
+    #[wasm_bindgen_test]
+    async fn save_daily_stats_round_trip_signature_pinned() {
+        async fn assert_signature(s: Session) -> Result<(), BridgeError> {
+            save_daily_stats(s).await
+        }
+        let _ = assert_signature(sample_session()).await;
     }
 }
