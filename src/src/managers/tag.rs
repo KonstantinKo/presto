@@ -157,6 +157,22 @@ impl TagManager {
         Self { tags }
     }
 
+    /// Build a manager from the result of
+    /// `bridge::commands::load_tags()` (or any equivalent loader),
+    /// applying the JS-side list-reduction validation and falling
+    /// back to an empty list on error. Mirrors the JS-side
+    /// catch-and-default at
+    /// `src/managers/tag-manager.js:168-196`: persistence failures
+    /// (missing file, deserialise error, bridge unavailable) must
+    /// not poison the manager's state.
+    ///
+    /// The reduction is applied unconditionally on success so a
+    /// corrupted record on disk doesn't poison the in-memory list.
+    #[must_use]
+    pub fn from_loaded_or_default(loaded: Result<Vec<Tag>, BridgeError>) -> Self {
+        loaded.map_or_else(|_| Self::new(), Self::list_reduction)
+    }
+
     /// Async cold-start path: ask the bridge for the persisted
     /// tags, fall back to an empty list on any error (cold start,
     /// bridge unavailable, corrupted file). Mirrors the JS-side
@@ -167,9 +183,7 @@ impl TagManager {
     /// The reduction is applied unconditionally so a corrupted
     /// record on disk doesn't poison the in-memory list.
     pub async fn load() -> Self {
-        commands::load_tags()
-            .await
-            .map_or_else(|_| Self::new(), Self::list_reduction)
+        Self::from_loaded_or_default(commands::load_tags().await)
     }
 }
 

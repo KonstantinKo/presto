@@ -6,14 +6,7 @@ use std::thread;
 use std::time::{Duration, Instant};
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::{TrayIconBuilder, TrayIconEvent};
-// Analytics (Aptabase) is disconnected: plugin not registered,
-// `are_analytics_enabled` hard-wired to `false`. `track_event` call
-// sites and the `EventTracker` import are preserved as a re-enable
-// scaffold; re-arm by re-registering the plugin and restoring the
-// settings-backed body of `are_analytics_enabled`.
 use tauri::{Emitter, Manager};
-#[allow(unused_imports)]
-use tauri_plugin_aptabase::EventTracker;
 use tauri_plugin_autostart::ManagerExt;
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut};
 use tauri_plugin_oauth::start;
@@ -411,10 +404,6 @@ fn load_settings_sync(app: &AppHandle) -> AppSettings {
     helpers::read_settings_from(&app_data_dir).unwrap_or_default()
 }
 
-const fn are_analytics_enabled(_app: &AppHandle) -> bool {
-    false
-}
-
 /// User-facing notification preferences; each bool maps to an independent
 /// UI toggle, restructuring would not match the settings UI.
 #[allow(clippy::struct_excessive_bools)]
@@ -645,15 +634,6 @@ async fn save_session_data(session: PomodoroSession, app: AppHandle) -> Result<(
 
     helpers::write_session_to(&app_data_dir, &session)?;
 
-    if are_analytics_enabled(&app) {
-        let properties = Some(serde_json::json!({
-            "completed_pomodoros": session.completed_pomodoros,
-            "total_focus_time": session.total_focus_time,
-            "current_session": session.current_session
-        }));
-        let _ = app.track_event("session_saved", properties);
-    }
-
     Ok(())
 }
 
@@ -668,10 +648,6 @@ async fn save_tasks(tasks: Vec<Task>, app: AppHandle) -> Result<(), BridgeError>
     let app_data_dir = get_app_data_dir(&app)?;
 
     helpers::write_tasks_to(&app_data_dir, &tasks)?;
-
-    if are_analytics_enabled(&app) {
-        let _ = app.track_event("tasks_saved", None);
-    }
 
     Ok(())
 }
@@ -776,12 +752,7 @@ fn emit_tray_and_show(app: &AppHandle, event: &str) {
 
 #[allow(clippy::unused_async)] // awaits run_on_main_thread on macOS
 async fn show_app_window(app: AppHandle) {
-    let settings = app
-        .state::<SettingsState>()
-        .0
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner)
-        .clone();
+    let settings = helpers::lock_or_recover(&app.state::<SettingsState>().0).clone();
     if settings.hide_icon_on_close {
         #[cfg(target_os = "macos")]
         {
@@ -802,10 +773,7 @@ async fn save_settings(settings: AppSettings, app: AppHandle) -> Result<(), Brid
 
     helpers::write_settings_to(&app_data_dir, &settings)?;
 
-    *app.state::<SettingsState>()
-        .0
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner) = settings;
+    *helpers::lock_or_recover(&app.state::<SettingsState>().0) = settings;
 
     Ok(())
 }
@@ -868,10 +836,7 @@ async fn reset_all_data(app: AppHandle) -> Result<(), BridgeError> {
 
     helpers::delete_all_data_in(&app_data_dir)?;
 
-    *app.state::<SettingsState>()
-        .0
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner) = AppSettings::default();
+    *helpers::lock_or_recover(&app.state::<SettingsState>().0) = AppSettings::default();
 
     Ok(())
 }
@@ -911,13 +876,6 @@ async fn save_manual_sessions(
     let app_data_dir = get_app_data_dir(&app)?;
 
     helpers::write_manual_sessions_to(&app_data_dir, &sessions)?;
-
-    if are_analytics_enabled(&app) {
-        let properties = Some(serde_json::json!({
-            "session_count": sessions.len()
-        }));
-        let _ = app.track_event("manual_sessions_saved", properties);
-    }
 
     Ok(())
 }
@@ -1000,7 +958,6 @@ pub fn run() {
                 delete_tag,
                 add_session_tag,
                 start_oauth_server,
-                track_event,
                 supabase_sign_in_with_password,
                 supabase_sign_out,
                 supabase_get_session,
@@ -1019,13 +976,6 @@ pub fn run() {
             .setup(|app| {
                 let initial_settings = load_settings_sync(app.handle());
                 app.manage(SettingsState(Mutex::new(initial_settings)));
-
-                let app_handle_analytics = app.handle().clone();
-                tauri::async_runtime::spawn(async move {
-                    if are_analytics_enabled(&app_handle_analytics) {
-                        let _ = app_handle_analytics.track_event("app_started", None);
-                    }
-                });
 
                 let show_item = MenuItem::with_id(app, "show", "Show Presto", true, None::<&str>)?;
                 let start_session_item =
@@ -1093,12 +1043,10 @@ pub fn run() {
                         if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                             api.prevent_close();
 
-                            let settings = app_handle_for_close
-                                .state::<SettingsState>()
-                                .0
-                                .lock()
-                                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                                .clone();
+                            let settings = helpers::lock_or_recover(
+                                &app_handle_for_close.state::<SettingsState>().0,
+                            )
+                            .clone();
                             let app_handle_clone = app_handle_for_close.clone();
                             tauri::async_runtime::spawn(async move {
                                 if let Some(window) = app_handle_clone.get_webview_window("main") {
@@ -1152,10 +1100,6 @@ pub fn run() {
             .build(tauri::generate_context!())
             .expect("error while running tauri application")
             .run(|app_handle, event| match event {
-                tauri::RunEvent::Exit if are_analytics_enabled(app_handle) => {
-                    let _ = app_handle.track_event("app_exited", None);
-                    app_handle.flush_events_blocking();
-                }
                 #[cfg(target_os = "macos")]
                 tauri::RunEvent::Reopen { .. } => {
                     let app_handle_clone = app_handle.clone();
@@ -1163,7 +1107,9 @@ pub fn run() {
                         show_app_window(app_handle_clone).await;
                     });
                 }
-                _ => {}
+                _ => {
+                    let _ = app_handle;
+                }
             });
     });
 }
@@ -1289,40 +1235,6 @@ async fn start_oauth_server(window: tauri::Window) -> Result<u16, BridgeError> {
     .map_err(|err| BridgeError::Internal {
         msg: err.to_string(),
     })
-}
-
-// `track_event` — Phase 1D T086.
-//
-// Replaces the JS `@aptabase/tauri` shim that the migration deletes. The
-// shim's only behaviour was to forward `track_event(...)` to the Aptabase
-// plugin via `invoke()`. This handler does the same with one extra
-// guarantee (per spec FR-018 / Principle II): the `analytics_enabled`
-// opt-in toggle is checked Rust-side via `are_analytics_enabled` before
-// any forwarding happens — a Leptos call site cannot accidentally bypass
-// it because the gate lives below the bridge.
-//
-// `props` is `Option<HashMap<String, Value>>` — `None` matches the
-// bare-name path Aptabase's `EventTracker::track_event` accepts directly.
-// We construct a `serde_json::Value::Object` from the HashMap and pass it
-// to the plugin (the plugin's `track_event` API takes a serializable
-// payload). When the toggle is off, the handler returns `Ok(())` without
-// forwarding — the disabled path is silent, not an error (matches the
-// existing in-handler call sites at `lib.rs:474`, `lib.rs:500`, etc.).
-#[tauri::command]
-async fn track_event(
-    name: String,
-    props: Option<HashMap<String, serde_json::Value>>,
-    app: AppHandle,
-) -> Result<(), BridgeError> {
-    if are_analytics_enabled(&app) {
-        // The aptabase plugin's `EventTracker::track_event` takes a
-        // serde_json::Value bag (not a typed HashMap); we wrap the map
-        // into `Value::Object` here so the bridge stays typed at the
-        // boundary while the plugin keeps its `Value` shape internally.
-        let payload = props.map(|map| serde_json::Value::Object(map.into_iter().collect()));
-        let _ = app.track_event(&name, payload);
-    }
-    Ok(())
 }
 
 // `supabase_sign_in_with_password` — Phase 1D T089.

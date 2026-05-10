@@ -160,7 +160,6 @@ pub fn AuthModal(auth_state: RwSignal<AuthState>) -> impl IntoView {
         });
         auth_state.set(AuthState::Unauthenticated);
         dropdown_open.set(false);
-        let analytics = settings.with_untracked(|s| s.analytics_enabled);
         spawn_local(async move {
             // The bridge call returns `BridgeError::BridgeUnavailable`
             // on the dev server (Trunk + e2e mock harness). We swallow
@@ -168,14 +167,6 @@ pub fn AuthModal(auth_state: RwSignal<AuthState>) -> impl IntoView {
             // user contract, and the Tauri side's idempotency means a
             // missed call here is recovered on the next launch.
             let _ = commands::supabase_sign_out(refresh_token).await;
-            // R-004: sign_out analytics event.
-            if analytics {
-                let _ = commands::track_event(
-                    "sign_out",
-                    None::<std::collections::HashMap<String, serde_json::Value>>,
-                )
-                .await;
-            }
         });
     };
 
@@ -206,15 +197,6 @@ pub fn AuthModal(auth_state: RwSignal<AuthState>) -> impl IntoView {
                     email.set(String::new());
                     password.set(String::new());
                     form_error.set(String::new());
-                    // R-004: sign_in_success analytics event.
-                    let analytics = settings.with_untracked(|s| s.analytics_enabled);
-                    if analytics {
-                        let _ = commands::track_event(
-                            "sign_in_success",
-                            None::<std::collections::HashMap<String, serde_json::Value>>,
-                        )
-                        .await;
-                    }
                 }
                 Err(e) => {
                     // Surface a user-facing message. The

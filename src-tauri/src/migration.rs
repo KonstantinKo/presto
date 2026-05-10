@@ -315,20 +315,15 @@ pub(super) fn import_supabase_session(
     // auth module persists. `expires_at` is intentionally not
     // forwarded — the post-cutover session re-derives expiry from
     // the JWT on next refresh.
-    let session_json = serde_json::json!({
-        "access_token": payload.access_token,
-        "refresh_token": payload.refresh_token,
-        "user": {
-            "id": payload.user.id,
-            "email": payload.user.email,
-            "user_metadata": payload.user.user_metadata,
+    let session = auth::AuthSession {
+        access_token: payload.access_token.clone(),
+        refresh_token: payload.refresh_token.clone(),
+        user: auth::AuthUser {
+            id: payload.user.id.clone(),
+            email: payload.user.email.clone(),
+            user_metadata: payload.user.user_metadata.clone(),
         },
-    });
-    let session: auth::AuthSession =
-        serde_json::from_value(session_json).map_err(|e| BridgeError::SerdeRoundtrip {
-            command: "import_legacy_supabase_session".to_string(),
-            error: format!("re-shape payload into AuthSession: {e}"),
-        })?;
+    };
     auth::persist_session(app_data_dir, &session)
 }
 

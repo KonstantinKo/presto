@@ -638,13 +638,12 @@ impl TimerState {
     /// drift-compensation arithmetic (T129) and break-mode
     /// completion semantics.
     pub fn tick(&mut self, clock: &dyn Clock) -> Vec<TimerEvent> {
-        let mut events = Vec::new();
         if !self.is_running {
-            return events;
+            return Vec::new();
         }
         let (Some(start_ms), Some(duration_secs)) = (self.timer_start_ms, self.timer_duration_secs)
         else {
-            return events;
+            return Vec::new();
         };
 
         let now = clock.now_ms();
@@ -653,6 +652,24 @@ impl TimerState {
         let new_remaining = duration_secs - elapsed_secs;
         let old_remaining = self.time_remaining_secs;
         self.time_remaining_secs = new_remaining;
+
+        self.tick_drift_compensation(old_remaining, new_remaining)
+    }
+
+    /// Integrate one tick's worth of elapsed time into the engine's
+    /// accumulators and fire any zero-cross completion transitions.
+    ///
+    /// Called by `tick()` after the wall-clock arithmetic is done.
+    /// `old_remaining` is `self.time_remaining_secs` *before* the
+    /// tick updated it; `new_remaining` is the freshly-computed
+    /// value (already written to `self.time_remaining_secs` by the
+    /// caller). Returns any events that fired during this tick.
+    fn tick_drift_compensation(
+        &mut self,
+        old_remaining: i64,
+        new_remaining: i64,
+    ) -> Vec<TimerEvent> {
+        let mut events = Vec::new();
 
         // Accumulator: integrate the wall-clock seconds drained by
         // this tick into the focus-session counter (focus mode

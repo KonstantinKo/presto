@@ -26,10 +26,6 @@ use crate::bridge::types::AuthUser;
 /// reads `"true"`) or `SignedIn` (when `bridge::commands::supabase_get_session`
 /// returns a session).
 ///
-/// Phase 3c wires up the state shape and the `Guest` projection
-/// (T175-T176); sign-in / sign-out / continue-as-guest land in
-/// T177-T182.
-///
 /// `PartialEq` is intentionally NOT derived: the `SignedIn` variant
 /// carries an `AuthUser` whose `user_metadata` field is a
 /// `serde_json::Value` (no `Eq`/`PartialEq` impl on `Value::Object`
@@ -160,6 +156,7 @@ impl<S: GuestModeStore> AuthManager<S> {
     /// `true` iff the current state is `SignedIn`. Convenience for
     /// the components layer (Phase 4) — equivalent to
     /// `matches!(self.state(), AuthState::SignedIn { .. })`.
+    #[must_use]
     pub const fn is_authenticated(&self) -> bool {
         matches!(self.state, AuthState::SignedIn { .. })
     }
@@ -167,6 +164,7 @@ impl<S: GuestModeStore> AuthManager<S> {
     /// `true` iff the current state is `Guest`. Distinct from
     /// `!is_authenticated()` — the `Unauthenticated` cold-start
     /// state is neither authenticated nor guest.
+    #[must_use]
     pub const fn is_guest(&self) -> bool {
         matches!(self.state, AuthState::Guest)
     }

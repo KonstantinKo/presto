@@ -171,6 +171,24 @@ impl SessionManager {
             .collect()
     }
 
+    /// Build a manager from the result of
+    /// `bridge::commands::load_manual_sessions()` (or any equivalent
+    /// loader), falling back to an empty list on error. Mirrors the
+    /// JS-side catch-and-default at
+    /// `src/managers/session-manager.js:32-50`: persistence failures
+    /// (missing file, deserialise error, bridge unavailable) must not
+    /// poison the manager's state — the user always sees an empty list
+    /// until entries are added.
+    #[must_use]
+    pub fn from_loaded_or_default(loaded: Result<Vec<ManualSession>, BridgeError>) -> Self {
+        loaded.map_or_else(
+            |_| Self::new(),
+            |sessions| Self {
+                manual_sessions: sessions,
+            },
+        )
+    }
+
     /// Async cold-start path: ask the bridge for the persisted
     /// manual sessions, fall back to an empty list on any error
     /// (cold start, bridge unavailable, corrupted file). Mirrors
@@ -180,12 +198,7 @@ impl SessionManager {
     /// `import_legacy_manual_sessions` migrated those records to
     /// the Rust-side store).
     pub async fn load() -> Self {
-        commands::load_manual_sessions().await.map_or_else(
-            |_| Self::new(),
-            |loaded| Self {
-                manual_sessions: loaded,
-            },
-        )
+        Self::from_loaded_or_default(commands::load_manual_sessions().await)
     }
 }
 

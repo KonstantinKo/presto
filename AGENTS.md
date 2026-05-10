@@ -20,13 +20,11 @@ repo, read these in order:
 
 - **Active branch**: `main`. Feature branches are `NNN-<slug>` (sequential
   numbering, see `specs/`).
-- **Vite dev port**: 1420 (set in `playwright.config.js` baseURL); bound
-  to localhost only.
-- **Trunk dev port** (post-migration): 1420 (same — Tauri config points
-  there).
-- **Tauri dev**: `npm run dev` runs `tauri dev`. Do **not** run this in
+- **Trunk dev port**: 1420 (set in `playwright.config.js` baseURL); bound
+  to localhost only — Tauri config points there.
+- **Tauri dev**: `cargo tauri dev` (via trunk). Do **not** run this in
   CI/agentex worktrees — it requires GUI dependencies. e2e tests use the
-  vite server with `tauriMock.js` instead.
+  trunk dev server with `tauriMock.js` instead.
 - **Tauri bridge mock**: `tests/e2e/fixtures/tauriMock.js` mirrors every
   Tauri command reachable from the frontend. Adding a command means
   extending the mock first; then the test; then the real call site.
@@ -43,9 +41,7 @@ repo, read these in order:
 
 - **Backend**: `cargo clippy --all-targets -- -D warnings -W clippy::pedantic`
   for `src-tauri/`. `cargo fmt --check`. `cargo build --frozen`.
-- **Frontend (today)**: `eslint src tests *.config.js`, `tsc --noEmit`,
-  `prettier --check .`, `vitest run`.
-- **Frontend (post-Leptos)**: same `clippy --all-targets -- -D warnings
+- **Frontend**: same `clippy --all-targets -- -D warnings
   -W clippy::pedantic` posture for the Leptos crate. `wasm-bindgen-test`
   for unit tests. `trunk build --release` on PR.
 - **E2E**: `npx playwright test` against the vite (or trunk) dev server
@@ -98,10 +94,8 @@ end-to-end.
 
 ## Things you can find quickly
 
-- **Timer state machine** — `src/core/pomodoro-timer.js` (post-migration:
-  the corresponding Leptos module).
-- **Manager classes** — `src/managers/*.js` (auth, session, settings,
-  navigation, tag, team, update).
+- **Timer state machine** — `src/src/engine/timer.rs`.
+- **Manager classes** — `src/src/managers/` (Rust modules).
 - **Tauri commands** — `src-tauri/src/lib.rs`.
 - **Persistence helpers** — `src-tauri/src/helpers.rs`.
 - **Tauri mock** — `tests/e2e/fixtures/tauriMock.js`.

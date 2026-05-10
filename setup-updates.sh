@@ -104,23 +104,6 @@ if $TAURI_CMD signer generate -w "$key_dir/$key_name"; then
         echo "⚠️  File $config_file not found"
     fi
 
-    # Update main.js with repository links
-    main_js_file="src/main.js"
-    if [ -f "$main_js_file" ]; then
-        sed -i.tmp "s/YOUR_USERNAME/$sed_username/g" "$main_js_file"
-        sed -i.tmp "s/YOUR_REPO/$sed_repo/g" "$main_js_file"
-        rm "$main_js_file.tmp" 2>/dev/null
-        echo "✅ Repository links updated!"
-    fi
-
-    # Update the update manager
-    update_manager_file="src/managers/update-manager-global.js"
-    if [ -f "$update_manager_file" ]; then
-        sed -i.tmp "s/USERNAME\/REPOSITORY/$sed_username\/$sed_repo/g" "$update_manager_file"
-        rm "$update_manager_file.tmp" 2>/dev/null
-        echo "✅ Update manager configured!"
-    fi
-
     echo ""
     echo "🎉 Configuration complete!"
     echo ""

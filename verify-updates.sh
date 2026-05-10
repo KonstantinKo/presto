@@ -76,8 +76,6 @@ echo "-------------------------"
 check_file "src-tauri/tauri.conf.json" "Tauri configuration"
 check_file ".github/workflows/release.yml" "GitHub Actions workflow"
 check_file "src-tauri/capabilities/default.json" "Tauri capabilities"
-check_file "src/managers/update-manager-global.js" "Update manager"
-check_file "src/components/update-notification.js" "Update notification component"
 
 echo ""
 echo "🔧 Checking Configuration"
@@ -136,25 +134,6 @@ if [ -f "$PUB_KEY_PATH" ]; then
     echo ""
 else
     print_status "error" "Public signing key not found at $PUB_KEY_PATH"
-fi
-
-echo ""
-echo "📦 Checking Dependencies"
-echo "------------------------"
-
-# Check package.json for required dependencies
-if [ -f "package.json" ]; then
-    if grep -q '@tauri-apps/plugin-updater' package.json; then
-        print_status "ok" "Updater plugin dependency found"
-    else
-        print_status "warning" "Updater plugin dependency not found in package.json"
-    fi
-    
-    if grep -q '@tauri-apps/plugin-dialog' package.json; then
-        print_status "ok" "Dialog plugin dependency found"
-    else
-        print_status "warning" "Dialog plugin dependency not found in package.json"
-    fi
 fi
 
 echo ""

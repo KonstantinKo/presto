@@ -213,18 +213,6 @@ pub(super) async fn sign_in_with_password(
     email: &str,
     password: &str,
 ) -> Result<AuthSession, BridgeError> {
-    if email.is_empty() {
-        return Err(BridgeError::InvalidArgument {
-            field: "email".to_string(),
-            reason: "email is empty".to_string(),
-        });
-    }
-    if password.is_empty() {
-        return Err(BridgeError::InvalidArgument {
-            field: "password".to_string(),
-            reason: "password is empty".to_string(),
-        });
-    }
     post_token("password", &PasswordGrantBody { email, password }).await
 }
 
@@ -234,12 +222,6 @@ pub(super) async fn sign_in_with_password(
 /// is signed out client-side even if the server-side revocation
 /// roundtrip fails.
 pub(super) async fn sign_out(refresh_token: &str) -> Result<(), BridgeError> {
-    if refresh_token.is_empty() {
-        return Err(BridgeError::InvalidArgument {
-            field: "refresh_token".to_string(),
-            reason: "refresh_token is empty".to_string(),
-        });
-    }
     let url = format!("{SUPABASE_URL}/auth/v1/logout");
     // Best-effort: log network failure but do not fail the command. The
     // local session is cleared by the caller regardless.
@@ -254,12 +236,6 @@ pub(super) async fn sign_out(refresh_token: &str) -> Result<(), BridgeError> {
 
 /// REST: POST `/auth/v1/token?grant_type=refresh_token`.
 pub(super) async fn refresh_session(refresh_token: &str) -> Result<AuthSession, BridgeError> {
-    if refresh_token.is_empty() {
-        return Err(BridgeError::InvalidArgument {
-            field: "refresh_token".to_string(),
-            reason: "refresh_token is empty".to_string(),
-        });
-    }
     post_token("refresh_token", &RefreshGrantBody { refresh_token }).await
 }
 

@@ -1,13 +1,4 @@
-// Calendar view component — Phase 4a (T198-T200) of spec
-// 001-leptos-migration.
-//
-// Skeleton (T198): mount the calendar navigation shell with the
-// e2e selector contract preserved. Wiring (T199): route prev/next
-// week + month clicks into the date-cursor signal, project the
-// week range and the month label against chrono format strings,
-// and feed the per-cell session counts from
-// `SessionManager::list_by_date`. T200 lands the visual regression
-// check.
+// Calendar view component. Spec: 001-leptos-migration §Phase 4a.
 //
 // **Selector contract** (consumed by
 // `tests/e2e/calendar-navigation.spec.js`,
@@ -39,44 +30,11 @@
 use chrono::{DateTime, Datelike, Days, Months, Utc};
 use leptos::prelude::*;
 
+use super::browser_clock::BrowserClock;
 use crate::bridge::session_type::SessionType;
 use crate::bridge::types::{ManualSession, Settings};
 use crate::engine::clock::Clock;
 use crate::engine::date_format::format_session_date;
-
-/// Browser-backed `Clock` implementation. Same shape as the
-/// `BrowserClock` in `components::timer` — duplicated rather than
-/// shared so each component is self-contained at the bridge
-/// boundary (Phase 4c will lift a single shared impl when the
-/// shared `app.rs` lands).
-struct BrowserClock;
-
-impl Clock for BrowserClock {
-    #[cfg(target_arch = "wasm32")]
-    #[allow(
-        clippy::cast_possible_truncation,
-        clippy::cast_sign_loss,
-        // `Date.now()` is f64 milliseconds since the unix epoch;
-        // values up to year 2038 fit easily within i64 (and even
-        // i53 — the f64 mantissa). The cast is safe for any
-        // realistic wall-clock value during the engine's lifetime.
-    )]
-    fn now_ms(&self) -> i64 {
-        js_sys::Date::now() as i64
-    }
-
-    #[cfg(not(target_arch = "wasm32"))]
-    fn now_ms(&self) -> i64 {
-        // Host-side fallback for `cargo test` / `cargo clippy`
-        // builds. The component is never mounted on the host
-        // target — the binary is wasm-only — so this body is
-        // unreachable under real execution. Returning a constant
-        // (epoch) keeps the trait satisfied without pulling
-        // `std::time` or chrono's `clock` feature into the
-        // dependency graph.
-        0
-    }
-}
 
 /// Lift a unix-timestamp (milliseconds) to a `DateTime<Utc>`
 /// without panicking on overflow. Falls back to the unix epoch on

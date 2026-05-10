@@ -190,16 +190,6 @@ const TAURI_MOCK_INIT_SCRIPT = `
             //                         -> Result<(), String>
             return;
 
-          case "track_event":
-            // Spec 001-leptos-migration T084 (mock-first per FR-010 / Principle VI):
-            // Replaces the JS @aptabase/tauri shim. Tauri-side handler at
-            // src-tauri/src/lib.rs gates on settings.analytics_enabled before
-            // calling tauri_plugin_aptabase. The mock is a no-op because the
-            // e2e suite never asserts on Aptabase delivery — it asserts on the
-            // call shape (name + props) when needed via a spy installed by
-            // individual specs.
-            return;
-
           case "supabase_sign_in_with_password":
             // Spec 001-leptos-migration T087 (mock-first per FR-010): replaces
             // the supabase-js auth path with a Rust REST adapter. The mock
