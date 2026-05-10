@@ -473,6 +473,26 @@ pub async fn start_activity_monitoring(timeout_seconds: u64) -> Result<(), Bridg
     invoke_serde("start_activity_monitoring", &Args { timeout_seconds }).await
 }
 
+/// Stop the macOS-side `ActivityMonitor`. Tauri-side handler:
+/// `stop_activity_monitoring() -> Result<(), BridgeError>`
+/// at `src-tauri/src/lib.rs:439`.
+///
+/// No-arg counterpart to `start_activity_monitoring`. The Tauri-side
+/// handler reaches for the `ACTIVITY_MONITOR` static mutex and calls
+/// `stop_monitoring()` on the inner monitor if one was previously
+/// installed; if no monitor was ever started, the call is silently
+/// absorbed and `Ok(())` is returned. The Leptos wrapper does not
+/// distinguish those cases.
+///
+/// # Errors
+/// Returns `BridgeError::BridgeUnavailable` when the Tauri JS bridge is
+/// not present. The Tauri-side handler does not currently produce a
+/// failure case (see lib.rs `stop_activity_monitoring`); any non-success
+/// would surface as `BridgeError::Internal`.
+pub async fn stop_activity_monitoring() -> Result<(), BridgeError> {
+    invoke_serde("stop_activity_monitoring", &serde_json::Value::Null).await
+}
+
 // Tests gated on `wasm32` because every wrapper-test is a
 // `#[wasm_bindgen_test]` — running them via `cargo test` on the host
 // target would produce dead-code lint failures (the host-side
