@@ -69,6 +69,22 @@ pub struct UpdateManager {
 }
 
 impl UpdateManager {
+    /// Polling cadence between successive auto update-checks.
+    /// Pinned at 1 hour to match the JS-era baseline at
+    /// `src/managers/update-manager-global.js:219`
+    /// (`setInterval(..., 60 * 60 * 1000)`).
+    ///
+    /// The components layer (Phase 4) reads this constant to drive
+    /// the actual interval timer; the manager itself does not own a
+    /// timer (the JS-era surface uses the browser's `setInterval`,
+    /// which has no Rust equivalent that crosses the wasm boundary
+    /// without a runtime — Leptos provides one in the components
+    /// layer via `set_interval_with_handle`).
+    ///
+    /// Spec 001-leptos-migration §Phase 3c T186; FR-004
+    /// update-cadence pin.
+    pub const POLL_INTERVAL: core::time::Duration = core::time::Duration::from_hours(1);
+
     /// Construct a manager rooted at `UpdateInfo::NoUpdate`. Mirrors
     /// the JS-era cold-start at `update-manager-global.js:9`
     /// (`this.updateAvailable = false`).
@@ -180,8 +196,8 @@ mod tests {
     fn polling_cadence_matches_jsbaseline() {
         assert_eq!(
             super::UpdateManager::POLL_INTERVAL,
-            core::time::Duration::from_secs(60 * 60),
-            "JS-era baseline at update-manager-global.js:219 is 60 * 60 * 1000 ms",
+            core::time::Duration::from_hours(1),
+            "JS-era baseline at update-manager-global.js:219 is 60 * 60 * 1000 ms (= 1 hour)",
         );
     }
 }
