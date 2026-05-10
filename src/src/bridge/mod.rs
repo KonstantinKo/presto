@@ -10,5 +10,6 @@
 // Per AGENTS.md §IPC: `invoke()` + `listen()` only; no other channels.
 
 pub mod availability;
+pub mod commands;
 pub mod error;
 pub mod session_type;
