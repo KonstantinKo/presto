@@ -570,6 +570,22 @@ mod tests {
         assert_eq!(after, "[]");
     }
 
+    /// T109 named-test (per F4 idempotency design). Two-call no-op:
+    /// the second invocation must not overwrite the first's output.
+    #[test]
+    fn import_manual_sessions_is_idempotent_across_two_calls() {
+        let dir = tempdir().unwrap();
+        let payload = LegacyManualSessionsPayload { sessions: vec![sample_manual()] };
+        import_manual_sessions(dir.path(), &payload).unwrap();
+        let first_bytes = std::fs::read(dir.path().join("manual_sessions.json")).unwrap();
+        let mut second = sample_manual();
+        second.id = "should-not-write".to_string();
+        let payload2 = LegacyManualSessionsPayload { sessions: vec![second] };
+        import_manual_sessions(dir.path(), &payload2).unwrap();
+        let second_bytes = std::fs::read(dir.path().join("manual_sessions.json")).unwrap();
+        assert_eq!(first_bytes, second_bytes);
+    }
+
     // ── import_user_state ───────────────────────────────────────────────────
 
     #[test]
