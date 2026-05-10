@@ -321,6 +321,16 @@ const TAURI_MOCK_INIT_SCRIPT = `
               },
             };
 
+          case "export_sessions_xlsx":
+            // Spec 001-leptos-migration T096 (mock-first per FR-010):
+            // replaces the JS `xlsx` library's writeFile() path with a
+            // Tauri-side rust_xlsxwriter call that builds the workbook
+            // server-side from a typed Vec<ManualSession>. Mock no-op:
+            // the e2e suite asserts on the call shape (path + sessions
+            // length), not on the file's bytes (which the host-side
+            // integration test in src-tauri/tests/ covers).
+            return;
+
           case "plugin:updater|check": {
             // Read config lazily so override scripts that run after this init script
             // can configure the updater response.
