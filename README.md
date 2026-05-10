@@ -1,314 +1,291 @@
-Due to numerous commitments, the project has unfortunately been abandoned.
-
 <img src="https://github.com/murdercode/presto/raw/HEAD/art/banner.png" width="100%" alt="Presto banner" style="max-width: 100%;">
 
-# Presto - Pomodoro Timer
+# Presto — Pomodoro Timer
 
-A modern, cross-platform Pomodoro timer application built with Tauri (Rust + HTML/CSS/JavaScript). Presto helps you boost productivity using the proven Pomodoro Technique with a beautiful, intuitive interface.
+A modern, cross-platform Pomodoro timer built with **Tauri + Leptos** (Rust + WebAssembly). Presto helps you stay focused using the Pomodoro Technique with a clean, native desktop interface.
+
+> Forked from [murdercode/presto](https://github.com/murdercode/presto) (upstream abandoned). This fork is actively maintained on a Leptos frontend post-cutover (single hard migration in 2026-05). See [`VISION.md`](VISION.md) for product scope and [`.specify/memory/constitution.md`](.specify/memory/constitution.md) for the engineering principles.
 
 ## ✨ Features
 
 ### 🍅 Pomodoro Technique
 
-- **Standard Pomodoro cycles**: 25-minute work sessions
-- **Smart breaks**: 5-minute short breaks, 20-minute long breaks every 4 cycles
-- **Daily goal**: Track progress through 10 daily Pomodoro sessions
-- **Visual progress**: Dot indicators showing session completion
+- Standard 25-minute focus cycles
+- 5-minute short breaks; 20-minute long break every 4 cycles
+- Daily goal tracking with visual progress dots
+- Configurable durations in Settings
 
 ### ⏱️ Timer Management
 
-- **Flexible controls**: Start, pause, reset, and skip functionality
-- **Visual feedback**: Dynamic UI that changes based on session type (work/break)
-- **Audio notifications**: Sound alerts for session transitions
-- **Desktop notifications**: System notifications to keep you informed
+- Start, pause, resume, skip, reset
+- Mode-aware UI (focus / short break / long break)
+- Audio + system notifications on transitions
+- Smart-pause on inactivity (optional)
+- Background-throttling-resistant timekeeping
 
-### 📋 Task Management
+### 📋 Tasks & Tags
 
-- **Task tracking**: Add and manage tasks for each Pomodoro session
-- **Task completion**: Mark tasks as completed with visual feedback
-- **Persistence**: Tasks are automatically saved and restored
+- Per-session task list with completion tracking
+- Tag any session for context grouping
+- Local-first persistence via Tauri
 
 ### 📊 Statistics & History
 
-- **Weekly statistics**: Track your productivity patterns
-- **Session history**: View detailed history of completed sessions
-- **Progress tracking**: Monitor your daily and weekly Pomodoro completion
+- Per-day session count, weekly view, calendar of completed pomodoros
+- Manual session entry for retroactive logging
+- All history available offline
+
+### 🔐 Optional Sync
+
+- Guest mode is first-class — every feature works without an account
+- Optional Supabase sign-in for cross-device sync
+- Optional Aptabase analytics (opt-in, off by default)
 
 ### ⌨️ Keyboard Shortcuts
 
-- **Cmd/Ctrl + Alt + Space**: Start/Pause timer
-- **Cmd/Ctrl + Alt + R**: Reset current session
-- **Cmd/Ctrl + Alt + S**: Skip current session
-- **Cmd/Ctrl + H**: Show/hide history modal
-- **Space**: Start/Pause timer (fallback when no custom shortcut is active)
+- **Cmd/Ctrl + Alt + Space**: Start / Pause
+- **Cmd/Ctrl + Alt + R**: Reset
+- **Cmd/Ctrl + Alt + S**: Skip
+- **Cmd/Ctrl + H**: History modal
+- **Space**: Start / Pause (when no other shortcut is active)
 
-### 🎨 Modern UI
+### 🎨 UI
 
-- **Dark mode design**: Easy on the eyes for long work sessions
-- **Responsive layout**: Works on different screen sizes
-- **Smooth animations**: Polished user experience
-- **Protection**: Prevents accidental closure during active sessions
+- Dark-mode design tuned for long focus sessions
+- Pluggable themes (CSS files under `src/style/themes/`)
+- Visual regression suite locks the UI contract — 14 baseline PNGs in `tests/e2e/__screenshots__/visual-regression/` are part of the merge gate
 
 ## 🚀 Getting Started
 
-### Installation via Homebrew (Recommended)
-
-The easiest way to install Presto on macOS is through Homebrew:
+### Installation via Homebrew (recommended, macOS)
 
 ```bash
 brew install --cask murdercode/presto/presto
 ```
 
-#### ⚠️ Troubleshooting: "Presto is damaged and can't be opened"
+#### Troubleshooting: "Presto is damaged and can't be opened"
 
-If you see this error when launching Presto for the first time, it's a temporary issue that occurs because the app lacks an Apple Developer signature (which requires paying $99 to Apple). This is a common situation for open-source applications. To resolve it, run this command in Terminal:
+The app lacks an Apple Developer signature (no $99 fee paid). Clear the quarantine attribute:
 
 ```bash
 xattr -d com.apple.quarantine /Applications/presto.app
 ```
 
-Then you can launch Presto normally from your Applications folder or Spotlight.
-
-### Installation from Source
-
-If you prefer to build from source, you'll need:
+### Build from source
 
 #### Prerequisites
 
-- [Node.js](https://nodejs.org/) (v16 or higher)
-- [Rust](https://rustup.rs/) (latest stable; the project is verified against `1.89.0`)
+- [Rust](https://rustup.rs/) (latest stable; verified against `1.95+`)
+- `wasm32-unknown-unknown` target: `rustup target add wasm32-unknown-unknown`
+- [Trunk](https://trunkrs.dev/): `cargo install trunk` (or `dnf install trunk` on Fedora)
 - Xcode Command Line Tools (macOS): `xcode-select --install`
+- Linux: `webkit2gtk-4.1`, `libsoup3`, `libappindicator3-1` (or distro equivalents)
 
-The Tauri CLI is pulled in automatically via `npm install` (`@tauri-apps/cli`); no separate install is needed.
+There is no Node.js or npm dependency at the repo root post-cutover. The end-to-end test suite has its own scoped `package.json` under `tests/e2e/` that pins `@playwright/test`.
 
 #### Steps
 
 1. **Clone the repository**
 
    ```bash
-   git clone https://github.com/murdercode/presto.git
+   git clone https://github.com/KonstantinKo/presto.git
    cd presto
    ```
 
-2. **Install dependencies**
+2. **Run in development mode**
 
    ```bash
-   npm install
+   cargo tauri dev
    ```
 
-3. **Run in development mode**
+   Tauri's `beforeDevCommand` runs `cd src && trunk serve --port 1420` automatically. The first run downloads ~400 crates and compiles both the Leptos frontend and the Tauri backend; subsequent runs are incremental.
+
+3. **Build for production**
 
    ```bash
-   npm run tauri dev
+   cargo tauri build
    ```
 
-   The first run downloads ~200 crates and compiles the Rust backend, which takes several minutes. Subsequent runs are incremental.
-
-4. **Build for production**
-   ```bash
-   npm run tauri build
-   ```
+   `beforeBuildCommand` produces the production WASM bundle in `src/dist/` via `trunk build --release`. The Tauri build then packages the bundle into a platform installer (`.dmg`, `.msi`, `.AppImage`, …) under `src-tauri/target/release/bundle/`.
 
 #### Troubleshooting
 
-- **`No version is set for command cargo` / `rustc`** — you are using `asdf` (or another version manager) and no Rust version is selected for this directory. Add a `.tool-versions` file at the **repo root** (not inside `src-tauri/`; the Tauri CLI invokes `rustc` from the repo root):
+- **`No version is set for command cargo` / `rustc`** — you are using `asdf` (or another version manager) and no Rust version is selected for this directory. Add a `.tool-versions` file at the repo root with `rust <stable>`, or run `asdf set -u rust <stable>`.
 
-  ```
-  rust 1.89.0
-  ```
+- **`error: failed to find tool. Is 'wasm32-unknown-unknown' installed?`** — `rustup target add wasm32-unknown-unknown`.
 
-  Or set a global default with `asdf set -u rust 1.89.0`.
+- **`trunk: command not found`** — `cargo install trunk` (the workspace's `tools/externalize-boot/` post-build hook also expects `trunk` on PATH).
 
-- **`thread '<unnamed>' panicked at ... rust.rs:... called Option::unwrap() on a None value`** — same root cause as above. The Tauri CLI parses `rustc -vV` output and panics if `rustc` cannot be resolved on `PATH`. Fix the toolchain resolution and re-run.
-
-- **`Found version mismatched Tauri packages`** — the npm packages and the Rust crates have drifted out of sync (e.g. `@tauri-apps/api` vs `tauri`). Pin the npm side to match the Rust crate versions resolved by Cargo (check `src-tauri/Cargo.lock`), e.g.:
-
-  ```bash
-  npm install --save-exact @tauri-apps/api@2.6.0 @tauri-apps/plugin-updater@2.8.1
-  ```
-
-- **Devtools in dev mode** — devtools are enabled via the `devtools` feature on the `tauri` crate in `src-tauri/Cargo.toml`. Open them with right-click → _Inspect Element_ (or `Cmd+Opt+I` on macOS) to surface frontend errors that the app's generic "An error occurred" toast hides.
+- **Devtools in dev mode** — devtools are enabled via the `devtools` feature on the `tauri` crate in `src-tauri/Cargo.toml`. Right-click → _Inspect Element_ (or `Cmd+Opt+I` on macOS).
 
 ## 🏗️ Project Structure
 
 ```
 presto/
-├── src/                         # Frontend source files
-│   ├── index.html               # Main HTML interface
-│   ├── main.js                  # Application entry point
-│   ├── version.js               # Version constants
-│   ├── globals.d.ts             # Global TypeScript declarations
-│   ├── assets/                  # Static assets (icons, images)
-│   ├── components/              # Reusable UI components
-│   │   └── update-notification.js
-│   ├── config/                  # Configuration constants
-│   │   └── storage-keys.js
-│   ├── core/                    # Core application logic
-│   │   └── pomodoro-timer.js    # Timer state machine and controls
-│   ├── docs/                    # Developer documentation
-│   ├── managers/                # Feature-area managers
-│   │   ├── auth-manager.js
-│   │   ├── navigation-manager.js
-│   │   ├── session-manager.js
-│   │   ├── settings-manager.js
-│   │   ├── tag-manager.js
-│   │   ├── team-manager.js
-│   │   └── update-manager-global.js
-│   ├── styles/                  # CSS stylesheets
-│   │   ├── themes/              # Pluggable timer themes
-│   │   └── *.css                # Feature-scoped stylesheets
-│   └── utils/                   # Shared utilities
-│       ├── analytics.js
-│       ├── theme-loader.js
-│       ├── timer-themes.js
-│       └── ...
-├── src-tauri/                   # Rust backend
+├── Cargo.toml                   # Workspace root (4 members)
+├── Cargo.lock                   # Workspace lockfile (single source of truth)
+├── src/                         # Leptos frontend crate (`presto-web`)
+│   ├── Cargo.toml
+│   ├── Trunk.toml               # Trunk build config + theme-codegen pre-build hook
+│   ├── index.html               # Trunk entry; boot script externalized post-build
+│   ├── src/                     # Rust source — components / managers / engine / bridge
+│   │   ├── lib.rs
+│   │   ├── main.rs
+│   │   ├── app.rs               # Top-level router + persistence sinks
+│   │   ├── engine/              # Pure timer state machine (no DOM access)
+│   │   ├── managers/            # Settings / Session / Tag / Auth / Update / Team / Navigation
+│   │   ├── components/          # Leptos UI components (one per screen / tab)
+│   │   ├── bridge/              # Tauri command + event wrappers (typed)
+│   │   └── theme/               # Theme loader (themes.rs is build-themes-generated)
+│   ├── style/                   # CSS modules (one per feature area + theme/)
+│   └── assets/                  # Icons (remixicon vendored)
+├── src-tauri/                   # Tauri backend crate (`presto-lib`)
 │   ├── src/
-│   │   └── lib.rs               # Tauri commands and data persistence
-│   ├── Cargo.toml               # Rust dependencies
-│   └── tauri.conf.json          # Tauri configuration
+│   │   ├── lib.rs               # `#[tauri::command]` handlers + plugin setup
+│   │   ├── auth.rs              # Supabase REST adapter
+│   │   ├── migration.rs         # One-shot localStorage → Rust-side migration
+│   │   ├── exports.rs           # XLSX export via `rust_xlsxwriter`
+│   │   └── helpers.rs           # Activity monitor + persistence helpers
+│   ├── Cargo.toml
+│   └── tauri.conf.json
+├── tools/
+│   ├── build-themes/            # Trunk pre-build hook: scans src/style/themes/ → themes.rs
+│   └── externalize-boot/        # Trunk post-build hook: lifts inline boot to dist/boot.js (CSP)
 ├── tests/
-│   ├── e2e/                     # Playwright E2E tests (browser-driven, UI-only)
-│   │   ├── CLAUDE.md            # E2E ground rules for this suite
-│   │   ├── fixtures/            # Shared fixtures (blockExternal, tauriMock, screens)
-│   │   ├── __screenshots__/     # Visual regression baselines (chromium-linux PNGs)
-│   │   └── *.spec.js            # One spec per screen / major flow
-│   ├── core/                    # Vitest unit tests for core logic
-│   └── managers/                # Vitest unit tests for managers
-├── playwright.config.js         # Playwright configuration (Vite dev server)
-├── package.json                 # Node.js dependencies and scripts
+│   └── e2e/                     # Playwright suite (scoped package.json + lockfile)
+│       ├── package.json         # Pins @playwright/test only
+│       ├── package-lock.json
+│       ├── playwright.config.js
+│       ├── fixtures/            # Shared fixtures (blockExternal, tauriMock, screens)
+│       ├── __screenshots__/     # Visual regression baselines (chromium-linux)
+│       └── *.spec.js            # 17 specs total (one per screen / major flow)
+├── scripts/                     # CI gate scripts (mock-drift, baseline-cap, engine-purity, lockfile-drift)
+├── .githooks/pre-commit         # Local lockfile-drift gate (install via scripts/install-git-hooks.sh)
+├── .specify/                    # Spec-kit artefacts (constitution, templates, extensions)
+├── AGENTS.md                    # Agent reading order, operational rules
+├── CLAUDE.md                    # Workflow conventions, where to find things
+├── VISION.md                    # Product scope + roadmap
 └── README.md                    # This file
 ```
 
 ## 🔧 Technical Details
 
-### Frontend (HTML/CSS/TypeScript-checked JavaScript)
+### Frontend (Leptos + WebAssembly)
 
-- **Typed vanilla JavaScript**: No frameworks; JSDoc annotations with `checkJs: true` provide full TypeScript type coverage
-- **CSS Grid & Flexbox**: Modern responsive layouts
-- **CSS Custom Properties**: Consistent theming and easy customization
-- **Local Storage**: Client-side data persistence
+- **Leptos** with fine-grained signal reactivity; no JS framework
+- **`wasm-bindgen` + `web-sys`** for browser/DOM access; engine kept pure (no DOM imports under `src/src/engine/`, enforced by a CI gate)
+- **`serde-wasm-bindgen`** for typed Tauri command round-trips — argument and return shapes are compile-time-checked between the Leptos call site and the Tauri-side handler
 
-### Backend (Rust/Tauri)
+### Backend (Rust + Tauri 2.x)
 
-- **Tauri framework**: Secure, fast native app wrapper
-- **File-based storage**: JSON files for data persistence
-- **Small bundle size**: Efficient Rust backend
-  <br /><strike>- **Cross-platform**: Works on Windows, macOS, and Linux</strike>
+- Tauri 2.x framework with the auto-updater, dialog, global-shortcut, opener, notification, OAuth, and Aptabase plugins
+- File-based JSON storage in the Tauri app-data directory
+- Direct Supabase REST adapter via `reqwest` (rustls-tls) — no JS auth SDK in the WASM bundle
 
-### Data Persistence
+### Quality gates
 
-The application stores data in the following locations:
-
-- **Session data**: Current timer state and progress
-- **Tasks**: User-created task list
-- **Statistics**: Daily and weekly productivity stats
-- **History**: Historical session data
+- **`cargo clippy --workspace --all-targets -- -D warnings -W clippy::pedantic`** (and `-W clippy::nursery`) — non-negotiable lint posture across both crates
+- **`cargo fmt --all --check`** — no formatting drift on merge
+- **`wasm-bindgen-test` (node)** for DOM-bound unit tests; **`cargo test`** for pure logic
+- **Playwright** for end-to-end UI flows (17 specs) and visual regression (14 baselines, ≤2% pixel-ratio drift per `playwright.config.js`)
+- **CI gate scripts** (`scripts/check-*.sh`): mock-drift, baseline-cap (≤2 baseline re-captures per PR), engine-purity (no DOM crates in the engine module), lockfile-drift (manifest ↔ lock pairs)
+- **Pre-commit hook** at `.githooks/pre-commit` runs the lockfile-drift gate locally; install once via `bash scripts/install-git-hooks.sh`
 
 ## 🎯 The Pomodoro Technique
 
-The Pomodoro Technique is a time management method developed by Francesco Cirillo:
+A time-management method developed by Francesco Cirillo:
 
-1. **Choose a task** to work on
-2. **Set timer for 25 minutes** (one "Pomodoro")
-3. **Work on the task** until timer rings
-4. **Take a 5-minute break**
-5. **Repeat steps 1-4**
-6. **After 4 Pomodoros**, take a longer 20-minute break
-
-### Benefits
-
-- Improved focus and concentration
-- Better time estimation skills
-- Reduced mental fatigue
-- Enhanced productivity
-- Better work-life balance
+1. Choose a task
+2. Set a 25-minute timer (one "Pomodoro")
+3. Work on the task until the timer rings
+4. Take a 5-minute break
+5. Repeat steps 1–4
+6. After 4 Pomodoros, take a longer 20-minute break
 
 ## 🛠️ Development
 
-### Available Scripts
+### Common commands
 
-- `npm run tauri dev` - Start development server
-- `npm run tauri build` - Build production app
-- `npm test` - Run JavaScript unit tests (Vitest)
-- `npm run typecheck` - TypeScript type-check all JS sources (`tsc --noEmit`)
-- `npm run test:e2e` - Run Playwright E2E suite (UI-driven, browser-level)
-- `cargo check` - Check Rust code (in src-tauri/)
-- `cargo test` - Run Rust tests (in src-tauri/)
+| Command | What it does |
+|---|---|
+| `cargo tauri dev` | Run the app locally (Trunk serves the frontend, Tauri opens the window) |
+| `cargo tauri build` | Produce a signed installer |
+| `cargo test --workspace --frozen` | Run host-side unit + integration tests |
+| `(cd src && wasm-pack test --node)` | Run wasm-bindgen-tests (DOM-bound logic) |
+| `(cd src && trunk build)` | Build the WASM bundle without packaging |
+| `(cd tests/e2e && npx playwright test)` | Run the e2e suite (17 specs) |
+| `(cd tests/e2e && npx playwright test visual-regression.spec.js)` | Run the visual regression suite (14 baselines) |
+| `cargo clippy --workspace --all-targets -- -D warnings` | Strict-deny pedantic + nursery lint pass |
+| `cargo fmt --all --check` | Formatting drift check |
+| `bash scripts/check-mock-drift.sh` | Confirm `tauriMock.js` mirrors the Tauri handler set |
 
 ### Recommended IDE Setup
 
 - [VS Code](https://code.visualstudio.com/)
-- [Tauri Extension](https://marketplace.visualstudio.com/items?itemName=tauri-apps.tauri-vscode)
 - [rust-analyzer](https://marketplace.visualstudio.com/items?itemName=rust-lang.rust-analyzer)
+- [Tauri Extension](https://marketplace.visualstudio.com/items?itemName=tauri-apps.tauri-vscode)
 
 ## 📱 Platform Support
 
-- **macOS** (10.13+)
-- _**Windows** (coming soon TBA)_
-- _**Linux** (coming soon TBA)_
+- **macOS** (10.13+) — primary target
+- **Linux** (recent webkit2gtk-4.1) — best-effort
+- **Windows** — best-effort; the Tauri auto-updater and global-shortcut plugins are exercised here too
 
 ## 🤝 Contributing
 
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+1. Read [`VISION.md`](VISION.md), [`CLAUDE.md`](CLAUDE.md), and [`.specify/memory/constitution.md`](.specify/memory/constitution.md) in that order
+2. Fork the repository
+3. Create a feature branch (`git checkout -b NNN-short-slug`)
+4. Use the spec-kit slash commands (`/speckit-specify`, `/speckit-plan`, `/speckit-tasks`, `/speckit-implement`) for any multi-file feature
+5. Commit your changes (lockfile drift gate runs on pre-commit)
+6. Push and open a Pull Request
 
 ## 📄 License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the MIT License — see the [LICENSE](LICENSE.md) file.
 
 ## 🙏 Acknowledgments
 
-- [Francesco Cirillo](https://francescocirillo.com/) for creating the Pomodoro Technique
-- [Tauri](https://tauri.app/) for the amazing framework
-- The Rust and web development communities
-
----
-
-**Start your productive journey with Presto!** 🍅✨
+- [Francesco Cirillo](https://francescocirillo.com/) for the Pomodoro Technique
+- [Tauri](https://tauri.app/) for the framework
+- [Leptos](https://leptos.dev/) for the WASM frontend stack
+- [murdercode](https://github.com/murdercode) for the original presto, now archived
 
 ## 🔄 Automatic Updates
 
-Presto includes an automatic update system that allows you to receive new versions directly from the app interface.
+Presto includes an automatic update system that delivers signed releases directly through the app.
 
 ### Features
 
-- **Automatic checking**: The app checks every hour for available updates
-- **Non-invasive notifications**: Elegant notification that appears when an update is available
-- **Progressive download**: Progress bar during download
-- **Automatic installation**: Update is applied on restart
-- **Security**: All updates are digitally signed
+- **Hourly checking** while the app is open (configurable; default on)
+- **Non-invasive banner** when an update is available
+- **Background download** with a progress indicator
+- **Signed installs** — every release is verified before being applied on next launch
 
 ### Developer Configuration
 
-If you want to configure the update system for your fork:
+If you fork this repo and want your own update channel:
 
-1. **Automatic setup**:
-
-   ```bash
-   ./setup-updates.sh
-   ```
-
+1. **Automated setup**: `./setup-updates.sh`
 2. **Manual setup**:
    - Generate keys: `./generate-keys.sh`
-   - Configure `src-tauri/tauri.conf.json` with your public key
-   - Add GitHub secrets for the private key
-   - Update repository references in the code
-
+   - Add the public key to `src-tauri/tauri.conf.json`
+   - Add the private key as a GitHub Actions secret
+   - Update repository references in code
 3. **Publishing**:
    ```bash
    git tag v1.0.0
    git push origin v1.0.0
    ```
 
-For more details see [UPDATES.md](UPDATES.md).
+See [`UPDATES.md`](UPDATES.md) for the full process.
 
 ### For Users
 
-- Updates are checked automatically
-- You can disable automatic checking in settings
-- You can manually check in the "Updates" section of settings
-- Downloads happen in background without interrupting work
+- Updates are checked automatically (toggle in Settings → Updates)
+- Manual checks are available in the same panel
+- Downloads happen in the background; the new version is applied on restart
+
+---
+
+**Start your productive journey with Presto!** 🍅✨
