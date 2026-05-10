@@ -1138,4 +1138,87 @@ mod tests {
             "countdown resumes from the same point"
         );
     }
+
+    /// Engine backfill (Phase 4a/4b gap): when smart-pause kicks in
+    /// from inactivity and the user then explicitly hits the resume
+    /// button (rather than waiting for activity-driven auto-resume),
+    /// the public `resume()` API must transition the engine back to
+    /// running with the elapsed accumulator preserved across the
+    /// pause window.
+    ///
+    /// The JS source `pomodoro-timer.js:824-878` (`resumeTimer`)
+    /// handles BOTH manual-pause and auto-pause unwind paths through
+    /// a single entrypoint — clicking the play/pause button while
+    /// auto-paused resumes the engine the same way clicking it
+    /// while manually-paused does. The Rust port must mirror that.
+    ///
+    /// This currently fails because `resume()` only handles
+    /// `is_paused == true`; it returns `NotPaused` when the engine
+    /// is in `is_auto_paused == true` (smart-pause) state, leaving
+    /// the user stuck unless they generate activity.
+    #[test]
+    fn smart_pause_then_explicit_resume_works_correctly() {
+        let clock = MockClock::new(0);
+        let mut state = TimerState::new(Durations::default());
+        state.set_smart_pause_enabled(true);
+        state.start(&clock).expect("start");
+
+        // 90 seconds of focus work, then idle → smart-pause.
+        clock.advance(90 * 1000);
+        let _ = state.tick(&clock);
+        let elapsed_before_pause = state.current_session_elapsed_secs();
+        let remaining_before_pause = state.time_remaining_secs();
+        assert_eq!(elapsed_before_pause, 90);
+
+        let _ = state.observe_activity(ActivitySignal::Idle, &clock);
+        assert!(state.is_auto_paused());
+        assert!(!state.is_running());
+
+        // 30 seconds of inactivity tick by — should NOT count.
+        clock.advance(30 * 1000);
+        let _ = state.tick(&clock);
+        assert_eq!(
+            state.current_session_elapsed_secs(),
+            elapsed_before_pause,
+            "smart-pause must freeze the elapsed accumulator"
+        );
+
+        // User clicks the resume button (not waiting for activity).
+        let resume_events = state
+            .resume(&clock)
+            .expect("explicit resume from smart-pause should succeed");
+
+        // The engine resumes — running flag back on, smart-pause
+        // flag off — and the events surface the transition. The
+        // event variant is implementation-defined: either
+        // `SessionResumed` (treating manual + smart-pause unwinds
+        // as one path, JS-source-style) or `AutoResumed` (preserving
+        // the smart-pause unwind label) is acceptable. The
+        // contract pin is just that ONE of the resume events fires.
+        assert!(!state.is_auto_paused());
+        assert!(state.is_running());
+        assert!(
+            resume_events.iter().any(|e| matches!(
+                e,
+                super::TimerEvent::SessionResumed | super::TimerEvent::AutoResumed
+            )),
+            "expected SessionResumed or AutoResumed in {resume_events:?}",
+        );
+
+        // Post-resume: a 1-second tick advances the countdown by 1
+        // and accrues 1 to the elapsed accumulator (the 30s of
+        // smart-pause inactivity is NOT charged).
+        clock.advance(1_000);
+        let _ = state.tick(&clock);
+        assert_eq!(
+            state.current_session_elapsed_secs(),
+            elapsed_before_pause + 1,
+            "post-resume tick accrues from the frozen accumulator"
+        );
+        assert_eq!(
+            state.time_remaining_secs(),
+            remaining_before_pause - 1,
+            "post-resume countdown advances 1 second per tick"
+        );
+    }
 }
