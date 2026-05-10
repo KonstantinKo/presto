@@ -470,6 +470,51 @@ mod tests {
         );
     }
 
+    /// T134: while auto-paused (smart-pause kicked in), an `Active`
+    /// signal resumes the timer. Mirrors `resumeFromAutoPause` at
+    /// `pomodoro-timer.js:564-626`. The wall-clock anchor is
+    /// re-recorded so subsequent ticks count from the resume
+    /// moment forward (the suspend gap is NOT charged against the
+    /// session — that's the difference between an OS suspend
+    /// (T128) and a deliberate auto-pause (T134)).
+    #[test]
+    fn smart_pause_resumes_on_activity() {
+        let clock = MockClock::new(0);
+        let mut state = TimerState::new(Durations::default());
+        state.set_smart_pause_enabled(true);
+        state.start(&clock).expect("start");
+        clock.advance(60_000);
+        state.tick(&clock);
+        // Auto-pause.
+        state.observe_activity(ActivitySignal::Idle);
+        assert!(state.is_auto_paused());
+        let elapsed_at_pause = state.current_session_elapsed_secs();
+        let remaining_at_pause = state.time_remaining_secs();
+
+        // 5 minutes of inactivity tick by, then user moves.
+        clock.advance(5 * 60 * 1000);
+        let events = state.observe_activity(ActivitySignal::Active);
+
+        assert!(!state.is_auto_paused());
+        assert!(state.is_running());
+        // The 5 minutes of suspended wall-clock are NOT charged
+        // against the session: time_remaining and the elapsed
+        // accumulator are unchanged at resume.
+        assert_eq!(state.time_remaining_secs(), remaining_at_pause);
+        assert_eq!(state.current_session_elapsed_secs(), elapsed_at_pause);
+        assert!(
+            events
+                .iter()
+                .any(|e| matches!(e, super::TimerEvent::AutoResumed)),
+            "expected AutoResumed in {events:?}"
+        );
+
+        // After resume, a fresh tick advances the countdown again.
+        clock.advance(1_000);
+        state.tick(&clock);
+        assert_eq!(state.time_remaining_secs(), remaining_at_pause - 1);
+    }
+
     /// T128: drift compensation recovers after an OS-suspend gap.
     /// SC-005, AS-1.3. Mirrors `updateTimerWithAccuracy` at
     /// `pomodoro-timer.js:730-789`, which computes elapsed time
