@@ -682,7 +682,7 @@ async fn update_tray_icon(
     final_result
 }
 
-#[allow(clippy::unused_async)] // awaits set_dock_visibility on macOS
+#[allow(clippy::unused_async)] // awaits run_on_main_thread on macOS
 async fn show_app_window(app: AppHandle) {
     let settings = app
         .state::<SettingsState>()
@@ -693,7 +693,9 @@ async fn show_app_window(app: AppHandle) {
     if settings.hide_icon_on_close {
         #[cfg(target_os = "macos")]
         {
-            let _ = set_dock_visibility(app.clone(), true).await;
+            let _ = app.run_on_main_thread(move || {
+                set_dock_visibility_native(true);
+            });
         }
     }
     if let Some(window) = app.get_webview_window("main") {
@@ -907,8 +909,6 @@ pub fn run() {
                 add_session_tag,
                 write_excel_file,
                 start_oauth_server,
-                set_dock_visibility,
-                set_status_bar_visibility,
                 track_event,
                 supabase_sign_in_with_password,
                 supabase_sign_out,
@@ -1037,11 +1037,9 @@ pub fn run() {
                                     if settings.hide_icon_on_close {
                                         #[cfg(target_os = "macos")]
                                         {
-                                            let _ = set_dock_visibility(
-                                                app_handle_clone.clone(),
-                                                false,
-                                            )
-                                            .await;
+                                            let _ = app_handle_clone.run_on_main_thread(move || {
+                                                set_dock_visibility_native(false);
+                                            });
                                         }
                                     }
                                 }
@@ -1476,23 +1474,6 @@ async fn import_legacy_supabase_session(
     migration::import_supabase_session(&app_data_dir, &payload)
 }
 
-#[tauri::command]
-async fn set_dock_visibility(_app: AppHandle, _visible: bool) -> Result<(), BridgeError> {
-    #[cfg(target_os = "macos")]
-    {
-        _app.run_on_main_thread(move || {
-            set_dock_visibility_native(_visible);
-        })
-        .map_err(|e| BridgeError::Internal { msg: format!("Failed to run on main thread: {e}") })?;
-        Ok(())
-    }
-
-    #[cfg(not(target_os = "macos"))]
-    {
-        Err(BridgeError::Internal { msg: "Dock visibility is only supported on macOS".to_string() })
-    }
-}
-
 #[cfg(target_os = "macos")]
 #[allow(unsafe_code)]
 fn set_dock_visibility_native(visible: bool) {
@@ -1515,73 +1496,6 @@ fn set_dock_visibility_native(visible: bool) {
             app.setActivationPolicy_(policy);
         }
     }
-}
-
-#[tauri::command]
-async fn set_status_bar_visibility(_app: AppHandle, _visible: bool) -> Result<(), BridgeError> {
-    #[cfg(target_os = "macos")]
-    {
-        use std::sync::{Arc, Mutex};
-
-        let result = Arc::new(Mutex::new(Ok(())));
-        let result_clone = Arc::clone(&result);
-
-        _app.run_on_main_thread(move || {
-            let mut result_guard = helpers::lock_or_recover(&result_clone);
-            *result_guard = match set_system_ui_mode_safe(_visible) {
-                Ok(()) => {
-                    log::info!(
-                        "✅ Status bar visibility successfully set to: {}",
-                        if _visible { "visible" } else { "hidden" }
-                    );
-                    Ok(())
-                }
-                Err(e) => {
-                    log::error!("❌ Failed to set status bar visibility: {e}");
-                    Err(BridgeError::Internal { msg: format!("Failed to set status bar visibility: {e}") })
-                }
-            };
-        })
-        .map_err(|e| BridgeError::Internal { msg: format!("Failed to run on main thread: {e}") })?;
-
-        // Extract the result from the mutex (named binding required by borrow checker:
-        // the temporary MutexGuard must drop before `result` does).
-        let final_result = helpers::lock_or_recover(&result).clone();
-        final_result
-    }
-
-    #[cfg(not(target_os = "macos"))]
-    {
-        Err(BridgeError::Internal { msg: "Status bar visibility is only supported on macOS".to_string() })
-    }
-}
-
-#[cfg(target_os = "macos")]
-#[allow(unsafe_code)]
-fn set_system_ui_mode_safe(visible: bool) -> Result<(), String> {
-    use cocoa::appkit::{NSApp, NSApplication, NSApplicationPresentationOptions};
-    use cocoa::base::nil;
-
-    // SAFETY: NSApp() returns a raw pointer that is nil if no shared NSApplication exists.
-    // We null-check before calling setPresentationOptions_, and this function is only
-    // invoked from the main thread via run_on_main_thread, satisfying AppKit's requirement.
-    unsafe {
-        let app = NSApp();
-        if app == nil {
-            return Err(BridgeError::Internal { msg: "NSApplication shared instance is nil".to_string() });
-        }
-
-        let options = if visible {
-            NSApplicationPresentationOptions::NSApplicationPresentationDefault
-        } else {
-            NSApplicationPresentationOptions::NSApplicationPresentationHideMenuBar
-                | NSApplicationPresentationOptions::NSApplicationPresentationHideDock
-        };
-
-        app.setPresentationOptions_(options);
-    }
-
-    Ok(())
 }
 
 #[cfg(test)]
