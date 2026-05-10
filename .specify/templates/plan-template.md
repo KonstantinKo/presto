@@ -47,8 +47,9 @@ Tracking* below). Cite principle by Roman numeral + name (e.g. "I. The Timer Is 
   new blanket `#[allow]`s? (Tool specifics in `.agentex.yml` / `AGENTS.md`.)
 - **IV. Visual Regression Is The UI Contract** — Does this feature change the UI?
   If yes, confirm the visual regression suite runs locally before push and that any
-  baseline updates are flagged with a one-line PR note. Do NOT propose tolerance
-  changes here — those require a constitution amendment.
+  baseline updates are flagged with a one-line PR note. Tolerance and baseline
+  count are configuration details — changes to either require explicit
+  justification in the PR (per Principle IV), not silent adjustment.
 - **V. Test-First For Stateful Engines** — Does this feature touch the timer engine,
   manager state machines, Tauri-backed persistence, or time-keeping math? If yes,
   failing tests precede implementation and assert behaviour, not internal structure.
