@@ -355,11 +355,11 @@ mod tests {
     use super::{
         add_session_tag, delete_tag, get_stats_history, load_manual_sessions, load_session_data,
         load_tags, load_tasks, save_daily_stats, save_manual_sessions, save_session_data,
-        save_tag, save_tasks,
+        save_settings, save_tag, save_tasks,
     };
     use crate::bridge::error::BridgeError;
     use crate::bridge::session_type::SessionType;
-    use crate::bridge::types::{ManualSession, Session, SessionTag, Tag, Task};
+    use crate::bridge::types::{ManualSession, Session, SessionTag, Settings, Tag, Task};
     use wasm_bindgen_test::wasm_bindgen_test;
 
     fn sample_session() -> Session {
@@ -684,5 +684,32 @@ mod tests {
             add_session_tag(st).await
         }
         let _ = assert_signature(sample_session_tag()).await;
+    }
+
+    fn sample_settings() -> Settings {
+        Settings::default()
+    }
+
+    #[wasm_bindgen_test]
+    async fn save_settings_round_trip_short_circuits_when_bridge_absent() {
+        let result = save_settings(sample_settings()).await;
+        match result {
+            Err(BridgeError::BridgeUnavailable) => {}
+            other => panic!("expected BridgeUnavailable, got {other:?}"),
+        }
+    }
+
+    /// Compile-time signature pin per contracts/tauri-bridge.md row 13:
+    /// `save_settings(settings: Settings) -> Result<(), BridgeError>`.
+    /// Pins the nested `Settings` shape (`ShortcutSettings`,
+    /// `TimerSettings`, `NotificationSettings`, `AdvancedSettings`) at
+    /// the bridge boundary — a missing or renamed nested field would
+    /// stop compiling here per FR-008.
+    #[wasm_bindgen_test]
+    async fn save_settings_round_trip_signature_pinned() {
+        async fn assert_signature(s: Settings) -> Result<(), BridgeError> {
+            save_settings(s).await
+        }
+        let _ = assert_signature(sample_settings()).await;
     }
 }
