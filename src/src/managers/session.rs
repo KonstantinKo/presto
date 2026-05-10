@@ -120,11 +120,7 @@ impl SessionManager {
     /// the persisted record changes). Spec
     /// 001-leptos-migration §Phase 3b T170.
     pub fn update_manual(&mut self, updated: ManualSession) {
-        if let Some(slot) = self
-            .manual_sessions
-            .iter_mut()
-            .find(|s| s.id == updated.id)
-        {
+        if let Some(slot) = self.manual_sessions.iter_mut().find(|s| s.id == updated.id) {
             *slot = updated;
         }
     }
@@ -184,11 +180,12 @@ impl SessionManager {
     /// `import_legacy_manual_sessions` migrated those records to
     /// the Rust-side store).
     pub async fn load() -> Self {
-        commands::load_manual_sessions()
-            .await
-            .map_or_else(|_| Self::new(), |loaded| Self {
+        commands::load_manual_sessions().await.map_or_else(
+            |_| Self::new(),
+            |loaded| Self {
                 manual_sessions: loaded,
-            })
+            },
+        )
     }
 }
 
@@ -319,11 +316,7 @@ mod tests {
             .find(|s| s.id == "m-1")
             .expect("m-1 still in the list");
         assert_eq!(m1_after.duration, 40, "duration replaced");
-        assert_eq!(
-            m1_after.notes.as_deref(),
-            Some("revised"),
-            "notes replaced",
-        );
+        assert_eq!(m1_after.notes.as_deref(), Some("revised"), "notes replaced",);
 
         // Engine accumulators are unaffected by an update — only the
         // persisted record changes (mirrors the JS-era flow which
@@ -389,11 +382,7 @@ mod tests {
 
         mgr.delete_manual("m-2");
 
-        assert_eq!(
-            mgr.manual_sessions().len(),
-            2,
-            "one entry was removed",
-        );
+        assert_eq!(mgr.manual_sessions().len(), 2, "one entry was removed",);
         assert!(
             mgr.manual_sessions().iter().all(|s| s.id != "m-2"),
             "m-2 must not appear in the surviving list",
@@ -403,7 +392,11 @@ mod tests {
         // IS the wire-level write the JS-era `delete_manual_session`
         // rebuilds and re-saves at `session-manager.js:380-389`.
         let payload = mgr.save_payload();
-        assert_eq!(payload.len(), 2, "bulk save payload omits the deleted entry");
+        assert_eq!(
+            payload.len(),
+            2,
+            "bulk save payload omits the deleted entry"
+        );
         assert!(
             payload.iter().all(|s| s.id != "m-2"),
             "bulk save payload contains no record of m-2",
@@ -487,7 +480,8 @@ mod tests {
             "every session in the day_one bucket carries the day_one date",
         );
         assert!(
-            day_one_sessions.iter().any(|s| s.id == "m-1") && day_one_sessions.iter().any(|s| s.id == "m-2"),
+            day_one_sessions.iter().any(|s| s.id == "m-1")
+                && day_one_sessions.iter().any(|s| s.id == "m-2"),
             "day_one bucket contains m-1 and m-2",
         );
 
