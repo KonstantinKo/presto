@@ -161,7 +161,7 @@ struct ManualSession {
     notes: Option<String>,
     created_at: String, // ISO string
     date: String,
-    tags: Option<Vec<serde_json::Value>>, // Array of tag objects
+    tags: Option<Vec<serde_json::Value>>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -549,7 +549,7 @@ impl ActivityMonitor {
                     }
                 }
 
-                thread::sleep(Duration::from_millis(500)); // Check every 500ms
+                thread::sleep(Duration::from_millis(500));
             }
         });
     }
@@ -1081,7 +1081,6 @@ pub fn run() {
                         }
                         Err(e) => {
                             log::error!("Failed to load settings on startup: {e}");
-                            // Try to register default shortcuts
                             let default_settings = AppSettings::default();
                             if let Err(e) = register_global_shortcuts(
                                 app_handle_for_shortcuts,

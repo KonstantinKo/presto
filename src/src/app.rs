@@ -147,7 +147,6 @@ pub fn App() -> impl IntoView {
         })
     });
 
-    // Sidebar nav click handlers.
     let on_timer_nav = move |_| nav.update(|n| n.transition_to(NavView::Timer));
     let on_calendar_nav = move |_| nav.update(|n| n.transition_to(NavView::Calendar));
     let on_team_nav = move |_| nav.update(|n| n.transition_to(NavView::Team));
@@ -282,7 +281,6 @@ pub fn App() -> impl IntoView {
             if let Some(handle) = pending_handle.take() {
                 handle.clear();
             }
-            // Schedule the bridge save 300ms from now.
             let handle_clone = pending_handle.clone();
             let scheduled = leptos::leptos_dom::helpers::set_timeout_with_handle(
                 move || {
