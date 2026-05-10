@@ -329,13 +329,13 @@ pub async fn delete_tag(tag_id: String) -> Result<(), BridgeError> {
 #[cfg(all(test, target_arch = "wasm32"))]
 mod tests {
     use super::{
-        delete_tag, get_stats_history, load_manual_sessions, load_session_data, load_tags,
-        load_tasks, save_daily_stats, save_manual_sessions, save_session_data, save_tag,
-        save_tasks,
+        add_session_tag, delete_tag, get_stats_history, load_manual_sessions, load_session_data,
+        load_tags, load_tasks, save_daily_stats, save_manual_sessions, save_session_data,
+        save_tag, save_tasks,
     };
     use crate::bridge::error::BridgeError;
     use crate::bridge::session_type::SessionType;
-    use crate::bridge::types::{ManualSession, Session, Tag, Task};
+    use crate::bridge::types::{ManualSession, Session, SessionTag, Tag, Task};
     use wasm_bindgen_test::wasm_bindgen_test;
 
     fn sample_session() -> Session {
@@ -629,5 +629,36 @@ mod tests {
             delete_tag(id).await
         }
         let _ = assert_signature("tag-focus".to_string()).await;
+    }
+
+    fn sample_session_tag() -> SessionTag {
+        SessionTag {
+            session_id: "session-2026-05-10-04".to_string(),
+            tag_id: "tag-focus".to_string(),
+            duration: 1500,
+            created_at: "2026-05-10T08:25:00Z".to_string(),
+        }
+    }
+
+    #[wasm_bindgen_test]
+    async fn add_session_tag_round_trip_short_circuits_when_bridge_absent() {
+        let result = add_session_tag(sample_session_tag()).await;
+        match result {
+            Err(BridgeError::BridgeUnavailable) => {}
+            other => panic!("expected BridgeUnavailable, got {other:?}"),
+        }
+    }
+
+    /// Compile-time signature pin per contracts/tauri-bridge.md row 12:
+    /// `add_session_tag(session_tag: SessionTag) -> Result<(), BridgeError>`.
+    /// The JS era appends one session-tag join row at a time via this
+    /// command; the deleted bulk `save_session_tags` (Vec) had no JS
+    /// callers and was dropped per Principle VII.
+    #[wasm_bindgen_test]
+    async fn add_session_tag_round_trip_signature_pinned() {
+        async fn assert_signature(st: SessionTag) -> Result<(), BridgeError> {
+            add_session_tag(st).await
+        }
+        let _ = assert_signature(sample_session_tag()).await;
     }
 }
