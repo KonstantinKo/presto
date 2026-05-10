@@ -593,11 +593,14 @@ mod tests {
         load_tasks, register_global_shortcuts, reset_all_data, save_daily_stats,
         save_manual_sessions, save_session_data, save_settings, save_tag, save_tasks,
         start_activity_monitoring, stop_activity_monitoring, update_activity_timeout,
+        update_tray_icon,
     };
     use crate::bridge::error::BridgeError;
     use crate::bridge::session_type::SessionType;
+    use crate::bridge::timer_mode::TimerMode;
     use crate::bridge::types::{
         ManualSession, Session, SessionTag, Settings, ShortcutSettings, Tag, Task,
+        UpdateTrayIconArgs,
     };
     use wasm_bindgen_test::wasm_bindgen_test;
 
@@ -1170,5 +1173,44 @@ mod tests {
             is_autostart_enabled().await
         }
         let _ = assert_signature().await;
+    }
+
+    fn sample_tray_icon_args() -> UpdateTrayIconArgs {
+        UpdateTrayIconArgs {
+            timer_text: "24:36".to_string(),
+            is_running: true,
+            session_mode: TimerMode::Focus,
+            current_session: 2,
+            total_sessions: 4,
+            mode_icon: Some("🧠".to_string()),
+        }
+    }
+
+    #[wasm_bindgen_test]
+    async fn update_tray_icon_round_trip_short_circuits_when_bridge_absent() {
+        let result = update_tray_icon(sample_tray_icon_args()).await;
+        match result {
+            Err(BridgeError::BridgeUnavailable) => {}
+            other => panic!("expected BridgeUnavailable, got {other:?}"),
+        }
+    }
+
+    /// Compile-time signature pin per contracts/tauri-bridge.md row 23:
+    /// `update_tray_icon(args: UpdateTrayIconArgs) -> Result<(), BridgeError>`.
+    /// The contract collapses the Tauri-side handler's six positional args
+    /// (`timer_text`, `is_running`, `session_mode`, `current_session`,
+    /// `total_sessions`, `mode_icon`) into a single typed wrapper struct
+    /// per data-model.md §`UpdateTrayIconArgs`; the on-the-wire shape is
+    /// preserved because `serde-wasm-bindgen` flattens the struct fields
+    /// to top-level keys in the Tauri args bag. Pins both the typed
+    /// `TimerMode` enum (Phase 1A T027 — was `String`) AND the camelCase
+    /// `session_mode` wire form via `TimerMode`'s `#[serde(rename_all =
+    /// "camelCase")]`.
+    #[wasm_bindgen_test]
+    async fn update_tray_icon_round_trip_signature_pinned() {
+        async fn assert_signature(a: UpdateTrayIconArgs) -> Result<(), BridgeError> {
+            update_tray_icon(a).await
+        }
+        let _ = assert_signature(sample_tray_icon_args()).await;
     }
 }
