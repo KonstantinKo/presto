@@ -1014,7 +1014,9 @@ pub fn run() {
                 import_legacy_tags,
                 import_legacy_manual_sessions,
                 import_legacy_user_state,
-                import_legacy_supabase_session
+                import_legacy_supabase_session,
+                is_legacy_migration_complete,
+                mark_legacy_migration_complete
             ])
             .setup(|app| {
                 let initial_settings = load_settings_sync(app.handle());
@@ -1588,6 +1590,40 @@ async fn import_legacy_supabase_session(
             msg: format!("Failed to get app data directory: {e}"),
         })?;
     migration::import_supabase_session(&app_data_dir, &payload)
+}
+
+// ── R-006: Legacy migration sentinel (Phase 4f) ──────────────────────────────
+//
+// Caps the steady-state cold-start cost of `migrate_legacy_localstorage` to a
+// single lightweight file-probe instead of 7 IPC round-trips per launch.
+// Once the migration runs to completion we write `legacy-migration-done.marker`
+// under the app-data dir; subsequent launches short-circuit before any
+// per-domain `import_legacy_*` hop is attempted.
+
+#[tauri::command]
+async fn is_legacy_migration_complete(app: AppHandle) -> Result<bool, BridgeError> {
+    let app_data_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| BridgeError::Internal {
+            msg: format!("Failed to get app data directory: {e}"),
+        })?;
+    Ok(app_data_dir.join("legacy-migration-done.marker").exists())
+}
+
+#[tauri::command]
+async fn mark_legacy_migration_complete(app: AppHandle) -> Result<(), BridgeError> {
+    let app_data_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| BridgeError::Internal {
+            msg: format!("Failed to get app data directory: {e}"),
+        })?;
+    std::fs::write(app_data_dir.join("legacy-migration-done.marker"), b"1").map_err(|e| {
+        BridgeError::Internal {
+            msg: format!("Failed to write migration sentinel: {e}"),
+        }
+    })
 }
 
 #[cfg(target_os = "macos")]

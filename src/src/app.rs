@@ -158,11 +158,29 @@ pub fn App() -> impl IntoView {
     // anyway and the spawn would log a noisy error.
     if matches!(bridge_state, BridgeAvailable::Available) {
         spawn_local(async move {
-            // Legacy localStorage migration runs first so settings
-            // loaded post-migration reflect the imported state.
-            // Idempotent per Phase 1E T115 — running on every cold
-            // start is safe.
-            let _ = storage::migrate_legacy_localstorage().await;
+            // R-006: sentinel gate — one IPC trip instead of 7 on
+            // post-migration cold starts. If the sentinel file exists,
+            // the migration has already run to completion on a prior
+            // launch; skip the 7-call per-domain block entirely.
+            // Errors (bridge absent, fs failure) fall through to the
+            // migration block — safe because per-domain handlers are
+            // idempotent (they skip when the target file already
+            // exists). On the first post-cutover launch `false` is
+            // returned (sentinel not yet written); after the migration
+            // succeeds we write the sentinel so the next cold start
+            // skips here.
+            let migration_done = commands::is_legacy_migration_complete()
+                .await
+                .unwrap_or(false);
+            if !migration_done {
+                let migrated = storage::migrate_legacy_localstorage().await;
+                if migrated.is_ok() {
+                    // Best-effort write; if it fails the next cold start
+                    // re-runs the migration (per-domain handlers are
+                    // idempotent so re-running is safe).
+                    let _ = commands::mark_legacy_migration_complete().await;
+                }
+            }
             // Then load the canonical post-migration settings into
             // the shared signal. Errors fall back to
             // `Settings::default()` (matches the JS-era behaviour

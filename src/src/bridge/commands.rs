@@ -1099,6 +1099,22 @@ pub async fn import_legacy_supabase_session(
     invoke_serde("import_legacy_supabase_session", &Args { payload }).await
 }
 
+// R-006: legacy migration sentinel wrappers.
+//
+// `is_legacy_migration_complete` returns `true` when the sentinel file
+// `<app-data>/legacy-migration-done.marker` exists (written by
+// `mark_legacy_migration_complete` on first successful migration). The
+// App startup path calls this first; when `true` it skips the 7-call
+// per-domain migration block, capping steady-state cold-start cost to
+// one IPC trip instead of seven.
+pub async fn is_legacy_migration_complete() -> Result<bool, BridgeError> {
+    invoke_serde("is_legacy_migration_complete", &()).await
+}
+
+pub async fn mark_legacy_migration_complete() -> Result<(), BridgeError> {
+    invoke_serde("mark_legacy_migration_complete", &()).await
+}
+
 // Tests gated on `wasm32` because every wrapper-test is a
 // `#[wasm_bindgen_test]` — running them via `cargo test` on the host
 // target would produce dead-code lint failures (the host-side
@@ -1109,13 +1125,13 @@ pub async fn import_legacy_supabase_session(
 mod tests {
     use super::{
         add_session_tag, delete_tag, disable_autostart, enable_autostart, export_sessions_xlsx,
-        get_stats_history, is_autostart_enabled, load_manual_sessions, load_session_data,
-        load_settings, load_tags, load_tasks, register_global_shortcuts, reset_all_data,
-        save_daily_stats, save_manual_sessions, save_session_data, save_settings, save_tag,
-        save_tasks, start_activity_monitoring, start_oauth_server, stop_activity_monitoring,
-        supabase_get_session, supabase_refresh_session, supabase_sign_in_with_password,
-        supabase_sign_out, track_event, update_activity_timeout, update_tray_icon,
-        update_tray_menu,
+        get_stats_history, is_autostart_enabled, is_legacy_migration_complete, load_manual_sessions,
+        load_session_data, load_settings, load_tags, load_tasks, mark_legacy_migration_complete,
+        register_global_shortcuts, reset_all_data, save_daily_stats, save_manual_sessions,
+        save_session_data, save_settings, save_tag, save_tasks, start_activity_monitoring,
+        start_oauth_server, stop_activity_monitoring, supabase_get_session,
+        supabase_refresh_session, supabase_sign_in_with_password, supabase_sign_out, track_event,
+        update_activity_timeout, update_tray_icon, update_tray_menu,
     };
     use crate::bridge::error::BridgeError;
     use crate::bridge::session_type::SessionType;
@@ -2030,5 +2046,47 @@ mod tests {
             export_sessions_xlsx(path, sessions).await
         }
         let _ = assert_signature("/tmp/export.xlsx".to_string(), sample_manual_sessions()).await;
+    }
+
+    // -----------------------------------------------------------------------
+    // R-006 — legacy migration sentinel (Phase 4f).
+    // -----------------------------------------------------------------------
+
+    #[wasm_bindgen_test]
+    async fn is_legacy_migration_complete_short_circuits_when_bridge_absent() {
+        let result = is_legacy_migration_complete().await;
+        match result {
+            Err(BridgeError::BridgeUnavailable) => {}
+            other => panic!("expected BridgeUnavailable, got {other:?}"),
+        }
+    }
+
+    /// Compile-time signature pin:
+    /// `is_legacy_migration_complete() -> Result<bool, BridgeError>`.
+    #[wasm_bindgen_test]
+    async fn is_legacy_migration_complete_signature_pinned() {
+        async fn assert_signature() -> Result<bool, BridgeError> {
+            is_legacy_migration_complete().await
+        }
+        let _ = assert_signature().await;
+    }
+
+    #[wasm_bindgen_test]
+    async fn mark_legacy_migration_complete_short_circuits_when_bridge_absent() {
+        let result = mark_legacy_migration_complete().await;
+        match result {
+            Err(BridgeError::BridgeUnavailable) => {}
+            other => panic!("expected BridgeUnavailable, got {other:?}"),
+        }
+    }
+
+    /// Compile-time signature pin:
+    /// `mark_legacy_migration_complete() -> Result<(), BridgeError>`.
+    #[wasm_bindgen_test]
+    async fn mark_legacy_migration_complete_signature_pinned() {
+        async fn assert_signature() -> Result<(), BridgeError> {
+            mark_legacy_migration_complete().await
+        }
+        let _ = assert_signature().await;
     }
 }
