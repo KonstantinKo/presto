@@ -18,13 +18,18 @@
     <link data-trunk rel="copy-dir" href="assets/icons" data-target-path="assets/icons" />
     <link rel="stylesheet" href="/assets/icons/remixicon.css" />
     <!-- Phase 6 (T241): wire the app stylesheet into the Trunk dist.
-         `style/main.css` `@import`s every component sheet under
-         `style/`; Trunk inlines the imports, minifies the result, and
-         fingerprints the output filename. Without this link the
-         `view-container.hidden { display: none }` rule (and every
-         layout rule the e2e suite relies on) is missing, breaking
-         visibility-based assertions. -->
-    <link data-trunk rel="css" href="style/main.css" />
+         `style/main.css` uses CSS `@import` to chain the per-component
+         sheets — Trunk's `rel="css"` directive is a verbatim copy
+         that does NOT inline the imports, so the browser must resolve
+         them itself. We `copy-dir` the whole `style/` tree into
+         `dist/style/` (preserving the relative paths the @imports
+         use) and then load `style/main.css` via a plain
+         `<link rel="stylesheet">` — the browser then fetches
+         `style/variables.css`, `style/themes/espresso.css`, etc.
+         relative to that, all of which are now reachable on the
+         Trunk dev server. -->
+    <link data-trunk rel="copy-dir" href="style" data-target-path="style" />
+    <link rel="stylesheet" href="/style/main.css" />
   </head>
   <body>
     <div id="root"></div>

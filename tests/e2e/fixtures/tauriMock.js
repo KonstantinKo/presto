@@ -433,6 +433,26 @@ const TAURI_MOCK_INIT_SCRIPT = `
     },
   };
 
+  // --- window.__TAURI_INTERNALS__ shim (Phase 6 T241) ---
+  //
+  // The Leptos bridge wrappers in src/src/bridge/commands.rs are bound
+  // to window.__TAURI_INTERNALS__.invoke(cmd, args), not the higher-level
+  // window.__TAURI__.core.invoke. Both globals exist in a real Tauri 2.x
+  // webview; the JS-era app only consumed __TAURI__, so this fixture only
+  // installed that one. Post-cutover the WASM bundle is the only client,
+  // and it goes through __TAURI_INTERNALS__ — so we proxy the lower-level
+  // probe to the same dispatcher the __TAURI__.core.invoke shim above
+  // uses.
+  //
+  // Tauri's real __TAURI_INTERNALS__.invoke signature is
+  // (cmd: string, args: object) => Promise<unknown> — same shape as
+  // __TAURI__.core.invoke; we simply forward.
+  window.__TAURI_INTERNALS__ = {
+    invoke: function (cmd, args) {
+      return window.__TAURI__.core.invoke(cmd, args);
+    },
+  };
+
   // Expose harness for fixture-level introspection
   window.__E2E_TEST_HARNESS__ = {
     state: _state,
@@ -462,6 +482,25 @@ export async function applyTauriMock(page) {
 if (!window.__E2E_CONFIG__) window.__E2E_CONFIG__ = {};
 window.__E2E_CONFIG__.enableUpdateTestMode = true;
 localStorage.setItem('presto_force_update_test', 'true');
+// Phase 6 (T241): the JS-era surface read these flags from inside
+// UpdateManagerV2.simulateUpdate(); the Leptos port's UpdateManager
+// only consumes the canonical tauri://update-available event. So we
+// emit that event into the mock event bus shortly after page load —
+// the Leptos crate's UPDATE_AVAILABLE listener (app.rs spawn_local)
+// catches it and lifts UpdateInfo::Available, the banner adds
+// .visible. Delay matches the JS-era ~5s startup pause so the spec's
+// 12s timeout still has plenty of head-room.
+window.addEventListener('TrunkApplicationStarted', function () {
+  setTimeout(function () {
+    if (window.__TAURI__ && window.__TAURI__.event) {
+      window.__TAURI__.event.emit('tauri://update-available', {
+        version: '0.4.5',
+        currentVersion: '0.4.4',
+        body: null,
+      });
+    }
+  }, 100);
+});
 `,
       });
     },
