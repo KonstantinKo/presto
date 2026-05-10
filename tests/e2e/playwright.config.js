@@ -33,7 +33,14 @@ export default defineConfig({
     // each build. First-run cold start can take ~60–120s on a fresh checkout
     // (cargo build of presto-web + tools/build-themes) — the timeout below is
     // conservative enough to absorb that without flaking on hot starts.
-    command: "trunk serve",
+    //
+    // `--no-autoreload` disables Trunk's hot-reload WebSocket. The visual-
+    // regression suite is sensitive to mid-run page reloads (each reload
+    // re-emits the `tauri://update-available` mock event, un-dismissing the
+    // banner and breaking downstream baselines). Tests don't depend on
+    // hot-reload because Playwright waits for `webServer.url` to be reachable
+    // before running — by which point Trunk has completed its initial build.
+    command: "trunk serve --no-autoreload",
     cwd: "../../src",
     url: "http://127.0.0.1:1420",
     reuseExistingServer: !process.env.CI,
