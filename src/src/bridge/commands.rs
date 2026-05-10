@@ -194,6 +194,22 @@ pub async fn save_tasks(tasks: Vec<Task>) -> Result<(), BridgeError> {
     invoke_serde("save_tasks", &Args { tasks }).await
 }
 
+/// Read the persisted task list. Tauri-side handler:
+/// `load_tasks() -> Result<Vec<Task>, BridgeError>`
+/// at `src-tauri/src/lib.rs:508`.
+///
+/// Returns an empty `Vec` if no tasks file exists yet (the Tauri-side
+/// helper at `helpers::read_tasks_from` treats `NotFound` as empty —
+/// a cold-start convention, not an error).
+///
+/// # Errors
+/// Returns `BridgeError::BridgeUnavailable` when the Tauri JS bridge is
+/// not present. Otherwise returns whatever variant the Tauri-side handler
+/// maps its filesystem failure to (typically `BridgeError::Internal`).
+pub async fn load_tasks() -> Result<Vec<Task>, BridgeError> {
+    invoke_serde("load_tasks", &serde_json::Value::Null).await
+}
+
 // Tests gated on `wasm32` because every wrapper-test is a
 // `#[wasm_bindgen_test]` — running them via `cargo test` on the host
 // target would produce dead-code lint failures (the host-side
