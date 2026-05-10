@@ -31,5 +31,6 @@
 // Tags (T201) follow.
 pub mod calendar;
 pub mod history;
+pub mod tags;
 pub mod tasks;
 pub mod timer;
