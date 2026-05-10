@@ -513,6 +513,28 @@ mod tests {
         assert_eq!(after, "[]");
     }
 
+    /// T107 named-test (per F4 idempotency design). Two-call no-op:
+    /// the second invocation must not overwrite the first's output.
+    #[test]
+    fn import_tags_is_idempotent_across_two_calls() {
+        let dir = tempdir().unwrap();
+        let payload = LegacyTagsPayload { tags: vec![sample_tag()] };
+        import_tags(dir.path(), &payload).unwrap();
+        let first_bytes = std::fs::read(dir.path().join("tags.json")).unwrap();
+        let payload2 = LegacyTagsPayload {
+            tags: vec![Tag {
+                id: "should-not-write".to_string(),
+                name: "X".to_string(),
+                icon: "x".to_string(),
+                color: "#000".to_string(),
+                created_at: "2026-05-10T00:00:00Z".to_string(),
+            }],
+        };
+        import_tags(dir.path(), &payload2).unwrap();
+        let second_bytes = std::fs::read(dir.path().join("tags.json")).unwrap();
+        assert_eq!(first_bytes, second_bytes);
+    }
+
     // ── import_manual_sessions ──────────────────────────────────────────────
 
     fn sample_manual() -> ManualSession {
