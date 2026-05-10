@@ -280,7 +280,7 @@ const TAURI_MOCK_INIT_SCRIPT = `
           case "supabase_sign_in_with_password":
             // Spec 001-leptos-migration T087 (mock-first per FR-010): replaces
             // the supabase-js auth path with a Rust REST adapter. The mock
-            // shape mirrors AuthSession (data-model.md §`Session`):
+            // shape mirrors AuthSession (data-model.md 'Session'):
             // { access_token, refresh_token, user: { id, email, user_metadata } }.
             return {
               access_token: "mock-access-token",
@@ -323,7 +323,7 @@ const TAURI_MOCK_INIT_SCRIPT = `
 
           case "export_sessions_xlsx":
             // Spec 001-leptos-migration T096 (mock-first per FR-010):
-            // replaces the JS `xlsx` library's writeFile() path with a
+            // replaces the JS 'xlsx' library's writeFile() path with a
             // Tauri-side rust_xlsxwriter call that builds the workbook
             // server-side from a typed Vec<ManualSession>. Mock no-op:
             // the e2e suite asserts on the call shape (path + sessions
