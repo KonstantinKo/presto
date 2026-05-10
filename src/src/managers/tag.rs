@@ -123,4 +123,62 @@ mod tests {
         );
         assert_eq!(mgr.list()[0].name, "Focus");
     }
+
+    /// T163 [RED]: `delete(tag_id)` removes the matching record
+    /// from the in-memory list. Mirrors the JS-side
+    /// `src/managers/tag-manager.js:332-333` filter pattern. The
+    /// test seeds two tags, deletes the first by id, and asserts
+    /// only the second survives. Also pins that
+    /// `find_by_id` returns `Some(_)` for the surviving tag and
+    /// `None` for the deleted one — the JS-era `tags.some(t =>
+    /// t.id === id)` callsites at lines 160, 185, and 332 all
+    /// reduce to this lookup.
+    ///
+    /// Done-signal: this test currently fails because
+    /// `TagManager::delete` and `find_by_id` do not yet exist.
+    /// T164 GREEN attaches both alongside the async
+    /// `delete_persisted` wrapper that hands the id to
+    /// `bridge::commands::delete_tag`.
+    #[test]
+    fn delete_removes_from_list() {
+        let mut mgr = TagManager::new();
+        mgr.create(Tag {
+            id: "tag-focus".to_string(),
+            name: "Focus".to_string(),
+            icon: "ri-brain-line".to_string(),
+            color: "#4CAF50".to_string(),
+            created_at: "2026-05-10T00:00:00Z".to_string(),
+        });
+        mgr.create(Tag {
+            id: "tag-meeting".to_string(),
+            name: "Meeting".to_string(),
+            icon: "ri-team-line".to_string(),
+            color: "#3b82f6".to_string(),
+            created_at: "2026-05-10T00:01:00Z".to_string(),
+        });
+        assert_eq!(mgr.list().len(), 2, "two tags seeded");
+
+        mgr.delete("tag-focus");
+
+        assert_eq!(mgr.list().len(), 1, "one tag remains after delete");
+        assert_eq!(
+            mgr.list()[0].id,
+            "tag-meeting",
+            "the surviving tag is the one that was NOT deleted",
+        );
+        assert!(
+            mgr.find_by_id("tag-focus").is_none(),
+            "find_by_id must return None for the deleted tag",
+        );
+        assert!(
+            mgr.find_by_id("tag-meeting").is_some(),
+            "find_by_id must return Some(_) for the surviving tag",
+        );
+
+        // Deleting a missing id is a no-op (matches the JS-side
+        // `filter(t => t.id !== id)` semantics — no error if the
+        // id wasn't in the list).
+        mgr.delete("tag-nope");
+        assert_eq!(mgr.list().len(), 1, "delete of unknown id is a no-op");
+    }
 }
