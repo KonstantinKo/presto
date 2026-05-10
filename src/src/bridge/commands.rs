@@ -31,7 +31,7 @@ use wasm_bindgen_futures::JsFuture;
 
 use super::availability::bridge_available;
 use super::error::BridgeError;
-use super::types::Session;
+use super::types::{Session, Task};
 
 #[wasm_bindgen]
 extern "C" {
@@ -172,6 +172,26 @@ pub async fn save_daily_stats(session: Session) -> Result<(), BridgeError> {
         session: Session,
     }
     invoke_serde("save_daily_stats", &Args { session }).await
+}
+
+// ---------------------------------------------------------------------------
+// Persistence — tasks
+// ---------------------------------------------------------------------------
+
+/// Persist the user's task list to disk. Tauri-side handler:
+/// `save_tasks(tasks: Vec<Task>) -> Result<(), BridgeError>`
+/// at `src-tauri/src/lib.rs:492`.
+///
+/// # Errors
+/// Returns `BridgeError::BridgeUnavailable` when the Tauri JS bridge is
+/// not present. Otherwise returns whatever variant the Tauri-side handler
+/// maps its filesystem failure to (typically `BridgeError::Internal`).
+pub async fn save_tasks(tasks: Vec<Task>) -> Result<(), BridgeError> {
+    #[derive(Serialize)]
+    struct Args {
+        tasks: Vec<Task>,
+    }
+    invoke_serde("save_tasks", &Args { tasks }).await
 }
 
 // Tests gated on `wasm32` because every wrapper-test is a
