@@ -329,18 +329,33 @@ pub fn App() -> impl IntoView {
         });
 
         // activity monitoring — fire when smart_pause or its timeout changes.
+        // When smart_pause is on and only the timeout changes (not the toggle
+        // itself), call update_activity_timeout to adjust the threshold without
+        // a stop/start cycle. When the toggle flips, start or stop monitoring.
         let smart_pause_first_run = std::rc::Rc::new(std::cell::Cell::new(true));
+        // Track previous smart_pause state to distinguish toggle from
+        // timeout-only changes across re-runs.
+        let prev_smart_pause = std::rc::Rc::new(std::cell::Cell::new(false));
         Effect::new(move |_| {
             let smart_pause = settings.with(|s| s.notifications.smart_pause);
             let timeout_secs =
                 settings.with(|s| u64::from(s.notifications.smart_pause_timeout) * 60);
             if smart_pause_first_run.get() {
                 smart_pause_first_run.set(false);
+                prev_smart_pause.set(smart_pause);
                 return;
             }
+            let was_smart_pause = prev_smart_pause.get();
+            prev_smart_pause.set(smart_pause);
             spawn_local(async move {
                 if smart_pause {
-                    let _ = commands::start_activity_monitoring(timeout_secs).await;
+                    if was_smart_pause {
+                        // Already on, timeout changed: update threshold in-place.
+                        let _ = commands::update_activity_timeout(timeout_secs).await;
+                    } else {
+                        // Toggle on: start monitoring with the current timeout.
+                        let _ = commands::start_activity_monitoring(timeout_secs).await;
+                    }
                 } else {
                     let _ = commands::stop_activity_monitoring().await;
                 }
