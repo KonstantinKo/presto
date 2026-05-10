@@ -739,7 +739,7 @@ mod tests {
         is_autostart_enabled, load_manual_sessions, load_session_data, load_settings, load_tags,
         load_tasks, register_global_shortcuts, reset_all_data, save_daily_stats,
         save_manual_sessions, save_session_data, save_settings, save_tag, save_tasks,
-        start_activity_monitoring, start_oauth_server, stop_activity_monitoring,
+        start_activity_monitoring, start_oauth_server, stop_activity_monitoring, track_event,
         update_activity_timeout, update_tray_icon, update_tray_menu, write_excel_file,
     };
     use crate::bridge::error::BridgeError;
@@ -749,6 +749,7 @@ mod tests {
         ManualSession, Session, SessionTag, Settings, ShortcutSettings, Tag, Task,
         UpdateTrayIconArgs,
     };
+    use std::collections::HashMap;
     use wasm_bindgen_test::wasm_bindgen_test;
 
     fn sample_session() -> Session {
@@ -1449,5 +1450,46 @@ mod tests {
             start_oauth_server().await
         }
         let _ = assert_signature().await;
+    }
+
+    // -----------------------------------------------------------------------
+    // Phase 1D — new permanent commands (T084-T098).
+    // Each wrapper covers a JS shim that the migration removes outright; the
+    // typed Rust wrappers replace those call sites. `track_event` covers the
+    // Aptabase JS shim (T084-T086).
+    // -----------------------------------------------------------------------
+
+    #[wasm_bindgen_test]
+    async fn track_event_round_trip_short_circuits_when_bridge_absent() {
+        let result = track_event("session_started", None).await;
+        match result {
+            Err(BridgeError::BridgeUnavailable) => {}
+            other => panic!("expected BridgeUnavailable, got {other:?}"),
+        }
+    }
+
+    /// Compile-time signature pin per contracts/tauri-bridge.md
+    /// §"`track_event` — replaces `@aptabase/tauri` JS shim":
+    /// `track_event(name: &str, props: Option<HashMap<String, Value>>) -> Result<(), BridgeError>`.
+    /// `name` is borrowed because every JS-era call site already has an
+    /// owned event-name string (cloning at the boundary is wasted). `props`
+    /// is `Option<HashMap<…>>` — `None` for the bare-name event case
+    /// (the Tauri-side handler at `src-tauri/src/lib.rs` forwards
+    /// `None` directly to `tauri_plugin_aptabase::EventTracker::track_event`),
+    /// `Some(map)` for the keyed-properties case. The opt-in toggle
+    /// (`settings.analytics_enabled`) is checked Rust-side at the handler
+    /// per Principle II — the wrapper does not gate on it.
+    #[wasm_bindgen_test]
+    async fn track_event_round_trip_signature_pinned() {
+        async fn assert_signature(
+            name: &str,
+            props: Option<HashMap<String, serde_json::Value>>,
+        ) -> Result<(), BridgeError> {
+            track_event(name, props).await
+        }
+        let _ = assert_signature("session_started", None).await;
+        let mut props = HashMap::new();
+        props.insert("session_count".to_string(), serde_json::json!(4));
+        let _ = assert_signature("session_completed", Some(props)).await;
     }
 }
