@@ -569,20 +569,52 @@ pub async fn disable_autostart() -> Result<(), BridgeError> {
 /// Read-only counterpart to `enable_autostart` / `disable_autostart`;
 /// delegates to `AutoLaunchManager::is_enabled()`.
 ///
-/// **Short-circuit policy (Phase 1C)**: when the Tauri JS bridge is
-/// absent the wrapper returns `Err(BridgeError::BridgeUnavailable)`,
-/// matching the uniform shape used by the other 25 wrappers in this
-/// phase. The contract (tauri-bridge.md §"Error handling") notes an
-/// eventual Phase 1G refinement where read-only commands may instead
-/// return a sentinel `Ok(false)`; that is a separate task and out of
-/// scope here. Consumers that need a sentinel can adapt at the call
-/// site with `.unwrap_or(false)`.
+/// **Short-circuit policy (Phase 1G refinement, the `is_read_only_query`
+/// shape)**: when the Tauri JS bridge is absent the wrapper returns
+/// `Ok(false)` rather than the uniform `Err(BridgeError::BridgeUnavailable)`
+/// the other 25 wrappers use. Rationale: this is the only "is X
+/// enabled?" predicate in the surviving command surface. Consumers
+/// (`managers/settings.rs` and the autostart UI toggle) want the
+/// `Result<bool, …>` to collapse to a single boolean arm when the
+/// bridge is absent (Trunk dev server, e2e mock, node tests) — they
+/// would otherwise have to write
+/// `match is_autostart_enabled().await { Ok(true) => …, Ok(false) | Err(BridgeUnavailable) => …, Err(other) => … }`,
+/// which expands to a three-arm match where the middle arm is
+/// always-the-same logic. Returning `Ok(false)` collapses that to
+/// `Ok(true) => …, Ok(false) => …, Err(other) => …`. The
+/// `Err(BridgeUnavailable)` arm becomes unreachable at the type
+/// level for this wrapper.
+///
+/// **Why scoped to this one wrapper**: save/update commands have
+/// real side effects to perform; list-returning reads need to
+/// distinguish "bridge absent" from "bridge present, but no rows yet"
+/// (a sentinel `Ok(vec![])` would conflate the two). For
+/// `is_autostart_enabled`, "bridge absent" and "definitely not
+/// enabled" are operationally identical — there's no way to enable
+/// autostart without a Tauri bridge, so reporting `false` is honest.
+/// Broader sentinel adoption across other read-only commands (e.g.,
+/// `supabase_get_session` collapsing to `Ok(None)`) is a follow-up;
+/// see contracts/tauri-bridge.md §"Error handling".
 ///
 /// # Errors
-/// Returns `BridgeError::BridgeUnavailable` when the Tauri JS bridge is
-/// not present. Plugin failures (rare; e.g., the underlying autolaunch
-/// API is unavailable) surface as `BridgeError::Internal`.
+/// Bridge-absent does NOT produce an error — see the short-circuit
+/// policy above. Returns `BridgeError::Internal` for plugin failures
+/// under a live bridge (rare; e.g., the underlying `auto-launch`
+/// crate's macOS-LSSharedFileList API surfacing). Returns
+/// `BridgeError::SerdeRoundtrip` if the Tauri-side return shape ever
+/// drifts from `bool` (would be a contract regression — not expected
+/// in normal operation).
 pub async fn is_autostart_enabled() -> Result<bool, BridgeError> {
+    // Sentinel short-circuit: read-only "is X enabled?" predicates
+    // collapse `BridgeAvailable::Absent` to `Ok(false)` per the
+    // doc-comment above. Every other wrapper in this module uses
+    // `invoke_serde`'s built-in `Err(BridgeUnavailable)` short-circuit;
+    // intercepting here before the helper runs preserves the
+    // uniformity of `invoke_serde` while letting this single wrapper
+    // diverge in its sentinel shape.
+    if bridge_available().is_absent() {
+        return Ok(false);
+    }
     invoke_serde("is_autostart_enabled", &serde_json::Value::Null).await
 }
 
