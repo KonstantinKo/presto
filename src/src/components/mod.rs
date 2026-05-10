@@ -37,5 +37,6 @@ pub mod history;
 pub mod settings;
 pub mod tags;
 pub mod tasks;
+pub mod team;
 pub mod timer;
 pub mod update_notification;
