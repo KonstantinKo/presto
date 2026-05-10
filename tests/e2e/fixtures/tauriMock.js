@@ -189,14 +189,6 @@ const TAURI_MOCK_INIT_SCRIPT = `
             return;
           }
 
-          case "delete_manual_session": {
-            var sessId = args && args.id;
-            _state.manualSessions = _state.manualSessions.filter(function (s) {
-              return s.id !== sessId;
-            });
-            return;
-          }
-
           case "is_autostart_enabled":
             return _state.autostartEnabled;
 
@@ -263,9 +255,6 @@ const TAURI_MOCK_INIT_SCRIPT = `
             // Rust handler signature: (app, is_running, is_paused, current_mode)
             //                         -> Result<(), String>
             return;
-
-          case "write_excel_file":
-            return null;
 
           case "track_event":
             // Spec 001-leptos-migration T084 (mock-first per FR-010 / Principle VI):

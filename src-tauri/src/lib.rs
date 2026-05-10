@@ -1,7 +1,5 @@
-use base64::{engine::general_purpose, Engine as _};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::fs;
 use std::sync::{Arc, LazyLock, Mutex};
 #[cfg(target_os = "macos")]
 use std::thread;
@@ -907,7 +905,6 @@ pub fn run() {
                 save_tag,
                 delete_tag,
                 add_session_tag,
-                write_excel_file,
                 start_oauth_server,
                 track_event,
                 supabase_sign_in_with_password,
@@ -1207,37 +1204,6 @@ async fn update_tray_menu(
     Ok(())
 }
 
-/// Decodes `data` from standard base64 and writes the result to `path`.
-///
-/// Exposed as `pub` so `tests/commands.rs` can wire it into a `MockRuntime`
-/// app via a locally-defined `#[tauri::command]` wrapper (applying `pub`
-/// directly to a `#[tauri::command]` that also appears in `generate_handler!`
-/// causes a macro-namespace conflict due to `#[macro_export]`).
-///
-/// # Errors
-///
-/// Returns `BridgeError::InvalidArgument` if `data` is not valid base64
-/// (caller's input failed validation), or `BridgeError::Internal` if the
-/// file cannot be written to `path` (filesystem failure with no
-/// caller-actionable detail). Spec 001-leptos-migration §Phase 1A T027.
-pub fn decode_and_write_file(path: &str, data: &str) -> Result<(), BridgeError> {
-    let decoded_data = general_purpose::STANDARD
-        .decode(data)
-        .map_err(|e| BridgeError::InvalidArgument {
-            field: "data".to_string(),
-            reason: format!("invalid base64: {e}"),
-        })?;
-    fs::write(path, decoded_data).map_err(|e| BridgeError::Internal {
-        msg: format!("Failed to write Excel file to {path}: {e}"),
-    })?;
-    Ok(())
-}
-
-#[tauri::command]
-async fn write_excel_file(path: String, data: String) -> Result<(), BridgeError> {
-    decode_and_write_file(&path, &data)
-}
-
 #[tauri::command]
 async fn start_oauth_server(window: tauri::Window) -> Result<u16, BridgeError> {
     start(move |url| {
@@ -1373,9 +1339,8 @@ async fn supabase_refresh_session(
 // `rust_xlsxwriter` call that builds the workbook from typed
 // `ManualSession` records and writes it to `path`. Per research.md §8,
 // rust_xlsxwriter is write-only (we never read .xlsx files) and lighter
-// than umya-spreadsheet. The deprecated `write_excel_file` command is
-// kept for cutover-period parity but unused by the post-cutover Leptos
-// crate; it's removed in Phase 6.
+// than umya-spreadsheet. The legacy `write_excel_file` cutover-parity
+// command was removed in Phase 6 (T235).
 #[tauri::command]
 async fn export_sessions_xlsx(
     path: String,

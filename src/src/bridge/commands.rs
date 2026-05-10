@@ -696,40 +696,6 @@ pub async fn update_tray_menu(
 }
 
 // ---------------------------------------------------------------------------
-// Export
-// ---------------------------------------------------------------------------
-
-/// Write a base64-encoded XLSX payload to disk. Tauri-side handler:
-/// `write_excel_file(path: String, data: String) -> Result<(), BridgeError>`
-/// at `src-tauri/src/lib.rs:1219`.
-///
-/// **Cutover-period parity only.** Deprecated by `export_sessions_xlsx`
-/// (Phase 1D / T097), which moves the workbook construction Rust-side
-/// using `rust_xlsxwriter` and accepts a typed `Vec<ManualSession>`
-/// rather than a base64 blob. This wrapper exists so the JS-era export
-/// path can compile against the new bridge during the transition; it
-/// is removed in Phase 6 cleanup along with the Tauri-side handler.
-///
-/// `data` is the standard-base64 encoding of the XLSX bytes; the
-/// Tauri-side handler decodes via `base64::engine::general_purpose::STANDARD`
-/// and writes to `path` via `std::fs::write`.
-///
-/// # Errors
-/// Returns `BridgeError::BridgeUnavailable` when the Tauri JS bridge is
-/// not present. Returns `BridgeError::InvalidArgument { field: "data",
-/// reason: <base64 decode error> }` if `data` is not valid base64
-/// (Tauri-side validation per `decode_and_write_file`). Returns
-/// `BridgeError::Internal` if the filesystem write to `path` fails.
-pub async fn write_excel_file(path: String, data: String) -> Result<(), BridgeError> {
-    #[derive(Serialize)]
-    struct Args {
-        path: String,
-        data: String,
-    }
-    invoke_serde("write_excel_file", &Args { path, data }).await
-}
-
-// ---------------------------------------------------------------------------
 // OAuth
 // ---------------------------------------------------------------------------
 
@@ -935,9 +901,8 @@ pub async fn supabase_refresh_session(
 /// server-side rather than over the bridge — less data crossing IPC,
 /// no JS xlsx library in the WASM bundle.
 ///
-/// Replaces the JS `xlsx` library's `writeFile()` path. The deprecated
-/// `write_excel_file` (which takes a pre-built base64 blob from the
-/// JS xlsx library) stays for cutover-period parity until Phase 6.
+/// Replaces the JS `xlsx` library's `writeFile()` path; the legacy
+/// `write_excel_file` cutover-parity wrapper was removed in Phase 6.
 ///
 /// `path` is the user-chosen save location (typically obtained via
 /// the Tauri dialog plugin's `save()` call site-side; the wrapper
@@ -1154,7 +1119,7 @@ mod tests {
         save_tasks, start_activity_monitoring, start_oauth_server, stop_activity_monitoring,
         supabase_get_session, supabase_refresh_session, supabase_sign_in_with_password,
         supabase_sign_out, track_event, update_activity_timeout, update_tray_icon,
-        update_tray_menu, write_excel_file,
+        update_tray_menu,
     };
     use crate::bridge::error::BridgeError;
     use crate::bridge::session_type::SessionType;
@@ -1820,39 +1785,6 @@ mod tests {
     }
 
     #[wasm_bindgen_test]
-    async fn write_excel_file_round_trip_short_circuits_when_bridge_absent() {
-        let result = write_excel_file(
-            "/tmp/export.xlsx".to_string(),
-            "UEsDBBQAAAAIAA==".to_string(),
-        )
-        .await;
-        match result {
-            Err(BridgeError::BridgeUnavailable) => {}
-            other => panic!("expected BridgeUnavailable, got {other:?}"),
-        }
-    }
-
-    /// Compile-time signature pin per contracts/tauri-bridge.md row 25:
-    /// `write_excel_file(path: String, data: String) -> Result<(), BridgeError>`.
-    /// `data` is base64-encoded XLSX bytes per the Tauri-side handler at
-    /// `src-tauri/src/lib.rs:1219`. Kept for cutover-period parity only;
-    /// deprecated by the new `export_sessions_xlsx` (introduced in Phase
-    /// 1D / T097) and removed in Phase 6 cleanup. The wrapper exists so
-    /// the JS-era export path can compile against the new bridge during
-    /// the transition.
-    #[wasm_bindgen_test]
-    async fn write_excel_file_round_trip_signature_pinned() {
-        async fn assert_signature(path: String, data: String) -> Result<(), BridgeError> {
-            write_excel_file(path, data).await
-        }
-        let _ = assert_signature(
-            "/tmp/export.xlsx".to_string(),
-            "UEsDBBQAAAAIAA==".to_string(),
-        )
-        .await;
-    }
-
-    #[wasm_bindgen_test]
     async fn start_oauth_server_round_trip_short_circuits_when_bridge_absent() {
         let result = start_oauth_server().await;
         match result {
@@ -2097,13 +2029,12 @@ mod tests {
     /// §"`export_sessions_xlsx` — replaces JS `xlsx` library":
     /// `export_sessions_xlsx(path: String, sessions: Vec<ManualSession>)
     ///     -> Result<(), BridgeError>`.
-    /// Distinct from the deprecated `write_excel_file(path, data: String)`
-    /// (kept for cutover-period parity but unused by the post-cutover
-    /// Leptos crate; removed in Phase 6) in that the Tauri-side handler
-    /// builds the workbook itself from typed `ManualSession` records
-    /// rather than accepting a base64-encoded blob the JS-era `xlsx`
-    /// library produced. Same on-disk file shape; less data crossing
-    /// the bridge.
+    /// Replaces the legacy `write_excel_file(path, data)` JS-era path
+    /// (removed in Phase 6 per contracts/tauri-bridge.md §Deletions): the
+    /// Tauri-side handler builds the workbook itself from typed
+    /// `ManualSession` records rather than accepting a base64-encoded
+    /// blob the JS `xlsx` library produced. Same on-disk file shape;
+    /// less data crossing the bridge.
     #[wasm_bindgen_test]
     async fn export_sessions_xlsx_round_trip_signature_pinned() {
         async fn assert_signature(

@@ -8,10 +8,8 @@
 // less data crossing the bridge (typed records instead of a pre-built
 // base64 blob).
 //
-// The deprecated `write_excel_file` command (lib.rs) is kept only for
-// cutover-period parity — it lets the JS-era export path continue to
-// compile against the new bridge until Phase 6, when both the legacy
-// command AND the JS xlsx dependency are removed.
+// The legacy `write_excel_file` cutover-parity command was removed in
+// Phase 6 (T235); the JS-era export path is gone post-cutover.
 //
 // Lint allowance rationale — `clippy::redundant_pub_crate`: same conflict
 // as the `auth` module (see auth.rs header). `pub(super)` items in a
