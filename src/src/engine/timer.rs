@@ -305,4 +305,45 @@ mod tests {
         assert_eq!(state.current_mode(), TimerMode::Break);
         assert_eq!(state.time_remaining_secs(), 5 * 60);
     }
+
+    /// Run the engine through a full focus → break cycle, returning
+    /// it to focus mode and starting again. Used by T126 to drive
+    /// four focus completions in sequence.
+    fn cycle_focus_then_break(state: &mut TimerState, clock: &MockClock) {
+        let durations = Durations::default();
+        // Drive the focus countdown to zero.
+        state.start(clock).expect("start focus");
+        clock.advance(i64::from(durations.focus) * 1000);
+        state.tick(clock);
+        // Drive the break countdown to zero.
+        state.start(clock).expect("start break");
+        clock.advance(i64::from(state.current_mode_duration_secs()) * 1000);
+        state.tick(clock);
+    }
+
+    /// T126: every fourth focus completion enters `LongBreak` instead
+    /// of `Break`. Mirrors the `completedPomodoros % 4 === 0`
+    /// branch at `pomodoro-timer.js:1195-1199`. Time remaining
+    /// resets to the configured long-break duration (20 min).
+    #[test]
+    fn long_break_after_4_focus_sessions() {
+        let clock = MockClock::new(0);
+        let mut state = TimerState::new(Durations::default());
+
+        // Three full cycles return us to focus each time.
+        cycle_focus_then_break(&mut state, &clock);
+        cycle_focus_then_break(&mut state, &clock);
+        cycle_focus_then_break(&mut state, &clock);
+        assert_eq!(state.completed_pomodoros(), 3);
+        assert_eq!(state.current_mode(), TimerMode::Focus);
+
+        // Fourth focus completion → LongBreak.
+        state.start(&clock).expect("start fourth focus");
+        clock.advance(25 * 60 * 1000);
+        state.tick(&clock);
+
+        assert_eq!(state.completed_pomodoros(), 4);
+        assert_eq!(state.current_mode(), TimerMode::LongBreak);
+        assert_eq!(state.time_remaining_secs(), 20 * 60);
+    }
 }
