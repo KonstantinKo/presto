@@ -254,17 +254,62 @@ mod tests {
     use super::{mode_label, pad_two};
     use crate::bridge::timer_mode::TimerMode;
 
-    /// Selector-contract smoke pin: enumerate the IDs the e2e suite
-    /// asserts on so a future refactor that loses one fails this
-    /// host-side test rather than only the e2e run. Visual
-    /// regression (T191) covers the rendered shape; this test
-    /// covers the string contract.
+    /// T191 — visual-regression / selector contract pin.
     ///
-    /// The set is hand-derived from `tests/e2e/_smoke.spec.js`,
-    /// `timer.spec.js`, and `visual-regression.spec.js` — every
-    /// `locator("#…")` against the timer view. If a spec adds a
-    /// new selector, append it here so the contract drift is
-    /// caught at `cargo test` time.
+    /// The e2e suite (`tests/e2e/timer.spec.js`,
+    /// `_smoke.spec.js`, `tags.spec.js`,
+    /// `sessions-history.spec.js`, `visual-regression.spec.js`)
+    /// asserts on a fixed set of `id="..."` attributes against
+    /// the timer view. Drift here breaks the e2e run; this
+    /// host-side test surfaces the drift earlier (in `cargo
+    /// test` rather than `npx playwright test`) by enumerating
+    /// the contract surface alongside the spec line that
+    /// consumes each selector.
+    ///
+    /// Source map (every entry below is exercised by the
+    /// referenced spec line):
+    ///
+    /// - `timer-view`           — `_smoke.spec.js:19` (`toBeVisible`),
+    ///                            `visual-regression.spec.js`
+    ///                            (timer-view screenshot baseline).
+    /// - `timer-minutes`        — `_smoke.spec.js:17` (initial "25"),
+    ///                            `timer.spec.js:28` (post-reset
+    ///                            "25").
+    /// - `timer-seconds`        — `_smoke.spec.js:18` ("00"),
+    ///                            `timer.spec.js:13` (ticks),
+    ///                            `timer.spec.js:29` ("00" reset).
+    /// - `play-pause-btn`       — `timer.spec.js:8,16,21` (start /
+    ///                            pause / resume).
+    /// - `stop-btn`             — `timer.spec.js:25` (reset).
+    /// - `skip-btn`             — present for E8 tray-skip + manual
+    ///                            skip flow (Phase 4c wires the
+    ///                            tray subscription).
+    /// - `play-icon`            — `timer.spec.js:7,17,30`
+    ///                            (visibility toggles).
+    /// - `pause-icon`           — `timer.spec.js:9,18` (running
+    ///                            indicator).
+    /// - `timer-status`         — `tags.spec.js:11,33`,
+    ///                            `sessions-history.spec.js:14`
+    ///                            (tag-dropdown trigger).
+    /// - `status-text`          — `sessions-history.spec.js:28`
+    ///                            ("Break" after focus completes).
+    /// - `status-icon`          — JS-era icon swap (`ri-brain-line`
+    ///                            for Focus, `ri-cup-line` for
+    ///                            Break); covered by visual
+    ///                            regression baselines.
+    /// - `progress-dots`        — JS-era `#progress-dots` filled by
+    ///                            the daily-goal projection;
+    ///                            container present so the visual
+    ///                            shell matches even before
+    ///                            population.
+    /// - `tag-dropdown-arrow`   — chevron next to status-text;
+    ///                            covered by visual regression.
+    ///
+    /// If a spec adds a new selector, append it here AND to the
+    /// `view!` macro above so the contract drift is caught at
+    /// `cargo test` time. Visual baseline updates are out of
+    /// scope (per AGENTS.md §"Don't update visual regression
+    /// baselines without explicit visual review").
     #[test]
     fn timer_view_selector_contract_documented() {
         const REQUIRED_IDS: &[&str] = &[
@@ -291,6 +336,20 @@ mod tests {
             );
             seen.push(id);
         }
+    }
+
+    /// T191 first-paint pin: the smoke spec asserts the initial
+    /// `#timer-minutes` reads "25" and `#timer-seconds` reads "00".
+    /// `pad_two` is the projection that produces those literals
+    /// from the engine's initial `time_remaining_secs()` (1500 →
+    /// 25 / 0). Pin the projection here so a future refactor that
+    /// changes the format silently fails this test rather than the
+    /// e2e suite.
+    #[test]
+    fn first_paint_minutes_seconds_match_smoke_spec() {
+        let initial_secs: u32 = 25 * 60;
+        assert_eq!(pad_two(initial_secs / 60), "25");
+        assert_eq!(pad_two(initial_secs % 60), "00");
     }
 
     #[test]
