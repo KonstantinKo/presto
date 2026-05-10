@@ -110,6 +110,114 @@ impl SettingsManager {
 mod tests {
     use super::SettingsManager;
 
+    /// T151 [RED]: F1/M3 migration coverage — the five cases from
+    /// data-model.md §"Settings legacy migration":
+    ///
+    /// 1. `hide_status_bar: true → IconOnly`
+    /// 2. `hide_status_bar: false → Default`
+    /// 3. `status_bar_display: "icon-only" → IconOnly` (kebab-case
+    ///    round-trip from a pre-cutover JS-era settings JSON)
+    /// 4. `status_bar_display: "default" → Default`
+    /// 5. neither field present → `Default`
+    ///
+    /// Mirrors the JS-side migration logic at
+    /// `src/managers/settings-manager.js:109-119` ported to Rust.
+    ///
+    /// Done-signal: this test currently fails because cases 1 and 2
+    /// require the custom deserializer
+    /// `deserialize_status_bar_display_with_legacy_fallback` that
+    /// T152 GREEN attaches to `Settings.status_bar_display`. The
+    /// other three cases pass with the default-only T150 shape and
+    /// land here so they regress loud if the deserializer ever drops
+    /// them. T152 implements the fallback.
+    #[test]
+    fn migrates_hide_status_bar_to_status_bar_display() {
+        use crate::bridge::types::StatusBarDisplay;
+
+        // Builds a minimal-shape settings JSON with an arbitrary
+        // status-bar fragment spliced in. Keeps every other field at
+        // its default so each case isolates the migration logic.
+        let make_json = |status_bar_fragment: &str| {
+            format!(
+                r#"{{
+                    "shortcuts": {{"start_stop": null, "reset": null, "skip": null}},
+                    "timer": {{"focus_duration": 25, "break_duration": 5,
+                              "long_break_duration": 20, "total_sessions": 10}},
+                    "notifications": {{"desktop_notifications": true,
+                                      "sound_notifications": true,
+                                      "auto_start_timer": true, "smart_pause": false,
+                                      "smart_pause_timeout": 30}},
+                    "autostart": false{status_bar_fragment}
+                }}"#
+            )
+        };
+
+        // Case 1: legacy `hide_status_bar: true → IconOnly`.
+        let mgr = SettingsManager::ingest_raw_json(&make_json(r#", "hide_status_bar": true"#))
+            .expect("legacy true must deserialise");
+        assert_eq!(
+            mgr.current().status_bar_display,
+            StatusBarDisplay::IconOnly,
+            "case 1: hide_status_bar:true must project to IconOnly",
+        );
+
+        // Case 2: legacy `hide_status_bar: false → Default`.
+        let mgr = SettingsManager::ingest_raw_json(&make_json(r#", "hide_status_bar": false"#))
+            .expect("legacy false must deserialise");
+        assert_eq!(
+            mgr.current().status_bar_display,
+            StatusBarDisplay::Default,
+            "case 2: hide_status_bar:false must project to Default",
+        );
+
+        // Case 3: kebab-case round-trip from a JS-era settings JSON
+        // that already carries the new field. Pre-cutover JS-side
+        // migration step had already started writing this shape.
+        let mgr = SettingsManager::ingest_raw_json(&make_json(
+            r#", "status_bar_display": "icon-only""#,
+        ))
+        .expect("new shape kebab-case must deserialise");
+        assert_eq!(
+            mgr.current().status_bar_display,
+            StatusBarDisplay::IconOnly,
+            "case 3: status_bar_display:\"icon-only\" must round-trip to IconOnly",
+        );
+
+        // Case 4: kebab-case `status_bar_display: "default" → Default`.
+        let mgr = SettingsManager::ingest_raw_json(&make_json(
+            r#", "status_bar_display": "default""#,
+        ))
+        .expect("new shape default kebab-case must deserialise");
+        assert_eq!(
+            mgr.current().status_bar_display,
+            StatusBarDisplay::Default,
+            "case 4: status_bar_display:\"default\" must round-trip to Default",
+        );
+
+        // Case 5: neither field present → `Default::default()`.
+        let mgr = SettingsManager::ingest_raw_json(&make_json(""))
+            .expect("neither field must deserialise");
+        assert_eq!(
+            mgr.current().status_bar_display,
+            StatusBarDisplay::Default,
+            "case 5: missing field must default to Default",
+        );
+
+        // Bonus pin: when both fields are present, the new field
+        // wins (matches the JS-side behaviour of preferring the new
+        // shape and only running the migration when
+        // `status_bar_display === undefined`).
+        let mgr = SettingsManager::ingest_raw_json(&make_json(
+            r#", "hide_status_bar": true, "status_bar_display": "default""#,
+        ))
+        .expect("both fields must deserialise");
+        assert_eq!(
+            mgr.current().status_bar_display,
+            StatusBarDisplay::Default,
+            "tie-breaker: when both fields present, new field wins",
+        );
+    }
+
     /// T149 [RED]: an older 0.4.x settings JSON that predates the
     /// `weekly_goal_minutes`, `auto_start_focus`,
     /// `allow_continuous_sessions`, `advanced`, `analytics_enabled`,
