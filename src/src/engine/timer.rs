@@ -8,6 +8,7 @@
 // See `engine/mod.rs` for module-level Principle I rationale.
 
 use crate::bridge::timer_mode::TimerMode;
+use crate::engine::activity_signal::ActivitySignal;
 use crate::engine::clock::Clock;
 use crate::engine::durations::Durations;
 
@@ -24,6 +25,12 @@ pub enum TimerEvent {
     /// `skip()` was called during focus mode). Carries the
     /// pomodoros-completed count *after* the increment.
     PomodoroCompleted { completed_pomodoros: u32 },
+    /// Smart-pause kicked in after the configured inactivity
+    /// threshold elapsed (i.e. the bridge layer fed an
+    /// `ActivitySignal::Idle` while a focus session was running).
+    /// Mirrors the `autoPauseTimer` body at
+    /// `pomodoro-timer.js:524-562`.
+    AutoPaused,
 }
 
 /// Pomodoro state machine.
@@ -69,6 +76,18 @@ pub struct TimerState {
     /// session-save flows). Reset by `reset()` and on a clean
     /// session start; preserved across pause/resume.
     current_session_elapsed_secs: u32,
+    /// Whether the engine is configured to auto-pause on idle
+    /// signals. Mirrors `smartPauseEnabled` at
+    /// `pomodoro-timer.js:20`. Toggled at runtime via
+    /// `set_smart_pause_enabled`.
+    smart_pause_enabled: bool,
+    /// Whether the engine is currently in the smart-pause
+    /// suspended state. Mirrors `isAutoPaused` at
+    /// `pomodoro-timer.js:21`. Distinct from a manual pause
+    /// (which would set `is_paused`); the bridge / UI layer
+    /// distinguishes the two so the resume affordance is correct
+    /// (manual resume vs. activity-driven auto-resume).
+    is_auto_paused: bool,
 }
 
 impl TimerState {
@@ -88,6 +107,8 @@ impl TimerState {
             timer_start_ms: None,
             timer_duration_secs: None,
             current_session_elapsed_secs: 0,
+            smart_pause_enabled: false,
+            is_auto_paused: false,
         }
     }
 
@@ -147,6 +168,60 @@ impl TimerState {
     #[must_use]
     pub const fn current_session_elapsed_secs(&self) -> u32 {
         self.current_session_elapsed_secs
+    }
+
+    /// Whether smart-pause is currently enabled. The bridge layer
+    /// gates its activity-monitor subscription on this flag.
+    #[must_use]
+    pub const fn smart_pause_enabled(&self) -> bool {
+        self.smart_pause_enabled
+    }
+
+    /// Toggles smart-pause. Disabling while currently auto-paused
+    /// resumes the timer (mirrors `enableSmartPause(false)` at
+    /// `pomodoro-timer.js:628-664`).
+    pub const fn set_smart_pause_enabled(&mut self, enabled: bool) {
+        self.smart_pause_enabled = enabled;
+        if !enabled && self.is_auto_paused {
+            self.is_auto_paused = false;
+        }
+    }
+
+    /// Whether the engine is currently in the smart-pause
+    /// suspended state. Distinct from a manual pause.
+    #[must_use]
+    pub const fn is_auto_paused(&self) -> bool {
+        self.is_auto_paused
+    }
+
+    /// Consume an `ActivitySignal` from the bridge layer.
+    ///
+    /// Idle while running a focus session triggers auto-pause.
+    /// Active while auto-paused triggers auto-resume (T134-T135).
+    /// Returns the events fired by the transition (empty `Vec` if
+    /// the signal didn't transition state).
+    ///
+    /// Mirrors `handleUserActivity` + `autoPauseTimer` +
+    /// `resumeFromAutoPause` at `pomodoro-timer.js:440-626`.
+    pub fn observe_activity(&mut self, signal: ActivitySignal) -> Vec<TimerEvent> {
+        let mut events = Vec::new();
+        match signal {
+            ActivitySignal::Idle => {
+                if self.smart_pause_enabled
+                    && self.is_running
+                    && !self.is_auto_paused
+                    && self.current_mode == TimerMode::Focus
+                {
+                    self.is_auto_paused = true;
+                    self.is_running = false;
+                    events.push(TimerEvent::AutoPaused);
+                }
+            }
+            ActivitySignal::Active => {
+                // Auto-resume path lands in T135.
+            }
+        }
+        events
     }
 
     /// Begin (or resume) the countdown.
