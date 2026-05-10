@@ -46,8 +46,13 @@
 #![allow(clippy::must_use_candidate, clippy::too_many_lines)]
 
 use leptos::prelude::*;
+use leptos::task::spawn_local;
 
-use crate::bridge::types::Settings;
+use crate::bridge::availability::{bridge_available, BridgeAvailable};
+use crate::bridge::commands;
+use crate::bridge::events::{self, GLOBAL_SHORTCUT, UPDATE_AVAILABLE};
+use crate::bridge::storage;
+use crate::bridge::types::{Settings, UpdateAvailablePayload};
 use crate::components::auth_modal::AuthModal;
 use crate::components::calendar::CalendarView;
 use crate::components::history::HistoryView;
@@ -59,7 +64,7 @@ use crate::components::timer::TimerView;
 use crate::components::update_notification::UpdateNotification;
 use crate::managers::auth::AuthState;
 use crate::managers::navigation::{NavView, NavigationManager, SettingsTab};
-use crate::managers::update::UpdateInfo;
+use crate::managers::update::{UpdateInfo, UpdateManager};
 
 /// Top-level App component. Mounts the sidebar nav, the active
 /// view, the global update banner, and the auth modal.
@@ -105,6 +110,79 @@ pub fn App() -> impl IntoView {
     let on_select_settings_tab = Callback::new(move |tab: SettingsTab| {
         nav.update(|n| n.select_settings_tab(tab));
     });
+
+    // Bridge availability — used by both startup hops (skip
+    // load_settings + skip listen subscriptions) and the
+    // degraded-mode UI (T218 will visualise this; today we use it
+    // to skip bridge calls when the JS surface isn't present).
+    let bridge_state = bridge_available();
+
+    // Startup hops: legacy migration + settings load. Skipped when
+    // the bridge is absent (Trunk dev server / e2e mock harness)
+    // because every wrapper short-circuits to BridgeUnavailable
+    // anyway and the spawn would log a noisy error.
+    if matches!(bridge_state, BridgeAvailable::Available) {
+        spawn_local(async move {
+            // Legacy localStorage migration runs first so settings
+            // loaded post-migration reflect the imported state.
+            // Idempotent per Phase 1E T115 — running on every cold
+            // start is safe.
+            let _ = storage::migrate_legacy_localstorage().await;
+            // Then load the canonical post-migration settings into
+            // the shared signal. Errors fall back to
+            // `Settings::default()` (matches the JS-era behaviour
+            // at `src/managers/settings-manager.js:125-128`).
+            if let Ok(loaded) = commands::load_settings().await {
+                settings.set(loaded);
+            }
+        });
+
+        // Subscribe to `tauri://update-available` emits. The
+        // listener feeds the `UpdateManager`'s `handle_event` and
+        // lifts the shared `update_info` signal — the
+        // `UpdateNotification` banner reads that signal.
+        spawn_local(async move {
+            let mut update_mgr = UpdateManager::new();
+            let listener = events::listen::<UpdateAvailablePayload>(
+                UPDATE_AVAILABLE,
+                move |payload| {
+                    update_mgr.handle_event(payload);
+                    update_info.set(update_mgr.info().clone());
+                },
+            )
+            .await;
+            // The Listener guard is intentionally leaked into the
+            // closure so the subscription survives until the App
+            // unmounts (which on the App root means until the WASM
+            // runtime tears down). A cleaner shutdown story
+            // attaches the guard to a Leptos `on_cleanup` once
+            // Phase 4c folds the manager state into context.
+            if let Ok(guard) = listener {
+                let _ = Box::leak(Box::new(guard));
+            }
+        });
+
+        // Subscribe to global-shortcut emits. Each emit carries
+        // the binding name as a primitive `String` payload (per
+        // contracts/tauri-bridge.md §"Tauri events"); the
+        // listener routes it through the timer's start/stop
+        // surface. T217 today wires the listener; routing the
+        // shortcut into `engine::TimerState` is owned by the
+        // TimerView's effect (Phase 4a). The listener exists at
+        // this level so the registration is one-shot.
+        spawn_local(async move {
+            let listener = events::listen::<String>(GLOBAL_SHORTCUT, |_name| {
+                // Phase 4c routes `_name` ("start_stop", "reset",
+                // "skip") into the engine. Today we acknowledge
+                // the emit so the JS bridge sees a live listener
+                // and doesn't drop subsequent events.
+            })
+            .await;
+            if let Ok(guard) = listener {
+                let _ = Box::leak(Box::new(guard));
+            }
+        });
+    }
 
     view! {
         <nav class="sidebar">

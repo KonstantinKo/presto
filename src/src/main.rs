@@ -1,20 +1,21 @@
 // Binary entry point for the Leptos-driven `presto-web` frontend.
 //
-// Per spec 001-leptos-migration tasks.md, Phase 4 mounts the
-// component tree (Phase 4a: T189-T203 — five core screens; Phase 4b
-// adds settings/auth/update/team). The full router lands at T217 in
-// Phase 4c — until then, `main.rs` mounts the `TimerView` directly
-// so the e2e suite's first-paint selectors (`#timer-view`,
-// `#timer-minutes`, `#timer-seconds`) resolve under `trunk serve`.
+// Spec 001-leptos-migration §Phase 4b T217: mounts the top-level
+// `<App/>` router from `presto_web::app`. The router owns the
+// sidebar, the per-view dispatch, the shared
+// `RwSignal<Settings/AuthState/UpdateInfo>`, and the bridge-bus
+// startup hops (legacy localStorage migration, settings load,
+// `tauri://update-available` + `global-shortcut` event
+// subscriptions).
 //
 // The component tree lives in the package's lib crate at
 // `src/src/lib.rs`; the binary imports via the public crate path
-// `presto_web::components::*`. The lib root carries the Phase 1A
-// T024 rationale for the lib + bin split.
+// `presto_web::app::App`. The lib root carries the Phase 1A T024
+// rationale for the lib + bin split.
 
-use presto_web::components::timer::TimerView;
+use presto_web::app::App;
 
 fn main() {
     console_error_panic_hook::set_once();
-    leptos::mount::mount_to_body(TimerView);
+    leptos::mount::mount_to_body(App);
 }
