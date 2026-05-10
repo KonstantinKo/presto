@@ -61,6 +61,14 @@ pub struct TimerState {
     /// `elapsed = (now - timer_start_ms) / 1000` and applies
     /// `time_remaining = timer_duration_secs - elapsed`.
     timer_duration_secs: Option<i64>,
+    /// Cumulative focus-work in the current session, in seconds.
+    /// Mirrors `currentSessionElapsedTime` at
+    /// `pomodoro-timer.js:37` plus the per-tick integration at
+    /// line 745-749. Read by the persistence layer on completion
+    /// to record the real session duration (used by undo /
+    /// session-save flows). Reset by `reset()` and on a clean
+    /// session start; preserved across pause/resume.
+    current_session_elapsed_secs: u32,
 }
 
 impl TimerState {
@@ -79,6 +87,7 @@ impl TimerState {
             is_running: false,
             timer_start_ms: None,
             timer_duration_secs: None,
+            current_session_elapsed_secs: 0,
         }
     }
 
@@ -131,6 +140,15 @@ impl TimerState {
         self.is_running
     }
 
+    /// Cumulative wall-clock seconds spent in the current focus
+    /// session. Mirrors `currentSessionElapsedTime` at
+    /// `pomodoro-timer.js:37`. Reset by `reset()` and on a clean
+    /// session start; preserved across pause/resume.
+    #[must_use]
+    pub const fn current_session_elapsed_secs(&self) -> u32 {
+        self.current_session_elapsed_secs
+    }
+
     /// Begin (or resume) the countdown.
     ///
     /// Records the wall-clock anchor and the duration snapshot so
@@ -181,6 +199,22 @@ impl TimerState {
         let new_remaining = duration_secs - elapsed_secs;
         let old_remaining = self.time_remaining_secs;
         self.time_remaining_secs = new_remaining;
+
+        // Accumulator: integrate the wall-clock seconds drained by
+        // this tick into the focus-session counter (focus mode
+        // only; break-mode accumulation is meaningless for the
+        // persistence layer). Mirrors the
+        // `currentSessionElapsedTime += timeDiff` line at
+        // `pomodoro-timer.js:745-749`.
+        if self.current_mode == TimerMode::Focus {
+            let drained = old_remaining.saturating_sub(new_remaining);
+            if drained > 0 {
+                let drained_u32 = u32::try_from(drained).unwrap_or(u32::MAX);
+                self.current_session_elapsed_secs = self
+                    .current_session_elapsed_secs
+                    .saturating_add(drained_u32);
+            }
+        }
 
         // Zero-cross from positive to non-positive triggers the
         // mode's completion transition. Mirrors the
