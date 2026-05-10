@@ -309,8 +309,9 @@ pub async fn save_tag(tag: Tag) -> Result<(), BridgeError> {
 #[cfg(all(test, target_arch = "wasm32"))]
 mod tests {
     use super::{
-        get_stats_history, load_manual_sessions, load_session_data, load_tags, load_tasks,
-        save_daily_stats, save_manual_sessions, save_session_data, save_tag, save_tasks,
+        delete_tag, get_stats_history, load_manual_sessions, load_session_data, load_tags,
+        load_tasks, save_daily_stats, save_manual_sessions, save_session_data, save_tag,
+        save_tasks,
     };
     use crate::bridge::error::BridgeError;
     use crate::bridge::session_type::SessionType;
@@ -586,5 +587,27 @@ mod tests {
             save_tag(t).await
         }
         let _ = assert_signature(sample_tag()).await;
+    }
+
+    #[wasm_bindgen_test]
+    async fn delete_tag_round_trip_short_circuits_when_bridge_absent() {
+        let result = delete_tag("tag-focus".to_string()).await;
+        match result {
+            Err(BridgeError::BridgeUnavailable) => {}
+            other => panic!("expected BridgeUnavailable, got {other:?}"),
+        }
+    }
+
+    /// Compile-time signature pin per contracts/tauri-bridge.md row 11:
+    /// `delete_tag(tag_id: String) -> Result<(), BridgeError>`.
+    /// The arg is a bare `String` (not a `Tag`) — deletion lookup is by
+    /// id, and the Tauri-side handler does an in-place filter rather
+    /// than requiring the full record.
+    #[wasm_bindgen_test]
+    async fn delete_tag_round_trip_signature_pinned() {
+        async fn assert_signature(id: String) -> Result<(), BridgeError> {
+            delete_tag(id).await
+        }
+        let _ = assert_signature("tag-focus".to_string()).await;
     }
 }
