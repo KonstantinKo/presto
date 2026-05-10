@@ -82,6 +82,26 @@ fn mock_session(email: &str) -> AuthSession {
 
 /// Auth modal — sidebar avatar + dropdown + sign-in overlay.
 ///
+/// Renders BOTH the avatar+dropdown (intended to live inside the
+/// sidebar) AND the full-screen sign-in overlay. Callers should
+/// mount this component AT THE APP ROOT level — not inside the
+/// `<aside class="sidebar">` — because the sidebar carries
+/// `backdrop-filter: blur(20px)` which establishes a containing
+/// block for `position: fixed` descendants. Mounting the auth
+/// modal inside the sidebar makes the overlay's `width: 100vw` /
+/// `top: 0` resolve relative to the 80×100vh sidebar instead of
+/// the viewport, which is what cropped the auth overlay off-
+/// screen-left in the e2e harness (Phase 4 wiring regression
+/// surfaced by `auth.spec.js:26` "element is outside of the
+/// viewport").
+///
+/// The avatar surface uses `position: fixed` to pin itself to the
+/// bottom-left of the viewport (matching the JS-era surface where
+/// the avatar was the bottom item of the sidebar). With the
+/// AuthModal mounted at the app root the avatar's positioning is
+/// independent of the sidebar's backdrop-filter, so the overlay
+/// resolves cleanly against the viewport.
+///
 /// Props:
 /// - `auth_state`: the shared `RwSignal<AuthState>`. The component
 ///   reads the variant to drive sign-in / sign-out visibility and
@@ -143,47 +163,53 @@ pub fn AuthModal(auth_state: RwSignal<AuthState>) -> impl IntoView {
     };
 
     view! {
-        // Sidebar avatar — always rendered. Clicking the button
-        // toggles the dropdown; the dropdown surface (with
-        // sign-in / sign-out buttons + the user name) is gated by
-        // `dropdown_open`.
-        <div class="user-avatar-container" id="user-avatar-container">
-            <button class="user-avatar-btn" id="user-avatar-btn" on:click=on_avatar_click>
-                <div id="user-avatar-fallback" class="avatar-fallback">
-                    <i id="user-guest-icon" class="ri-user-line"></i>
-                </div>
-            </button>
-            <div
-                class="user-dropdown"
-                id="user-dropdown"
-                style=move || {
-                    if dropdown_open.get() { "" } else { "display: none" }
-                }
-            >
-                <div class="user-dropdown-header" id="user-dropdown-header">
-                    <span class="user-name" id="user-name">{move || display_name.get()}</span>
-                </div>
-                <div class="user-dropdown-actions">
-                    <button
-                        class="user-dropdown-action"
-                        id="user-sign-in"
-                        style=move || {
-                            if is_authenticated.get() { "display: none" } else { "" }
-                        }
-                        on:click=on_sign_in_click
-                    >
-                        "Sign In"
-                    </button>
-                    <button
-                        class="user-dropdown-action"
-                        id="user-sign-out"
-                        style=move || {
-                            if is_authenticated.get() { "" } else { "display: none" }
-                        }
-                        on:click=on_sign_out_click
-                    >
-                        "Sign Out"
-                    </button>
+        // Avatar surface — `auth-avatar-host` is a position:fixed
+        // wrapper that pins the avatar+dropdown to the bottom-left
+        // of the viewport (matching the visual location of the
+        // bottom of the sidebar). Pinning at the document root
+        // (rather than nesting inside `.sidebar`) keeps the auth
+        // overlay's `position: fixed` resolution independent of the
+        // sidebar's `backdrop-filter` containing block — see the
+        // component-level rustdoc for the regression history.
+        <div class="auth-avatar-host">
+            <div class="user-avatar-container" id="user-avatar-container">
+                <button class="user-avatar-btn" id="user-avatar-btn" on:click=on_avatar_click>
+                    <div id="user-avatar-fallback" class="avatar-fallback">
+                        <i id="user-guest-icon" class="ri-user-line"></i>
+                    </div>
+                </button>
+                <div
+                    class="user-dropdown"
+                    id="user-dropdown"
+                    style=move || {
+                        if dropdown_open.get() { "" } else { "display: none" }
+                    }
+                >
+                    <div class="user-dropdown-header" id="user-dropdown-header">
+                        <span class="user-name" id="user-name">{move || display_name.get()}</span>
+                    </div>
+                    <div class="user-dropdown-actions">
+                        <button
+                            class="user-dropdown-action"
+                            id="user-sign-in"
+                            style=move || {
+                                if is_authenticated.get() { "display: none" } else { "" }
+                            }
+                            on:click=on_sign_in_click
+                        >
+                            "Sign In"
+                        </button>
+                        <button
+                            class="user-dropdown-action"
+                            id="user-sign-out"
+                            style=move || {
+                                if is_authenticated.get() { "" } else { "display: none" }
+                            }
+                            on:click=on_sign_out_click
+                        >
+                            "Sign Out"
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>

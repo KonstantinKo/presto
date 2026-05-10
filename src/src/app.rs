@@ -223,7 +223,6 @@ pub fn App() -> impl IntoView {
                 </button>
             </div>
             <div class="sidebar-bottom">
-                <AuthModal auth_state=auth_state/>
                 <button
                     class="sidebar-icon-large"
                     class:active=move || is_settings.get()
@@ -236,6 +235,17 @@ pub fn App() -> impl IntoView {
                 </button>
             </div>
         </nav>
+
+        // AuthModal is mounted at the App root (outside `.sidebar`)
+        // because the sidebar carries `backdrop-filter`, which
+        // establishes a containing block for `position: fixed`
+        // descendants and would otherwise crop the auth overlay's
+        // `width: 100vw` to the 80px sidebar column. The component
+        // owns its own `position: fixed` wrapper for the avatar so
+        // it still visually sits inside the sidebar bottom-left.
+        // See `auth_modal.rs` rustdoc for the regression history
+        // (auth.spec.js:26 "element is outside of the viewport").
+        <AuthModal auth_state=auth_state/>
 
         <main class="main-content">
             // Each view container carries `.hidden` when inactive —

@@ -32,6 +32,7 @@
 /* Interactive elements */
 @import 'modals.css';
 @import 'notifications.css';
+@import 'auth.css';
 
 /* Effects and animations */
 @import 'animations.css';

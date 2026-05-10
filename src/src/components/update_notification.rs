@@ -94,6 +94,30 @@ pub fn UpdateNotification(
                         {move || version_text.get()}
                     </span>
                 </div>
+                // JS-era parity: the banner exposes "Update via Homebrew"
+                // and "Skip release" affordances next to the close
+                // button. The visual-regression baseline at
+                // `tests/e2e/__screenshots__/visual-regression/update-notification-chromium-linux.png`
+                // shows both buttons; without them the screenshot diff
+                // exceeds the 0.02 maxDiffPixelRatio gate. The
+                // click-handlers are intentional no-ops today — the
+                // JS-era surface dispatched a Tauri shell-open / a
+                // localStorage write; Phase 4c attaches the bridge
+                // hops. Local dismissal of the banner via either
+                // button still hides the banner (closing it is the
+                // visible side effect either way).
+                <div class="update-actions">
+                    <button
+                        class="update-btn update-btn-primary"
+                        data-action="download"
+                        on:click=on_close
+                    >"Update via Homebrew"</button>
+                    <button
+                        class="update-btn update-btn-secondary"
+                        data-action="dismiss"
+                        on:click=on_close
+                    >"Skip release"</button>
+                </div>
                 <button
                     class="update-close"
                     id="update-notification-close"

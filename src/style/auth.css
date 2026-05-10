@@ -1,3 +1,21 @@
+/*
+ * `.auth-avatar-host` pins the user-avatar surface to the bottom-
+ * left of the viewport, matching the visual location of the
+ * sidebar's bottom-most icon. The host is mounted at the App
+ * root rather than inside `.sidebar` so the auth overlay's
+ * `position: fixed` resolves against the viewport (the sidebar
+ * carries `backdrop-filter`, which would otherwise establish a
+ * containing block; see `auth_modal.rs` rustdoc for the full
+ * regression context). The 16px bottom inset matches the JS-era
+ * sidebar's 1.5rem bottom padding.
+ */
+.auth-avatar-host {
+  position: fixed;
+  left: 16px;
+  bottom: 90px;
+  z-index: 1100;
+}
+
 .auth-overlay {
   position: fixed;
   top: 0;

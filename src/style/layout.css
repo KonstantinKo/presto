@@ -58,6 +58,28 @@ body.longBreak {
   box-sizing: border-box;
 }
 
+/*
+ * The Leptos App router (Phase 4b T216) wraps every view in a
+ * `<main class="main-content">`. The JS-era surface used `.container`
+ * directly on each top-level wrapper — the Leptos port introduces
+ * the `.main-content` host so the App can group every view-host
+ * under a single semantic landmark. Mirroring the `.container`
+ * sidebar-clearance margin keeps view content out from under the
+ * 80px-wide fixed sidebar (otherwise calendar nav buttons, settings
+ * sidebar, and the auth modal trigger overlap the icons strip).
+ */
+.main-content {
+  margin-left: 80px;
+  min-height: 100vh;
+  box-sizing: border-box;
+}
+
+@media (max-width: 480px) {
+  .main-content {
+    margin-left: 0;
+  }
+}
+
 .view-container {
   display: block;
   animation: fadeIn 0.3s ease;

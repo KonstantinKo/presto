@@ -258,3 +258,151 @@
   background-color: rgba(158, 158, 158, 0.15);
   color: #BDBDBD;
 }
+
+/*
+ * Update-available banner. Mirrors the JS-era styles that
+ * `src/components/update-notification.js` injected at runtime via
+ * `injectStyles()` (deleted in Phase 6 T238). The Leptos port mounts
+ * the banner statically in `app.rs`, so the styles live here in the
+ * shipped stylesheet rather than being injected on demand.
+ *
+ * The off-screen baseline (`translateY(-100%)`) keeps the banner out
+ * of the click path until `UpdateInfo::Available` triggers the
+ * `.visible` modifier. Without this rule the always-mounted banner
+ * box layouts as a normal block element and intercepts every click in
+ * the upper-left of the viewport — that's the regression that broke
+ * auth, calendar-nav, settings-*, tags, and update-notification
+ * specs at the click step.
+ *
+ * The `desktop` class is reserved for the Tauri webview path (the
+ * JS-era code added it when `window.__TAURI__` was present); we keep
+ * the rule for parity with the visual-regression baseline (which
+ * shows the banner clearing the 80px sidebar). The Leptos port adds
+ * `desktop` unconditionally — it only ever runs inside Tauri or the
+ * Trunk dev server bound to the same DOM, so the inset is desired in
+ * both branches.
+ */
+.update-notification-container {
+  position: fixed;
+  top: 0;
+  left: 80px;
+  right: 0;
+  z-index: 10000;
+  transform: translateY(-100%);
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  /* Even in the off-screen state the box reserves layout space for
+     an instant, so explicitly drop pointer-events on the hidden
+     branch — guards against any sub-pixel / animation race that
+     would otherwise re-introduce the click intercept. */
+  pointer-events: none;
+}
+
+.update-notification-container.visible {
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+.update-notification {
+  background: #2c3e50;
+  color: white;
+  padding: 8px 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 14px;
+  line-height: 1.4;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.update-content {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+  min-width: 0;
+}
+
+.update-icon {
+  color: white;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+}
+
+.update-message {
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.update-version {
+  font-size: 13px;
+  opacity: 0.9;
+  font-family: 'SF Mono', 'Monaco', 'Cascadia Code', monospace;
+  margin-left: 8px;
+}
+
+.update-actions {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.update-btn {
+  padding: 4px 12px;
+  border-radius: 4px;
+  font-size: 13px;
+  font-weight: 500;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.update-btn-primary {
+  background: rgba(255, 255, 255, 0.2);
+  color: white;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.update-btn-primary:hover {
+  background: rgba(255, 255, 255, 0.3);
+  border-color: rgba(255, 255, 255, 0.4);
+}
+
+.update-btn-secondary {
+  background: transparent;
+  color: white;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.update-btn-secondary:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.4);
+}
+
+.update-close {
+  background: transparent;
+  border: none;
+  padding: 4px;
+  cursor: pointer;
+  color: white;
+  opacity: 0.8;
+  transition: opacity 0.2s ease;
+  border-radius: 3px;
+  margin-left: 8px;
+  flex-shrink: 0;
+  font-size: 18px;
+  line-height: 1;
+}
+
+.update-close:hover {
+  opacity: 1;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+@media (max-width: 768px) {
+  .update-notification-container {
+    left: 0;
+  }
+}
