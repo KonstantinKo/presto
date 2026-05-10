@@ -421,12 +421,15 @@ pub async fn reset_all_data() -> Result<(), BridgeError> {
 mod tests {
     use super::{
         add_session_tag, delete_tag, get_stats_history, load_manual_sessions, load_session_data,
-        load_settings, load_tags, load_tasks, reset_all_data, save_daily_stats,
-        save_manual_sessions, save_session_data, save_settings, save_tag, save_tasks,
+        load_settings, load_tags, load_tasks, register_global_shortcuts, reset_all_data,
+        save_daily_stats, save_manual_sessions, save_session_data, save_settings, save_tag,
+        save_tasks,
     };
     use crate::bridge::error::BridgeError;
     use crate::bridge::session_type::SessionType;
-    use crate::bridge::types::{ManualSession, Session, SessionTag, Settings, Tag, Task};
+    use crate::bridge::types::{
+        ManualSession, Session, SessionTag, Settings, ShortcutSettings, Tag, Task,
+    };
     use wasm_bindgen_test::wasm_bindgen_test;
 
     fn sample_session() -> Session {
@@ -825,5 +828,33 @@ mod tests {
             reset_all_data().await
         }
         let _ = assert_signature().await;
+    }
+
+    fn sample_shortcuts() -> ShortcutSettings {
+        ShortcutSettings::default()
+    }
+
+    #[wasm_bindgen_test]
+    async fn register_global_shortcuts_round_trip_short_circuits_when_bridge_absent() {
+        let result = register_global_shortcuts(sample_shortcuts()).await;
+        match result {
+            Err(BridgeError::BridgeUnavailable) => {}
+            other => panic!("expected BridgeUnavailable, got {other:?}"),
+        }
+    }
+
+    /// Compile-time signature pin per contracts/tauri-bridge.md row 16:
+    /// `register_global_shortcuts(shortcuts: ShortcutSettings) -> Result<(), BridgeError>`.
+    /// `ShortcutSettings` is the same struct embedded in `Settings`
+    /// (defined in `types.rs`) — the wrapper does not introduce a
+    /// shadow type. The deleted bulk `unregister_global_shortcuts`
+    /// command (Principle VII) is replaced JS-side by re-calling this
+    /// command with `None` bindings, hence no separate wrapper.
+    #[wasm_bindgen_test]
+    async fn register_global_shortcuts_round_trip_signature_pinned() {
+        async fn assert_signature(s: ShortcutSettings) -> Result<(), BridgeError> {
+            register_global_shortcuts(s).await
+        }
+        let _ = assert_signature(sample_shortcuts()).await;
     }
 }
