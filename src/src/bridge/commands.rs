@@ -493,6 +493,30 @@ pub async fn stop_activity_monitoring() -> Result<(), BridgeError> {
     invoke_serde("stop_activity_monitoring", &serde_json::Value::Null).await
 }
 
+/// Reconfigure the running `ActivityMonitor`'s idle threshold without
+/// tearing it down. Tauri-side handler:
+/// `update_activity_timeout(timeout_seconds: u64) -> Result<(), BridgeError>`
+/// at `src-tauri/src/lib.rs:450`.
+///
+/// `timeout_seconds: u64` matches the Tauri-side handler exactly.
+/// Distinct from `stop_activity_monitoring` in that the Tauri-side
+/// handler returns `BridgeError::Internal { msg: "Activity monitor not
+/// initialized" }` if no monitor is currently installed — callers must
+/// install one via `start_activity_monitoring` first, or accept that
+/// variant.
+///
+/// # Errors
+/// Returns `BridgeError::BridgeUnavailable` when the Tauri JS bridge is
+/// not present. Returns `BridgeError::Internal` if no monitor is
+/// installed (Tauri-side handler condition).
+pub async fn update_activity_timeout(timeout_seconds: u64) -> Result<(), BridgeError> {
+    #[derive(Serialize)]
+    struct Args {
+        timeout_seconds: u64,
+    }
+    invoke_serde("update_activity_timeout", &Args { timeout_seconds }).await
+}
+
 // Tests gated on `wasm32` because every wrapper-test is a
 // `#[wasm_bindgen_test]` — running them via `cargo test` on the host
 // target would produce dead-code lint failures (the host-side
