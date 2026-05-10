@@ -878,7 +878,8 @@ pub fn run() {
                 set_status_bar_visibility,
                 track_event,
                 supabase_sign_in_with_password,
-                supabase_sign_out
+                supabase_sign_out,
+                supabase_get_session
             ])
             .setup(|app| {
                 let initial_settings = load_settings_sync(app.handle());
@@ -1314,6 +1315,22 @@ async fn supabase_sign_out(refresh_token: String, app: AppHandle) -> Result<(), 
         msg: format!("Failed to get app data directory: {e}"),
     })?;
     auth::clear_session(&app_data_dir)
+}
+
+// `supabase_get_session` — Phase 1D T093.
+//
+// Reads the persisted Supabase session from the app-data directory and
+// returns `Some(AuthSession)` when a session is present, `None` for the
+// cold-start (no-file) case. No-arg by design: the JS-era code path
+// invoked `supabase.auth.getSession()` which read from localStorage; we
+// move the read Rust-side per research.md §6 Decision §6 (single
+// source of truth lives below the bridge).
+#[tauri::command]
+async fn supabase_get_session(app: AppHandle) -> Result<Option<auth::AuthSession>, BridgeError> {
+    let app_data_dir = app.path().app_data_dir().map_err(|e| BridgeError::Internal {
+        msg: format!("Failed to get app data directory: {e}"),
+    })?;
+    auth::read_session(&app_data_dir)
 }
 
 #[tauri::command]

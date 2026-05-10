@@ -836,6 +836,31 @@ pub async fn supabase_sign_out(refresh_token: String) -> Result<(), BridgeError>
     invoke_serde("supabase_sign_out", &Args { refresh_token }).await
 }
 
+/// Read the currently persisted Supabase session from the app-data dir.
+///
+/// Tauri-side handler: `supabase_get_session() -> Result<Option<AuthSession>,
+/// BridgeError>` at `src-tauri/src/lib.rs`. Replaces the JS
+/// `supabase.auth.getSession()` localStorage read.
+///
+/// Returns `Ok(None)` for the cold-start "no signed-in user" case
+/// (matches the `null` default in tauriMock.js) — the consumer
+/// (`managers/auth.rs`) branches on the `Option` rather than
+/// surfacing the empty-state through `BridgeError::NotFound`. The
+/// closed-domain shape lets the consumer pattern-match cleanly:
+/// `match supabase_get_session().await { Ok(Some(s)) => ..., Ok(None)
+/// => ..., Err(e) => ... }`.
+///
+/// # Errors
+/// Returns `BridgeError::BridgeUnavailable` when the Tauri JS bridge is
+/// not present. Returns `BridgeError::Internal` for filesystem errors
+/// reading the persisted file. Returns `BridgeError::SerdeRoundtrip`
+/// if the file exists but cannot be deserialised into `AuthSession`
+/// (admin-side fix: remove the file; the wrapper does not silently
+/// drop a corrupted record).
+pub async fn supabase_get_session() -> Result<Option<AuthSession>, BridgeError> {
+    invoke_serde("supabase_get_session", &serde_json::Value::Null).await
+}
+
 // Tests gated on `wasm32` because every wrapper-test is a
 // `#[wasm_bindgen_test]` — running them via `cargo test` on the host
 // target would produce dead-code lint failures (the host-side
