@@ -110,6 +110,24 @@ impl SessionManager {
     pub async fn save_manual(&self) -> Result<(), BridgeError> {
         commands::save_manual_sessions(self.save_payload()).await
     }
+
+    /// Replace the matching manual-session entry by `id`. Pure
+    /// mutation — update-of-unknown-id is a no-op (mirrors the
+    /// JS-side `findIndex(...) !== -1` guard at
+    /// `src/managers/session-manager.js:357-364`). Distinct from
+    /// `create_manual`: the engine's accumulators are NOT pumped on
+    /// update (the JS-era flow doesn't re-pump them either; only
+    /// the persisted record changes). Spec
+    /// 001-leptos-migration §Phase 3b T170.
+    pub fn update_manual(&mut self, updated: ManualSession) {
+        if let Some(slot) = self
+            .manual_sessions
+            .iter_mut()
+            .find(|s| s.id == updated.id)
+        {
+            *slot = updated;
+        }
+    }
 }
 
 #[cfg(test)]
@@ -225,7 +243,7 @@ mod tests {
         // Replace m-1 with a longer-duration entry.
         let mut updated = sample_manual("m-1", 40, "Sat May 10 2026");
         updated.notes = Some("revised".to_string());
-        mgr.update_manual(updated.clone());
+        mgr.update_manual(updated);
 
         assert_eq!(
             mgr.manual_sessions().len(),
