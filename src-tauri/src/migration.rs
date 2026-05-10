@@ -619,10 +619,11 @@ mod tests {
         assert!(!dir.path().join("session.json").exists());
     }
 
-    /// T111 named-test (per F4 idempotency design). Two-call no-op:
-    /// after the first import writes the sentinel + session, the
-    /// second invocation must not re-write the session.json (even
-    /// with a different active_session payload).
+    /// T111 named-test (per F4 idempotency design).
+    ///
+    /// Two-call no-op: after the first import writes the sentinel +
+    /// session, the second invocation must not re-write the
+    /// `session.json` (even with a different `active_session` payload).
     #[test]
     fn import_user_state_is_idempotent_across_two_calls() {
         let dir = tempdir().unwrap();
@@ -705,9 +706,11 @@ mod tests {
     }
 
     /// T113 named-test (per F4 idempotency design + research.md §6
-    /// step 4). Two-call no-op: the second invocation must not
-    /// overwrite the first's persisted session, even with a different
-    /// payload. Pins the consumer-visible "first import wins" rule.
+    /// step 4).
+    ///
+    /// Two-call no-op: the second invocation must not overwrite the
+    /// first's persisted session, even with a different payload.
+    /// Pins the consumer-visible "first import wins" rule.
     #[test]
     fn import_supabase_session_is_idempotent_across_two_calls() {
         let dir = tempdir().unwrap();

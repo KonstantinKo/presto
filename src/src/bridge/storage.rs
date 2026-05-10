@@ -321,11 +321,45 @@ pub async fn import_legacy_supabase_session_from_storage() -> Result<(), BridgeE
 }
 
 // ── Single entry point ──────────────────────────────────────────────────────
-//
-// T115 (GREEN) lands the orchestration. T101-T113 land the per-domain
-// readers above. The single entry point is added at T115 so the test
-// at T114 can pin the idempotent-second-launch behaviour against a
-// real implementation.
+
+/// T115 GREEN — Single Leptos-side entry point for the one-shot
+/// localStorage migration.
+///
+/// Per data-model.md §"Legacy localStorage migration": runs once on
+/// first post-cutover launch from `app.rs`, dispatches to each
+/// per-domain reader. Idempotent: subsequent invocations are safe
+/// (each reader's "absent localStorage = no-op" branch absorbs the
+/// second-launch case, and each Tauri-side handler's "authoritative
+/// file already exists = no-op" branch absorbs the case where
+/// localStorage was cleared but the file is already populated).
+///
+/// Order is intentional: settings + user-state first (they carry the
+/// flags that gate later UI behaviour), then the bulk data
+/// (history / tasks / tags / manual sessions), then the auth
+/// session last (so a refresh-token failure on auth import doesn't
+/// strand the rest of the migration).
+///
+/// Errors short-circuit the remaining migration: if a reader fails
+/// (e.g., bridge unavailable but a localStorage entry was present),
+/// the entry point returns the error so the caller can decide
+/// whether to retry on next launch. Per the F4 design point, a
+/// partial-failure preserves the un-migrated localStorage keys (the
+/// reader only clears keys after the bridge call succeeds).
+///
+/// # Errors
+/// Returns the first non-`Ok` outcome from any per-domain reader;
+/// the rest are skipped on that launch and re-attempted on next
+/// launch via the same entry point.
+pub async fn migrate_legacy_localstorage() -> Result<(), BridgeError> {
+    import_legacy_settings_from_storage().await?;
+    import_legacy_user_state_from_storage().await?;
+    import_legacy_history_from_storage().await?;
+    import_legacy_tasks_from_storage().await?;
+    import_legacy_tags_from_storage().await?;
+    import_legacy_manual_sessions_from_storage().await?;
+    import_legacy_supabase_session_from_storage().await?;
+    Ok(())
+}
 
 // Tests gated on `wasm32` because every assertion is a
 // `#[wasm_bindgen_test]` — running them via `cargo test` on the host
