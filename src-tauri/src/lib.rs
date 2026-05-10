@@ -397,7 +397,7 @@ const fn default_max_session_time() -> u32 {
 }
 
 const fn default_analytics_enabled() -> bool {
-    false
+    true
 }
 
 /// Loads settings synchronously from disk, falling back to defaults on any error.
