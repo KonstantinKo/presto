@@ -53,6 +53,10 @@ qa:
     # baseline PNGs may change in a single PR. >2 escalates to a
     # constitution-amendment-or-spec-revision discussion.
     - bash scripts/check-baseline-cap.sh
+    # Lockfile-drift gate (T248, Principle IX): manifest-without-lockfile
+    # changes between origin/main and HEAD fail-closed. Mirrors the
+    # pre-commit hook under .githooks/pre-commit.
+    - LOCKFILE_BASE_REF=origin/main bash scripts/check-lockfile-drift.sh
 
   format:
     - command: cargo fmt --all -- --check
