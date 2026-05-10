@@ -111,11 +111,15 @@ pub fn App() -> impl IntoView {
         nav.update(|n| n.select_settings_tab(tab));
     });
 
-    // Bridge availability — used by both startup hops (skip
-    // load_settings + skip listen subscriptions) and the
-    // degraded-mode UI (T218 will visualise this; today we use it
-    // to skip bridge calls when the JS surface isn't present).
+    // Bridge availability — drives both the startup hops (only
+    // fired when the bridge is reachable) and the T218
+    // degraded-mode banner (rendered when `Absent`). Probing
+    // `bridge_available()` once on mount mirrors the FR-009 short-
+    // circuit pattern at every wrapper site: cheap (one Reflect
+    // lookup), and the result is stable for the lifetime of the
+    // Leptos runtime within a single tab session.
     let bridge_state = bridge_available();
+    let bridge_absent = matches!(bridge_state, BridgeAvailable::Absent);
 
     // Startup hops: legacy migration + settings load. Skipped when
     // the bridge is absent (Trunk dev server / e2e mock harness)
@@ -281,5 +285,21 @@ pub fn App() -> impl IntoView {
         // `update-notification.spec.js:32-34` asserts the banner's
         // dismissed flag survives Calendar → Timer round-trips).
         <UpdateNotification update_info=update_info/>
+
+        // T218 degraded-mode banner — visible only when the Tauri
+        // JS bridge is absent (Trunk dev server / browser-only
+        // load). The banner pins Phase 1G's BridgeAvailable
+        // short-circuit at the visual level: persistence is a
+        // no-op, but the UI still renders and the in-memory state
+        // remains usable for development. The banner uses an
+        // `id`-less surface so the e2e suite (which always runs
+        // against the bridge mock) doesn't trip on it; `cargo
+        // tauri dev` hides it because the bridge is reachable.
+        {bridge_absent.then(|| view! {
+            <div class="degraded-mode-banner" role="status">
+                <strong>"Degraded mode."</strong>
+                " Tauri bridge unavailable — settings + sessions are in-memory only."
+            </div>
+        })}
     }
 }
