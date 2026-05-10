@@ -193,8 +193,32 @@ struct Task {
     completed_at: Option<String>,
 }
 
+/// Status-bar visibility mode.
+///
+/// Replaces the legacy `hide_status_bar: bool` shape with a typed
+/// enum so future "compact" or "hidden" modes don't fork the
+/// on-disk encoding (data-model.md §"Settings legacy migration";
+/// F1/M3 lockstep migration with the Leptos-side mirror in
+/// `presto-web::bridge::types::StatusBarDisplay`).
+///
+/// Wire shape: kebab-case strings (`"default"`, `"icon-only"`).
+///
+/// Spec 001-leptos-migration §Phase 3a T150.
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Default)]
+#[serde(rename_all = "kebab-case")]
+enum StatusBarDisplay {
+    #[default]
+    Default,
+    IconOnly,
+}
+
 /// User-facing settings; the bool fields are independent toggles, splitting
 /// them into nested structs would hurt config readability.
+///
+/// **Phase 3a F1/M3 migration**: `hide_status_bar: bool` is replaced by
+/// `status_bar_display: StatusBarDisplay`. Legacy 0.4.x settings JSONs
+/// that still carry `hide_status_bar` are projected into the new shape
+/// by the custom deserializer in T152; T150 lands the field default-only.
 #[allow(clippy::struct_excessive_bools)]
 #[derive(Debug, Serialize, Deserialize, Clone)]
 struct AppSettings {
@@ -208,8 +232,11 @@ struct AppSettings {
     analytics_enabled: bool,
     #[serde(default)]
     hide_icon_on_close: bool,
+    /// Phase 3a T150 default-only. The legacy fallback deserializer
+    /// (which projects `hide_status_bar: bool` when the new field is
+    /// missing) is added in T152.
     #[serde(default)]
-    hide_status_bar: bool,
+    status_bar_display: StatusBarDisplay,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -306,7 +333,7 @@ impl Default for AppSettings {
             autostart: false,
             analytics_enabled: true,
             hide_icon_on_close: false,
-            hide_status_bar: false,
+            status_bar_display: StatusBarDisplay::Default,
         }
     }
 }
@@ -1584,7 +1611,7 @@ fn set_system_ui_mode_safe(visible: bool) -> Result<(), String> {
 mod tests {
     use super::{
         default_analytics_enabled, default_weekly_goal, AppSettings, ManualSession,
-        PomodoroSession, SessionTag, Tag, Task,
+        PomodoroSession, SessionTag, StatusBarDisplay, Tag, Task,
     };
 
     #[test]
@@ -1621,7 +1648,14 @@ mod tests {
         let defaults = AppSettings::default();
         assert_eq!(s.analytics_enabled, defaults.analytics_enabled);
         assert_eq!(s.hide_icon_on_close, defaults.hide_icon_on_close);
-        assert_eq!(s.hide_status_bar, defaults.hide_status_bar);
+        // Phase 3a T150: when neither legacy `hide_status_bar` nor new
+        // `status_bar_display` is present, the field defaults to
+        // `StatusBarDisplay::Default`. The legacy fallback path
+        // (`hide_status_bar: true → IconOnly`) is exercised by T151's
+        // `migrates_hide_status_bar_to_status_bar_display` once T152
+        // lands the custom deserializer.
+        assert_eq!(s.status_bar_display, defaults.status_bar_display);
+        assert_eq!(s.status_bar_display, StatusBarDisplay::Default);
         assert_eq!(
             s.notifications.auto_start_focus,
             defaults.notifications.auto_start_focus
@@ -1648,7 +1682,7 @@ mod tests {
         assert!(s.analytics_enabled);
         assert!(!s.autostart);
         assert!(!s.hide_icon_on_close);
-        assert!(!s.hide_status_bar);
+        assert_eq!(s.status_bar_display, StatusBarDisplay::Default);
         assert!(s.notifications.desktop_notifications);
         assert!(s.notifications.sound_notifications);
         assert!(s.notifications.auto_start_timer);

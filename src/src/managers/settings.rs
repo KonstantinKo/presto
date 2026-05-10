@@ -67,6 +67,30 @@ impl SettingsManager {
         &self.state
     }
 
+    /// Ingest a raw on-disk settings JSON document. Mirrors the
+    /// JS-side `mergeWithDefaults` flow at
+    /// `src/managers/settings-manager.js:133-147` plus the
+    /// `hide_status_bar → status_bar_display` migration step at
+    /// lines 109-119: the typed deserialize on
+    /// `bridge::types::Settings` carries the F1/M3 migration via
+    /// `#[serde(default)]` markers (T150) and the custom legacy
+    /// fallback (T152), so the resulting `Settings` is always in the
+    /// post-cutover shape regardless of which 0.4.x revision wrote
+    /// the file.
+    ///
+    /// Used for tests + (via T156) the future "load → fill defaults
+    /// → write back" idempotent migration path.
+    ///
+    /// # Errors
+    /// Returns `serde_json::Error` if the input is not valid JSON or
+    /// is missing required fields that have no `#[serde(default)]`
+    /// (such as `shortcuts`, `timer`, `notifications`, `autostart` —
+    /// every released 0.4.x build emits these).
+    pub fn ingest_raw_json(raw: &str) -> Result<Self, serde_json::Error> {
+        let state: Settings = serde_json::from_str(raw)?;
+        Ok(Self { state })
+    }
+
     /// Async cold-start path: ask the bridge for the persisted settings,
     /// fall back to `Settings::default()` on any error (cold start, bridge
     /// unavailable, corrupted file). Mirrors the JS-side

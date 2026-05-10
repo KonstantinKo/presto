@@ -215,22 +215,44 @@ pub struct AdvancedSettings {
     pub debug_mode: bool,
 }
 
-/// Full application settings record. Mirrors `AppSettings` at
-/// `src-tauri/src/lib.rs:196-210`.
+/// Status-bar visibility mode.
 ///
-/// **Wire shape note**: this matches the Tauri-side `AppSettings`
-/// exactly today, including `hide_status_bar: bool`. Spec
-/// data-model.md §`Settings / AppSettings` describes a planned
-/// migration to a typed `status_bar_display: StatusBarDisplay` enum
-/// with a custom deserializer that falls back to `hide_status_bar`
-/// for legacy JSONs; that migration is out of scope for Phase 1C and
-/// will be done in a later phase that touches both crates in lockstep.
-/// Today's wrapper round-trips the existing shape (FR-005 — no
-/// on-disk shape change in this phase).
+/// Replaces the legacy `hide_status_bar: bool` shape with a typed
+/// enum so future "compact" or "hidden" modes don't fork the on-disk
+/// encoding (data-model.md §"Settings legacy migration"; F1/M3
+/// lockstep migration).
+///
+/// Wire shape: kebab-case strings (`"default"`, `"icon-only"`),
+/// matching the JS-era on-disk values written by
+/// `src/managers/settings-manager.js` after its `hide_status_bar →
+/// status_bar_display` migration step.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "kebab-case")]
+pub enum StatusBarDisplay {
+    /// Full status bar (timer text + icon).
+    #[default]
+    Default,
+    /// Icon-only status bar — corresponds to the legacy
+    /// `hide_status_bar: true` setting.
+    IconOnly,
+}
+
+/// Full application settings record. Mirrors `AppSettings` at
+/// `src-tauri/src/lib.rs:200-213`.
+///
+/// **Wire shape (post-Phase-3a)**: the legacy `hide_status_bar: bool`
+/// field is replaced by `status_bar_display: StatusBarDisplay` per the
+/// F1/M3 lockstep migration (Phase 3a T150 — same commit pair tightens
+/// the Tauri-side `AppSettings`). Legacy 0.4.x settings JSONs that
+/// still carry `hide_status_bar` are read by the custom deserializer
+/// `deserialize_status_bar_display_with_legacy_fallback` (Phase 3a
+/// T152) and re-emitted with only the new shape on next save.
+/// Phase 3a T150 lands the basic field default (no legacy fallback
+/// yet); the legacy fallback follows in T152.
 ///
 /// `clippy::struct_excessive_bools` is allowed here for the same
 /// reason as on `NotificationSettings` and on the Tauri-side mirror
-/// at `src-tauri/src/lib.rs:195`: each bool is an independent
+/// at `src-tauri/src/lib.rs:198`: each bool is an independent
 /// settings toggle exposed in the UI; restructuring would not match
 /// either the on-disk JSON shape or the settings-page layout.
 #[allow(clippy::struct_excessive_bools)]
@@ -246,8 +268,11 @@ pub struct Settings {
     pub analytics_enabled: bool,
     #[serde(default)]
     pub hide_icon_on_close: bool,
+    /// Phase 3a T150 default-only. The legacy fallback deserializer
+    /// (which projects `hide_status_bar: bool` into this enum when the
+    /// new field is missing) is added in T152.
     #[serde(default)]
-    pub hide_status_bar: bool,
+    pub status_bar_display: StatusBarDisplay,
 }
 
 impl Default for Settings {
@@ -260,7 +285,7 @@ impl Default for Settings {
             autostart: false,
             analytics_enabled: true,
             hide_icon_on_close: false,
-            hide_status_bar: false,
+            status_bar_display: StatusBarDisplay::Default,
         }
     }
 }
@@ -508,7 +533,7 @@ pub struct UpdateAvailablePayload {
 
 #[cfg(test)]
 mod tests {
-    use super::{AuthSession, AuthUser, ManualSession, Session, Settings, Task};
+    use super::{AuthSession, AuthUser, ManualSession, Session, Settings, StatusBarDisplay, Task};
     use crate::bridge::session_type::SessionType;
 
     #[test]
@@ -550,10 +575,11 @@ mod tests {
 
     #[test]
     fn settings_round_trips_default_shape() {
-        // Pins today's Tauri-side AppSettings wire shape including the
-        // legacy `hide_status_bar` field. The forward migration to
-        // `status_bar_display` per data-model.md is a separate phase;
-        // this test documents the baseline so a future drift fails loud.
+        // Pins today's `AppSettings` wire shape post-Phase-3a F1/M3
+        // migration: `status_bar_display: StatusBarDisplay` (kebab-case
+        // string on the wire) replaces the legacy `hide_status_bar: bool`
+        // field. The legacy fallback path is exercised separately in
+        // `managers::settings::tests::migrates_hide_status_bar_to_status_bar_display`.
         let s = Settings::default();
         let json = serde_json::to_string(&s).unwrap();
         let decoded: Settings = serde_json::from_str(&json).unwrap();
@@ -561,7 +587,10 @@ mod tests {
         assert_eq!(decoded.timer.weekly_goal_minutes, 125);
         assert!(decoded.notifications.desktop_notifications);
         assert!(decoded.analytics_enabled);
-        assert!(!decoded.hide_status_bar);
+        assert_eq!(decoded.status_bar_display, StatusBarDisplay::Default);
+        // Wire shape: kebab-case enum string, no `hide_status_bar` key.
+        assert!(json.contains(r#""status_bar_display":"default""#));
+        assert!(!json.contains("hide_status_bar"));
         assert_eq!(
             decoded.shortcuts.start_stop.as_deref(),
             Some("CommandOrControl+Alt+Space"),
@@ -572,9 +601,13 @@ mod tests {
     fn settings_deserialises_from_minimal_legacy_json() {
         // Old `0.4.x` settings JSONs may lack `weekly_goal_minutes`,
         // `auto_start_focus`, `allow_continuous_sessions`, `advanced`,
-        // `analytics_enabled`, `hide_icon_on_close`, and `hide_status_bar`.
-        // The serde defaults must fill those in (FR-005 — round-trip
-        // every released 0.4.x JSON without manual migration).
+        // `analytics_enabled`, `hide_icon_on_close`, and any
+        // status-bar field. The serde defaults must fill those in
+        // (FR-005 — round-trip every released 0.4.x JSON without
+        // manual migration). The "legacy `hide_status_bar` projects
+        // into `status_bar_display`" path lands in T152's custom
+        // deserializer; here we cover only the "neither field
+        // present" branch.
         let legacy = r#"{
             "shortcuts": {"start_stop": null, "reset": null, "skip": null},
             "timer": {"focus_duration": 25, "break_duration": 5,
@@ -592,7 +625,7 @@ mod tests {
         assert!(!decoded.advanced.debug_mode);
         assert!(decoded.analytics_enabled);
         assert!(!decoded.hide_icon_on_close);
-        assert!(!decoded.hide_status_bar);
+        assert_eq!(decoded.status_bar_display, StatusBarDisplay::default());
     }
 
     #[test]
