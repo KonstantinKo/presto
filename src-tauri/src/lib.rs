@@ -485,11 +485,12 @@ fn should_debounce_shortcut(action: &str) -> bool {
     helpers::is_debounced(&mut map, action, Instant::now(), Duration::from_millis(500))
 }
 
-
 fn get_app_data_dir(app: &AppHandle) -> Result<std::path::PathBuf, BridgeError> {
-    app.path().app_data_dir().map_err(|e| BridgeError::Internal {
-        msg: format!("Failed to get app data directory: {e}"),
-    })
+    app.path()
+        .app_data_dir()
+        .map_err(|e| BridgeError::Internal {
+            msg: format!("Failed to get app data directory: {e}"),
+        })
 }
 
 impl ActivityMonitor {
