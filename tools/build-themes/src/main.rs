@@ -25,3 +25,111 @@ fn main() -> std::io::Result<()> {
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::generate_themes_rs;
+    use std::fs;
+    use std::path::PathBuf;
+
+    /// T219 [T:RED]: the build-themes binary scans the configured
+    /// theme directory for `*.css` files and emits a `themes.rs`
+    /// source that exposes the catalogue as Rust constants
+    /// (`ALL_THEMES: &[&str]`, `DEFAULT_THEME: &str`). The
+    /// generated file lets the Settings → Theme tab render one
+    /// tile per CSS file in `src/style/themes/` without a manual
+    /// list. Snapshot-style: assert the emitted text contains the
+    /// expected strings rather than diffing whole-file because
+    /// formatting drift (rustfmt re-flow, trailing whitespace) is
+    /// not part of the contract.
+    ///
+    /// FR-021 (theme contract preserved). Done-signal: this test
+    /// passes; `cargo run -p presto-build-themes` emits a non-empty
+    /// `themes.rs` with the expected catalogue derived from the
+    /// fixture inputs.
+    ///
+    /// Fixture: a temp directory populated with three placeholder
+    /// CSS files mirroring the JS-era catalogue
+    /// (`espresso.css`, `pipboy.css`, `pommodore64.css`) plus one
+    /// hidden file (`.DS_Store`-style) that MUST be filtered out.
+    #[test]
+    fn generates_themes_rs_snapshot() {
+        // Use a per-test temp directory rooted under target/ so
+        // parallel test runs don't collide. `CARGO_TARGET_TMPDIR`
+        // would be ideal but isn't stable for `[[bin]]` test
+        // harnesses; fall back to `target/tmp/<test-name>` instead.
+        let manifest_dir = env!("CARGO_MANIFEST_DIR");
+        let target_tmp = PathBuf::from(manifest_dir)
+            .join("..")
+            .join("..")
+            .join("target")
+            .join("tmp")
+            .join("build-themes-test-snapshot");
+        let _ = fs::remove_dir_all(&target_tmp);
+        let input_dir = target_tmp.join("themes");
+        fs::create_dir_all(&input_dir).expect("create fixture themes dir");
+        for name in ["espresso.css", "pipboy.css", "pommodore64.css"] {
+            fs::write(input_dir.join(name), "/* fixture */\n")
+                .expect("write fixture css");
+        }
+        // Hidden / non-CSS files must be filtered out.
+        fs::write(input_dir.join(".DS_Store"), "junk").expect("hidden fixture");
+        fs::write(input_dir.join("README.md"), "not css").expect("non-css fixture");
+
+        let output_path = target_tmp.join("themes.rs");
+
+        generate_themes_rs(&input_dir, &output_path).expect("generate themes.rs");
+
+        let generated = fs::read_to_string(&output_path).expect("read generated");
+
+        // Header must mark the file as auto-generated so reviewers
+        // know not to hand-edit it.
+        assert!(
+            generated.contains("@generated"),
+            "generated themes.rs must carry an @generated marker:\n{generated}",
+        );
+        assert!(
+            generated.contains("DO NOT EDIT"),
+            "generated themes.rs must carry a DO NOT EDIT note:\n{generated}",
+        );
+
+        // The catalogue must surface as a `pub const ALL_THEMES`
+        // slice with each theme stem (no `.css` suffix). The order
+        // is alphabetical so the rendered tile order is stable
+        // across regenerations.
+        assert!(
+            generated.contains("pub const ALL_THEMES"),
+            "missing ALL_THEMES const in:\n{generated}",
+        );
+        for stem in ["espresso", "pipboy", "pommodore64"] {
+            assert!(
+                generated.contains(&format!("\"{stem}\"")),
+                "expected \"{stem}\" in generated catalogue:\n{generated}",
+            );
+        }
+
+        // Hidden / non-CSS fixtures must NOT leak in.
+        assert!(
+            !generated.contains("DS_Store"),
+            "hidden file must not appear in catalogue:\n{generated}",
+        );
+        assert!(
+            !generated.contains("README"),
+            "non-css file must not appear in catalogue:\n{generated}",
+        );
+
+        // A `DEFAULT_THEME` constant must be present. The picked
+        // default is the first alphabetically — "espresso" for the
+        // JS-era catalogue. Pin the actual default the generator
+        // chose so a future flip to e.g. "pipboy" surfaces as a
+        // test diff.
+        assert!(
+            generated.contains("pub const DEFAULT_THEME"),
+            "missing DEFAULT_THEME const in:\n{generated}",
+        );
+        assert!(
+            generated.contains("\"espresso\""),
+            "expected DEFAULT_THEME to surface \"espresso\" as the alphabetical-first stem:\n{generated}",
+        );
+    }
+}
