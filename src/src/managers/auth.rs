@@ -53,26 +53,146 @@ pub enum AuthState {
     SignedIn { user: AuthUser },
 }
 
+/// Trait abstracting the `presto-guest-mode` localStorage flag store.
+///
+/// Production wires this against `web_sys::Storage` via
+/// `WebGuestModeStore` (wasm-only). Host tests under `cargo test`
+/// instantiate the lightweight `InMemoryGuestModeStore` so the
+/// state-machine transitions can be exercised without a browser
+/// context. Per Principle V, the test path is the canonical driver
+/// for the transitions; the `web_sys`-backed impl is exercised via
+/// `wasm-pack test` only.
+///
+/// The trait surface is deliberately tiny — three operations match
+/// the JS-era access pattern at `auth-manager.js:40-93`
+/// (`getItem(key)`, `setItem(key, "true")`, `removeItem(key)`).
+pub trait GuestModeStore {
+    /// Read the current value of the `presto-guest-mode` flag.
+    /// Returns `true` iff the stored value is the literal string
+    /// `"true"` (matching JS-era `=== "true"` comparisons). Absent /
+    /// other values reduce to `false`.
+    fn is_guest(&self) -> bool;
+    /// Persist `presto-guest-mode = "true"` so subsequent launches
+    /// land in the `Guest` branch of `init()`.
+    fn set_guest(&self);
+    /// Drop the `presto-guest-mode` key. Called on sign-in (the user
+    /// is no longer a guest) and on sign-out (the JS-era listener at
+    /// `auth-manager.js:54-59` clears the flag for symmetry).
+    fn clear_guest(&self);
+}
+
+/// In-memory `GuestModeStore` used by host-side `cargo test`s.
+///
+/// Holds the bool in a `Cell<bool>` (single-threaded; no `Mutex`
+/// needed — the WASM target is single-threaded anyway and host
+/// tests run each within their own `Cell` scope).
+#[derive(Debug, Default)]
+pub struct InMemoryGuestModeStore {
+    flag: core::cell::Cell<bool>,
+}
+
+impl InMemoryGuestModeStore {
+    /// Construct an empty store — `is_guest()` returns `false` until
+    /// a `set_guest()` lands.
+    #[must_use]
+    pub const fn new() -> Self {
+        Self {
+            flag: core::cell::Cell::new(false),
+        }
+    }
+
+    /// Test seed: pre-populate the store with `value`. Mirrors the
+    /// JS-era `localStorage.setItem("presto-guest-mode", "true")`
+    /// fixture used by JS-side test stubs.
+    #[must_use]
+    pub const fn with_initial(value: bool) -> Self {
+        Self {
+            flag: core::cell::Cell::new(value),
+        }
+    }
+}
+
+impl GuestModeStore for InMemoryGuestModeStore {
+    fn is_guest(&self) -> bool {
+        self.flag.get()
+    }
+    fn set_guest(&self) {
+        self.flag.set(true);
+    }
+    fn clear_guest(&self) {
+        self.flag.set(false);
+    }
+}
+
+/// Authentication state machine. Wraps `AuthState` and a
+/// `GuestModeStore` impl that owns the `presto-guest-mode`
+/// localStorage flag.
+///
+/// Per Principle II, the default-constructed manager lands in
+/// `AuthState::Unauthenticated`; the user chooses between the
+/// `Guest` branch (`continue_as_guest`, T182) and the `SignedIn`
+/// branch (`complete_sign_in`, T178). Sign-in is opt-in — neither
+/// the constructor nor `project_from_store()` ever auto-attempts
+/// authentication.
+#[derive(Debug)]
+pub struct AuthManager<S: GuestModeStore> {
+    state: AuthState,
+    store: S,
+}
+
+impl<S: GuestModeStore> AuthManager<S> {
+    /// Construct a manager rooted at `AuthState::Unauthenticated`.
+    /// The supplied `store` owns the `presto-guest-mode` flag
+    /// surface; production code injects `WebGuestModeStore::new()`
+    /// (wasm-only), tests inject `InMemoryGuestModeStore::new()`.
+    pub const fn new(store: S) -> Self {
+        Self {
+            state: AuthState::Unauthenticated,
+            store,
+        }
+    }
+
+    /// Borrow the current authentication state.
+    pub const fn state(&self) -> &AuthState {
+        &self.state
+    }
+
+    /// `true` iff the current state is `SignedIn`. Convenience for
+    /// the components layer (Phase 4) — equivalent to
+    /// `matches!(self.state(), AuthState::SignedIn { .. })`.
+    pub const fn is_authenticated(&self) -> bool {
+        matches!(self.state, AuthState::SignedIn { .. })
+    }
+
+    /// `true` iff the current state is `Guest`. Distinct from
+    /// `!is_authenticated()` — the `Unauthenticated` cold-start
+    /// state is neither authenticated nor guest.
+    pub const fn is_guest(&self) -> bool {
+        matches!(self.state, AuthState::Guest)
+    }
+
+    /// Cold-start projection: if the `presto-guest-mode` flag is
+    /// `true` in the supplied store, lift `Unauthenticated → Guest`;
+    /// otherwise leave the state unchanged. Pure helper — the wasm
+    /// `init()` path calls this after a `bridge::commands::supabase_get_session()`
+    /// returns `Ok(None)`, so the order is "session-from-disk wins,
+    /// then the localStorage flag, then default".
+    ///
+    /// Exposed as a separate method (rather than folded into the
+    /// constructor) so tests can drive the state machine by
+    /// pre-seeding the store with `with_initial(true)` and then
+    /// calling `project_from_store()` — this keeps the test path
+    /// off the wasm-bindgen boundary per Principle V.
+    pub fn project_from_store(&mut self) {
+        if matches!(self.state, AuthState::Unauthenticated) && self.store.is_guest() {
+            self.state = AuthState::Guest;
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{AuthState, AuthUser};
-    use crate::bridge::types::AuthSession;
-
-    fn _sample_user() -> AuthUser {
-        AuthUser {
-            id: "user-uuid-1".to_string(),
-            email: "test@example.com".to_string(),
-            user_metadata: serde_json::json!({}),
-        }
-    }
-
-    fn _sample_session() -> AuthSession {
-        AuthSession {
-            access_token: "access-token-redacted".to_string(),
-            refresh_token: "refresh-token-redacted".to_string(),
-            user: _sample_user(),
-        }
-    }
+    use super::AuthState;
 
     /// T175 [RED]: when the `presto-guest-mode` localStorage flag is
     /// `"true"` on cold start AND the bridge returns no persisted
@@ -115,5 +235,90 @@ mod tests {
         );
         assert!(mgr.is_guest());
         assert!(!mgr.is_authenticated());
+    }
+
+    /// T176 [GREEN] complement: when neither a persisted session nor
+    /// the `presto-guest-mode` flag is present, the manager must
+    /// stay at `Unauthenticated`. Pins Principle II's "guest mode is
+    /// opt-in" line: an empty store does NOT lift the manager into
+    /// Guest behind the user's back.
+    #[test]
+    fn initial_state_unauthenticated_when_flag_absent() {
+        let store = super::InMemoryGuestModeStore::new();
+        let mut mgr = super::AuthManager::new(store);
+
+        mgr.project_from_store();
+        assert!(matches!(mgr.state(), AuthState::Unauthenticated));
+        assert!(!mgr.is_authenticated());
+        assert!(!mgr.is_guest());
+    }
+}
+
+// ---------------------------------------------------------------------------
+// `WebGuestModeStore` — wasm-only `GuestModeStore` impl backed by
+// `web_sys::Storage`.
+//
+// Carries the production wiring for the `presto-guest-mode`
+// localStorage flag. Gated on `target_arch = "wasm32"` because
+// `web_sys::window()` is not available on host builds — the host
+// path uses `InMemoryGuestModeStore` exclusively (per Principle V,
+// the state-machine transitions are host-testable; the wasm impl is
+// a thin shim over the browser surface, exercised at integration
+// time via `wasm-pack test`).
+// ---------------------------------------------------------------------------
+
+#[cfg(target_arch = "wasm32")]
+pub use wasm_impl::WebGuestModeStore;
+
+#[cfg(target_arch = "wasm32")]
+mod wasm_impl {
+    use super::GuestModeStore;
+
+    /// `web_sys::Storage`-backed `GuestModeStore`. Reads / writes /
+    /// removes the `presto-guest-mode` localStorage key. Failures
+    /// (missing window, sandboxed origin, quota errors) reduce to
+    /// the cold-start no-op shape: `is_guest()` returns `false` and
+    /// the mutators are best-effort no-ops. Matches the JS-era
+    /// behaviour at `auth-manager.js:40-93`, which uses bare
+    /// `localStorage.getItem` / `setItem` / `removeItem` calls
+    /// without try/catch — a sandboxed-origin failure simply skips
+    /// the flag, leaving the user at the auth-modal default on
+    /// next launch.
+    #[derive(Debug, Default)]
+    pub struct WebGuestModeStore;
+
+    impl WebGuestModeStore {
+        /// Construct an empty store. The actual storage handle is
+        /// resolved lazily on each call — the JS-era `localStorage`
+        /// access pattern doesn't cache the handle either, so this
+        /// matches the established surface.
+        #[must_use]
+        pub const fn new() -> Self {
+            Self
+        }
+
+        fn storage() -> Option<web_sys::Storage> {
+            web_sys::window().and_then(|w| w.local_storage().ok().flatten())
+        }
+    }
+
+    impl GuestModeStore for WebGuestModeStore {
+        fn is_guest(&self) -> bool {
+            Self::storage().is_some_and(|s| {
+                s.get_item("presto-guest-mode").ok().flatten().as_deref() == Some("true")
+            })
+        }
+
+        fn set_guest(&self) {
+            if let Some(s) = Self::storage() {
+                let _ = s.set_item("presto-guest-mode", "true");
+            }
+        }
+
+        fn clear_guest(&self) {
+            if let Some(s) = Self::storage() {
+                let _ = s.remove_item("presto-guest-mode");
+            }
+        }
     }
 }
