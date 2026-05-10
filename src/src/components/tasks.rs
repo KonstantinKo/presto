@@ -29,36 +29,137 @@
 
 use leptos::prelude::*;
 
-/// Tasks view skeleton. Renders an `<input>` for adding tasks plus
-/// a `<ul>` list host. T193 attaches the add / toggle-complete /
-/// delete handlers and the per-row `<For/>` iterator; today the
-/// view is the static shell so `(cd src && trunk build)` returns
-/// 0 and the future visual baseline lands against stable DOM.
-///
-/// The component is parameterless: T193 introduces a local
-/// `RwSignal<Vec<bridge::types::Task>>` for state ownership;
-/// Phase 4c will lift it to a context slice when the persistence
-/// wiring lands.
+use crate::bridge::types::Task;
+
+/// Tasks view — adds / toggles-complete / deletes tasks against an
+/// in-memory `RwSignal<Vec<Task>>`. The Tauri-side `save_tasks` /
+/// `load_tasks` bridge wrappers are reachable when the bridge is
+/// present; Phase 4c attaches the persistence sink (the in-memory
+/// signal is the dev-server / e2e-mock branch). Per Principle I,
+/// the component never mutates engine state — tasks are independent
+/// of the timer state machine.
 #[component]
 pub fn TasksView() -> impl IntoView {
+    // In-memory task list. Phase 4c reads the persisted seed from
+    // `bridge::commands::load_tasks` and supplies it via context;
+    // today's local default is the empty list — equivalent to the
+    // JS-era cold-start "no tasks file yet" branch.
+    let tasks = RwSignal::new(Vec::<Task>::new());
+
+    // Bind for the new-task input field. `String` rather than `&str`
+    // because the input value is owned and reset on submit.
+    let new_text = RwSignal::new(String::new());
+
+    // The next task id is the largest existing id + 1, mirroring
+    // the JS-era `Math.max(...this.tasks.map(t => t.id), 0) + 1`
+    // pattern at the JS-side task manager. Defensive against an
+    // empty list (returns 1) and against duplicate ids on a
+    // corrupted load (the +1 still produces a fresh slot).
+    let next_id = move || {
+        tasks.with(|list| {
+            list.iter()
+                .map(|t| t.id)
+                .max()
+                .map_or(1, |max| max.saturating_add(1))
+        })
+    };
+
+    // Add-task handler. Trims the input; refuses empty strings
+    // (JS-era `if (!text.trim()) return;` guard at
+    // `src/main.js`). On success, appends a fresh `Task` and
+    // clears the input.
+    let on_add = move |_| {
+        let text = new_text.with(|s| s.trim().to_string());
+        if text.is_empty() {
+            return;
+        }
+        let id = next_id();
+        tasks.update(|list| {
+            list.push(Task {
+                id,
+                text,
+                completed: false,
+                // ISO-8601 timestamp would normally come from the
+                // bridge's clock; on the dev server we leave it
+                // blank and Phase 4c attaches the real timestamp
+                // when `save_tasks` lands.
+                created_at: String::new(),
+                completed_at: None,
+            });
+        });
+        new_text.set(String::new());
+    };
+
+    // Per-row toggle-complete handler. Looked-up by id; missing
+    // ids are no-ops (matches JS-era `findIndex(...) !== -1` guard).
+    let on_toggle = move |id: u64| {
+        tasks.update(|list| {
+            if let Some(task) = list.iter_mut().find(|t| t.id == id) {
+                task.completed = !task.completed;
+            }
+        });
+    };
+
+    // Per-row delete handler. Same retain-by-id pattern as
+    // `TagManager::delete` (filter out the matching id; preserve
+    // ordering of survivors).
+    let on_delete = move |id: u64| {
+        tasks.update(|list| {
+            list.retain(|t| t.id != id);
+        });
+    };
+
     view! {
         <div class="view-container hidden view-section" id="tasks-view">
             <h1 class="page-header">"Tasks"</h1>
 
-            // New-task input row — submit handler attaches in T193.
+            // New-task input row.
             <div class="task-input-row" id="task-input-row">
                 <input
                     type="text"
                     id="new-task-input"
                     placeholder="Add a task..."
                     aria-label="New task"
+                    prop:value=move || new_text.get()
+                    on:input=move |ev| new_text.set(event_target_value(&ev))
                 />
-                <button id="add-task-btn" class="add-task-btn">"Add"</button>
+                <button id="add-task-btn" class="add-task-btn" on:click=on_add>"Add"</button>
             </div>
 
-            // Task list. T193 attaches the per-row `<For/>` iterator
-            // and the click handlers; today the host is empty.
-            <ul class="task-list" id="task-list" role="list"></ul>
+            // Task list.
+            <ul class="task-list" id="task-list" role="list">
+                <For
+                    each=move || tasks.get()
+                    key=|task| task.id
+                    children=move |task| {
+                        let task_id = task.id;
+                        let completed = task.completed;
+                        let label = task.text.clone();
+                        let display = task.text;
+                        view! {
+                            <li
+                                class="task-item"
+                                class:completed=completed
+                                role="listitem"
+                                aria-label=label
+                            >
+                                <input
+                                    type="checkbox"
+                                    class="task-checkbox"
+                                    prop:checked=completed
+                                    on:change=move |_| on_toggle(task_id)
+                                />
+                                <span class="task-text">{display}</span>
+                                <button
+                                    class="task-delete-btn"
+                                    aria-label="Delete task"
+                                    on:click=move |_| on_delete(task_id)
+                                >"×"</button>
+                            </li>
+                        }
+                    }
+                />
+            </ul>
         </div>
     }
 }
