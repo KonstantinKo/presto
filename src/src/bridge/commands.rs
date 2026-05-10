@@ -726,6 +726,54 @@ pub async fn start_oauth_server() -> Result<u16, BridgeError> {
     invoke_serde("start_oauth_server", &serde_json::Value::Null).await
 }
 
+// ---------------------------------------------------------------------------
+// Phase 1D — new permanent commands
+// ---------------------------------------------------------------------------
+
+/// Forward an analytics event to the Tauri-side Aptabase plugin.
+///
+/// Tauri-side handler: `track_event(name: String, props: Option<HashMap<String, Value>>)
+/// -> Result<(), BridgeError>` at `src-tauri/src/lib.rs`.
+///
+/// Replaces the JS `@aptabase/tauri` shim (deleted by this migration). The
+/// shim's only behaviour was to forward `track_event(...)` to the Tauri
+/// plugin via `invoke()`; this wrapper does the same with one extra
+/// guarantee — the `analytics_enabled` opt-in toggle is checked
+/// Rust-side at the handler (per Principle II / FR-018), so a Leptos
+/// call site cannot accidentally bypass it. The wrapper is dispatch-only;
+/// the gate lives in the handler.
+///
+/// `name: &str` — the JS-era call sites already hold owned event-name
+/// strings; borrowing avoids a wasted clone at the boundary. `props:
+/// Option<HashMap<…>>` — `None` matches the bare-name path the Aptabase
+/// plugin's `EventTracker::track_event` accepts directly; `Some(map)`
+/// carries arbitrary JSON-shaped properties (counts, durations, etc.).
+/// The `BuildHasher` is generic so callers can use the default `RandomState`
+/// or a custom hasher without forcing a re-collect at the boundary.
+///
+/// # Errors
+/// Returns `BridgeError::BridgeUnavailable` when the Tauri JS bridge is
+/// not present (Trunk dev server, e2e mock, node tests). Otherwise
+/// returns `BridgeError::Internal` if the Tauri-side serde of the args
+/// fails. Note: when `analytics_enabled` is `false`, the handler returns
+/// `Ok(())` without forwarding to Aptabase — the wrapper does not
+/// observe whether forwarding actually occurred.
+pub async fn track_event<S: std::hash::BuildHasher>(
+    name: &str,
+    props: Option<std::collections::HashMap<String, serde_json::Value, S>>,
+) -> Result<(), BridgeError> {
+    #[derive(Serialize)]
+    struct Args<'a> {
+        name: &'a str,
+        props: Option<serde_json::Map<String, serde_json::Value>>,
+    }
+    // Re-collect into `serde_json::Map` so the wire shape is hasher-
+    // independent; the Tauri-side handler reconstructs an `Option<Value>`
+    // from this object and forwards it to the Aptabase plugin.
+    let props = props.map(|map| map.into_iter().collect::<serde_json::Map<_, _>>());
+    invoke_serde("track_event", &Args { name, props }).await
+}
+
 // Tests gated on `wasm32` because every wrapper-test is a
 // `#[wasm_bindgen_test]` — running them via `cargo test` on the host
 // target would produce dead-code lint failures (the host-side
@@ -1461,7 +1509,15 @@ mod tests {
 
     #[wasm_bindgen_test]
     async fn track_event_round_trip_short_circuits_when_bridge_absent() {
-        let result = track_event("session_started", None).await;
+        // The wrapper is generic over `BuildHasher` to dodge the
+        // `clippy::implicit_hasher` pedantic lint at module scope; pin the
+        // call-site hasher to the std default `RandomState` so the no-prop
+        // case (`None`) doesn't leave `S` ambiguous.
+        let result = track_event::<std::collections::hash_map::RandomState>(
+            "session_started",
+            None,
+        )
+        .await;
         match result {
             Err(BridgeError::BridgeUnavailable) => {}
             other => panic!("expected BridgeUnavailable, got {other:?}"),
@@ -1491,5 +1547,24 @@ mod tests {
         let mut props = HashMap::new();
         props.insert("session_count".to_string(), serde_json::json!(4));
         let _ = assert_signature("session_completed", Some(props)).await;
+    }
+
+    /// Spec FR-018 / Principle II anchor: when the wrapper is invoked with
+    /// `Some(props)`, the wire shape received by the Tauri-side handler MUST
+    /// be a `serde_json::Object` (not a typed map literal) so the handler's
+    /// `Option<HashMap<String, Value>>` deserialiser accepts it. Pins the
+    /// hasher-erasure conversion that lives in the wrapper body — drift
+    /// would surface as a `BridgeError::SerdeRoundtrip` at the boundary,
+    /// not a compile error.
+    #[wasm_bindgen_test]
+    async fn track_event_with_props_short_circuits_when_bridge_absent() {
+        let mut props = HashMap::new();
+        props.insert("count".to_string(), serde_json::json!(7));
+        props.insert("source".to_string(), serde_json::json!("tray"));
+        let result = track_event("custom_event", Some(props)).await;
+        match result {
+            Err(BridgeError::BridgeUnavailable) => {}
+            other => panic!("expected BridgeUnavailable, got {other:?}"),
+        }
     }
 }

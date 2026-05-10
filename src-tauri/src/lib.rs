@@ -874,7 +874,8 @@ pub fn run() {
                 write_excel_file,
                 start_oauth_server,
                 set_dock_visibility,
-                set_status_bar_visibility
+                set_status_bar_visibility,
+                track_event
             ])
             .setup(|app| {
                 let initial_settings = load_settings_sync(app.handle());
@@ -1226,6 +1227,40 @@ async fn start_oauth_server(window: tauri::Window) -> Result<u16, BridgeError> {
         let _ = window.emit("oauth-callback", url);
     })
     .map_err(|err| BridgeError::Internal { msg: err.to_string() })
+}
+
+// `track_event` — Phase 1D T086.
+//
+// Replaces the JS `@aptabase/tauri` shim that the migration deletes. The
+// shim's only behaviour was to forward `track_event(...)` to the Aptabase
+// plugin via `invoke()`. This handler does the same with one extra
+// guarantee (per spec FR-018 / Principle II): the `analytics_enabled`
+// opt-in toggle is checked Rust-side via `are_analytics_enabled` before
+// any forwarding happens — a Leptos call site cannot accidentally bypass
+// it because the gate lives below the bridge.
+//
+// `props` is `Option<HashMap<String, Value>>` — `None` matches the
+// bare-name path Aptabase's `EventTracker::track_event` accepts directly.
+// We construct a `serde_json::Value::Object` from the HashMap and pass it
+// to the plugin (the plugin's `track_event` API takes a serializable
+// payload). When the toggle is off, the handler returns `Ok(())` without
+// forwarding — the disabled path is silent, not an error (matches the
+// existing in-handler call sites at `lib.rs:474`, `lib.rs:500`, etc.).
+#[tauri::command]
+async fn track_event(
+    name: String,
+    props: Option<HashMap<String, serde_json::Value>>,
+    app: AppHandle,
+) -> Result<(), BridgeError> {
+    if are_analytics_enabled(&app) {
+        // The aptabase plugin's `EventTracker::track_event` takes a
+        // serde_json::Value bag (not a typed HashMap); we wrap the map
+        // into `Value::Object` here so the bridge stays typed at the
+        // boundary while the plugin keeps its `Value` shape internally.
+        let payload = props.map(|map| serde_json::Value::Object(map.into_iter().collect()));
+        let _ = app.track_event(&name, payload);
+    }
+    Ok(())
 }
 
 #[tauri::command]
