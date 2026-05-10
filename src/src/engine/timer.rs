@@ -610,6 +610,47 @@ mod tests {
         assert!(!state.is_running());
     }
 
+    /// T138: manual session entries route through the engine path
+    /// rather than bypassing into the persistence layer directly.
+    /// Per Principle I rule "manual session entry must go through
+    /// the same engine path as live sessions".
+    ///
+    /// `record_manual_session(secs)` increments
+    /// `completed_pomodoros`, integrates the duration into the
+    /// total focus time, and emits `ManualSessionRecorded`. The
+    /// engine's mode + countdown are NOT disturbed (the user
+    /// might be mid-focus when they add a backfill manual entry).
+    #[test]
+    fn manual_session_entry_routes_through_engine() {
+        let clock = MockClock::new(0);
+        let mut state = TimerState::new(Durations::default());
+        state.start(&clock).expect("start");
+        clock.advance(60_000);
+        state.tick(&clock);
+
+        let pomodoros_before = state.completed_pomodoros();
+        let total_focus_before = state.total_focus_secs();
+        let mode_before = state.current_mode();
+        let remaining_before = state.time_remaining_secs();
+
+        let events = state.record_manual_session(20 * 60);
+
+        assert_eq!(state.completed_pomodoros(), pomodoros_before + 1);
+        assert_eq!(state.total_focus_secs(), total_focus_before + 20 * 60);
+        // Mode + countdown unchanged — manual entry doesn't disturb
+        // an in-flight live session.
+        assert_eq!(state.current_mode(), mode_before);
+        assert_eq!(state.time_remaining_secs(), remaining_before);
+        assert!(state.is_running());
+        assert!(
+            events.iter().any(|e| matches!(
+                e,
+                super::TimerEvent::ManualSessionRecorded { duration_secs: 1200 }
+            )),
+            "expected ManualSessionRecorded {{ duration_secs: 1200 }} in {events:?}"
+        );
+    }
+
     /// T128: drift compensation recovers after an OS-suspend gap.
     /// SC-005, AS-1.3. Mirrors `updateTimerWithAccuracy` at
     /// `pomodoro-timer.js:730-789`, which computes elapsed time
