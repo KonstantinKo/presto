@@ -17,7 +17,13 @@
 //                  router-style enums (any-to-any transitions allowed).
 // - `tag`       — `TagManager` over the user's `Tag` list. Per-tag CRUD
 //                 (no bulk save) per contracts/tauri-bridge.md §Deletions.
+// - `session`   — `SessionManager` over the user's manual-session
+//                 backfill records. Per Principle I, manual entries
+//                 route through `engine::timer::TimerState::record_manual_session`
+//                 before the bulk re-save lands on disk via
+//                 `bridge::commands::save_manual_sessions`.
 
 pub mod navigation;
+pub mod session;
 pub mod settings;
 pub mod tag;
