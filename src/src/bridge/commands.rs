@@ -289,7 +289,7 @@ pub async fn load_tags() -> Result<Vec<Tag>, BridgeError> {
 mod tests {
     use super::{
         get_stats_history, load_manual_sessions, load_session_data, load_tags, load_tasks,
-        save_daily_stats, save_manual_sessions, save_session_data, save_tasks,
+        save_daily_stats, save_manual_sessions, save_session_data, save_tag, save_tasks,
     };
     use crate::bridge::error::BridgeError;
     use crate::bridge::session_type::SessionType;
@@ -534,5 +534,36 @@ mod tests {
             load_tags().await
         }
         let _ = assert_signature().await;
+    }
+
+    fn sample_tag() -> Tag {
+        Tag {
+            id: "tag-focus".to_string(),
+            name: "Deep Work".to_string(),
+            icon: "ri-brain-line".to_string(),
+            color: "#4CAF50".to_string(),
+            created_at: "2026-05-10T08:00:00Z".to_string(),
+        }
+    }
+
+    #[wasm_bindgen_test]
+    async fn save_tag_round_trip_short_circuits_when_bridge_absent() {
+        let result = save_tag(sample_tag()).await;
+        match result {
+            Err(BridgeError::BridgeUnavailable) => {}
+            other => panic!("expected BridgeUnavailable, got {other:?}"),
+        }
+    }
+
+    /// Compile-time signature pin per contracts/tauri-bridge.md row 10:
+    /// `save_tag(tag: Tag) -> Result<(), BridgeError>`.
+    /// Distinct from the deleted `save_tags` (Vec) bulk command — the JS
+    /// era saves tags one at a time via this upsert path.
+    #[wasm_bindgen_test]
+    async fn save_tag_round_trip_signature_pinned() {
+        async fn assert_signature(t: Tag) -> Result<(), BridgeError> {
+            save_tag(t).await
+        }
+        let _ = assert_signature(sample_tag()).await;
     }
 }
