@@ -86,6 +86,66 @@ impl SettingsManager {
 mod tests {
     use super::SettingsManager;
 
+    /// T149 [RED]: an older 0.4.x settings JSON that predates the
+    /// `weekly_goal_minutes`, `auto_start_focus`,
+    /// `allow_continuous_sessions`, `advanced`, `analytics_enabled`,
+    /// `hide_icon_on_close`, and the `status_bar_display` /
+    /// `hide_status_bar` field cluster MUST deserialise — the
+    /// `#[serde(default)]` markers on each field provide cold-start
+    /// values matching `Settings::default()`. Mirrors the Tauri-side
+    /// pin at
+    /// `src-tauri/src/lib.rs::tests::app_settings_missing_serde_default_fields_use_defaults`.
+    ///
+    /// Done-signal: this test currently fails because the manager
+    /// does not yet expose an `ingest_raw_json` path and because the
+    /// `Settings` struct in `bridge::types` carries
+    /// `hide_status_bar: bool` rather than the
+    /// `status_bar_display: StatusBarDisplay` shape the test asserts.
+    /// T150 GREEN lands the field-level migration on both
+    /// `presto-web::Settings` and `presto::AppSettings` in lockstep.
+    #[test]
+    fn missing_serde_default_fields_use_defaults() {
+        // Pre-cutover JSON: minimal shape, no nested defaults populated.
+        let legacy = r#"{
+            "shortcuts": {"start_stop": null, "reset": null, "skip": null},
+            "timer": {"focus_duration": 25, "break_duration": 5,
+                      "long_break_duration": 20, "total_sessions": 10},
+            "notifications": {"desktop_notifications": true,
+                              "sound_notifications": true,
+                              "auto_start_timer": true, "smart_pause": false,
+                              "smart_pause_timeout": 30},
+            "autostart": false
+        }"#;
+        let mgr = SettingsManager::ingest_raw_json(legacy)
+            .expect("legacy minimal-shape JSON must deserialise");
+        let defaults = crate::bridge::types::Settings::default();
+
+        assert_eq!(
+            mgr.current().timer.weekly_goal_minutes,
+            defaults.timer.weekly_goal_minutes,
+            "weekly_goal_minutes serde default must fire",
+        );
+        assert_eq!(
+            mgr.current().notifications.auto_start_focus,
+            defaults.notifications.auto_start_focus,
+        );
+        assert_eq!(
+            mgr.current().notifications.allow_continuous_sessions,
+            defaults.notifications.allow_continuous_sessions,
+        );
+        assert_eq!(mgr.current().advanced.debug_mode, defaults.advanced.debug_mode);
+        assert_eq!(mgr.current().analytics_enabled, defaults.analytics_enabled);
+        assert_eq!(mgr.current().hide_icon_on_close, defaults.hide_icon_on_close);
+        // T151 covers the migration cases for status_bar_display in
+        // detail; here we only assert the "neither field present"
+        // branch lands at `StatusBarDisplay::default()`.
+        assert_eq!(
+            mgr.current().status_bar_display,
+            crate::bridge::types::StatusBarDisplay::default(),
+            "status_bar_display must default when neither legacy nor new field present",
+        );
+    }
+
     /// T147 [RED]: when the bridge load returns `Err` (e.g. cold-start
     /// "no settings file" surfaced as `BridgeError::BridgeUnavailable`
     /// in the host test environment, or the Tauri-side fallback path
