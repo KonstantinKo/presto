@@ -137,6 +137,22 @@ pub async fn load_session_data() -> Result<Option<Session>, BridgeError> {
     invoke_serde("load_session_data", &serde_json::Value::Null).await
 }
 
+/// Read the persisted full session history. Tauri-side handler:
+/// `get_stats_history() -> Result<Vec<PomodoroSession>, BridgeError>`
+/// at `src-tauri/src/lib.rs:517`.
+///
+/// Returns an empty `Vec` if no history file exists yet (the Tauri-side
+/// helper at `helpers::read_history_from` treats `NotFound` as empty —
+/// a cold-start convention, not an error).
+///
+/// # Errors
+/// Returns `BridgeError::BridgeUnavailable` when the Tauri JS bridge is
+/// not present. Otherwise returns whatever variant the Tauri-side handler
+/// maps its filesystem failure to (typically `BridgeError::Internal`).
+pub async fn get_stats_history() -> Result<Vec<Session>, BridgeError> {
+    invoke_serde("get_stats_history", &serde_json::Value::Null).await
+}
+
 // Tests gated on `wasm32` because every wrapper-test is a
 // `#[wasm_bindgen_test]` — running them via `cargo test` on the host
 // target would produce dead-code lint failures (the host-side
