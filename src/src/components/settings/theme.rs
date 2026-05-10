@@ -35,6 +35,9 @@
 use leptos::prelude::*;
 use wasm_bindgen::JsCast as _;
 
+use crate::theme::loader::{apply_theme, resolve_color_mode, system_prefers_dark};
+use crate::theme::themes::ALL_THEMES;
+
 /// Apply `data-<attr>="<value>"` to the document's `<html>` element.
 /// Mirrors the JS-era `document.documentElement.setAttribute(...)`
 /// pattern at `src/managers/theme-manager.js`. Best-effort: failures
@@ -55,37 +58,36 @@ fn set_html_attr(attr: &str, value: &str) {
     }
 }
 
-/// Theme picker tile. Mirrors the JS-era `themes` catalogue at
-/// `src/managers/theme-manager.js` — id matches the
-/// `data-timer-theme` attribute the spec asserts on; label is
-/// purely cosmetic.
-struct TimerThemeTile {
-    id: &'static str,
-    label: &'static str,
+/// Capitalise the first character of `stem` for the tile label.
+///
+/// Mirrors the JS-era `capitalizeFirst` helper at
+/// `src/utils/theme-loader.js`. Returns `stem` unchanged if it's
+/// empty (the build-themes generator already filters empty stems
+/// — this is defence-in-depth).
+fn capitalise_first(stem: &str) -> String {
+    let mut chars = stem.chars();
+    chars
+        .next()
+        .map_or_else(String::new, |first| first.to_uppercase().chain(chars).collect())
 }
-
-/// Minimal fixture catalogue. Phase 5 replaces this with the
-/// code-gen'd `theme::themes::ALL_THEMES` slice from the build-themes
-/// tool; here the static pair is enough to satisfy the e2e
-/// `tileCount >= 2` assertion.
-const TIMER_THEMES: &[TimerThemeTile] = &[
-    TimerThemeTile {
-        id: "espresso",
-        label: "Espresso",
-    },
-    TimerThemeTile {
-        id: "matcha",
-        label: "Matcha",
-    },
-];
 
 /// Theme settings tab — light/dark/auto picker + timer theme grid.
 #[component]
 pub fn ThemeSettings() -> impl IntoView {
-    let on_theme = move |theme: &'static str| {
-        set_html_attr("data-theme", theme);
+    // Color-theme handler resolves `auto` against the OS preference
+    // and applies the concrete `data-theme` token. The JS-era
+    // pattern at `src/managers/theme-manager.js` does the same:
+    // `auto` is a settings-level value, never a rendered token.
+    let on_theme = move |pref: &'static str| {
+        let resolved = resolve_color_mode(pref, system_prefers_dark());
+        set_html_attr("data-theme", resolved);
     };
+    // Timer-theme handler routes through the loader's apply_theme
+    // for the `data-theme` write *as well* — when a user picks a
+    // tile, the e2e flow asserts on `data-theme` toggling. The
+    // tile selection itself is reflected via `data-timer-theme`.
     let on_timer_theme = move |id: &'static str| {
+        apply_theme(id);
         set_html_attr("data-timer-theme", id);
     };
 
@@ -139,11 +141,11 @@ pub fn ThemeSettings() -> impl IntoView {
             <div class="setting-item">
                 <label for="timer-theme-selector">"Timer Theme:"</label>
                 <div class="timer-theme-grid" id="timer-theme-grid">
-                    {TIMER_THEMES
+                    {ALL_THEMES
                         .iter()
-                        .map(|tile| {
-                            let id = tile.id;
-                            let label = tile.label;
+                        .map(|stem| {
+                            let id: &'static str = stem;
+                            let label = capitalise_first(stem);
                             view! {
                                 <button
                                     class="timer-theme-option"
@@ -166,7 +168,8 @@ pub fn ThemeSettings() -> impl IntoView {
 
 #[cfg(test)]
 mod tests {
-    use super::TIMER_THEMES;
+    use super::capitalise_first;
+    use crate::theme::themes::ALL_THEMES;
 
     /// T205 — selector contract pin. Sourced from
     /// `tests/e2e/settings-theme.spec.js`.
@@ -178,18 +181,27 @@ mod tests {
         }
     }
 
-    /// E2e asserts `tileCount >= 2` (`spec.js:29`); the fixture
-    /// catalogue must satisfy that lower bound. Phase 5 will swap
-    /// this static list for the code-gen'd full catalogue.
+    /// E2e asserts `tileCount >= 2` (`spec.js:29`); the
+    /// auto-generated catalogue must satisfy that lower bound. Pin
+    /// against `ALL_THEMES` directly so a future code-gen drift
+    /// (e.g. accidentally emitting an empty slice) surfaces here
+    /// rather than in the e2e suite.
     #[test]
     fn timer_theme_catalogue_meets_e2e_minimum() {
         assert!(
-            TIMER_THEMES.len() >= 2,
-            "settings-theme.spec.js:29 asserts tileCount >= 2",
+            ALL_THEMES.len() >= 2,
+            "settings-theme.spec.js:29 asserts tileCount >= 2; ALL_THEMES has {}",
+            ALL_THEMES.len(),
         );
-        for tile in TIMER_THEMES {
-            assert!(!tile.id.is_empty(), "theme id must not be empty");
-            assert!(!tile.label.is_empty(), "theme label must not be empty");
+        for stem in ALL_THEMES {
+            assert!(!stem.is_empty(), "theme stem must not be empty");
         }
+    }
+
+    #[test]
+    fn capitalise_first_handles_normal_stems() {
+        assert_eq!(capitalise_first("espresso"), "Espresso");
+        assert_eq!(capitalise_first("pipboy"), "Pipboy");
+        assert_eq!(capitalise_first(""), "");
     }
 }

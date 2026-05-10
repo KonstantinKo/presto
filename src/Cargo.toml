@@ -40,6 +40,12 @@ features = [
     # localStorage migration". Slated for removal alongside the
     # migration code one minor version after cutover.
     "Storage",
+    # `MediaQueryList` powers `theme::loader::system_prefers_dark`
+    # (Phase 5 T224 — follow-system-theme via the
+    # `prefers-color-scheme: dark` media query). Mirrors the JS-era
+    # `window.matchMedia(...).matches` read at
+    # `src/managers/theme-manager.js`.
+    "MediaQueryList",
 ]
 
 [dev-dependencies]

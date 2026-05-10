@@ -91,6 +91,63 @@ pub fn apply_resolved(theme_name: &str) {
     apply_theme(resolve_theme(theme_name));
 }
 
+/// Whether the operating system requests a dark colour scheme.
+///
+/// Reads `window.matchMedia("(prefers-color-scheme: dark)").matches`
+/// — the JS-era follow-system hop in
+/// `src/managers/theme-manager.js`. T224 of spec
+/// 001-leptos-migration. Returns `false` when the bridge is absent
+/// (host build / SSR) — the manager layer treats `false` as
+/// "default to light theme" which matches the JS source's fallback
+/// branch.
+#[cfg(target_arch = "wasm32")]
+#[must_use]
+pub fn system_prefers_dark() -> bool {
+    let Some(window) = web_sys::window() else {
+        return false;
+    };
+    match window.match_media("(prefers-color-scheme: dark)") {
+        Ok(Some(query)) => query.matches(),
+        _ => false,
+    }
+}
+
+/// Host-side stub for `system_prefers_dark`.
+///
+/// Returns `false` so manager-layer tests don't need a wasm
+/// runtime. The wasm body reads the live media query.
+#[cfg(not(target_arch = "wasm32"))]
+#[must_use]
+#[allow(
+    clippy::missing_const_for_fn,
+    // Cannot be `const fn` because the wasm-target sibling has DOM
+    // I/O; signatures must match across cfg variants.
+)]
+pub fn system_prefers_dark() -> bool {
+    false
+}
+
+/// Resolve a settings-level color-mode preference to a concrete
+/// `data-theme` token.
+///
+/// `pref` is the JS-era selector value (`"auto"` / `"light"` /
+/// `"dark"`); `system_dark` is the result of `system_prefers_dark`.
+/// Returns `"dark"` or `"light"` — the literal token the JS-era
+/// `<html data-theme="...">` carries. Unknown `pref` values map to
+/// `"light"` (matches the JS-era default branch at
+/// `src/managers/theme-manager.js`).
+#[must_use]
+pub fn resolve_color_mode(pref: &str, system_dark: bool) -> &'static str {
+    match pref {
+        "dark" => "dark",
+        "auto" if system_dark => "dark",
+        // "light" and "auto" with !system_dark and any unknown
+        // value all map to "light" — collapsed via wildcard so
+        // clippy's `match_same_arms` lint is satisfied.
+        _ => "light",
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::{apply_resolved, apply_theme, resolve_theme};
@@ -143,5 +200,37 @@ mod tests {
     fn apply_resolved_signature_pinned() {
         apply_resolved("dark");
         apply_resolved("a-theme-that-cannot-exist-xyz123");
+    }
+
+    /// T224: `resolve_color_mode` maps the JS-era settings-level
+    /// preference (`auto` / `light` / `dark`) to a concrete
+    /// `data-theme` token. `auto` resolves against the `system_dark`
+    /// hint (which the wasm body fills via the
+    /// `prefers-color-scheme: dark` media query); `light` and
+    /// `dark` round-trip; unknown values default to `light`.
+    #[test]
+    fn resolve_color_mode_auto_follows_system_hint() {
+        assert_eq!(super::resolve_color_mode("auto", true), "dark");
+        assert_eq!(super::resolve_color_mode("auto", false), "light");
+    }
+
+    #[test]
+    fn resolve_color_mode_explicit_overrides_system() {
+        assert_eq!(super::resolve_color_mode("dark", false), "dark");
+        assert_eq!(super::resolve_color_mode("light", true), "light");
+    }
+
+    #[test]
+    fn resolve_color_mode_unknown_defaults_to_light() {
+        assert_eq!(super::resolve_color_mode("", false), "light");
+        assert_eq!(super::resolve_color_mode("nonsense", true), "light");
+    }
+
+    /// Host-side `system_prefers_dark` is a no-op stub returning
+    /// `false`. Pin the signature so the manager layer's call
+    /// remains type-checked.
+    #[test]
+    fn system_prefers_dark_signature_pinned() {
+        let _ = super::system_prefers_dark();
     }
 }
