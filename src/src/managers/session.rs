@@ -393,4 +393,76 @@ mod tests {
             "delete of unknown id is a no-op",
         );
     }
+
+    /// T173 [RED]: `list_by_date(date_str)` returns only the manual
+    /// sessions whose `date` field matches `date_str`. The date
+    /// string is the chrono format `%a %b %d %Y` produced by
+    /// `engine::date_format::format_session_date(timestamp_ms)` —
+    /// the same format pinned in Phase 2 against JS
+    /// `Date.prototype.toDateString()` parity (data-model.md
+    /// §`Session.date`). Mirrors the JS-side `getSessionsForDate`
+    /// flow at `src/managers/session-manager.js:413-417` where
+    /// `this.sessions[date.toDateString()]` indexes the date-keyed
+    /// in-memory map.
+    ///
+    /// Date strings are compared exactly — there's no timezone
+    /// projection or mid-day rollover here, matching the JS-era
+    /// flow which also key-equals on the `toDateString()` output.
+    ///
+    /// Done-signal: this test currently fails because
+    /// `SessionManager::list_by_date` does not yet exist. T174
+    /// GREEN attaches it.
+    #[test]
+    fn list_by_date_groups_correctly() {
+        use crate::engine::date_format::format_session_date;
+
+        let mut mgr = SessionManager::new();
+        let mut engine = TimerState::new(Durations::default());
+
+        // Three sessions across two distinct dates.
+        // 2024-01-01 UTC → "Mon Jan 01 2024".
+        // 2024-01-02 UTC → "Tue Jan 02 2024".
+        let day_one_ms: i64 = 1_704_067_200_000; // 2024-01-01T00:00:00Z
+        let day_two_ms: i64 = day_one_ms + 86_400_000;
+        let day_one = format_session_date(day_one_ms);
+        let day_two = format_session_date(day_two_ms);
+        assert_ne!(day_one, day_two, "test fixture: two distinct date keys");
+
+        let m1 = sample_manual("m-1", 25, &day_one);
+        let m2 = sample_manual("m-2", 50, &day_one);
+        let m3 = sample_manual("m-3", 30, &day_two);
+        let _ = mgr.create_manual(&mut engine, m1);
+        let _ = mgr.create_manual(&mut engine, m2);
+        let _ = mgr.create_manual(&mut engine, m3);
+
+        let day_one_sessions = mgr.list_by_date(&day_one);
+        let day_two_sessions = mgr.list_by_date(&day_two);
+
+        assert_eq!(
+            day_one_sessions.len(),
+            2,
+            "two sessions on day_one ({day_one})",
+        );
+        assert!(
+            day_one_sessions.iter().all(|s| s.date == day_one),
+            "every session in the day_one bucket carries the day_one date",
+        );
+        assert!(
+            day_one_sessions.iter().any(|s| s.id == "m-1") && day_one_sessions.iter().any(|s| s.id == "m-2"),
+            "day_one bucket contains m-1 and m-2",
+        );
+
+        assert_eq!(
+            day_two_sessions.len(),
+            1,
+            "one session on day_two ({day_two})",
+        );
+        assert_eq!(day_two_sessions[0].id, "m-3");
+
+        // Unknown date returns an empty list (matches the JS-era
+        // `this.sessions[date] || []` shape at line 416).
+        let unknown_day = format_session_date(day_two_ms + 86_400_000);
+        let none = mgr.list_by_date(&unknown_day);
+        assert!(none.is_empty(), "unknown date returns an empty list");
+    }
 }
