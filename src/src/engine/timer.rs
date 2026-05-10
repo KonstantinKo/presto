@@ -240,6 +240,25 @@ impl TimerState {
         self.total_focus_secs
     }
 
+    /// Resets the engine to its initial state.
+    ///
+    /// Idle in `Focus` mode with the focus duration's worth of
+    /// time remaining; clears the per-session elapsed accumulator
+    /// and the wall-clock anchor. The cumulative
+    /// `completed_pomodoros` and `total_focus_secs` are NOT reset
+    /// (those are run-wide; midnight monitoring at
+    /// `pomodoro-timer.js:925-972` clears them — out of Phase 2
+    /// scope). Mirrors `resetTimer` at `pomodoro-timer.js:854-878`.
+    pub const fn reset(&mut self) {
+        self.is_running = false;
+        self.is_auto_paused = false;
+        self.current_mode = TimerMode::Focus;
+        self.time_remaining_secs = self.durations.focus as i64;
+        self.current_session_elapsed_secs = 0;
+        self.timer_start_ms = None;
+        self.timer_duration_secs = None;
+    }
+
     /// Records a manual session backfill of `duration_secs`
     /// through the engine path (per Principle I — manual entries
     /// flow through the same accumulators as live sessions).
