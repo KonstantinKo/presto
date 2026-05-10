@@ -39,3 +39,4 @@ pub mod navigation;
 pub mod session;
 pub mod settings;
 pub mod tag;
+pub mod update;
