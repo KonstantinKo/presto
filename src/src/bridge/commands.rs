@@ -153,6 +153,27 @@ pub async fn get_stats_history() -> Result<Vec<Session>, BridgeError> {
     invoke_serde("get_stats_history", &serde_json::Value::Null).await
 }
 
+/// Append a completed session to the on-disk daily-stats file. Tauri-side
+/// handler: `save_daily_stats(session: PomodoroSession) -> Result<(), BridgeError>`
+/// at `src-tauri/src/lib.rs:526`.
+///
+/// Distinct from `save_session_data`, which overwrites the *live* session
+/// file (a single-record snapshot of the in-progress timer). This command
+/// appends to the daily-stats file (a session-by-session log used by the
+/// stats / history view).
+///
+/// # Errors
+/// Returns `BridgeError::BridgeUnavailable` when the Tauri JS bridge is
+/// not present. Otherwise returns whatever variant the Tauri-side handler
+/// maps its filesystem failure to (typically `BridgeError::Internal`).
+pub async fn save_daily_stats(session: Session) -> Result<(), BridgeError> {
+    #[derive(Serialize)]
+    struct Args {
+        session: Session,
+    }
+    invoke_serde("save_daily_stats", &Args { session }).await
+}
+
 // Tests gated on `wasm32` because every wrapper-test is a
 // `#[wasm_bindgen_test]` — running them via `cargo test` on the host
 // target would produce dead-code lint failures (the host-side
