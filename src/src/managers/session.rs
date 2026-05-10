@@ -286,4 +286,88 @@ mod tests {
             "update of unknown id is a no-op (list unchanged)",
         );
     }
+
+    /// T171 [RED]: `delete_manual(id)` removes the matching entry
+    /// by `id` and the next `save_payload()` returns the bulk
+    /// `Vec<ManualSession>` shape with the entry omitted.
+    ///
+    /// Per tasks.md T172, the on-disk-update path is "bulk re-save
+    /// with the entry omitted, matching the deleted
+    /// `delete_manual_session` JS path" — the Tauri side has no
+    /// per-entry delete command; the wire-level write is a full
+    /// `save_manual_sessions(remaining)` call. The manager's
+    /// `delete_manual` mutation is the local half of that flow;
+    /// `save_manual` is the durable half (already implemented in
+    /// T168 GREEN; reused here).
+    ///
+    /// Engine accumulators are NOT decremented on delete — the JS-
+    /// era flow at `deleteCurrentSession` doesn't touch the engine
+    /// either, and the historical pomodoros / focus-time
+    /// accumulators are run-wide totals that don't shrink on
+    /// retroactive edits.
+    ///
+    /// Done-signal: this test currently fails because
+    /// `SessionManager::delete_manual` does not yet exist.
+    /// T172 GREEN attaches the implementation.
+    #[test]
+    fn manual_session_delete_removes_by_id() {
+        let mut mgr = SessionManager::new();
+        let mut engine = TimerState::new(Durations::default());
+
+        let m1 = sample_manual("m-1", 25, "Sat May 10 2026");
+        let m2 = sample_manual("m-2", 50, "Sat May 10 2026");
+        let m3 = sample_manual("m-3", 30, "Sun May 11 2026");
+        let _ = mgr.create_manual(&mut engine, m1);
+        let _ = mgr.create_manual(&mut engine, m2);
+        let _ = mgr.create_manual(&mut engine, m3);
+        assert_eq!(mgr.manual_sessions().len(), 3);
+
+        let pomodoros_before_delete = engine.completed_pomodoros();
+        let total_focus_before_delete = engine.total_focus_secs();
+
+        mgr.delete_manual("m-2");
+
+        assert_eq!(
+            mgr.manual_sessions().len(),
+            2,
+            "one entry was removed",
+        );
+        assert!(
+            mgr.manual_sessions().iter().all(|s| s.id != "m-2"),
+            "m-2 must not appear in the surviving list",
+        );
+
+        // The bulk save payload reflects the post-delete list — this
+        // IS the wire-level write the JS-era `delete_manual_session`
+        // rebuilds and re-saves at `session-manager.js:380-389`.
+        let payload = mgr.save_payload();
+        assert_eq!(payload.len(), 2, "bulk save payload omits the deleted entry");
+        assert!(
+            payload.iter().all(|s| s.id != "m-2"),
+            "bulk save payload contains no record of m-2",
+        );
+
+        // Engine accumulators are unaffected — historical totals
+        // don't shrink on retroactive deletes (matches the JS-era
+        // flow which also doesn't decrement engine state).
+        assert_eq!(
+            engine.completed_pomodoros(),
+            pomodoros_before_delete,
+            "delete must NOT decrement engine.completed_pomodoros",
+        );
+        assert_eq!(
+            engine.total_focus_secs(),
+            total_focus_before_delete,
+            "delete must NOT decrement engine.total_focus_secs",
+        );
+
+        // Delete-of-unknown-id is a no-op.
+        let len_before_noop = mgr.manual_sessions().len();
+        mgr.delete_manual("m-nope");
+        assert_eq!(
+            mgr.manual_sessions().len(),
+            len_before_noop,
+            "delete of unknown id is a no-op",
+        );
+    }
 }
