@@ -215,12 +215,15 @@ enum StatusBarDisplay {
 /// User-facing settings; the bool fields are independent toggles, splitting
 /// them into nested structs would hurt config readability.
 ///
-/// **Phase 3a F1/M3 migration**: `hide_status_bar: bool` is replaced by
-/// `status_bar_display: StatusBarDisplay`. Legacy 0.4.x settings JSONs
-/// that still carry `hide_status_bar` are projected into the new shape
-/// by the custom deserializer in T152; T150 lands the field default-only.
+/// **Phase 3a F1/M3 migration**: `hide_status_bar: bool` is replaced
+/// by `status_bar_display: StatusBarDisplay`. Legacy 0.4.x settings
+/// JSONs that still carry `hide_status_bar` are projected into the
+/// new shape by the `#[serde(from = "AppSettingsOnDisk")]` shim
+/// below; the derived `Serialize` impl emits only the new shape on
+/// save (legacy field is dropped — no field for it exists).
 #[allow(clippy::struct_excessive_bools)]
 #[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(from = "AppSettingsOnDisk")]
 struct AppSettings {
     shortcuts: ShortcutSettings,
     timer: TimerSettings,
@@ -232,11 +235,65 @@ struct AppSettings {
     analytics_enabled: bool,
     #[serde(default)]
     hide_icon_on_close: bool,
-    /// Phase 3a T150 default-only. The legacy fallback deserializer
-    /// (which projects `hide_status_bar: bool` when the new field is
-    /// missing) is added in T152.
-    #[serde(default)]
     status_bar_display: StatusBarDisplay,
+}
+
+/// On-disk shape of the settings JSON, accepting either the new
+/// `status_bar_display` field or the legacy `hide_status_bar: bool`
+/// field. The `From<AppSettingsOnDisk> for AppSettings` impl
+/// below mirrors the JS-side migration logic at
+/// `src/managers/settings-manager.js:109-119` ported to Rust:
+///
+/// 1. If `status_bar_display` is present, use it.
+/// 2. Else if `hide_status_bar: true`, use `IconOnly`.
+/// 3. Else if `hide_status_bar: false`, use `Default`.
+/// 4. Else, use `StatusBarDisplay::default()` (i.e. `Default`).
+///
+/// Tie-breaker: when both fields are present, the new field wins
+/// (matches the JS-side behaviour at lines 111-113 where the
+/// migration only runs when `status_bar_display === undefined`).
+///
+/// Spec 001-leptos-migration §Phase 3a T152;
+/// data-model.md §"Settings legacy migration". The Leptos-side
+/// mirror is `presto-web::bridge::types::SettingsOnDisk`.
+#[allow(clippy::struct_excessive_bools)]
+#[derive(Debug, Clone, Deserialize)]
+struct AppSettingsOnDisk {
+    shortcuts: ShortcutSettings,
+    timer: TimerSettings,
+    notifications: NotificationSettings,
+    #[serde(default)]
+    advanced: AdvancedSettings,
+    autostart: bool,
+    #[serde(default = "default_analytics_enabled")]
+    analytics_enabled: bool,
+    #[serde(default)]
+    hide_icon_on_close: bool,
+    #[serde(default)]
+    status_bar_display: Option<StatusBarDisplay>,
+    /// Legacy read-only fallback. Never re-emitted on save — the
+    /// post-conversion `AppSettings` has no field for it.
+    #[serde(default)]
+    hide_status_bar: Option<bool>,
+}
+
+impl From<AppSettingsOnDisk> for AppSettings {
+    fn from(raw: AppSettingsOnDisk) -> Self {
+        let status_bar_display = raw.status_bar_display.unwrap_or(match raw.hide_status_bar {
+            Some(true) => StatusBarDisplay::IconOnly,
+            Some(false) | None => StatusBarDisplay::Default,
+        });
+        Self {
+            shortcuts: raw.shortcuts,
+            timer: raw.timer,
+            notifications: raw.notifications,
+            advanced: raw.advanced,
+            autostart: raw.autostart,
+            analytics_enabled: raw.analytics_enabled,
+            hide_icon_on_close: raw.hide_icon_on_close,
+            status_bar_display,
+        }
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -1669,6 +1726,74 @@ mod tests {
             defaults.timer.weekly_goal_minutes
         );
         assert_eq!(s.advanced.debug_mode, defaults.advanced.debug_mode);
+    }
+
+    #[test]
+    fn app_settings_legacy_hide_status_bar_migrates_to_status_bar_display() {
+        // F1/M3 lockstep migration mirror — the Tauri-side companion
+        // to `presto-web::managers::settings::tests::migrates_hide_status_bar_to_status_bar_display`.
+        // Covers the same five cases (per data-model.md §"Settings
+        // legacy migration") so a future drift on either side
+        // regresses loud:
+        //
+        //   1. hide_status_bar:true → IconOnly
+        //   2. hide_status_bar:false → Default
+        //   3. status_bar_display:"icon-only" → IconOnly
+        //   4. status_bar_display:"default" → Default
+        //   5. neither → Default
+        let make_json = |status_bar_fragment: &str| {
+            format!(
+                r#"{{
+                    "shortcuts": {{"start_stop": null, "reset": null, "skip": null}},
+                    "timer": {{"focus_duration": 25, "break_duration": 5,
+                              "long_break_duration": 20, "total_sessions": 10}},
+                    "notifications": {{"desktop_notifications": true,
+                                      "sound_notifications": true,
+                                      "auto_start_timer": true, "smart_pause": false,
+                                      "smart_pause_timeout": 30}},
+                    "autostart": false{status_bar_fragment}
+                }}"#
+            )
+        };
+
+        let cases: &[(&str, StatusBarDisplay)] = &[
+            (r#", "hide_status_bar": true"#, StatusBarDisplay::IconOnly),
+            (r#", "hide_status_bar": false"#, StatusBarDisplay::Default),
+            (
+                r#", "status_bar_display": "icon-only""#,
+                StatusBarDisplay::IconOnly,
+            ),
+            (
+                r#", "status_bar_display": "default""#,
+                StatusBarDisplay::Default,
+            ),
+            ("", StatusBarDisplay::Default),
+        ];
+
+        for (fragment, expected) in cases {
+            let json = make_json(fragment);
+            let s: AppSettings = serde_json::from_str(&json)
+                .unwrap_or_else(|e| panic!("case {fragment:?} must deserialise: {e}"));
+            assert_eq!(
+                s.status_bar_display, *expected,
+                "case {fragment:?} must yield {expected:?}",
+            );
+        }
+
+        // Re-serialising any AppSettings record drops `hide_status_bar`
+        // (no field for it on the struct) — verify with a
+        // hide_status_bar:true round-trip.
+        let json = make_json(r#", "hide_status_bar": true"#);
+        let s: AppSettings = serde_json::from_str(&json).unwrap();
+        let resaved = serde_json::to_string(&s).unwrap();
+        assert!(
+            !resaved.contains("hide_status_bar"),
+            "save must drop legacy hide_status_bar field",
+        );
+        assert!(
+            resaved.contains(r#""status_bar_display":"icon-only""#),
+            "save must emit kebab-case status_bar_display",
+        );
     }
 
     #[test]

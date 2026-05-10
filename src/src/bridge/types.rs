@@ -238,25 +238,27 @@ pub enum StatusBarDisplay {
 }
 
 /// Full application settings record. Mirrors `AppSettings` at
-/// `src-tauri/src/lib.rs:200-213`.
+/// `src-tauri/src/lib.rs`.
 ///
 /// **Wire shape (post-Phase-3a)**: the legacy `hide_status_bar: bool`
 /// field is replaced by `status_bar_display: StatusBarDisplay` per the
-/// F1/M3 lockstep migration (Phase 3a T150 — same commit pair tightens
-/// the Tauri-side `AppSettings`). Legacy 0.4.x settings JSONs that
-/// still carry `hide_status_bar` are read by the custom deserializer
-/// `deserialize_status_bar_display_with_legacy_fallback` (Phase 3a
-/// T152) and re-emitted with only the new shape on next save.
-/// Phase 3a T150 lands the basic field default (no legacy fallback
-/// yet); the legacy fallback follows in T152.
+/// F1/M3 lockstep migration (Phase 3a T150 / T152 — the same commit
+/// pair tightens the Tauri-side `AppSettings`). Legacy 0.4.x settings
+/// JSONs that still carry `hide_status_bar` are read by the
+/// `#[serde(from = "SettingsOnDisk")]` shim below: it accepts either
+/// shape on the wire, projects through the legacy fallback, and the
+/// derived `Serialize` impl on `Settings` then emits only the new
+/// shape on next save (legacy field is gone — there is no field for
+/// it on the struct).
 ///
 /// `clippy::struct_excessive_bools` is allowed here for the same
-/// reason as on `NotificationSettings` and on the Tauri-side mirror
-/// at `src-tauri/src/lib.rs:198`: each bool is an independent
-/// settings toggle exposed in the UI; restructuring would not match
-/// either the on-disk JSON shape or the settings-page layout.
+/// reason as on `NotificationSettings` and on the Tauri-side mirror:
+/// each bool is an independent settings toggle exposed in the UI;
+/// restructuring would not match either the on-disk JSON shape or
+/// the settings-page layout.
 #[allow(clippy::struct_excessive_bools)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(from = "SettingsOnDisk")]
 pub struct Settings {
     pub shortcuts: ShortcutSettings,
     pub timer: TimerSettings,
@@ -268,10 +270,6 @@ pub struct Settings {
     pub analytics_enabled: bool,
     #[serde(default)]
     pub hide_icon_on_close: bool,
-    /// Phase 3a T150 default-only. The legacy fallback deserializer
-    /// (which projects `hide_status_bar: bool` into this enum when the
-    /// new field is missing) is added in T152.
-    #[serde(default)]
     pub status_bar_display: StatusBarDisplay,
 }
 
@@ -286,6 +284,66 @@ impl Default for Settings {
             analytics_enabled: true,
             hide_icon_on_close: false,
             status_bar_display: StatusBarDisplay::Default,
+        }
+    }
+}
+
+/// On-disk shape of the settings JSON, accepting either the new
+/// `status_bar_display: StatusBarDisplay` field or the legacy
+/// `hide_status_bar: bool` field. Used as the
+/// `#[serde(from = "SettingsOnDisk")]` source for `Settings`; the
+/// `From<SettingsOnDisk> for Settings` impl below ports the legacy
+/// fallback from `src/managers/settings-manager.js:109-119`:
+///
+/// 1. If `status_bar_display` is present, use it.
+/// 2. Else if `hide_status_bar: true`, use `IconOnly`.
+/// 3. Else if `hide_status_bar: false`, use `Default`.
+/// 4. Else, use `StatusBarDisplay::default()` (i.e. `Default`).
+///
+/// Tie-breaker: when both fields are present, the new field wins.
+/// This matches the JS-side behaviour at lines 111-113, where the
+/// migration only runs when `loadedSettings.status_bar_display ===
+/// undefined`.
+///
+/// Spec 001-leptos-migration §Phase 3a T152;
+/// data-model.md §"Settings legacy migration".
+#[allow(clippy::struct_excessive_bools)]
+#[derive(Debug, Clone, Deserialize)]
+struct SettingsOnDisk {
+    shortcuts: ShortcutSettings,
+    timer: TimerSettings,
+    notifications: NotificationSettings,
+    #[serde(default)]
+    advanced: AdvancedSettings,
+    autostart: bool,
+    #[serde(default = "default_analytics_enabled")]
+    analytics_enabled: bool,
+    #[serde(default)]
+    hide_icon_on_close: bool,
+    #[serde(default)]
+    status_bar_display: Option<StatusBarDisplay>,
+    /// Legacy field — read-only fallback. The struct that
+    /// `Settings` deserialises into never re-emits this on save
+    /// because the post-conversion `Settings` has no field for it.
+    #[serde(default)]
+    hide_status_bar: Option<bool>,
+}
+
+impl From<SettingsOnDisk> for Settings {
+    fn from(raw: SettingsOnDisk) -> Self {
+        let status_bar_display = raw.status_bar_display.unwrap_or(match raw.hide_status_bar {
+            Some(true) => StatusBarDisplay::IconOnly,
+            Some(false) | None => StatusBarDisplay::Default,
+        });
+        Self {
+            shortcuts: raw.shortcuts,
+            timer: raw.timer,
+            notifications: raw.notifications,
+            advanced: raw.advanced,
+            autostart: raw.autostart,
+            analytics_enabled: raw.analytics_enabled,
+            hide_icon_on_close: raw.hide_icon_on_close,
+            status_bar_display,
         }
     }
 }
