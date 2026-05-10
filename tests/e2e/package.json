@@ -1,0 +1,16 @@
+{
+  "name": "presto-e2e",
+  "private": true,
+  "version": "0.4.4",
+  "type": "module",
+  "description": "Playwright e2e suite for the Leptos+Tauri app. Hosted under tests/e2e/ so the root no longer needs a JS toolchain post-cutover (spec 001-leptos-migration FR-015 / SC-008).",
+  "scripts": {
+    "test": "playwright test",
+    "test:visual": "playwright test visual-regression.spec.js",
+    "test:ui": "playwright test --ui",
+    "install-browsers": "playwright install --with-deps chromium"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.49.0"
+  }
+}

@@ -17,6 +17,14 @@
          leaf name only (`dist/icons/`). -->
     <link data-trunk rel="copy-dir" href="assets/icons" data-target-path="assets/icons" />
     <link rel="stylesheet" href="/assets/icons/remixicon.css" />
+    <!-- Phase 6 (T241): wire the app stylesheet into the Trunk dist.
+         `style/main.css` `@import`s every component sheet under
+         `style/`; Trunk inlines the imports, minifies the result, and
+         fingerprints the output filename. Without this link the
+         `view-container.hidden { display: none }` rule (and every
+         layout rule the e2e suite relies on) is missing, breaking
+         visibility-based assertions. -->
+    <link data-trunk rel="css" href="style/main.css" />
   </head>
   <body>
     <div id="root"></div>
