@@ -329,6 +329,41 @@ mod tests {
         assert!(mgr.is_authenticated());
         assert!(!mgr.is_guest());
     }
+
+    /// T179 [RED]: `sign_out` transitions `SignedIn →
+    /// Unauthenticated` per data-model.md §`AuthState` transitions
+    /// table. Mirrors the JS-side SIGNED_OUT listener at
+    /// `auth-manager.js:56-60` which clears `currentUser`,
+    /// `isGuest = false`, and removes the `presto-guest-mode` key.
+    /// The Rust port collapses these into a single state move:
+    /// post-sign-out, the manager is `Unauthenticated` and the
+    /// localStorage flag is cleared.
+    ///
+    /// Done-signal: this test currently fails because
+    /// `AuthManager::sign_out` does not yet exist. T180 GREEN
+    /// attaches it.
+    #[test]
+    fn sign_out_transition_signed_in_to_unauthenticated() {
+        let store = super::InMemoryGuestModeStore::new();
+        let mut mgr = super::AuthManager::new(store);
+
+        let session = crate::bridge::types::AuthSession {
+            access_token: "access-token-redacted".to_string(),
+            refresh_token: "refresh-token-redacted".to_string(),
+            user: crate::bridge::types::AuthUser {
+                id: "user-uuid-1".to_string(),
+                email: "test@example.com".to_string(),
+                user_metadata: serde_json::json!({}),
+            },
+        };
+        mgr.complete_sign_in(session);
+        assert!(mgr.is_authenticated());
+
+        mgr.sign_out();
+        assert!(matches!(mgr.state(), AuthState::Unauthenticated));
+        assert!(!mgr.is_authenticated());
+        assert!(!mgr.is_guest());
+    }
 }
 
 // ---------------------------------------------------------------------------
