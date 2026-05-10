@@ -151,6 +151,45 @@ impl SessionManager {
     pub fn delete_manual(&mut self, id: &str) {
         self.manual_sessions.retain(|s| s.id != id);
     }
+
+    /// Project the manual-session list to the entries whose `date`
+    /// field matches `date_str`. The date string is the chrono
+    /// format `%a %b %d %Y` produced by
+    /// `engine::date_format::format_session_date(timestamp_ms)` —
+    /// the same format pinned in Phase 2 against JS
+    /// `Date.prototype.toDateString()` parity (data-model.md
+    /// §`Session.date`). Mirrors the JS-side `getSessionsForDate`
+    /// flow at `src/managers/session-manager.js:413-417`.
+    ///
+    /// Returns borrowed references — callers that need owned values
+    /// can `.cloned().collect()`. Unknown date returns an empty
+    /// `Vec` (matches the JS-era `this.sessions[date] || []` shape
+    /// at line 416).
+    ///
+    /// Spec 001-leptos-migration §Phase 3b T174.
+    #[must_use]
+    pub fn list_by_date(&self, date_str: &str) -> Vec<&ManualSession> {
+        self.manual_sessions
+            .iter()
+            .filter(|s| s.date == date_str)
+            .collect()
+    }
+
+    /// Async cold-start path: ask the bridge for the persisted
+    /// manual sessions, fall back to an empty list on any error
+    /// (cold start, bridge unavailable, corrupted file). Mirrors
+    /// the JS-side `loadSessionsFromStorage` flow at
+    /// `src/managers/session-manager.js:25-52`, minus the
+    /// localStorage fallback (Phase 1E
+    /// `import_legacy_manual_sessions` migrated those records to
+    /// the Rust-side store).
+    pub async fn load() -> Self {
+        commands::load_manual_sessions()
+            .await
+            .map_or_else(|_| Self::new(), |loaded| Self {
+                manual_sessions: loaded,
+            })
+    }
 }
 
 #[cfg(test)]
