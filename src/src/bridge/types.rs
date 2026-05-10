@@ -42,6 +42,21 @@ pub struct Task {
     pub completed_at: Option<String>,
 }
 
+/// Per-session per-tag time-spent join row. Mirrors `SessionTag` at
+/// `src-tauri/src/lib.rs:177-182`.
+///
+/// On-disk shape: `snake_case` JSON via serde's default field naming.
+/// `duration` is wall-clock seconds spent on this tag during the named
+/// session — distinct from `ManualSession::duration` (minutes).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SessionTag {
+    pub session_id: String,
+    pub tag_id: String,
+    /// Seconds.
+    pub duration: u32,
+    pub created_at: String,
+}
+
 /// User-defined tag attached to sessions and manual entries. Mirrors `Tag`
 /// at `src-tauri/src/lib.rs:167-174`.
 ///

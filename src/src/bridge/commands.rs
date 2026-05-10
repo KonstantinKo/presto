@@ -31,7 +31,7 @@ use wasm_bindgen_futures::JsFuture;
 
 use super::availability::bridge_available;
 use super::error::BridgeError;
-use super::types::{ManualSession, Session, Tag, Task};
+use super::types::{ManualSession, Session, SessionTag, Tag, Task};
 
 #[wasm_bindgen]
 extern "C" {
@@ -318,6 +318,30 @@ pub async fn delete_tag(tag_id: String) -> Result<(), BridgeError> {
         tag_id: String,
     }
     invoke_serde("delete_tag", &Args { tag_id }).await
+}
+
+/// Append a session-tag join row recording time spent on `tag_id` during
+/// `session_id`.
+///
+/// Tauri-side handler:
+/// `add_session_tag(session_tag: SessionTag) -> Result<(), BridgeError>`
+/// at `src-tauri/src/lib.rs:1113`.
+///
+/// One row per tag per session — the JS era appends them one at a time
+/// via this command. The deleted bulk `save_session_tags(Vec<SessionTag>)`
+/// command had no JS callers and was dropped per Principle VII (see
+/// contracts/tauri-bridge.md §Deletions).
+///
+/// # Errors
+/// Returns `BridgeError::BridgeUnavailable` when the Tauri JS bridge is
+/// not present. Otherwise returns whatever variant the Tauri-side handler
+/// maps its filesystem failure to (typically `BridgeError::Internal`).
+pub async fn add_session_tag(session_tag: SessionTag) -> Result<(), BridgeError> {
+    #[derive(Serialize)]
+    struct Args {
+        session_tag: SessionTag,
+    }
+    invoke_serde("add_session_tag", &Args { session_tag }).await
 }
 
 // Tests gated on `wasm32` because every wrapper-test is a
