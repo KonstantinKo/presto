@@ -18,6 +18,8 @@
 // `!Send`-erasure shim that does nothing on the WASM target.
 #![allow(clippy::future_not_send)]
 
+use crate::bridge::commands;
+use crate::bridge::error::BridgeError;
 use crate::bridge::types::Tag;
 
 /// Wrapper over the user's tag list. Phase 3b wires up the state
@@ -44,6 +46,40 @@ impl TagManager {
     #[must_use]
     pub fn list(&self) -> &[Tag] {
         &self.tags
+    }
+
+    /// Append a new tag to the in-memory list. Pure mutation —
+    /// `id`, `icon`, `color`, and `created_at` are supplied by the
+    /// caller (Phase 4 components own the `crypto.randomUUID()` /
+    /// `tag-<uuid>` shape and the ISO-8601 timestamp). Mirrors the
+    /// JS-side `src/managers/tag-manager.js:286-303` push-then-save
+    /// flow: the manager updates state synchronously and the
+    /// caller hands the same `Tag` to `save_new` to durable-store
+    /// it. Spec 001-leptos-migration §Phase 3b T162.
+    pub fn create(&mut self, tag: Tag) {
+        self.tags.push(tag);
+    }
+
+    /// Async persist path: hand `tag` to
+    /// `bridge::commands::save_tag` (per Principle VI — managers
+    /// reach the Tauri side only through the typed bridge wrapper).
+    /// Mirrors the JS-side `await invoke("save_tag", { tag })` at
+    /// `src/managers/tag-manager.js:298`.
+    ///
+    /// Per the JS-era flow, the in-memory `tags` list is mutated by
+    /// `create()` synchronously and the persist call is best-effort
+    /// — the on-disk store catches up after the async hop. The
+    /// caller pairs the two: `mgr.create(tag.clone());
+    /// mgr.save_new(tag).await?`.
+    ///
+    /// # Errors
+    /// Returns whatever `bridge::commands::save_tag` returns —
+    /// `BridgeError::BridgeUnavailable` when the Tauri JS bridge is
+    /// not present (Trunk dev server, e2e mock, host tests), or
+    /// whichever variant the Tauri-side handler maps its filesystem
+    /// failure to.
+    pub async fn save_new(&self, tag: Tag) -> Result<(), BridgeError> {
+        commands::save_tag(tag).await
     }
 }
 
@@ -77,7 +113,7 @@ mod tests {
             color: "#4CAF50".to_string(),
             created_at: "2026-05-10T00:00:00Z".to_string(),
         };
-        mgr.create(tag.clone());
+        mgr.create(tag);
 
         assert_eq!(mgr.list().len(), 1, "create must append exactly one tag");
         assert_eq!(
