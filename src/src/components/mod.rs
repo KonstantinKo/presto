@@ -38,3 +38,4 @@ pub mod settings;
 pub mod tags;
 pub mod tasks;
 pub mod timer;
+pub mod update_notification;
