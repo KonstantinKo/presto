@@ -703,8 +703,8 @@ mod tests {
         is_autostart_enabled, load_manual_sessions, load_session_data, load_settings, load_tags,
         load_tasks, register_global_shortcuts, reset_all_data, save_daily_stats,
         save_manual_sessions, save_session_data, save_settings, save_tag, save_tasks,
-        start_activity_monitoring, stop_activity_monitoring, update_activity_timeout,
-        update_tray_icon, update_tray_menu, write_excel_file,
+        start_activity_monitoring, start_oauth_server, stop_activity_monitoring,
+        update_activity_timeout, update_tray_icon, update_tray_menu, write_excel_file,
     };
     use crate::bridge::error::BridgeError;
     use crate::bridge::session_type::SessionType;
@@ -1386,5 +1386,32 @@ mod tests {
             "UEsDBBQAAAAIAA==".to_string(),
         )
         .await;
+    }
+
+    #[wasm_bindgen_test]
+    async fn start_oauth_server_round_trip_short_circuits_when_bridge_absent() {
+        let result = start_oauth_server().await;
+        match result {
+            Err(BridgeError::BridgeUnavailable) => {}
+            other => panic!("expected BridgeUnavailable, got {other:?}"),
+        }
+    }
+
+    /// Compile-time signature pin per contracts/tauri-bridge.md row 26:
+    /// `start_oauth_server() -> Result<u16, BridgeError>`.
+    /// Final wrapper in the surviving table. Returns the loopback port
+    /// the OAuth callback HTTP server is bound to (the JS-era flow
+    /// builds the `redirect_uri` against `http://localhost:{port}`);
+    /// `u16` matches the `tauri_plugin_oauth::start` callback's port
+    /// type exactly. The Tauri-side handler also clones the `Window`
+    /// into the callback closure to emit `oauth-callback` events;
+    /// that side-channel is owned by the consumer (`managers::auth`),
+    /// not by the wrapper return.
+    #[wasm_bindgen_test]
+    async fn start_oauth_server_round_trip_signature_pinned() {
+        async fn assert_signature() -> Result<u16, BridgeError> {
+            start_oauth_server().await
+        }
+        let _ = assert_signature().await;
     }
 }
