@@ -371,4 +371,14 @@ mod tests {
         let result = assert_signature().await;
         assert!(result.is_ok(), "cold-start no-op contract: {result:?}");
     }
+
+    /// T104 (RED). Pin `pomodoro-tasks` reader contract.
+    #[wasm_bindgen_test]
+    async fn imports_legacy_tasks() {
+        async fn assert_signature() -> Result<(), super::super::error::BridgeError> {
+            super::import_legacy_tasks_from_storage().await
+        }
+        let result = assert_signature().await;
+        assert!(result.is_ok(), "cold-start no-op contract: {result:?}");
+    }
 }
