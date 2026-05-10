@@ -37,10 +37,21 @@
 #![allow(clippy::redundant_pub_crate)]
 
 use std::path::Path;
+use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 
 use crate::BridgeError;
+
+fn http_client() -> &'static reqwest::Client {
+    static CLIENT: std::sync::OnceLock<reqwest::Client> = std::sync::OnceLock::new();
+    CLIENT.get_or_init(|| {
+        reqwest::Client::builder()
+            .timeout(Duration::from_secs(30))
+            .build()
+            .expect("reqwest client init failed")
+    })
+}
 
 // Supabase project URL + anon key. Lifted from the JS `src/utils/supabase.js`
 // file (the URL and anon key are intentionally public — the anon key is
@@ -108,8 +119,7 @@ async fn post_token<B: Serialize + Sync + ?Sized>(
     body: &B,
 ) -> Result<AuthSession, BridgeError> {
     let url = format!("{SUPABASE_URL}/auth/v1/token?grant_type={grant_type}");
-    let client = reqwest::Client::new();
-    let response = client
+    let response = http_client()
         .post(&url)
         .header("apikey", SUPABASE_ANON_KEY)
         .header("Content-Type", "application/json")
@@ -231,10 +241,9 @@ pub(super) async fn sign_out(refresh_token: &str) -> Result<(), BridgeError> {
         });
     }
     let url = format!("{SUPABASE_URL}/auth/v1/logout");
-    let client = reqwest::Client::new();
     // Best-effort: log network failure but do not fail the command. The
     // local session is cleared by the caller regardless.
-    let _ = client
+    let _ = http_client()
         .post(&url)
         .header("apikey", SUPABASE_ANON_KEY)
         .header("Authorization", format!("Bearer {refresh_token}"))

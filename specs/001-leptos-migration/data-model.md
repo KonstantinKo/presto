@@ -293,7 +293,7 @@ pub enum BridgeError {
     NotFound { resource: String },
     /// `serde-wasm-bindgen` failed to deserialise the return on the Leptos side.
     #[error("serde roundtrip failed in {command}: {error}")]
-    SerdeRoundtrip { command: &'static str, error: String },
+    SerdeRoundtrip { command: String, error: String },
     /// Catch-all for unexpected Tauri-side failures (filesystem errors, plugin errors, etc.).
     #[error("internal: {msg}")]
     Internal { msg: String },

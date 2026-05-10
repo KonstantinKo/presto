@@ -56,6 +56,8 @@ qa:
     # Lockfile-drift gate (T248, Principle IX): manifest-without-lockfile
     # changes between origin/main and HEAD fail-closed. Mirrors the
     # pre-commit hook under .githooks/pre-commit.
+    # Ensure origin/main is resolvable in shallow clones / fresh CI workers.
+    - git rev-parse origin/main >/dev/null 2>&1 || git fetch --no-tags --prune origin main
     - LOCKFILE_BASE_REF=origin/main bash scripts/check-lockfile-drift.sh
 
   format:

@@ -27,6 +27,22 @@ cargo install trunk --locked
 
 Trunk is the WASM bundler + dev server for the Leptos crate.
 
+### Tauri CLI
+
+```bash
+cargo install tauri-cli --version "^2" --locked
+```
+
+Required to run `cargo tauri dev` (Section 3).
+
+### wasm-pack
+
+```bash
+cargo install wasm-pack --locked
+```
+
+Required to run `wasm-pack test` (Section 4).
+
 ### Node.js (e2e scope only)
 
 ```bash
@@ -55,6 +71,9 @@ On macOS: Xcode Command Line Tools (`xcode-select --install`).
 ```bash
 git clone <repo-url>
 cd presto
+
+# Install the repo pre-commit hook (lockfile-drift + fmt checks)
+scripts/install-git-hooks.sh
 
 # Build everything in the workspace, frozen against Cargo.lock
 cargo build --workspace --frozen

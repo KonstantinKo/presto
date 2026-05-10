@@ -11,7 +11,7 @@ The 10 commands deleted in the cutover commit are listed under §Deletions; they
 
 ---
 
-## Surviving commands (26 of today's 36; registered in `src-tauri/src/lib.rs:733`; renumbered post-deletion)
+## Surviving commands (25 of today's 36; registered in `src-tauri/src/lib.rs:733`; renumbered post-deletion)
 
 ### Persistence — sessions
 
@@ -84,17 +84,13 @@ The 10 commands deleted in the cutover commit are listed under §Deletions; they
 
 ### Export
 
-| # | Command | Args | Returns | Leptos wrapper |
-|---|---|---|---|---|
-| 25 | `write_excel_file` | `path: String, data: String (base64)` | `Result<(), BridgeError>` | `pub async fn write_excel_file(path: String, data: String) -> Result<(), BridgeError>` |
-
-`write_excel_file` is the only command in this table whose JS-side caller is itself replaced this feature; it is **deprecated by the new `export_sessions_xlsx`** below and removed in Phase 6 cleanup. The post-cutover, steady-state handler-set count is documented in plan.md §Technical Context, with the transition-only `import_legacy_*` commands counted separately because they are slated for removal one minor version after cutover.
+`write_excel_file` has been deprecated and removed (per T235) in favour of `export_sessions_xlsx` (see §New permanent commands). The surviving command count reflects this removal.
 
 ### OAuth
 
 | # | Command | Args | Returns | Leptos wrapper |
 |---|---|---|---|---|
-| 26 | `start_oauth_server` | _(none)_ | `Result<u16, BridgeError>` (returns the port) | `pub async fn start_oauth_server() -> Result<u16, BridgeError>` |
+| 25 | `start_oauth_server` | _(none)_ | `Result<u16, BridgeError>` (returns the port) | `pub async fn start_oauth_server() -> Result<u16, BridgeError>` |
 
 ### Deletions (cutover commit)
 
@@ -195,7 +191,7 @@ case "supabase_refresh_session":
 async fn export_sessions_xlsx(path: String, sessions: Vec<ManualSession>) -> Result<(), BridgeError>;
 ```
 
-Implementation uses `rust_xlsxwriter` (write-only; lean). Builds the workbook server-side from the typed `ManualSession` list and writes to `path`. The pre-existing `write_excel_file` command is kept for cutover-period parity but unused by the post-cutover Leptos crate; it's removed in Phase 6.
+Implementation uses `rust_xlsxwriter` (write-only; lean). Builds the workbook server-side from the typed `ManualSession` list and writes to `path`. The legacy `write_excel_file` command was removed (per T235); `export_sessions_xlsx` is the sole export handler.
 
 **Leptos wrapper**:
 ```rust

@@ -562,9 +562,7 @@ async fn start_activity_monitoring(
     #[cfg(not(target_os = "macos"))]
     {
         let _ = (app, timeout_seconds);
-        Err(BridgeError::Internal {
-            msg: "Activity monitoring is only supported on macOS".to_string(),
-        })
+        Ok(())
     }
 }
 
@@ -582,17 +580,10 @@ async fn stop_activity_monitoring() -> Result<(), BridgeError> {
 #[tauri::command]
 async fn update_activity_timeout(timeout_seconds: u64) -> Result<(), BridgeError> {
     let monitor = helpers::lock_or_recover(&ACTIVITY_MONITOR);
-    monitor.as_ref().map_or_else(
-        || {
-            Err(BridgeError::Internal {
-                msg: "Activity monitor not initialized".to_string(),
-            })
-        },
-        |m| {
-            m.update_threshold(timeout_seconds);
-            Ok(())
-        },
-    )
+    monitor.as_ref().map_or(Ok(()), |m| {
+        m.update_threshold(timeout_seconds);
+        Ok(())
+    })
 }
 
 #[tauri::command]
@@ -1619,6 +1610,9 @@ async fn mark_legacy_migration_complete(app: AppHandle) -> Result<(), BridgeErro
         .map_err(|e| BridgeError::Internal {
             msg: format!("Failed to get app data directory: {e}"),
         })?;
+    std::fs::create_dir_all(&app_data_dir).map_err(|e| BridgeError::Internal {
+        msg: format!("Failed to create app data directory: {e}"),
+    })?;
     std::fs::write(app_data_dir.join("legacy-migration-done.marker"), b"1").map_err(|e| {
         BridgeError::Internal {
             msg: format!("Failed to write migration sentinel: {e}"),
