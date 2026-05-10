@@ -55,6 +55,17 @@ pub enum TimerEvent {
         skipped_mode: TimerMode,
         elapsed_secs: u32,
     },
+    /// Manual pause emitted by `pause()`. Distinct from
+    /// `AutoPaused` so the bridge layer can disambiguate the
+    /// pause source (manual button click vs. smart-pause / idle
+    /// detection) for tray + UI affordances. Mirrors `pauseTimer`
+    /// at `pomodoro-timer.js:790-822`.
+    SessionPaused,
+    /// Manual resume emitted by `resume()`. Distinct from
+    /// `AutoResumed` (which fires only when smart-pause unwinds
+    /// on observed activity). Mirrors `resumeTimer` at
+    /// `pomodoro-timer.js:824-878`.
+    SessionResumed,
 }
 
 /// Pomodoro state machine.
@@ -66,6 +77,15 @@ pub enum TimerEvent {
 /// `pause` / `resume` / `skip` / `reset` per behavioural tests
 /// T122-T143.
 #[derive(Debug, Clone)]
+// `clippy::struct_excessive_bools`: the JS-era state machine
+// expresses four mutually-distinguishable boolean signals
+// (`isRunning`, `isPaused`, `isAutoPaused`, `smartPauseEnabled`)
+// at `pomodoro-timer.js:18-22`. Folding them into a `State` enum
+// would conflate manual-pause + smart-pause (which the bridge
+// layer renders with different tray icons) and break parity with
+// the JS source. Keeping the bool fields preserves the 1:1
+// behavioural-port mapping that Principle I demands.
+#[allow(clippy::struct_excessive_bools)]
 pub struct TimerState {
     /// Configured per-mode duration set in seconds.
     durations: Durations,
@@ -112,6 +132,15 @@ pub struct TimerState {
     /// distinguishes the two so the resume affordance is correct
     /// (manual resume vs. activity-driven auto-resume).
     is_auto_paused: bool,
+    /// Whether the engine is currently in a manual-pause state
+    /// (user clicked the pause button). Mirrors `isPaused` at
+    /// `pomodoro-timer.js:22`. Mutually exclusive with
+    /// `is_running` — `pause()` flips running off, `resume()`
+    /// flips it back on. Distinct from `is_auto_paused`: smart-
+    /// pause and manual pause have different resume affordances
+    /// (activity-driven vs. button-driven), and the bridge layer
+    /// renders different tray icons for each.
+    is_paused: bool,
     /// Cap on the number of focus pomodoros allowed in this run.
     /// Once `completed_pomodoros == total_sessions`, further
     /// `start()` calls return `MaxSessionCapReached`. Mirrors
@@ -143,6 +172,7 @@ impl TimerState {
             current_session_elapsed_secs: 0,
             smart_pause_enabled: false,
             is_auto_paused: false,
+            is_paused: false,
             total_sessions: 10,
             total_focus_secs: 0,
         }
@@ -230,6 +260,15 @@ impl TimerState {
         self.is_auto_paused
     }
 
+    /// Whether the engine is currently in a manual-pause state.
+    /// Distinct from smart-pause (`is_auto_paused`); the UI / tray
+    /// layer reads both signals to render the correct resume
+    /// affordance.
+    #[must_use]
+    pub const fn is_paused(&self) -> bool {
+        self.is_paused
+    }
+
     /// Configured max-session cap. Mirrors `totalSessions` at
     /// `pomodoro-timer.js:31`.
     #[must_use]
@@ -303,6 +342,7 @@ impl TimerState {
         self.time_remaining_secs = i64::from(self.durations.for_mode(self.current_mode));
         self.is_running = false;
         self.is_auto_paused = false;
+        self.is_paused = false;
         self.timer_start_ms = None;
         self.timer_duration_secs = None;
 
@@ -325,6 +365,7 @@ impl TimerState {
     pub const fn reset(&mut self) {
         self.is_running = false;
         self.is_auto_paused = false;
+        self.is_paused = false;
         self.current_mode = TimerMode::Focus;
         self.time_remaining_secs = self.durations.focus as i64;
         self.current_session_elapsed_secs = 0;
@@ -423,9 +464,76 @@ impl TimerState {
         }
         let now = clock.now_ms();
         self.is_running = true;
+        self.is_paused = false;
         self.timer_start_ms = Some(now);
         self.timer_duration_secs = Some(self.time_remaining_secs);
         Ok(())
+    }
+
+    /// Manually pause the countdown.
+    ///
+    /// Freezes `current_session_elapsed_secs` at its current value
+    /// and clears the wall-clock anchor so subsequent `tick()`s
+    /// short-circuit (the running flag flips off). Resuming via
+    /// `resume()` re-anchors the wall clock to "now" so the pause
+    /// gap doesn't leak into the next tick's elapsed computation.
+    ///
+    /// Mirrors `pauseTimer` at `pomodoro-timer.js:790-822`.
+    /// Distinct from auto-pause (smart-pause); the bridge layer
+    /// renders different tray icons for the two states.
+    ///
+    /// # Errors
+    /// Returns `TimerError::NotRunning` if invoked while the engine
+    /// is idle (not running, not already paused). Pausing while
+    /// already paused is a no-op (`Ok(vec![])`) — the JS source
+    /// silently ignores redundant pauses, and so does this.
+    pub fn pause(&mut self, _clock: &dyn Clock) -> Result<Vec<TimerEvent>, TimerError> {
+        if self.is_paused {
+            // Already paused — no-op (idempotent). The JS source
+            // mirrors this at `pauseTimer:792` (`if (this.isPaused)
+            // return;`).
+            return Ok(Vec::new());
+        }
+        if !self.is_running {
+            return Err(TimerError::NotRunning);
+        }
+        self.is_running = false;
+        self.is_paused = true;
+        // Freeze the wall-clock anchor: clearing `timer_start_ms`
+        // is what makes `tick()` short-circuit (it requires both
+        // anchor + duration to advance). The accumulator is
+        // preserved as-is by virtue of not being touched.
+        self.timer_start_ms = None;
+        self.timer_duration_secs = None;
+        Ok(vec![TimerEvent::SessionPaused])
+    }
+
+    /// Resume from a manual pause.
+    ///
+    /// Re-anchors the wall clock to "now" with the current
+    /// `time_remaining` snapshot so subsequent ticks count from the
+    /// resume moment forward — the pause gap is NOT charged
+    /// against the session. Mirrors `resumeTimer` at
+    /// `pomodoro-timer.js:824-878`.
+    ///
+    /// # Errors
+    /// Returns `TimerError::NotPaused` if invoked while the engine
+    /// is not in a manual-pause state. Resuming while already
+    /// running is a no-op (`Ok(vec![])`) — symmetric with the
+    /// `pause()` no-op when already paused.
+    pub fn resume(&mut self, clock: &dyn Clock) -> Result<Vec<TimerEvent>, TimerError> {
+        if self.is_running && !self.is_paused {
+            // Already running — no-op (idempotent).
+            return Ok(Vec::new());
+        }
+        if !self.is_paused {
+            return Err(TimerError::NotPaused);
+        }
+        self.is_paused = false;
+        self.is_running = true;
+        self.timer_start_ms = Some(clock.now_ms());
+        self.timer_duration_secs = Some(self.time_remaining_secs);
+        Ok(vec![TimerEvent::SessionResumed])
     }
 
     /// Advance the state machine to wall-clock `now`, emitting any
@@ -532,6 +640,16 @@ pub enum TimerError {
     /// the run or bump the cap. Mirrors `totalSessions` at
     /// `pomodoro-timer.js:31`.
     MaxSessionCapReached,
+    /// Attempted to `pause()` while the engine was idle (not
+    /// running, not already paused). Pausing while already paused
+    /// is a no-op (`Ok(vec![])`); pausing from idle is a caller
+    /// bug (the UI gates pause on the running flag).
+    NotRunning,
+    /// Attempted to `resume()` while the engine was not in a
+    /// manual-pause state. Resuming while already running is a
+    /// no-op (`Ok(vec![])`); resuming from a fresh idle state is
+    /// a caller bug (start, not resume, is the right entrypoint).
+    NotPaused,
 }
 
 #[cfg(test)]
@@ -948,9 +1066,10 @@ mod tests {
     /// behaviour it asserts is the audit surface).
     ///
     /// The test currently fails because `pause()` / `resume()` /
-    /// `is_paused()` aren't public on `TimerState` — only `reset()`
-    /// + `start()` exist (the components/timer.rs `on_play_pause`
-    /// path stops the clock by calling `reset()`, which clobbers
+    /// `is_paused()` aren't public on `TimerState` — only the
+    /// existing `reset()` and `start()` exist (the
+    /// `components/timer.rs` `on_play_pause` path stops the clock
+    /// by calling `reset()`, which clobbers
     /// `current_session_elapsed_secs`).
     #[test]
     fn pause_preserves_remaining_time_and_resume_continues_from_same_point() {
