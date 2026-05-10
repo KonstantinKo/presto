@@ -18,6 +18,11 @@
 // - `#email`, `#password` — inputs in the overlay (`spec.js:22-23`).
 // - `#auth-form` — `<form>` host (`spec.js:26`); the spec submits
 //   via `getByRole("button", { name: /login/i })`.
+// - `#auth-error` — inline error surface when sign-in fails (Phase
+//   4e R-003). Hidden until a sign-in attempt errs; the e2e mock
+//   never errs so this is invisible during the spec, but a real
+//   Tauri-bridge build with bad credentials surfaces the message
+//   here instead of silently leaving the overlay open.
 //
 // Per Principle II (Local-First, Privacy-Default), the cold-start
 // state is `AuthState::Unauthenticated` — the user must explicitly
@@ -27,12 +32,15 @@
 // without a bridge dispatch. The overlay is only visible when the
 // user clicks `#user-sign-in`; on cold start the modal is hidden.
 //
-// Per Principle VI, sign-in dispatches via
-// `bridge::commands::supabase_sign_in_with_password`; on success
-// the manager's `complete_sign_in(session)` lifts state to
-// `SignedIn`. Today this commit wires the click → manager flow
-// against the in-memory `RwSignal<AuthState>`; Phase 4c attaches
-// the actual bridge call alongside the Tauri-side handler.
+// **Phase 4e R-003**: sign-in now dispatches the real bridge round
+// trip via `bridge::commands::supabase_sign_in_with_password`. On
+// success the resulting `AuthSession` lifts the shared signal into
+// `SignedIn { user }`; on error the inline `#auth-error` surface
+// renders the error message and the overlay stays open (matching
+// the JS-era `displayError` flow at `auth-manager.js`). The e2e mock
+// returns a stub session whose user_metadata.full_name is
+// "Test User", so the spec's `toHaveText("Test User")` assertion
+// still resolves through the real bridge code path.
 //
 // Lint allowance: `clippy::must_use_candidate` is silenced for the
 // usual Leptos `#[component]` reason. `clippy::too_many_lines` is
@@ -42,8 +50,9 @@
 
 use leptos::ev::SubmitEvent;
 use leptos::prelude::*;
+use leptos::task::spawn_local;
 
-use crate::bridge::types::{AuthSession, AuthUser};
+use crate::bridge::commands;
 use crate::managers::auth::AuthState;
 
 /// Project the current `AuthState` to the display name shown in
@@ -59,24 +68,6 @@ fn user_display_name(state: &AuthState) -> String {
             .get("full_name")
             .and_then(|v| v.as_str())
             .map_or_else(|| user.email.clone(), ToString::to_string),
-    }
-}
-
-/// Construct a stub `AuthSession` for the e2e mock path. The mock
-/// returns a session with `user_metadata.full_name = "Test User"`;
-/// we synthesise the same shape locally so the manager's
-/// `complete_sign_in` lifts state to `SignedIn { user }` with the
-/// expected display name. Phase 4c replaces this with the real
-/// `bridge::commands::supabase_sign_in_with_password` round-trip.
-fn mock_session(email: &str) -> AuthSession {
-    AuthSession {
-        access_token: "mock-access-token".to_string(),
-        refresh_token: "mock-refresh-token".to_string(),
-        user: AuthUser {
-            id: "mock-user-id".to_string(),
-            email: email.to_string(),
-            user_metadata: serde_json::json!({"full_name": "Test User"}),
-        },
     }
 }
 
@@ -117,6 +108,9 @@ pub fn AuthModal(auth_state: RwSignal<AuthState>) -> impl IntoView {
     // Form-input bindings.
     let email = RwSignal::new(String::new());
     let password = RwSignal::new(String::new());
+    // Phase 4e R-003: inline error surface for failed bridge sign-in
+    // round-trips. Empty string = no error displayed.
+    let form_error = RwSignal::new(String::new());
 
     let display_name = Signal::derive(move || auth_state.with(user_display_name));
     let is_authenticated =
@@ -136,25 +130,78 @@ pub fn AuthModal(auth_state: RwSignal<AuthState>) -> impl IntoView {
         // resets to `Unauthenticated` and clears the guest-mode
         // flag. The component path here mirrors that — the
         // RwSignal is the source of truth for the rendered state.
+        //
+        // Phase 4e R-003: also dispatch the bridge `supabase_sign_out`
+        // round-trip so the Tauri-side persisted session is cleared.
+        // The dispatch is best-effort — the in-memory state moves to
+        // `Unauthenticated` regardless of the bridge outcome (the
+        // user clicked Sign Out; a network failure must not strand
+        // them in a phantom `SignedIn` state). We capture the current
+        // refresh token before clobbering the state, so the bridge
+        // call has the credential it needs to revoke at Supabase.
+        let refresh_token = auth_state.with_untracked(|s| match s {
+            AuthState::SignedIn { user: _ } => {
+                // The refresh token is persisted Tauri-side, not
+                // surfaced through `AuthState`. Pass an empty string
+                // and let the Tauri handler load the persisted token
+                // (the handler's first action is to read
+                // `supabase-session.json`). An empty token is the
+                // documented signal for "use the persisted one".
+                String::new()
+            }
+            _ => String::new(),
+        });
         auth_state.set(AuthState::Unauthenticated);
         dropdown_open.set(false);
+        spawn_local(async move {
+            // The bridge call returns `BridgeError::BridgeUnavailable`
+            // on the dev server (Trunk + e2e mock harness). We swallow
+            // every variant — the local sign-out is the load-bearing
+            // user contract, and the Tauri side's idempotency means a
+            // missed call here is recovered on the next launch.
+            let _ = commands::supabase_sign_out(refresh_token).await;
+        });
     };
 
     let on_form_submit = move |ev: SubmitEvent| {
         ev.prevent_default();
         let email_value = email.get();
+        let password_value = password.get();
         if email_value.trim().is_empty() {
             return;
         }
-        // Synthesise the post-sign-in `AuthSession` and lift the
-        // state. Phase 4c replaces this with the actual bridge
-        // call; the in-memory branch is sufficient for the e2e
-        // spec's mocked path.
-        let session = mock_session(&email_value);
-        auth_state.set(AuthState::SignedIn { user: session.user });
-        overlay_open.set(false);
-        email.set(String::new());
-        password.set(String::new());
+        // Clear any prior error so a retry starts from a clean slate.
+        form_error.set(String::new());
+        // Phase 4e R-003: real `supabase_sign_in_with_password`
+        // bridge dispatch. The e2e mock at
+        // `tests/e2e/fixtures/tauriMock.js` returns a stub session
+        // whose `user_metadata.full_name = "Test User"`, so the
+        // existing `auth.spec.js:29 toHaveText("Test User")`
+        // assertion resolves through the real call path. A Trunk
+        // dev-server load (no Tauri bridge) returns
+        // `BridgeError::BridgeUnavailable` and surfaces the message
+        // in `#auth-error`; the user can retry once the bridge is
+        // available.
+        spawn_local(async move {
+            match commands::supabase_sign_in_with_password(email_value, password_value).await {
+                Ok(session) => {
+                    auth_state.set(AuthState::SignedIn { user: session.user });
+                    overlay_open.set(false);
+                    email.set(String::new());
+                    password.set(String::new());
+                    form_error.set(String::new());
+                }
+                Err(e) => {
+                    // Surface a user-facing message. The
+                    // `BridgeError` variants carry distinct text
+                    // (`InvalidArgument` for bad creds,
+                    // `BridgeUnavailable` for dev-server / mock
+                    // load, etc.); rendering `Display` keeps the
+                    // wire-shape contract intact.
+                    form_error.set(format!("{e}"));
+                }
+            }
+        });
     };
 
     view! {
@@ -275,6 +322,29 @@ pub fn AuthModal(auth_state: RwSignal<AuthState>) -> impl IntoView {
                                     on:input=move |ev| password.set(event_target_value(&ev))
                                 />
                             </div>
+                            // Phase 4e R-003: inline error surface
+                            // for failed sign-in dispatches. Hidden
+                            // until a `BridgeError` lands in
+                            // `form_error`. The e2e mock returns
+                            // `Ok` so this is invisible during the
+                            // spec; a real bridge build with bad
+                            // creds renders the error message
+                            // here so the user can retry without
+                            // navigating away.
+                            <div
+                                class="auth-error"
+                                id="auth-error"
+                                role="alert"
+                                style=move || {
+                                    if form_error.with(String::is_empty) {
+                                        "display: none"
+                                    } else {
+                                        ""
+                                    }
+                                }
+                            >
+                                {move || form_error.get()}
+                            </div>
                             <div class="form-actions">
                                 <button type="submit" class="auth-btn primary-btn" data-action="signin">
                                     "Login"
@@ -293,7 +363,7 @@ pub fn AuthModal(auth_state: RwSignal<AuthState>) -> impl IntoView {
 
 #[cfg(test)]
 mod tests {
-    use super::{mock_session, user_display_name};
+    use super::user_display_name;
     use crate::bridge::types::AuthUser;
     use crate::managers::auth::AuthState;
 
@@ -329,25 +399,15 @@ mod tests {
         );
     }
 
-    #[test]
-    fn mock_session_carries_test_user_metadata() {
-        let session = mock_session("a@b.c");
-        assert_eq!(session.user.email, "a@b.c");
-        assert_eq!(
-            session
-                .user
-                .user_metadata
-                .get("full_name")
-                .and_then(|v| v.as_str()),
-            Some("Test User"),
-        );
-    }
-
     /// T212 — selector contract pin. Sourced from
     /// `tests/e2e/auth.spec.js`. Drift here breaks the e2e run.
     /// `continue-guest` is the T213 Principle-II addition (no e2e
     /// spec exercises it yet; pinned here to keep the JS-era
-    /// `src/main.js:470` contract from drifting).
+    /// `src/main.js:470` contract from drifting). `auth-error` is
+    /// the Phase 4e R-003 inline error surface — no e2e spec
+    /// asserts on it (the mock returns Ok so the surface stays
+    /// hidden) but we pin the id so a renaming regression is
+    /// caught loudly.
     #[test]
     fn auth_modal_selector_contract_documented() {
         const REQUIRED_IDS: &[&str] = &[
@@ -361,6 +421,7 @@ mod tests {
             "email",
             "password",
             "continue-guest",
+            "auth-error",
         ];
         let mut seen: Vec<&str> = Vec::with_capacity(REQUIRED_IDS.len());
         for id in REQUIRED_IDS {

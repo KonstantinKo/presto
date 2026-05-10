@@ -85,6 +85,14 @@ pub fn App() -> impl IntoView {
     // `sessions-history.spec.js:38-41` exercises.
     let sessions = RwSignal::new(Vec::<crate::bridge::types::ManualSession>::new());
 
+    // Phase 4e R-004: shared tag list. Today the TimerView owns
+    // its own local signal seeded with a default-focus tag; the
+    // shared signal exists at App level so the persistence sink
+    // and the eventual TimerView refactor can both observe it.
+    // The signal is provided as context for descendants and the
+    // cold-start load below pre-populates it from disk.
+    let tags = RwSignal::new(Vec::<crate::bridge::types::Tag>::new());
+
     // Make `RwSignal<Settings>` available to descendants via context.
     // TimerView reads it to derive the engine's `Durations` from the
     // settings.timer fields (so `settings-general.spec.js` and the
@@ -96,6 +104,7 @@ pub fn App() -> impl IntoView {
     // path propagate to TimerView.
     provide_context(settings);
     provide_context(sessions);
+    provide_context(tags);
 
     // Derived view-active flags. Each per-view container reads its
     // own flag to decide whether to apply `.hidden` — matching the
@@ -159,8 +168,182 @@ pub fn App() -> impl IntoView {
             // `Settings::default()` (matches the JS-era behaviour
             // at `src/managers/settings-manager.js:125-128`).
             if let Ok(loaded) = commands::load_settings().await {
+                // Phase 4e R-002: project the user-state slice
+                // (`guest_mode`) into the auth signal AFTER the
+                // migration ran (so a 0.4.x guest user's
+                // `presto-guest-mode` localStorage flag has been
+                // folded into `Settings.guest_mode` already). The
+                // projection only fires when the in-memory
+                // `auth_state` is still the cold-start
+                // `Unauthenticated` shape — once the user signs in
+                // (or hits Continue as Guest manually), the
+                // post-load projection should not regress them.
+                if loaded.guest_mode {
+                    auth_state.update(|s| {
+                        if matches!(s, AuthState::Unauthenticated) {
+                            *s = AuthState::Guest;
+                        }
+                    });
+                }
                 settings.set(loaded);
             }
+            // Phase 4e R-003: cold-start session probe — read the
+            // persisted Supabase session from disk; if present, lift
+            // the auth signal into `SignedIn`. Mirrors the JS-era
+            // `auth-manager.js`'s `getSession()` cold-start hop.
+            // Only overrides the projection above when a real
+            // session exists; the bridge-unavailable path is silently
+            // absorbed (the dev server has no Tauri bridge, so
+            // `Ok(None)` and `Err(BridgeUnavailable)` both reduce to
+            // "no signed-in user" which leaves the auth signal at
+            // its current value).
+            if let Ok(Some(session)) = commands::supabase_get_session().await {
+                auth_state.set(AuthState::SignedIn { user: session.user });
+            }
+        });
+
+        // Phase 4e R-004: debounced settings persistence sink.
+        //
+        // The shared `RwSignal<Settings>` is the source of truth
+        // for every Settings tab. This Effect re-runs whenever the
+        // signal changes; rather than firing the bridge call on
+        // every keystroke (a slider drag could pump >50 changes /
+        // second), we schedule a `setTimeout` 300ms in the future
+        // and reset the schedule on each subsequent change. Once
+        // the user pauses for 300ms, the latest value lands on
+        // disk via `commands::save_settings`.
+        //
+        // The first effect run captures the initial signal value
+        // (right after `commands::load_settings` hydrates it). We
+        // skip the FIRST save attempt so the load → save → load
+        // cycle doesn't tail-chase itself; the cold-start guard
+        // (`first_run`) flips after the first invocation.
+        //
+        // Mirrors the JS-era `scheduleAutoSave()` flow at
+        // `src/managers/settings-manager.js:116`.
+        let first_run = std::rc::Rc::new(std::cell::Cell::new(true));
+        let pending_handle = std::rc::Rc::new(std::cell::Cell::new(
+            None::<leptos::leptos_dom::helpers::TimeoutHandle>,
+        ));
+        Effect::new(move |_| {
+            // Track the signal: every settings mutation re-runs
+            // this closure.
+            let snapshot = settings.get();
+            // Skip the very first effect run — that fires on mount
+            // before `load_settings` has even returned, so persisting
+            // would write `Settings::default()` over the user's
+            // on-disk state.
+            if first_run.get() {
+                first_run.set(false);
+                return;
+            }
+            // Cancel any in-flight debounce window so the latest
+            // edit wins. The `TimeoutHandle::clear()` is a no-op if
+            // the timeout has already fired.
+            if let Some(handle) = pending_handle.take() {
+                handle.clear();
+            }
+            // Schedule the bridge save 300ms from now.
+            let handle_clone = pending_handle.clone();
+            let scheduled = leptos::leptos_dom::helpers::set_timeout_with_handle(
+                move || {
+                    let to_save = snapshot.clone();
+                    handle_clone.set(None);
+                    spawn_local(async move {
+                        // Errors absorbed — the bridge-unavailable
+                        // path on the dev server is expected; a real
+                        // Tauri build only fails here for filesystem
+                        // failures (which would surface in dev tools
+                        // rather than UI). The next mutation fires
+                        // another save.
+                        let _ = commands::save_settings(to_save).await;
+                    });
+                },
+                std::time::Duration::from_millis(300),
+            );
+            if let Ok(handle) = scheduled {
+                pending_handle.set(Some(handle));
+            }
+        });
+
+        // Phase 4e R-004: session persistence sink. The shared
+        // `sessions` signal is appended to by TimerView's tick
+        // closure on `PomodoroCompleted` events. The Effect re-runs
+        // on every push and persists the full bulk list via
+        // `bridge::commands::save_manual_sessions`. Like the
+        // settings sink, the first effect run is skipped so the
+        // load → save cycle doesn't tail-chase.
+        //
+        // Manual session CRUD also runs through this signal (the
+        // CalendarView add/edit/delete handlers update the same
+        // `RwSignal<Vec<ManualSession>>`), so a single sink
+        // captures both auto-completed timer sessions and manual
+        // backfills. Bulk-rewrite matches the JS-era
+        // `saveSessionsToStorage` flow at
+        // `src/managers/session-manager.js:54-78`.
+        let sessions_first_run = std::rc::Rc::new(std::cell::Cell::new(true));
+        Effect::new(move |_| {
+            let snapshot = sessions.get();
+            if sessions_first_run.get() {
+                sessions_first_run.set(false);
+                return;
+            }
+            spawn_local(async move {
+                let _ = commands::save_manual_sessions(snapshot).await;
+            });
+        });
+
+        // Phase 4e R-004: cold-start hydration for session/tag lists.
+        // Read the persisted bulk lists into the shared signals so the
+        // CalendarView / TagsView starting state matches disk.
+        spawn_local(async move {
+            if let Ok(loaded) = commands::load_manual_sessions().await {
+                // Bypass the persistence sink's first-run guard by
+                // setting before any user mutation lands. The Effect
+                // above sees this as the FIRST signal value and skips
+                // the round-trip back to disk.
+                sessions.set(loaded);
+            }
+        });
+        // Tag list hydration. Today the TimerView owns its own
+        // local `RwSignal<Vec<Tag>>` because the JS-era surface
+        // had a single dropdown anchored under `#timer-status`;
+        // threading the shared `tags` context into that signal is
+        // the load-bearing follow-up. The cold-start load runs
+        // here so the eventual refactor consumes a populated
+        // context — until then the loaded list is observed via
+        // the persistence sink below (which writes any future
+        // mutation through the bridge).
+        spawn_local(async move {
+            if let Ok(loaded) = commands::load_tags().await {
+                tags.set(loaded);
+            }
+        });
+
+        // Phase 4e R-004: tag persistence sink. Bulk re-save on
+        // every mutation. The Tauri side has a single per-tag
+        // `save_tag` and `delete_tag` rather than a bulk rewrite,
+        // so we don't have a clean bulk-save command — instead the
+        // sink exists to serialize new tags as they're added,
+        // matching the JS-era `saveTagsToStorage` flow. Today the
+        // sink is wired but most mutations still happen on a
+        // local TimerView signal; once the TimerView consumes the
+        // shared `tags` context, this will fire on every tag CRUD.
+        let tags_first_run = std::rc::Rc::new(std::cell::Cell::new(true));
+        Effect::new(move |_| {
+            let snapshot = tags.get();
+            if tags_first_run.get() {
+                tags_first_run.set(false);
+                return;
+            }
+            spawn_local(async move {
+                // Per-tag save: iterate the list and re-save each.
+                // The Tauri-side handler is idempotent on id so a
+                // re-save of an unchanged tag is a no-op.
+                for tag in snapshot {
+                    let _ = commands::save_tag(tag).await;
+                }
+            });
         });
 
         // Subscribe to `tauri://update-available` emits. The

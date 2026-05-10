@@ -543,3 +543,19 @@
     font-size: 14px;
   }
 }
+
+/* Phase 4e R-003: inline error surface for failed sign-in dispatches.
+ * Hidden by default via the component's inline `style="display:none"`
+ * toggle when no error is present; the styling here applies only when
+ * the surface is shown. Subtle red so the user notices the message
+ * but the form remains the focal point. */
+.auth-error {
+  margin: 12px 0 0 0;
+  padding: 10px 14px;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  color: #b91c1c;
+  font-size: 14px;
+  line-height: 1.4;
+}
