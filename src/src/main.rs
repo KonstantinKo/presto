@@ -1,15 +1,20 @@
-// Phase 0 hello-world entry. Replaced wholesale in Phases 1-5.
-// Per spec 001-leptos-migration plan.md §Phase 0 exit criteria and
-// tasks.md T005 (`leptos::mount_to_body(|| view! { <p>"hello"</p> })`).
+// Binary entry point for the Leptos-driven `presto-web` frontend.
 //
-// The bridge module tree (typed Tauri command boundary) lives in the lib
-// root at `src/src/lib.rs`; the binary uses it via the package's lib
-// crate path (`presto_web::bridge::*`). Phase 1A T024 introduces this
-// lib + bin layout; see `lib.rs` for rationale.
+// Per spec 001-leptos-migration tasks.md, Phase 4 mounts the
+// component tree (Phase 4a: T189-T203 — five core screens; Phase 4b
+// adds settings/auth/update/team). The full router lands at T217 in
+// Phase 4c — until then, `main.rs` mounts the `TimerView` directly
+// so the e2e suite's first-paint selectors (`#timer-view`,
+// `#timer-minutes`, `#timer-seconds`) resolve under `trunk serve`.
+//
+// The component tree lives in the package's lib crate at
+// `src/src/lib.rs`; the binary imports via the public crate path
+// `presto_web::components::*`. The lib root carries the Phase 1A
+// T024 rationale for the lib + bin split.
 
-use leptos::prelude::*;
+use presto_web::components::timer::TimerView;
 
 fn main() {
     console_error_panic_hook::set_once();
-    leptos::mount::mount_to_body(|| view! { <p>"hello"</p> });
+    leptos::mount::mount_to_body(TimerView);
 }

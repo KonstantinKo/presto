@@ -18,5 +18,6 @@
 // correct shape for Phase 1C onwards when bridge wrappers grow.
 
 pub mod bridge;
+pub mod components;
 pub mod engine;
 pub mod managers;
