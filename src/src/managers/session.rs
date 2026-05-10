@@ -316,7 +316,7 @@ mod tests {
             .find(|s| s.id == "m-1")
             .expect("m-1 still in the list");
         assert_eq!(m1_after.duration, 40, "duration replaced");
-        assert_eq!(m1_after.notes.as_deref(), Some("revised"), "notes replaced",);
+        assert_eq!(m1_after.notes.as_deref(), Some("revised"), "notes replaced");
 
         // Engine accumulators are unaffected by an update — only the
         // persisted record changes (mirrors the JS-era flow which
@@ -382,7 +382,7 @@ mod tests {
 
         mgr.delete_manual("m-2");
 
-        assert_eq!(mgr.manual_sessions().len(), 2, "one entry was removed",);
+        assert_eq!(mgr.manual_sessions().len(), 2, "one entry was removed");
         assert!(
             mgr.manual_sessions().iter().all(|s| s.id != "m-2"),
             "m-2 must not appear in the surviving list",
