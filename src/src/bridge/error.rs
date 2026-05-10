@@ -156,4 +156,54 @@ mod tests {
             assert_eq!(format!("{variant:?}"), format!("{decoded:?}"));
         }
     }
+
+    /// Pins the `Display` output for every variant — the `thiserror::Error`
+    /// derive generates `Display` from the `#[error("...")]` attributes.
+    /// These strings appear in log output and in the `SerdeRoundtrip::error`
+    /// field when a bridge command fails; a silent change would mislead
+    /// operators diagnosing production failures.
+    #[test]
+    fn display_messages_match_error_attributes() {
+        assert_eq!(
+            format!("{}", BridgeError::BridgeUnavailable),
+            "bridge unavailable",
+        );
+        assert_eq!(
+            format!("{}", BridgeError::NotAuthenticated),
+            "not authenticated",
+        );
+        assert_eq!(
+            format!(
+                "{}",
+                BridgeError::InvalidArgument {
+                    field: "email".to_string(),
+                    reason: "empty".to_string(),
+                }
+            ),
+            "invalid argument email: empty",
+        );
+        assert_eq!(
+            format!(
+                "{}",
+                BridgeError::NotFound {
+                    resource: "settings.json".to_string(),
+                }
+            ),
+            "not found: settings.json",
+        );
+        assert_eq!(
+            format!(
+                "{}",
+                BridgeError::SerdeRoundtrip {
+                    command: "load_settings".to_string(),
+                    error: "missing field".to_string(),
+                }
+            ),
+            "serde roundtrip failed in load_settings: missing field",
+        );
+        assert_eq!(
+            format!("{}", BridgeError::Internal { msg: "disk full".to_string() }),
+            "internal: disk full",
+        );
+    }
 }

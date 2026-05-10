@@ -360,6 +360,55 @@ pub async fn migrate_legacy_localstorage() -> Result<(), BridgeError> {
     Ok(())
 }
 
+// Host-target tests for pure helpers (no DOM, no wasm-bindgen).
+// These run under `cargo test --lib` on any platform.
+#[cfg(test)]
+mod host_tests {
+    use super::parse_json;
+    use crate::bridge::types::Session;
+
+    /// `parse_json(None)` is the "key absent from localStorage" branch —
+    /// must return `None` without attempting deserialisation.
+    #[test]
+    fn parse_json_returns_none_for_absent_key() {
+        let result: Option<Session> = parse_json(None);
+        assert!(result.is_none());
+    }
+
+    /// `parse_json(Some(invalid))` is the "key present but corrupt"
+    /// branch — must absorb the parse failure and return `None`
+    /// (per-record leniency; mirrors the JS-era `JSON.parse` try-catch
+    /// that treats a corrupt blob as "no data").
+    #[test]
+    fn parse_json_returns_none_for_corrupt_json() {
+        let result: Option<Session> = parse_json(Some("not-json{".to_string()));
+        assert!(result.is_none());
+    }
+
+    /// `parse_json(Some(valid))` is the happy path — deserialises the
+    /// JSON string into the target type and returns `Some(value)`.
+    #[test]
+    fn parse_json_returns_some_for_valid_json() {
+        let json = r#"{"completed_pomodoros":3,"total_focus_time":4500,"current_session":4,"date":"Sat May 10 2026"}"#.to_string();
+        let result: Option<Session> = parse_json(Some(json));
+        assert!(result.is_some());
+        let s = result.unwrap();
+        assert_eq!(s.completed_pomodoros, 3);
+        assert_eq!(s.total_focus_time, 4500);
+        assert_eq!(s.date, "Sat May 10 2026");
+    }
+
+    /// Mismatched types (valid JSON, wrong shape) return `None` — the
+    /// "key present but wrong type" guard used by the settings and
+    /// session readers to absorb legacy format drift without panicking.
+    #[test]
+    fn parse_json_returns_none_for_type_mismatch() {
+        // A plain number is valid JSON but not a `Session` object.
+        let result: Option<Session> = parse_json(Some("42".to_string()));
+        assert!(result.is_none());
+    }
+}
+
 // Tests gated on `wasm32` because every assertion is a
 // `#[wasm_bindgen_test]` — running them via `cargo test` on the host
 // target would produce dead-code lint failures. `wasm-pack test --node`
