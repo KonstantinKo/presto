@@ -331,6 +331,26 @@ const TAURI_MOCK_INIT_SCRIPT = `
             // integration test in src-tauri/tests/ covers).
             return;
 
+          case "import_legacy_supabase_session":
+          case "import_legacy_settings":
+          case "import_legacy_history":
+          case "import_legacy_tasks":
+          case "import_legacy_tags":
+          case "import_legacy_manual_sessions":
+          case "import_legacy_user_state":
+            // Spec 001-leptos-migration T099 (mock-first per FR-010 /
+            // Principle VI). Transition-only commands per
+            // contracts/tauri-bridge.md §"Transition-only commands":
+            // they migrate JS-era localStorage payloads into the
+            // Rust-side authoritative stores on first post-cutover
+            // launch. Each is idempotent (handler skips when the
+            // Rust-side store already has data). The e2e harness has
+            // no legacy data to migrate (the mock starts each test
+            // with a clean Rust-side state), so the no-op return
+            // faithfully models the cutover-launch path. Sunset:
+            // removed one minor version after cutover.
+            return;
+
           case "plugin:updater|check": {
             // Read config lazily so override scripts that run after this init script
             // can configure the updater response.
