@@ -825,8 +825,8 @@ mod tests {
         load_tasks, register_global_shortcuts, reset_all_data, save_daily_stats,
         save_manual_sessions, save_session_data, save_settings, save_tag, save_tasks,
         start_activity_monitoring, start_oauth_server, stop_activity_monitoring,
-        supabase_sign_in_with_password, track_event, update_activity_timeout, update_tray_icon,
-        update_tray_menu, write_excel_file,
+        supabase_sign_in_with_password, supabase_sign_out, track_event,
+        update_activity_timeout, update_tray_icon, update_tray_menu, write_excel_file,
     };
     use crate::bridge::error::BridgeError;
     use crate::bridge::session_type::SessionType;
@@ -1645,5 +1645,32 @@ mod tests {
             supabase_sign_in_with_password(email, password).await
         }
         let _ = assert_signature("user@example.com".to_string(), "hunter2".to_string()).await;
+    }
+
+    #[wasm_bindgen_test]
+    async fn supabase_sign_out_round_trip_short_circuits_when_bridge_absent() {
+        let result = supabase_sign_out("rt-token".to_string()).await;
+        match result {
+            Err(BridgeError::BridgeUnavailable) => {}
+            other => panic!("expected BridgeUnavailable, got {other:?}"),
+        }
+    }
+
+    /// Compile-time signature pin per contracts/tauri-bridge.md §"Supabase
+    /// auth adapter family":
+    /// `supabase_sign_out(refresh_token: String) -> Result<(), BridgeError>`.
+    /// `refresh_token` is required (the Supabase REST `/auth/v1/logout`
+    /// endpoint demands it as the Authorization Bearer); the wrapper
+    /// surfaces the request rather than reading the token Rust-side
+    /// because the call site (`managers/auth.rs`) already holds the
+    /// session record and passes the token explicitly. Tauri-side
+    /// handler also clears the persisted session file on success — that
+    /// side-effect is not observable from the wrapper return.
+    #[wasm_bindgen_test]
+    async fn supabase_sign_out_round_trip_signature_pinned() {
+        async fn assert_signature(refresh_token: String) -> Result<(), BridgeError> {
+            supabase_sign_out(refresh_token).await
+        }
+        let _ = assert_signature("rt-token".to_string()).await;
     }
 }
