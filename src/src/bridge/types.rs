@@ -678,10 +678,10 @@ pub struct UpdateAvailablePayload {
 mod tests {
     use super::{
         AppearanceSettings, AuthSession, AuthUser, LegacyHistoryPayload,
-        LegacyManualSessionsPayload, LegacyTagsPayload, LegacyTasksPayload,
-        LegacyUserStatePayload, ManualSession, NotificationSettings, Session, SessionTag, Settings,
-        ShortcutSettings, StatusBarDisplay, SupabaseSessionPayload, Tag, Task, TimerSettings,
-        UpdateAvailablePayload, UpdateTrayIconArgs,
+        LegacyManualSessionsPayload, LegacyTagsPayload, LegacyTasksPayload, LegacyUserStatePayload,
+        ManualSession, NotificationSettings, Session, SessionTag, Settings, ShortcutSettings,
+        StatusBarDisplay, SupabaseSessionPayload, Tag, Task, TimerSettings, UpdateAvailablePayload,
+        UpdateTrayIconArgs,
     };
     use crate::bridge::session_type::SessionType;
     use crate::bridge::timer_mode::TimerMode;
@@ -1000,7 +1000,10 @@ mod tests {
     #[test]
     fn notification_settings_default_values() {
         let n = NotificationSettings::default();
-        assert!(n.desktop_notifications, "desktop_notifications defaults true");
+        assert!(
+            n.desktop_notifications,
+            "desktop_notifications defaults true"
+        );
         assert!(n.sound_notifications, "sound_notifications defaults true");
         assert!(n.auto_start_timer, "auto_start_timer defaults true");
         assert!(!n.auto_start_focus, "auto_start_focus defaults false");
@@ -1009,7 +1012,10 @@ mod tests {
             "allow_continuous_sessions defaults false",
         );
         assert!(!n.smart_pause, "smart_pause defaults false");
-        assert_eq!(n.smart_pause_timeout, 30, "smart_pause_timeout defaults 30s");
+        assert_eq!(
+            n.smart_pause_timeout, 30,
+            "smart_pause_timeout defaults 30s"
+        );
     }
 
     /// Pins the `TimerSettings` defaults in isolation — the values are
@@ -1220,7 +1226,8 @@ mod tests {
 
     #[test]
     fn legacy_user_state_payload_round_trips_with_absent_optional_fields() {
-        let json = r#"{"guest_mode":null,"auth_seen":null,"skipped_versions":[],"active_session":null}"#;
+        let json =
+            r#"{"guest_mode":null,"auth_seen":null,"skipped_versions":[],"active_session":null}"#;
         let decoded: LegacyUserStatePayload = serde_json::from_str(json).unwrap();
         assert!(decoded.guest_mode.is_none());
         assert!(decoded.auth_seen.is_none());

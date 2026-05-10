@@ -57,8 +57,16 @@ mod tests {
     fn default_values_are_standard_pomodoro_durations() {
         let d = Durations::default();
         assert_eq!(d.focus, 25 * 60, "focus must be 25 min in seconds");
-        assert_eq!(d.short_break, 5 * 60, "short break must be 5 min in seconds");
-        assert_eq!(d.long_break, 20 * 60, "long break must be 20 min in seconds");
+        assert_eq!(
+            d.short_break,
+            5 * 60,
+            "short break must be 5 min in seconds"
+        );
+        assert_eq!(
+            d.long_break,
+            20 * 60,
+            "long break must be 20 min in seconds"
+        );
     }
 
     /// `for_mode` routes each `TimerMode` variant to the matching

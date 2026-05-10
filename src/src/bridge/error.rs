@@ -202,7 +202,12 @@ mod tests {
             "serde roundtrip failed in load_settings: missing field",
         );
         assert_eq!(
-            format!("{}", BridgeError::Internal { msg: "disk full".to_string() }),
+            format!(
+                "{}",
+                BridgeError::Internal {
+                    msg: "disk full".to_string()
+                }
+            ),
             "internal: disk full",
         );
     }
