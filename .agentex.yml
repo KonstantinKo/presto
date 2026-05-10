@@ -45,6 +45,10 @@ qa:
     # plugin-injected commands are exempt. See scripts/check-mock-drift.sh
     # header for the full exemption list.
     - bash scripts/check-mock-drift.sh
+    # Engine purity gate (T246, Principle I): no `web_sys` / `web-sys`
+    # references under src/src/engine/. The engine is a pure Rust state
+    # machine; DOM input enters via the bridge layer.
+    - bash scripts/check-engine-purity.sh
     # Baseline-cap gate (T244, Principle IV): at most 2 visual-regression
     # baseline PNGs may change in a single PR. >2 escalates to a
     # constitution-amendment-or-spec-revision discussion.
