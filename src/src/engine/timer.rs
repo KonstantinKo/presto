@@ -267,6 +267,7 @@ pub enum TimerError {}
 mod tests {
     use super::TimerState;
     use crate::bridge::timer_mode::TimerMode;
+    use crate::engine::activity_signal::ActivitySignal;
     use crate::engine::clock::Clock;
     use crate::engine::durations::Durations;
     use core::cell::Cell;
@@ -363,6 +364,35 @@ mod tests {
         state.start(clock).expect("start break");
         clock.advance(i64::from(state.current_mode_duration_secs()) * 1000);
         state.tick(clock);
+    }
+
+    /// T132: with smart-pause enabled, observing an `Idle` activity
+    /// signal during a running focus session auto-pauses the timer.
+    /// Mirrors `autoPauseTimer` at `pomodoro-timer.js:524-562`:
+    /// the JS-side path checks `smartPauseEnabled && isRunning &&
+    /// !isPaused && !isAutoPaused && currentMode === "focus"` and
+    /// then sets `isAutoPaused = true; isPaused = true` and stops
+    /// the tick loop. The engine port mirrors that gate exactly,
+    /// emitting `AutoPaused` so the bridge can update tray + UI.
+    #[test]
+    fn smart_pause_pauses_after_inactive_timeout() {
+        let clock = MockClock::new(0);
+        let mut state = TimerState::new(Durations::default());
+        state.set_smart_pause_enabled(true);
+        state.start(&clock).expect("start");
+        clock.advance(1_000);
+        state.tick(&clock);
+
+        let events = state.observe_activity(ActivitySignal::Idle);
+
+        assert!(state.is_auto_paused());
+        assert!(!state.is_running());
+        assert!(
+            events
+                .iter()
+                .any(|e| matches!(e, super::TimerEvent::AutoPaused)),
+            "expected AutoPaused in {events:?}"
+        );
     }
 
     /// T128: drift compensation recovers after an OS-suspend gap.
