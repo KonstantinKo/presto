@@ -936,4 +936,87 @@ mod tests {
         assert_eq!(state.current_mode(), TimerMode::LongBreak);
         assert_eq!(state.time_remaining_secs(), 20 * 60);
     }
+
+    /// Engine backfill (Phase 4a/4b gap): explicit manual pause/resume
+    /// must preserve the per-session elapsed accumulator across the
+    /// pause window — the suspend gap does NOT count as focus work,
+    /// and post-resume ticks accrue from the frozen value forward.
+    ///
+    /// Mirrors the JS-era `pauseTimer` / `resumeTimer` at
+    /// `pomodoro-timer.js:790-878`. The contract pin is the test
+    /// name itself (per AGENTS.md §"RED-first": the test name + the
+    /// behaviour it asserts is the audit surface).
+    ///
+    /// The test currently fails because `pause()` / `resume()` /
+    /// `is_paused()` aren't public on `TimerState` — only `reset()`
+    /// + `start()` exist (the components/timer.rs `on_play_pause`
+    /// path stops the clock by calling `reset()`, which clobbers
+    /// `current_session_elapsed_secs`).
+    #[test]
+    fn pause_preserves_remaining_time_and_resume_continues_from_same_point() {
+        let clock = MockClock::new(0);
+        let mut state = TimerState::new(Durations::default());
+        state.start(&clock).expect("start");
+
+        // 5 minutes elapsed mid-focus (no completion yet — still
+        // 20 minutes left in the focus countdown).
+        clock.advance(5 * 60 * 1000);
+        let _ = state.tick(&clock);
+        let elapsed_before_pause = state.current_session_elapsed_secs();
+        let remaining_before_pause = state.time_remaining_secs();
+        assert_eq!(elapsed_before_pause, 5 * 60);
+
+        // Manual pause. The wall-clock anchor freezes; the engine
+        // is no longer running.
+        let pause_events = state.pause(&clock).expect("pause should succeed");
+        assert!(
+            pause_events
+                .iter()
+                .any(|e| matches!(e, super::TimerEvent::SessionPaused)),
+            "expected SessionPaused in {pause_events:?}"
+        );
+        assert!(state.is_paused());
+        assert!(!state.is_running());
+
+        // 2 minutes pass during the pause — these MUST NOT count.
+        clock.advance(2 * 60 * 1000);
+        let _ = state.tick(&clock);
+        assert_eq!(
+            state.current_session_elapsed_secs(),
+            elapsed_before_pause,
+            "elapsed time frozen during pause"
+        );
+        assert_eq!(
+            state.time_remaining_secs(),
+            remaining_before_pause,
+            "time remaining frozen during pause"
+        );
+
+        // Resume. Re-anchor the wall clock; subsequent ticks add to
+        // the frozen accumulator going forward.
+        let resume_events = state.resume(&clock).expect("resume should succeed");
+        assert!(
+            resume_events
+                .iter()
+                .any(|e| matches!(e, super::TimerEvent::SessionResumed)),
+            "expected SessionResumed in {resume_events:?}"
+        );
+        assert!(!state.is_paused());
+        assert!(state.is_running());
+
+        // 1 minute after resume — the accumulator and countdown
+        // each move by exactly 60 seconds.
+        clock.advance(60 * 1000);
+        let _ = state.tick(&clock);
+        assert_eq!(
+            state.current_session_elapsed_secs(),
+            elapsed_before_pause + 60,
+            "elapsed time tracks again after resume"
+        );
+        assert_eq!(
+            state.time_remaining_secs(),
+            remaining_before_pause - 60,
+            "countdown resumes from the same point"
+        );
+    }
 }
