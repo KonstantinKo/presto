@@ -254,7 +254,8 @@ mod tests {
         }
     }
 
-    /// Selector contract pin for the history view, sourced from
+    /// T197 — visual-regression / selector contract pin for the
+    /// history view. Sourced from
     /// `tests/e2e/sessions-history.spec.js`. Each entry maps to a
     /// `locator("#…")` callsite in the spec; drift here breaks
     /// the e2e run for that flow.
@@ -263,10 +264,23 @@ mod tests {
     ///   the table inline in the calendar view; the Leptos port
     ///   lifts it to a dedicated container so `NavView::History`
     ///   dispatches cleanly).
-    /// - `sessions-table-body` — `<tbody>` host (`spec.js:37`).
-    /// - `session-modal-overlay` — modal backdrop (`spec.js:42`).
-    /// - `session-duration` — duration field (`spec.js:44`).
-    /// - `close-session-modal` — close button (`spec.js:47`).
+    /// - `sessions-table-body` — `<tbody>` host (`spec.js:37`
+    ///   asserts `.getByRole("row")`).
+    /// - `session-modal-overlay` — modal backdrop (`spec.js:42`
+    ///   `toBeVisible`, `spec.js:48` `toBeHidden`).
+    /// - `session-duration` — duration field (`spec.js:44`
+    ///   `toBeVisible`).
+    /// - `close-session-modal` — close button (`spec.js:47`
+    ///   click).
+    /// - "Edit session" buttons — sourced via `getByRole("button",
+    ///   { name: "Edit session" })` at `spec.js:41`. The
+    ///   per-row aria-label is the contract surface; we pin
+    ///   the literal here.
+    ///
+    /// Visual baseline updates are out of scope per AGENTS.md
+    /// §"Don't update visual regression baselines without
+    /// explicit visual review" — this test only pins the string
+    /// contract.
     #[test]
     fn history_view_selector_contract_documented() {
         const REQUIRED_IDS: &[&str] = &[
@@ -277,6 +291,8 @@ mod tests {
             "session-duration",
             "close-session-modal",
         ];
+        const EDIT_BUTTON_ARIA_LABEL: &str = "Edit session";
+        const CLOSE_BUTTON_ARIA_LABEL: &str = "Close edit modal";
         let mut seen: Vec<&str> = Vec::with_capacity(REQUIRED_IDS.len());
         for id in REQUIRED_IDS {
             assert!(!id.is_empty(), "selector ID must not be empty");
@@ -286,6 +302,14 @@ mod tests {
             );
             seen.push(id);
         }
+        assert_eq!(
+            EDIT_BUTTON_ARIA_LABEL, "Edit session",
+            "edit-button aria-label must match spec.js:41 getByRole",
+        );
+        assert!(
+            !CLOSE_BUTTON_ARIA_LABEL.is_empty(),
+            "close-button aria-label must be set for accessibility",
+        );
     }
 
     /// `filter_by_date(list, None)` returns every row.
