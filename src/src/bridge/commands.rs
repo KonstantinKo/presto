@@ -121,6 +121,22 @@ pub async fn save_session_data(session: Session) -> Result<(), BridgeError> {
     invoke_serde("save_session_data", &Args { session }).await
 }
 
+/// Read the persisted live session from disk. Tauri-side handler:
+/// `load_session_data() -> Result<Option<PomodoroSession>, BridgeError>`
+/// at `src-tauri/src/lib.rs:483`.
+///
+/// `Option<Session>` is the load-bearing shape — the handler returns
+/// `None` for the cold-start "no session yet" case rather than surfacing
+/// it as `BridgeError::NotFound`.
+///
+/// # Errors
+/// Returns `BridgeError::BridgeUnavailable` when the Tauri JS bridge is
+/// not present. Otherwise returns whatever variant the Tauri-side handler
+/// maps its filesystem failure to (typically `BridgeError::Internal`).
+pub async fn load_session_data() -> Result<Option<Session>, BridgeError> {
+    invoke_serde("load_session_data", &serde_json::Value::Null).await
+}
+
 // Tests gated on `wasm32` because every wrapper-test is a
 // `#[wasm_bindgen_test]` — running them via `cargo test` on the host
 // target would produce dead-code lint failures (the host-side
