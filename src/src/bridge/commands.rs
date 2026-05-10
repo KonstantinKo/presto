@@ -391,6 +391,26 @@ pub async fn load_settings() -> Result<Settings, BridgeError> {
     invoke_serde("load_settings", &serde_json::Value::Null).await
 }
 
+/// Wipe every app-data file and reset the in-process settings state.
+///
+/// Removes all sessions, history, tasks, manual sessions, tags, and
+/// session-tag join files, then resets the in-process `SettingsState`
+/// to `AppSettings::default()`. Tauri-side handler:
+/// `reset_all_data() -> Result<(), BridgeError>` at
+/// `src-tauri/src/lib.rs:698`.
+///
+/// No-arg destructive command. The JS-side caller is expected to gate
+/// on user intent (a confirm dialog) before invoking; the wrapper does
+/// not interpose its own confirmation step.
+///
+/// # Errors
+/// Returns `BridgeError::BridgeUnavailable` when the Tauri JS bridge is
+/// not present. Otherwise returns whatever variant the Tauri-side handler
+/// maps its filesystem failure to (typically `BridgeError::Internal`).
+pub async fn reset_all_data() -> Result<(), BridgeError> {
+    invoke_serde("reset_all_data", &serde_json::Value::Null).await
+}
+
 // Tests gated on `wasm32` because every wrapper-test is a
 // `#[wasm_bindgen_test]` — running them via `cargo test` on the host
 // target would produce dead-code lint failures (the host-side
