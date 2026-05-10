@@ -31,7 +31,7 @@ use wasm_bindgen_futures::JsFuture;
 
 use super::availability::bridge_available;
 use super::error::BridgeError;
-use super::types::{Session, Task};
+use super::types::{ManualSession, Session, Task};
 
 #[wasm_bindgen]
 extern "C" {
@@ -208,6 +208,32 @@ pub async fn save_tasks(tasks: Vec<Task>) -> Result<(), BridgeError> {
 /// maps its filesystem failure to (typically `BridgeError::Internal`).
 pub async fn load_tasks() -> Result<Vec<Task>, BridgeError> {
     invoke_serde("load_tasks", &serde_json::Value::Null).await
+}
+
+// ---------------------------------------------------------------------------
+// Persistence — manual sessions
+// ---------------------------------------------------------------------------
+
+/// Persist the user's manual-session entries to disk. Tauri-side handler:
+/// `save_manual_sessions(sessions: Vec<ManualSession>) -> Result<(), BridgeError>`
+/// at `src-tauri/src/lib.rs:736`.
+///
+/// The closed-domain `SessionType` enum is enforced at the wrapper
+/// boundary (Phase 1A T029) — a stringly-typed `session_type` value
+/// would not compile here. Wire form is preserved exactly per FR-005:
+/// `SessionType` serialises as the existing camelCase strings
+/// (`"focus"` / `"break"` / `"longBreak"` / `"custom"`).
+///
+/// # Errors
+/// Returns `BridgeError::BridgeUnavailable` when the Tauri JS bridge is
+/// not present. Otherwise returns whatever variant the Tauri-side handler
+/// maps its filesystem failure to (typically `BridgeError::Internal`).
+pub async fn save_manual_sessions(sessions: Vec<ManualSession>) -> Result<(), BridgeError> {
+    #[derive(Serialize)]
+    struct Args {
+        sessions: Vec<ManualSession>,
+    }
+    invoke_serde("save_manual_sessions", &Args { sessions }).await
 }
 
 // Tests gated on `wasm32` because every wrapper-test is a
