@@ -13,3 +13,4 @@ pub mod availability;
 pub mod commands;
 pub mod error;
 pub mod session_type;
+pub mod types;

@@ -60,7 +60,12 @@ pub fn bridge_available() -> BridgeAvailable {
     }
 }
 
-#[cfg(test)]
+// Tests gated on `wasm32` because every assertion is a
+// `#[wasm_bindgen_test]` — running them via `cargo test` on the host
+// target would produce dead-code lint failures. `wasm-pack test --node`
+// is the canonical test driver per `quickstart.md` line 105 and tasks.md
+// T030 done-signal.
+#[cfg(all(test, target_arch = "wasm32"))]
 mod tests {
     use super::{bridge_available, BridgeAvailable};
     use wasm_bindgen_test::wasm_bindgen_test;
