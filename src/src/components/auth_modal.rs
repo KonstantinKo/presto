@@ -227,7 +227,7 @@ pub fn AuthModal(auth_state: RwSignal<AuthState>) -> impl IntoView {
         >
             <div class="auth-container">
                 <div class="auth-header">
-                    <h1>"Welcome to Presto"</h1>
+                    <h1>"Welcome to Presto! 🍅"</h1>
                     <p>"Your productivity companion is ready to help you stay focused."</p>
                 </div>
                 <div class="auth-content">
@@ -244,7 +244,7 @@ pub fn AuthModal(auth_state: RwSignal<AuthState>) -> impl IntoView {
                             </div>
                             <h3>"Continue as Guest"</h3>
                             <p>
-                                "Try Presto without creating an account. Your data stays local."
+                                "Try Presto without creating an account. Your data will be stored locally only."
                             </p>
                             <button
                                 class="auth-btn guest-btn"
@@ -254,7 +254,8 @@ pub fn AuthModal(auth_state: RwSignal<AuthState>) -> impl IntoView {
                                     overlay_open.set(false);
                                 }
                             >
-                                "Continue as Guest"
+                                <i class="ri-arrow-left-line"></i>
+                                " Continue as Guest"
                             </button>
                         </div>
                     </div>
