@@ -12,27 +12,21 @@
 // `format_session_date` so existing JSON files round-trip without
 // migration.
 
-use chrono::{DateTime, Utc};
-
 /// Formats a unix timestamp (milliseconds) as the JS-era
 /// `Date.prototype.toDateString()` shape: `"%a %b %d %Y"`
 /// (e.g. `"Wed Jan 01 2025"`).
 ///
-/// The format string is pinned by `tests::matches_js_to_date_string`,
-/// which iterates 366 consecutive days and asserts byte-for-byte
-/// equality against an independently-computed JS-equivalent. This
-/// is the single point where the on-disk session-date wire form
-/// is produced post-cutover.
+/// On `wasm32` this delegates to `js_sys::Date::new(ms).toDateString()`
+/// so the output uses the user's **local** time zone — matching the
+/// JS-era source which always used local-time `toDateString()`. On
+/// all other targets (host-side tests, CI) it falls back to the
+/// chrono-UTC path; the 366-day parity test
+/// (`tests::matches_js_to_date_string`) pins that fallback.
 ///
-/// Returns the UTC-projected date. The JS-era source uses local-
-/// time `toDateString()` because `Date` objects are local-time-
-/// projected; for a single-user app where the clock and the
-/// renderer are colocated, UTC vs local diverge only on the
-/// midnight-boundary corner cases that the JS source itself
-/// handles via `currentDateString` polling at
-/// `pomodoro-timer.js:925-933`. Phase 2 ships UTC here; Phase 3
-/// (manager layer) wires the local-time projection if needed —
-/// the format pin doesn't change.
+/// This is the single point where the on-disk session-date wire form
+/// is produced post-cutover. Both `synth_completed_session` in
+/// `components::timer` and the `CalendarView` grouping route through
+/// this helper so they remain consistent.
 ///
 /// # Panics
 /// Cannot panic: `from_timestamp(0, 0)` is the unix epoch which
@@ -40,10 +34,22 @@ use chrono::{DateTime, Utc};
 /// `i64::MAX`-overflow corner case in `from_timestamp_millis`.
 #[must_use]
 pub fn format_session_date(timestamp_ms: i64) -> String {
-    DateTime::<Utc>::from_timestamp_millis(timestamp_ms)
-        .unwrap_or_else(|| DateTime::<Utc>::from_timestamp(0, 0).expect("epoch is valid"))
-        .format("%a %b %d %Y")
-        .to_string()
+    #[cfg(target_arch = "wasm32")]
+    {
+        // Mirrors JS-era `new Date(ms).toDateString()` — local-time
+        // projection. Both session-save producers MUST agree, so we
+        // route both through this helper.
+        let d = js_sys::Date::new(&wasm_bindgen::JsValue::from_f64(timestamp_ms as f64));
+        return d.to_date_string().as_string().unwrap_or_default();
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        use chrono::{DateTime, Utc};
+        DateTime::<Utc>::from_timestamp_millis(timestamp_ms)
+            .unwrap_or_else(|| DateTime::<Utc>::from_timestamp(0, 0).expect("epoch is valid"))
+            .format("%a %b %d %Y")
+            .to_string()
+    }
 }
 
 #[cfg(test)]

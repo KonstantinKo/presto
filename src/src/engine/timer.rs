@@ -66,6 +66,21 @@ pub enum TimerEvent {
     /// on observed activity). Mirrors `resumeTimer` at
     /// `pomodoro-timer.js:824-878`.
     SessionResumed,
+    /// Two minutes remain in the current focus session (120→≤120
+    /// crossing during `Focus` mode). Only emitted in `Focus` mode;
+    /// the `new_remaining > 0` guard ensures it does not fire on the
+    /// same tick as the zero-cross. Mirrors `pomodoro-timer.js:758-775`.
+    TwoMinutesRemaining,
+    /// Thirty seconds remain in the current focus session (30→≤30
+    /// crossing during `Focus` mode). Only emitted in `Focus` mode.
+    /// Mirrors `pomodoro-timer.js:758-775`.
+    ThirtySecondsRemaining,
+    /// The current session crossed zero while `allow_continuous_sessions`
+    /// is enabled. Fires once on the zero-cross; subsequent ticks
+    /// advance `time_remaining_secs` further negative without re-firing.
+    /// Mirrors the continuous-session overtime branch at
+    /// `pomodoro-timer.js:776-785`.
+    OvertimeStarted { mode: TimerMode },
 }
 
 /// Pomodoro state machine.
@@ -151,6 +166,16 @@ pub struct TimerState {
     /// live sessions and manual backfills (per Principle I)
     /// integrate into this accumulator.
     total_focus_secs: u32,
+    /// When `true`, a focus session that crosses zero enters overtime
+    /// (time remaining goes negative) rather than transitioning to
+    /// `Break`. Toggled via `set_allow_continuous_sessions`. Mirrors
+    /// the JS-era continuous-sessions setting.
+    allow_continuous_sessions: bool,
+    /// Set on the focus zero-cross when `allow_continuous_sessions`
+    /// is on; cleared by `skip()` and `reset()`. Prevents a second
+    /// `completed_pomodoros` increment if the user manually skips
+    /// during overtime — the zero-cross already counted the session.
+    session_completed_but_not_saved: bool,
 }
 
 impl TimerState {
@@ -175,6 +200,8 @@ impl TimerState {
             is_paused: false,
             total_sessions: 10,
             total_focus_secs: 0,
+            allow_continuous_sessions: false,
+            session_completed_but_not_saved: false,
         }
     }
 
@@ -200,6 +227,15 @@ impl TimerState {
         } else {
             self.time_remaining_secs as u32
         }
+    }
+
+    /// Signed seconds remaining. Negative during overtime when
+    /// `allow_continuous_sessions` is enabled. The unsigned
+    /// `time_remaining_secs()` clamps at 0 for normal display; this
+    /// accessor lets the UI show the absolute overtime elapsed.
+    #[must_use]
+    pub const fn time_remaining_secs_signed(&self) -> i64 {
+        self.time_remaining_secs
     }
 
     /// Count of focus pomodoros completed since construction or last
@@ -251,6 +287,13 @@ impl TimerState {
         if !enabled && self.is_auto_paused {
             self.is_auto_paused = false;
         }
+    }
+
+    /// Enables or disables continuous-sessions (overtime) mode.
+    /// When enabled, a focus session that crosses zero re-anchors
+    /// and runs negative rather than transitioning to break.
+    pub const fn set_allow_continuous_sessions(&mut self, enabled: bool) {
+        self.allow_continuous_sessions = enabled;
     }
 
     /// Whether the engine is currently in the smart-pause
@@ -323,10 +366,17 @@ impl TimerState {
 
         match skipped_mode {
             TimerMode::Focus => {
-                self.completed_pomodoros = self.completed_pomodoros.saturating_add(1);
-                self.total_focus_secs = self
-                    .total_focus_secs
-                    .saturating_add(self.current_session_elapsed_secs);
+                if self.session_completed_but_not_saved {
+                    // The zero-cross already counted this session;
+                    // don't double-increment completed_pomodoros or
+                    // re-integrate elapsed when skipping during overtime.
+                    self.session_completed_but_not_saved = false;
+                } else {
+                    self.completed_pomodoros = self.completed_pomodoros.saturating_add(1);
+                    self.total_focus_secs = self
+                        .total_focus_secs
+                        .saturating_add(self.current_session_elapsed_secs);
+                }
                 self.current_session_elapsed_secs = 0;
                 self.current_mode = if self.completed_pomodoros.is_multiple_of(4) {
                     TimerMode::LongBreak
@@ -402,6 +452,7 @@ impl TimerState {
         self.current_session_elapsed_secs = 0;
         self.timer_start_ms = None;
         self.timer_duration_secs = None;
+        self.session_completed_but_not_saved = false;
     }
 
     /// Records a manual session backfill of `duration_secs`
@@ -425,12 +476,11 @@ impl TimerState {
     /// Mirrors the JS-era `adjustTimer` flow at
     /// `pomodoro-timer.js:adjustTimer` (the `-5/+5` right-rail
     /// affordance — visible on the visual-regression baseline).
-    /// `delta_secs > 0` adds time, `< 0` subtracts. The remaining
-    /// time is clamped to the inclusive range `[1, current mode
-    /// duration]` so a `-5` press near zero doesn't roll the
-    /// countdown negative and a `+5` press at full duration
-    /// doesn't bloat past the configured mode duration (the JS-era
-    /// `adjustTimer` enforces both clamps).
+    /// `delta_secs > 0` adds time, `< 0` subtracts. Floors at
+    /// 1 second so a `-5` press near zero doesn't roll the countdown
+    /// negative. No upper bound — the JS-era `adjustTimer` only
+    /// floored at zero, allowing power users to run
+    /// longer-than-configured sessions.
     ///
     /// When the timer is running, this rebases the wall-clock
     /// anchor to "now" with the new remaining time as the duration
@@ -444,16 +494,12 @@ impl TimerState {
     /// already worked the elapsed time, the adjust button only
     /// shifts the *future* portion of the session.
     pub fn adjust_remaining_secs(&mut self, delta_secs: i32, clock: &dyn Clock) {
-        let max_secs = i64::from(self.durations.for_mode(self.current_mode));
         let proposed = self
             .time_remaining_secs
             .saturating_add(i64::from(delta_secs));
-        // Floor at 1 second (the JS-era clamp prevents the display
-        // from showing 0:00 outside the natural completion path).
-        // Ceil at the current mode's full duration so a +5 press at
-        // a full focus duration doesn't bloat the countdown past
-        // the configured limit.
-        let clamped = proposed.clamp(1, max_secs);
+        // Floor at 1 second so a press near zero doesn't roll the
+        // display to 0:00 outside the natural completion path.
+        let clamped = proposed.max(1);
         self.time_remaining_secs = clamped;
 
         // Re-anchor the wall clock when running so the next tick
@@ -653,7 +699,7 @@ impl TimerState {
         let old_remaining = self.time_remaining_secs;
         self.time_remaining_secs = new_remaining;
 
-        self.tick_drift_compensation(old_remaining, new_remaining)
+        self.tick_drift_compensation(old_remaining, new_remaining, now)
     }
 
     /// Integrate one tick's worth of elapsed time into the engine's
@@ -663,11 +709,14 @@ impl TimerState {
     /// `old_remaining` is `self.time_remaining_secs` *before* the
     /// tick updated it; `new_remaining` is the freshly-computed
     /// value (already written to `self.time_remaining_secs` by the
-    /// caller). Returns any events that fired during this tick.
+    /// caller). `now_ms` is the wall-clock timestamp captured in
+    /// `tick()` — used to re-anchor the overtime countdown.
+    /// Returns any events that fired during this tick.
     fn tick_drift_compensation(
         &mut self,
         old_remaining: i64,
         new_remaining: i64,
+        now_ms: i64,
     ) -> Vec<TimerEvent> {
         let mut events = Vec::new();
 
@@ -687,12 +736,58 @@ impl TimerState {
             }
         }
 
+        // 2-minute and 30-second warning events (focus mode only).
+        // Placed before the zero-cross block so a tick that crosses
+        // both 120 and 0 emits the warning AND the completion.
+        // The `new_remaining > 0` guard prevents the warning from
+        // firing on the same tick as the zero-cross itself. Mirrors
+        // `pomodoro-timer.js:758-775`.
+        if self.current_mode == TimerMode::Focus {
+            if old_remaining > 120 && new_remaining <= 120 && new_remaining > 0 {
+                events.push(TimerEvent::TwoMinutesRemaining);
+            }
+            if old_remaining > 30 && new_remaining <= 30 && new_remaining > 0 {
+                events.push(TimerEvent::ThirtySecondsRemaining);
+            }
+        }
+
         // Zero-cross from positive to non-positive triggers the
         // mode's completion transition. Mirrors the
         // `oldTimeRemaining > 0 && timeRemaining <= 0` check at
         // `pomodoro-timer.js:777`.
         if old_remaining > 0 && new_remaining <= 0 {
             match self.current_mode {
+                TimerMode::Focus if self.allow_continuous_sessions => {
+                    // Continuous sessions: count the completion but
+                    // don't flip mode. Re-anchor so subsequent ticks
+                    // make `time_remaining_secs` go negative.
+                    // Mirrors `pomodoro-timer.js:776-785`.
+                    self.completed_pomodoros = self.completed_pomodoros.saturating_add(1);
+                    self.total_focus_secs = self
+                        .total_focus_secs
+                        .saturating_add(self.current_session_elapsed_secs);
+                    self.current_session_elapsed_secs = 0;
+                    events.push(TimerEvent::PomodoroCompleted {
+                        completed_pomodoros: self.completed_pomodoros,
+                    });
+                    events.push(TimerEvent::OvertimeStarted {
+                        mode: TimerMode::Focus,
+                    });
+                    self.session_completed_but_not_saved = true;
+                    // Re-anchor at zero so elapsed time from here
+                    // subtracts from 0 → negative.
+                    self.timer_start_ms = Some(now_ms);
+                    self.timer_duration_secs = Some(0);
+                }
+                TimerMode::Break | TimerMode::LongBreak if self.allow_continuous_sessions => {
+                    // Break overtime: re-anchor without mode flip or
+                    // accumulator change.
+                    events.push(TimerEvent::OvertimeStarted {
+                        mode: self.current_mode,
+                    });
+                    self.timer_start_ms = Some(now_ms);
+                    self.timer_duration_secs = Some(0);
+                }
                 TimerMode::Focus => {
                     self.completed_pomodoros = self.completed_pomodoros.saturating_add(1);
                     // Integrate the wall-clock-accumulated focus
@@ -714,18 +809,24 @@ impl TimerState {
                     } else {
                         TimerMode::Break
                     };
+                    self.time_remaining_secs =
+                        i64::from(self.durations.for_mode(self.current_mode));
+                    self.is_running = false;
+                    self.timer_start_ms = None;
+                    self.timer_duration_secs = None;
                 }
                 TimerMode::Break | TimerMode::LongBreak => {
                     // Break-mode completion returns to focus. Mirrors
                     // `pomodoro-timer.js:1213` (`this.currentMode =
                     // "focus"`).
                     self.current_mode = TimerMode::Focus;
+                    self.time_remaining_secs =
+                        i64::from(self.durations.for_mode(self.current_mode));
+                    self.is_running = false;
+                    self.timer_start_ms = None;
+                    self.timer_duration_secs = None;
                 }
             }
-            self.time_remaining_secs = i64::from(self.durations.for_mode(self.current_mode));
-            self.is_running = false;
-            self.timer_start_ms = None;
-            self.timer_duration_secs = None;
         }
 
         events
@@ -1329,26 +1430,40 @@ mod tests {
     }
 
     /// `adjust_remaining_secs(+300)` adds 5 minutes to an idle timer
-    /// and clamps at the current mode's full duration. The JS-era
-    /// right-rail `+5` press is the visual-regression baseline's
-    /// `#timer-plus-btn`; the engine method is the post-Phase-4d
-    /// API that closes that gap.
+    /// with no upper-bound ceiling. The JS-era right-rail `+5` press
+    /// is the visual-regression baseline's `#timer-plus-btn`; power
+    /// users can extend a session past the configured duration.
     #[test]
     fn adjust_remaining_adds_seconds_when_idle() {
         let clock = MockClock::new(0);
         let mut state = TimerState::new(Durations::default()); // focus 1500
-                                                               // Knock the displayed remaining down to 1200 first so the
-                                                               // +300 doesn't immediately saturate against the cap.
+                                                               // Knock the displayed remaining down to 1200 first.
         state.adjust_remaining_secs(-300, &clock);
         assert_eq!(state.time_remaining_secs(), 1200);
         state.adjust_remaining_secs(300, &clock);
         assert_eq!(state.time_remaining_secs(), 1500);
-        // A second +300 saturates against the focus cap.
+        // No ceiling: a second +300 should climb past the mode cap.
         state.adjust_remaining_secs(300, &clock);
         assert_eq!(
             state.time_remaining_secs(),
-            1500,
-            "+5 at full duration must clamp at the mode cap",
+            1800,
+            "+5 past mode cap must not be clamped",
+        );
+    }
+
+    /// `adjust_remaining_secs(+300)` has no upper bound — repeated
+    /// presses accumulate past the configured mode duration.
+    #[test]
+    fn adjust_remaining_does_not_clamp_at_mode_duration() {
+        let clock = MockClock::new(0);
+        let mut state = TimerState::new(Durations::default()); // focus 1500
+        for _ in 0..4 {
+            state.adjust_remaining_secs(300, &clock);
+        }
+        assert_eq!(
+            state.time_remaining_secs(),
+            1500 + 4 * 300,
+            "four +5 presses from full must reach 2700",
         );
     }
 
@@ -1385,18 +1500,156 @@ mod tests {
         clock.advance(5_000);
         let _ = state.tick(&clock);
         assert_eq!(state.time_remaining_secs(), 1495);
-        // +5: 1495 + 300 = 1795, but clamped at 1500 (focus cap).
+        // +5: 1495 + 300 = 1795 (no ceiling — see adjust_remaining_does_not_clamp).
         state.adjust_remaining_secs(300, &clock);
-        assert_eq!(state.time_remaining_secs(), 1500);
+        assert_eq!(state.time_remaining_secs(), 1795);
         // Advance another 1 second → next tick decrements from
-        // the post-adjust baseline (1500 → 1499), proving the
+        // the post-adjust baseline (1795 → 1794), proving the
         // anchor was rebased.
         clock.advance(1_000);
         let _ = state.tick(&clock);
         assert_eq!(
             state.time_remaining_secs(),
-            1499,
+            1794,
             "post-adjust tick must measure against the rebased anchor",
         );
+    }
+
+    /// `TwoMinutesRemaining` fires exactly when the countdown crosses
+    /// the 120 → ≤120 boundary in Focus mode, and NOT in Break mode.
+    #[test]
+    fn two_minutes_warning_fires_on_120_crossing_focus_only() {
+        // --- Focus mode ---
+        let clock = MockClock::new(0);
+        let mut state = TimerState::new(Durations {
+            focus: 240,
+            short_break: 300,
+            long_break: 1200,
+        });
+        state.start(&clock).expect("start focus");
+        // Advance 121 s → remaining = 240 - 121 = 119 (crosses 120).
+        clock.advance(121 * 1000);
+        let events = state.tick(&clock);
+        assert!(
+            events
+                .iter()
+                .any(|e| matches!(e, super::TimerEvent::TwoMinutesRemaining)),
+            "TwoMinutesRemaining must fire on 120→119 crossing in Focus; events={events:?}",
+        );
+
+        // --- Break mode must NOT emit ---
+        let clock2 = MockClock::new(0);
+        let mut state2 = TimerState::new(Durations {
+            focus: 240,
+            short_break: 300,
+            long_break: 1200,
+        });
+        state2.start(&clock2).expect("start focus");
+        clock2.advance(240 * 1000);
+        state2.tick(&clock2); // completes focus → Break
+        assert_eq!(state2.current_mode(), TimerMode::Break);
+        state2.start(&clock2).expect("start break");
+        clock2.advance(181 * 1000); // crosses 120 in break
+        let break_events = state2.tick(&clock2);
+        assert!(
+            !break_events
+                .iter()
+                .any(|e| matches!(e, super::TimerEvent::TwoMinutesRemaining)),
+            "TwoMinutesRemaining must NOT fire in Break mode; events={break_events:?}",
+        );
+    }
+
+    /// `ThirtySecondsRemaining` fires on the 30 → ≤30 crossing in
+    /// Focus mode.
+    #[test]
+    fn thirty_seconds_warning_fires_on_30_crossing() {
+        let clock = MockClock::new(0);
+        let mut state = TimerState::new(Durations {
+            focus: 60,
+            short_break: 300,
+            long_break: 1200,
+        });
+        state.start(&clock).expect("start");
+        // Advance 31 s → remaining = 60 - 31 = 29 (crosses 30).
+        clock.advance(31 * 1000);
+        let events = state.tick(&clock);
+        assert!(
+            events
+                .iter()
+                .any(|e| matches!(e, super::TimerEvent::ThirtySecondsRemaining)),
+            "ThirtySecondsRemaining must fire on 30→29 crossing; events={events:?}",
+        );
+    }
+
+    /// With `allow_continuous_sessions = true`, a focus zero-cross
+    /// emits `PomodoroCompleted` + `OvertimeStarted`, keeps mode as
+    /// Focus, keeps running, and subsequent ticks produce a negative
+    /// signed remaining.
+    #[test]
+    fn continuous_focus_zero_cross_enters_overtime() {
+        let clock = MockClock::new(0);
+        let mut state = TimerState::new(Durations {
+            focus: 60,
+            short_break: 300,
+            long_break: 1200,
+        });
+        state.set_allow_continuous_sessions(true);
+        state.start(&clock).expect("start");
+
+        clock.advance(61 * 1000);
+        let events = state.tick(&clock);
+
+        assert!(
+            events
+                .iter()
+                .any(|e| matches!(e, super::TimerEvent::PomodoroCompleted { .. })),
+            "PomodoroCompleted must fire on continuous zero-cross; events={events:?}",
+        );
+        assert!(
+            events.iter().any(|e| matches!(
+                e,
+                super::TimerEvent::OvertimeStarted {
+                    mode: TimerMode::Focus
+                }
+            )),
+            "OvertimeStarted(Focus) must fire; events={events:?}",
+        );
+        assert_eq!(state.current_mode(), TimerMode::Focus, "mode stays Focus");
+        assert!(state.is_running(), "must stay running");
+        assert_eq!(state.completed_pomodoros(), 1);
+
+        // 5 more seconds → signed remaining should be -5.
+        clock.advance(5 * 1000);
+        let _ = state.tick(&clock);
+        assert_eq!(
+            state.time_remaining_secs_signed(),
+            -5,
+            "signed remaining must be -5 after 5 s of overtime",
+        );
+    }
+
+    /// Skipping during overtime must NOT double-count `completed_pomodoros`.
+    #[test]
+    fn continuous_skip_during_overtime_does_not_double_count() {
+        let clock = MockClock::new(0);
+        let mut state = TimerState::new(Durations {
+            focus: 60,
+            short_break: 300,
+            long_break: 1200,
+        });
+        state.set_allow_continuous_sessions(true);
+        state.start(&clock).expect("start");
+
+        clock.advance(61 * 1000);
+        let _ = state.tick(&clock);
+        assert_eq!(state.completed_pomodoros(), 1);
+
+        let _skip_events = state.skip();
+        assert_eq!(
+            state.completed_pomodoros(),
+            1,
+            "skip during overtime must not re-increment completed_pomodoros",
+        );
+        assert_eq!(state.current_mode(), TimerMode::Break);
     }
 }

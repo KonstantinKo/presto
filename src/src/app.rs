@@ -50,20 +50,65 @@ use leptos::task::spawn_local;
 
 use crate::bridge::availability::{bridge_available, BridgeAvailable};
 use crate::bridge::commands;
-use crate::bridge::events::{self, GLOBAL_SHORTCUT, UPDATE_AVAILABLE};
+use crate::bridge::events::{
+    self, GLOBAL_SHORTCUT, UPDATE_AVAILABLE, USER_ACTIVITY, USER_INACTIVITY,
+};
 use crate::bridge::storage;
 use crate::bridge::types::{Session, Settings, UpdateAvailablePayload};
 use crate::components::auth_modal::AuthModal;
+use crate::components::browser_clock::BrowserClock;
 use crate::components::calendar::CalendarView;
 use crate::components::settings::SettingsView;
 use crate::components::tasks::TasksView;
 use crate::components::team::TeamView;
 use crate::components::timer::TimerView;
 use crate::components::update_notification::UpdateNotification;
+use crate::engine::activity_signal::ActivitySignal;
+use crate::engine::durations::Durations;
+use crate::engine::timer::TimerState;
 use crate::managers::auth::AuthState;
 use crate::managers::navigation::{NavView, NavigationManager, SettingsTab};
 use crate::managers::update::{UpdateInfo, UpdateManager};
 use crate::theme::loader;
+
+/// App-level toast notification queue.
+///
+/// Provided via context at the App root so the timer component (and any
+/// future component) can push transient notification pings without
+/// prop-drilling. Distinct from `SettingsToast` (single-message banner);
+/// `AppToast` queues `Vec<(id, text)>` because the timer flow can fire
+/// 2-minute + 30-second warnings in rapid succession.
+#[derive(Clone, Copy)]
+pub struct AppToast {
+    pub messages: RwSignal<Vec<(u64, String)>>,
+    next_id: RwSignal<u64>,
+}
+
+impl Default for AppToast {
+    fn default() -> Self {
+        Self {
+            messages: RwSignal::new(Vec::new()),
+            next_id: RwSignal::new(0),
+        }
+    }
+}
+
+impl AppToast {
+    /// Push a toast message that auto-dismisses after 2 seconds.
+    pub fn show(self, text: impl Into<String>) {
+        let id = self.next_id.get_untracked();
+        self.next_id.update(|n| *n = n.wrapping_add(1));
+        let text = text.into();
+        self.messages.update(|msgs| msgs.push((id, text)));
+        let messages = self.messages;
+        let _ = leptos::leptos_dom::helpers::set_timeout_with_handle(
+            move || {
+                messages.update(|msgs| msgs.retain(|(i, _)| *i != id));
+            },
+            std::time::Duration::from_secs(2),
+        );
+    }
+}
 
 /// Top-level App component. Mounts the sidebar nav, the active
 /// view, the global update banner, and the auth modal.
@@ -77,6 +122,17 @@ pub fn App() -> impl IntoView {
     let settings = RwSignal::new(Settings::default());
     let auth_state = RwSignal::new(AuthState::default());
     let update_info = RwSignal::new(UpdateInfo::default());
+
+    // Shared engine signal lifted to App so the USER_ACTIVITY /
+    // USER_INACTIVITY bridge events can dispatch directly into the
+    // engine without going through TimerView.
+    let engine = RwSignal::new(TimerState::new(Durations::default()));
+    provide_context(engine);
+
+    // App-level toast queue. TimerView and future components push
+    // transient messages (completion, warnings, smart-pause) here.
+    let app_toast = AppToast::default();
+    provide_context(app_toast);
 
     // Shared session log. TimerView pushes a `ManualSession` on
     // engine completion (focus session zero-cross OR a `skip()`
@@ -343,8 +399,7 @@ pub fn App() -> impl IntoView {
         let prev_smart_pause = std::rc::Rc::new(std::cell::Cell::new(false));
         Effect::new(move |_| {
             let smart_pause = settings.with(|s| s.notifications.smart_pause);
-            let timeout_secs =
-                settings.with(|s| u64::from(s.notifications.smart_pause_timeout) * 60);
+            let timeout_secs = settings.with(|s| u64::from(s.notifications.smart_pause_timeout));
             if smart_pause_first_run.get() {
                 smart_pause_first_run.set(false);
                 prev_smart_pause.set(smart_pause);
@@ -514,6 +569,40 @@ pub fn App() -> impl IntoView {
             }
         });
 
+        // Wire USER_ACTIVITY / USER_INACTIVITY into the engine's smart-pause
+        // logic. The Tauri-side ActivityMonitor emits these; the engine's
+        // `observe_activity` transitions the timer to AutoPaused / Running.
+        spawn_local(async move {
+            let listener = events::listen::<serde_json::Value>(USER_ACTIVITY, move |_| {
+                engine.update(|state| {
+                    let _ = state.observe_activity(ActivitySignal::Active, &BrowserClock);
+                });
+            })
+            .await;
+            if let Ok(guard) = listener {
+                let _ = Box::leak(Box::new(guard));
+            }
+        });
+        spawn_local(async move {
+            let listener = events::listen::<serde_json::Value>(USER_INACTIVITY, move |_| {
+                engine.update(|state| {
+                    let _ = state.observe_activity(ActivitySignal::Idle, &BrowserClock);
+                });
+            })
+            .await;
+            if let Ok(guard) = listener {
+                let _ = Box::leak(Box::new(guard));
+            }
+        });
+
+        // Keep the engine's smart_pause_enabled flag in sync with
+        // Settings. Without this the engine's observe_activity(Idle)
+        // short-circuits because the engine's own flag stays false.
+        Effect::new(move |_| {
+            let enabled = settings.with(|s| s.notifications.smart_pause);
+            engine.update(|state| state.set_smart_pause_enabled(enabled));
+        });
+
         // Subscribe to global-shortcut emits. Each emit carries
         // the binding name as a primitive `String` payload (per
         // contracts/tauri-bridge.md §"Tauri events"); the
@@ -658,6 +747,14 @@ pub fn App() -> impl IntoView {
         // `id`-less surface so the e2e suite (which always runs
         // against the bridge mock) doesn't trip on it; `cargo
         // tauri dev` hides it because the bridge is reachable.
+        <div class="notification-container">
+            <For
+                each=move || app_toast.messages.get()
+                key=|(id, _)| *id
+                children=move |(_, text)| view! { <div class="notification-ping" role="status">{text}</div> }
+            />
+        </div>
+
         {bridge_absent.then(|| view! {
             <div class="degraded-mode-banner" role="status">
                 <strong>"Degraded mode."</strong>

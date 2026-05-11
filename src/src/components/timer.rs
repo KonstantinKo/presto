@@ -45,13 +45,14 @@ use leptos::task::spawn_local;
 use wasm_bindgen::JsCast;
 
 use super::browser_clock::BrowserClock;
+use crate::app::AppToast;
 use crate::bridge::commands;
 use crate::bridge::session_type::SessionType;
 use crate::bridge::timer_mode::TimerMode;
 use crate::bridge::types::{ManualSession, Session, Settings, Tag};
 use crate::engine::clock::Clock;
 use crate::engine::durations::Durations;
-use crate::engine::timer::TimerState;
+use crate::engine::timer::{TimerEvent, TimerState};
 
 /// Icon-picker catalogue. Mirrors the JS-era set in
 /// `tags.spec.js:17` (which clicks `.emoji-option[data-icon="🎯"]`).
@@ -109,22 +110,122 @@ fn pad_two(value: u32) -> String {
 /// `bridge::commands::save_manual_sessions` hop alongside this so
 /// the rows survive a process restart.
 fn synth_completed_session(now_ms: i64, focus_duration_secs: u32) -> ManualSession {
-    let now = chrono::DateTime::<chrono::Utc>::from_timestamp_millis(now_ms).unwrap_or_else(|| {
-        chrono::DateTime::<chrono::Utc>::from_timestamp(0, 0).expect("epoch valid")
-    });
-    let end = now;
-    let start = end - chrono::Duration::seconds(i64::from(focus_duration_secs));
-    let id = format!("session-{}", end.timestamp_millis());
+    let (hh_end, mm_end) = local_hh_mm(now_ms);
+    let start_ms = now_ms - i64::from(focus_duration_secs) * 1000;
+    let (hh_start, mm_start) = local_hh_mm(start_ms);
     ManualSession {
-        id,
+        id: format!("session-{now_ms}"),
         session_type: SessionType::Focus,
         duration: focus_duration_secs.div_euclid(60).max(1),
-        start_time: start.format("%H:%M").to_string(),
-        end_time: end.format("%H:%M").to_string(),
+        start_time: format!("{hh_start:02}:{mm_start:02}"),
+        end_time: format!("{hh_end:02}:{mm_end:02}"),
         notes: None,
-        created_at: end.to_rfc3339(),
-        date: end.format("%a %b %d %Y").to_string(),
+        created_at: chrono::DateTime::<chrono::Utc>::from_timestamp_millis(now_ms)
+            .unwrap_or_default()
+            .to_rfc3339(),
+        date: crate::engine::date_format::format_session_date(now_ms),
         tags: None,
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+fn local_hh_mm(ms: i64) -> (u32, u32) {
+    let d = js_sys::Date::new(&wasm_bindgen::JsValue::from_f64(ms as f64));
+    (d.get_hours(), d.get_minutes())
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+const fn local_hh_mm(_ms: i64) -> (u32, u32) {
+    (0, 0)
+}
+
+#[cfg(target_arch = "wasm32")]
+fn play_chime() {
+    use web_sys::{AudioContext, OscillatorType};
+    let Ok(ctx) = AudioContext::new() else { return };
+    let Ok(osc) = ctx.create_oscillator() else {
+        return;
+    };
+    let Ok(gain) = ctx.create_gain() else { return };
+    osc.set_type(OscillatorType::Sine);
+    osc.frequency().set_value(800.0);
+    let now = ctx.current_time();
+    let _ = gain.gain().set_value_at_time(0.3, now);
+    let _ = gain
+        .gain()
+        .exponential_ramp_to_value_at_time(0.01, now + 0.5);
+    let _ = osc.connect_with_audio_node(&gain);
+    let _ = gain.connect_with_audio_node(&ctx.destination());
+    let _ = osc.start();
+    let _ = osc.stop_with_when(now + 0.5);
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+const fn play_chime() {}
+
+fn handle_events(
+    events: &[TimerEvent],
+    settings: &Settings,
+    toast: AppToast,
+    warning_signal: RwSignal<bool>,
+) {
+    for e in events {
+        match e {
+            TimerEvent::PomodoroCompleted { .. } => {
+                toast.show("Pomodoro completed! Take a break \u{1f60c}");
+                if settings.notifications.sound_notifications {
+                    play_chime();
+                }
+                if settings.notifications.desktop_notifications {
+                    spawn_local(async {
+                        let _ = crate::bridge::notification::send_notification(
+                            "Presto",
+                            "Focus session complete \u{2014} take a break",
+                        )
+                        .await;
+                    });
+                }
+                warning_signal.set(false);
+            }
+            TimerEvent::TwoMinutesRemaining => {
+                toast.show("2 minutes remaining! \u{1f525}");
+                warning_signal.set(true);
+            }
+            TimerEvent::ThirtySecondsRemaining => {
+                toast.show("30 seconds left! \u{23f0}");
+                warning_signal.set(true);
+            }
+            TimerEvent::SessionPaused => toast.show("Timer paused \u{23f8}\u{fe0f}"),
+            TimerEvent::SessionResumed => toast.show("Timer resumed \u{25b6}\u{fe0f}"),
+            TimerEvent::SessionSkipped { skipped_mode, .. } => {
+                toast.show(match skipped_mode {
+                    TimerMode::Focus => "Focus session skipped \u{1f60c}",
+                    TimerMode::Break => "Break skipped \u{2014} ready to focus? \u{1f345}",
+                    TimerMode::LongBreak => "Long break skipped \u{2014} back to work \u{1f680}",
+                });
+                warning_signal.set(false);
+            }
+            TimerEvent::AutoPaused => {
+                toast.show("Smart Pause: timer paused due to inactivity \u{23f8}\u{fe0f}");
+            }
+            TimerEvent::AutoResumed => toast.show("Welcome back! Timer resumed \u{25b6}\u{fe0f}"),
+            TimerEvent::ManualSessionRecorded { .. } => toast.show("Manual session recorded"),
+            TimerEvent::OvertimeStarted { .. } => {
+                toast.show("Pomodoro completed! Continue working or take a break \u{1f345}");
+                if settings.notifications.sound_notifications {
+                    play_chime();
+                }
+                if settings.notifications.desktop_notifications {
+                    spawn_local(async {
+                        let _ = crate::bridge::notification::send_notification(
+                            "Presto",
+                            "Focus session complete \u{2014} overtime started",
+                        )
+                        .await;
+                    });
+                }
+            }
+        }
     }
 }
 
@@ -187,7 +288,10 @@ pub fn TimerView() -> impl IntoView {
 
     // Engine state — RwSignal so derived projections (countdown
     // text, mode label, running flag) re-render on `update()`.
-    let engine = RwSignal::new(TimerState::new(initial_durations));
+    let engine = use_context::<RwSignal<TimerState>>()
+        .unwrap_or_else(|| RwSignal::new(TimerState::new(initial_durations)));
+    let app_toast = use_context::<AppToast>().unwrap_or_default();
+    let warning_signal = RwSignal::new(false);
 
     // React to settings changes: rebase the engine's `Durations`
     // when the Settings signal moves. The effect re-runs whenever
@@ -198,6 +302,13 @@ pub fn TimerView() -> impl IntoView {
     Effect::new(move |_| {
         let new_durations = settings.with(durations_from_settings);
         engine.update(|state| state.set_durations(new_durations));
+    });
+
+    // Pipe Settings.notifications.allow_continuous_sessions into the
+    // engine so the overtime path fires when enabled.
+    Effect::new(move |_| {
+        let enabled = settings.with(|s| s.notifications.allow_continuous_sessions);
+        engine.update(|state| state.set_allow_continuous_sessions(enabled));
     });
 
     // Tag-dropdown popover state. The JS-era surface anchored the
@@ -295,15 +406,26 @@ pub fn TimerView() -> impl IntoView {
                 let matches_space = ev.code() == "Space";
                 if matches_shortcut || matches_space {
                     ev.prevent_default();
-                    engine.update(|state| {
-                        if state.is_running() {
-                            let _ = state.pause(&BrowserClock);
-                        } else if state.is_paused() || state.is_auto_paused() {
-                            let _ = state.resume(&BrowserClock);
-                        } else {
-                            let _ = state.start(&BrowserClock);
-                        }
-                    });
+                    let events = engine
+                        .try_update(|state| {
+                            if state.is_running() {
+                                state.pause(&BrowserClock).unwrap_or_default()
+                            } else if state.is_paused() || state.is_auto_paused() {
+                                state.resume(&BrowserClock).unwrap_or_default()
+                            } else {
+                                state
+                                    .start(&BrowserClock)
+                                    .map(|()| Vec::new())
+                                    .unwrap_or_default()
+                            }
+                        })
+                        .unwrap_or_default();
+                    handle_events(
+                        &events,
+                        &settings.get_untracked(),
+                        app_toast,
+                        warning_signal,
+                    );
                 }
             },
         );
@@ -395,12 +517,45 @@ pub fn TimerView() -> impl IntoView {
     // Derived signals — each `.with(|s| ...)` borrows the engine
     // without cloning; Leptos memoises the result and re-runs the
     // closure only when the engine signal changes.
-    let minutes_text =
-        Signal::derive(move || engine.with(|s| pad_two(s.time_remaining_secs() / 60)));
-    let seconds_text =
-        Signal::derive(move || engine.with(|s| pad_two(s.time_remaining_secs() % 60)));
+    let is_overtime = Signal::derive(move || engine.with(|s| s.time_remaining_secs_signed() < 0));
+
+    let minutes_text = Signal::derive(move || {
+        engine.with(|s| {
+            let signed = s.time_remaining_secs_signed();
+            if signed < 0 {
+                pad_two(u32::try_from(-signed).unwrap_or(u32::MAX) / 60)
+            } else {
+                pad_two(s.time_remaining_secs() / 60)
+            }
+        })
+    });
+
+    let seconds_text = Signal::derive(move || {
+        engine.with(|s| {
+            let signed = s.time_remaining_secs_signed();
+            if signed < 0 {
+                pad_two(u32::try_from(-signed).unwrap_or(u32::MAX) % 60)
+            } else {
+                pad_two(s.time_remaining_secs() % 60)
+            }
+        })
+    });
+
     let mode_text = Signal::derive(move || engine.with(|s| mode_label(s.current_mode())));
     let is_running = Signal::derive(move || engine.with(TimerState::is_running));
+
+    // Update document title with overtime prefix when running in overtime.
+    Effect::new(move |_| {
+        let signed = engine.with(TimerState::time_remaining_secs_signed);
+        let is_ot = signed < 0;
+        let abs_secs = u32::try_from(signed.unsigned_abs()).unwrap_or(u32::MAX);
+        let mins = abs_secs / 60;
+        let secs = abs_secs % 60;
+        let prefix = if is_ot { "+" } else { "" };
+        if let Some(doc) = web_sys::window().and_then(|w| w.document()) {
+            doc.set_title(&format!("{prefix}{mins:02}:{secs:02} \u{2014} Presto"));
+        }
+    });
 
     // Style helpers for the play/pause icon visibility-toggle. The
     // selector contract says `#play-icon` is visible when idle and
@@ -429,33 +584,54 @@ pub fn TimerView() -> impl IntoView {
     // the in-memory state machine is correct even though
     // persistence is a no-op on the dev server.
     let on_play_pause = move |_| {
-        engine.update(|state| {
-            if state.is_running() {
-                // Manual pause via the engine's public API. Unlike
-                // the earlier `reset()` workaround, this preserves
-                // `current_session_elapsed_secs` across the pause
-                // window so the persistence layer records the real
-                // session duration on the eventual completion or
-                // skip. See `engine::timer::TimerState::pause`.
-                let _ = state.pause(&BrowserClock);
-            } else if state.is_paused() || state.is_auto_paused() {
-                // Resume from manual or smart-pause through the
-                // single `resume()` entrypoint (mirrors the JS-era
-                // `resumeTimer` behaviour where the play button
-                // unwinds either pause variant).
-                let _ = state.resume(&BrowserClock);
-            } else {
-                let _ = state.start(&BrowserClock);
-            }
-        });
+        let events = engine
+            .try_update(|state| {
+                if state.is_running() {
+                    state.pause(&BrowserClock).unwrap_or_default()
+                } else if state.is_paused() || state.is_auto_paused() {
+                    state.resume(&BrowserClock).unwrap_or_default()
+                } else {
+                    state
+                        .start(&BrowserClock)
+                        .map(|()| Vec::new())
+                        .unwrap_or_default()
+                }
+            })
+            .unwrap_or_default();
+        handle_events(
+            &events,
+            &settings.get_untracked(),
+            app_toast,
+            warning_signal,
+        );
     };
     let on_stop = move |_| {
         engine.update(TimerState::reset);
     };
     let on_skip = move |_| {
-        engine.update(|state| {
-            let _ = state.skip();
-        });
+        let events = engine.try_update(TimerState::skip).unwrap_or_default();
+        handle_events(
+            &events,
+            &settings.get_untracked(),
+            app_toast,
+            warning_signal,
+        );
+        if settings.with_untracked(|s| s.notifications.auto_start_timer) {
+            let start_events = engine
+                .try_update(|state| {
+                    state
+                        .start(&BrowserClock)
+                        .map(|()| Vec::new())
+                        .unwrap_or_default()
+                })
+                .unwrap_or_default();
+            handle_events(
+                &start_events,
+                &settings.get_untracked(),
+                app_toast,
+                warning_signal,
+            );
+        }
     };
 
     // Right-rail timer-adjust handlers. Per the JS-era
@@ -495,112 +671,90 @@ pub fn TimerView() -> impl IntoView {
         // closure re-runs only on cleanup, not on every tick.
         let handle = set_interval_with_handle(
             move || {
-                engine.update(|state| {
-                    let was_focus = matches!(state.current_mode(), TimerMode::Focus);
-                    let was_running = state.is_running();
-                    let mode_before = state.current_mode();
-                    // Capture focus duration before tick so a
-                    // mid-tick rebase via `set_durations` doesn't
-                    // race with the synth-session below.
-                    let focus_secs_at_tick = settings.with_untracked(durations_from_settings).focus;
-                    let events = state.tick(&BrowserClock);
-                    // If a focus session just completed (the engine
-                    // emits `PomodoroCompleted` on the focus →
-                    // break zero-cross), append a synthesised
-                    // `ManualSession` to the shared log so the
-                    // CalendarView table reflects today's run.
-                    let completed_focus = was_focus
-                        && events.iter().any(|e| {
-                            matches!(
-                                e,
-                                crate::engine::timer::TimerEvent::PomodoroCompleted { .. }
-                            )
-                        });
-                    if completed_focus {
-                        let now_ms = BrowserClock.now_ms();
-                        let session = synth_completed_session(now_ms, focus_secs_at_tick);
-                        sessions.update(|list| list.push(session));
-
-                        // R-004: persist accumulated session counters +
-                        // append to the daily-stats history on each
-                        // completed focus session. Both calls use the
-                        // engine state captured immediately after the
-                        // tick so the completed_pomodoros count
-                        // includes the session that just finished.
-                        // Errors absorbed — bridge absent on the dev
-                        // server; real Tauri builds surface fs errors
-                        // in dev tools, not UI.
-                        let completed = state.completed_pomodoros();
-                        let total_focus = state.total_focus_secs();
-                        let now_dt = chrono::DateTime::<chrono::Utc>::from_timestamp_millis(now_ms)
-                            .unwrap_or_else(|| {
-                                chrono::DateTime::<chrono::Utc>::from_timestamp(0, 0)
-                                    .expect("epoch valid")
+                let events = engine
+                    .try_update(|state| {
+                        let was_focus = matches!(state.current_mode(), TimerMode::Focus);
+                        let was_running = state.is_running();
+                        let mode_before = state.current_mode();
+                        let focus_secs_at_tick =
+                            settings.with_untracked(durations_from_settings).focus;
+                        let events = state.tick(&BrowserClock);
+                        let completed_focus = was_focus
+                            && events
+                                .iter()
+                                .any(|e| matches!(e, TimerEvent::PomodoroCompleted { .. }));
+                        if completed_focus {
+                            let now_ms = BrowserClock.now_ms();
+                            let session = synth_completed_session(now_ms, focus_secs_at_tick);
+                            sessions.update(|list| list.push(session));
+                            let completed = state.completed_pomodoros();
+                            let total_focus = state.total_focus_secs();
+                            let date_str = crate::engine::date_format::format_session_date(now_ms);
+                            let session_data = Session {
+                                completed_pomodoros: completed,
+                                total_focus_time: total_focus,
+                                current_session: completed.saturating_add(1),
+                                date: date_str,
+                            };
+                            let sd_for_stats = session_data.clone();
+                            spawn_local(async move {
+                                let _ = commands::save_session_data(session_data).await;
+                                let _ = commands::save_daily_stats(sd_for_stats).await;
                             });
-                        let date_str = now_dt.format("%a %b %d %Y").to_string();
-                        let session_data = Session {
-                            completed_pomodoros: completed,
-                            total_focus_time: total_focus,
-                            current_session: completed.saturating_add(1),
-                            date: date_str,
-                        };
-                        let sd_for_stats = session_data.clone();
-                        spawn_local(async move {
-                            let _ = commands::save_session_data(session_data).await;
-                            let _ = commands::save_daily_stats(sd_for_stats).await;
-                        });
-                    }
-                    if was_running && !state.is_running() {
-                        // Engine just transitioned out of running
-                        // (mode completion). If auto-start is on,
-                        // kick off the next session.
-                        let auto_start =
-                            settings.with_untracked(|s| s.notifications.auto_start_timer);
-                        if auto_start {
-                            if let Err(e) = state.start(&BrowserClock) {
-                                leptos::logging::warn!(
-                                    "auto-start after completion failed: {:?}",
-                                    e
-                                );
+                        }
+                        if was_running && !state.is_running() {
+                            let auto_start =
+                                settings.with_untracked(|s| s.notifications.auto_start_timer);
+                            if auto_start {
+                                if let Err(e) = state.start(&BrowserClock) {
+                                    leptos::logging::warn!(
+                                        "auto-start after completion failed: {:?}",
+                                        e
+                                    );
+                                }
                             }
                         }
-                    }
-
-                    // R-004: tray icon + menu update on mode transitions.
-                    // PM lean: only fire on mode change (focus → break etc.)
-                    // not on every 1Hz tick — avoids 1 IPC/sec steady-state
-                    // cost. The Tauri-side handler is a no-op when the tray
-                    // is absent (Linux without tray support) so errors are
-                    // absorbed here.
-                    let mode_after = state.current_mode();
-                    let mode_changed = mode_before != mode_after;
-                    let running_changed = was_running != state.is_running();
-                    if mode_changed || running_changed {
-                        use crate::bridge::types::UpdateTrayIconArgs;
-                        let mins = state.time_remaining_secs() / 60;
-                        let secs = state.time_remaining_secs() % 60;
-                        let timer_text = format!("{mins:02}:{secs:02}");
-                        let is_running = state.is_running();
-                        let is_paused = state.is_paused() || state.is_auto_paused();
-                        let current_session = state.completed_pomodoros().saturating_add(1);
-                        let total_sessions = settings.with_untracked(|s| s.timer.total_sessions);
-                        let tray_args = UpdateTrayIconArgs {
-                            timer_text,
-                            is_running,
-                            session_mode: mode_after,
-                            current_session,
-                            total_sessions,
-                            mode_icon: None,
-                        };
-                        let mode_for_menu = mode_after;
-                        spawn_local(async move {
-                            let _ = commands::update_tray_icon(tray_args).await;
-                            let _ =
-                                commands::update_tray_menu(is_running, is_paused, mode_for_menu)
-                                    .await;
-                        });
-                    }
-                });
+                        let mode_after = state.current_mode();
+                        let mode_changed = mode_before != mode_after;
+                        let running_changed = was_running != state.is_running();
+                        if mode_changed || running_changed {
+                            use crate::bridge::types::UpdateTrayIconArgs;
+                            let mins = state.time_remaining_secs() / 60;
+                            let secs = state.time_remaining_secs() % 60;
+                            let timer_text = format!("{mins:02}:{secs:02}");
+                            let is_running = state.is_running();
+                            let is_paused = state.is_paused() || state.is_auto_paused();
+                            let current_session = state.completed_pomodoros().saturating_add(1);
+                            let total_sessions =
+                                settings.with_untracked(|s| s.timer.total_sessions);
+                            let tray_args = UpdateTrayIconArgs {
+                                timer_text,
+                                is_running,
+                                session_mode: mode_after,
+                                current_session,
+                                total_sessions,
+                                mode_icon: None,
+                            };
+                            let mode_for_menu = mode_after;
+                            spawn_local(async move {
+                                let _ = commands::update_tray_icon(tray_args).await;
+                                let _ = commands::update_tray_menu(
+                                    is_running,
+                                    is_paused,
+                                    mode_for_menu,
+                                )
+                                .await;
+                            });
+                        }
+                        events
+                    })
+                    .unwrap_or_default();
+                handle_events(
+                    &events,
+                    &settings.get_untracked(),
+                    app_toast,
+                    warning_signal,
+                );
             },
             std::time::Duration::from_secs(1),
         );
@@ -861,13 +1015,14 @@ pub fn TimerView() -> impl IntoView {
             // countdown across two colors. The visual-regression
             // baseline shows both columns in `--focus-timer-color`,
             // which only happens with the theme class applied.
-            <div class="timer-container" class:focus=move || matches!(
-                engine.with(TimerState::current_mode), TimerMode::Focus,
-            ) class:break=move || matches!(
-                engine.with(TimerState::current_mode), TimerMode::Break,
-            ) class:longBreak=move || matches!(
-                engine.with(TimerState::current_mode), TimerMode::LongBreak,
-            )>
+            <div
+                class="timer-container"
+                class:focus=move || matches!(engine.with(TimerState::current_mode), TimerMode::Focus)
+                class:break=move || matches!(engine.with(TimerState::current_mode), TimerMode::Break)
+                class:longBreak=move || matches!(engine.with(TimerState::current_mode), TimerMode::LongBreak)
+                class:warning=move || warning_signal.get()
+                class:overtime=move || is_overtime.get()
+            >
                 <div class="timer-minutes" id="timer-minutes">{move || minutes_text.get()}</div>
                 <div class="timer-seconds" id="timer-seconds">{move || seconds_text.get()}</div>
             </div>
