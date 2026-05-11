@@ -169,21 +169,26 @@ fn handle_events(
     toast: AppToast,
     warning_signal: RwSignal<bool>,
 ) {
+    let has_overtime = events
+        .iter()
+        .any(|e| matches!(e, TimerEvent::OvertimeStarted { .. }));
     for e in events {
         match e {
             TimerEvent::PomodoroCompleted { .. } => {
-                toast.show("Pomodoro completed! Take a break \u{1f60c}");
-                if settings.notifications.sound_notifications {
-                    play_chime();
-                }
-                if settings.notifications.desktop_notifications {
-                    spawn_local(async {
-                        let _ = crate::bridge::notification::send_notification(
-                            "Presto",
-                            "Focus session complete \u{2014} take a break",
-                        )
-                        .await;
-                    });
+                if !has_overtime {
+                    toast.show("Pomodoro completed! Take a break \u{1f60c}");
+                    if settings.notifications.sound_notifications {
+                        play_chime();
+                    }
+                    if settings.notifications.desktop_notifications {
+                        spawn_local(async {
+                            let _ = crate::bridge::notification::send_notification(
+                                "Presto",
+                                "Focus session complete \u{2014} take a break",
+                            )
+                            .await;
+                        });
+                    }
                 }
                 warning_signal.set(false);
             }
@@ -607,6 +612,7 @@ pub fn TimerView() -> impl IntoView {
     };
     let on_stop = move |_| {
         engine.update(TimerState::reset);
+        warning_signal.set(false);
     };
     let on_skip = move |_| {
         let events = engine.try_update(TimerState::skip).unwrap_or_default();
@@ -649,6 +655,9 @@ pub fn TimerView() -> impl IntoView {
         engine.update(|state| {
             state.adjust_remaining_secs(300, &BrowserClock);
         });
+        if engine.with(|s| s.time_remaining_secs() > 120) {
+            warning_signal.set(false);
+        }
     };
 
     // 1 Hz tick loop. Ticking unconditionally (not gated on
