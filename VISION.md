@@ -51,28 +51,14 @@ for accessing the same history from a second machine, opt-in.
 - AI-assisted "smart scheduling" — the value proposition is *deterministic*
   rituals; AI heuristics undermine that.
 
-## The migration on the table
+## The completed migration
 
-The frontend is currently vanilla JS + HTML + CSS in `src/`, built with
-Vite, tested with Vitest + Playwright. The next major arc moves the
-frontend to **Leptos (Rust + WASM)** with `trunk` as the build tool and
-`wasm-bindgen-test` for unit tests. Rationale:
+The frontend was migrated from vanilla JS + Vite to **Leptos (Rust + WASM)** with `trunk` as the build tool and `wasm-bindgen-test` for unit tests in feature 001. The migration landed as a single hard cutover with the 14-baseline visual regression suite as the safety gate.
 
-- **Type safety end-to-end.** Tauri commands already have typed Rust
-  signatures. Pairing them with a Rust frontend lets the boundary be
-  compile-time-checked instead of runtime-asserted.
-- **Strict tooling.** `clippy --all-targets -- -D warnings -W
-  clippy::pedantic`, `rustfmt`, no `--no-verify`. The codebase becomes
-  pedantic-clean from day one and stays that way.
-- **Smaller surface.** One language, one toolchain, one test framework.
-  No more "is this an eslint problem or a tsc problem".
-
-The migration is a **single hard cutover**: one feature, one PR, one
-landing. The 14-baseline visual regression suite at
-`tests/e2e/__screenshots__/visual-regression/` is the safety net —
-pixel-equivalent against the current JS UI is the green-light gate. Tauri
-backend (`src-tauri/`) and the Playwright e2e suite stay; only the
-JS/Vite/Vitest layer is replaced.
+Benefits realized:
+- **Type safety end-to-end.** Tauri commands and Leptos frontend share the same type system; the IPC boundary is compile-time-checked.
+- **Strict tooling.** `clippy --all-targets -- -D warnings -W clippy::pedantic`, `rustfmt`, no `--no-verify`. One language, one toolchain.
+- **Smaller surface.** No more JS/TS/ESLint layer.
 
 ## Domain & constraints
 
@@ -87,24 +73,23 @@ JS/Vite/Vitest layer is replaced.
 
 ## Tech stack
 
-| Layer | Today | Target |
-|---|---|---|
-| Frontend | Vanilla JS modules, HTML, CSS | Leptos (CSR + WASM) |
-| Build | Vite | Trunk / cargo-leptos |
-| Frontend tests | Vitest + happy-dom | wasm-bindgen-test |
-| E2E | Playwright (chromium) | Playwright (chromium) — unchanged |
-| Visual regression | 14 PNG baselines | 14 PNG baselines — unchanged |
-| Backend | Rust (Tauri 2.x) | Rust (Tauri 2.x) — unchanged |
-| Auth (optional) | Supabase JS SDK | Supabase Rust SDK / direct REST |
+| Layer | Stack |
+|---|---|
+| Frontend | Leptos (CSR + WASM) |
+| Build | Trunk / cargo-leptos |
+| Frontend tests | wasm-bindgen-test |
+| E2E | Playwright (chromium) |
+| Visual regression | 14 PNG baselines |
+| Backend | Rust (Tauri 2.x) |
+| Auth (optional) | Supabase Rust SDK / direct REST |
 
 ## Roadmap (rough)
 
 In order, each as its own focused build cycle:
 
 1. **Spec-kit retrofit** — constitution, AGENTS.md, VISION.md (this file),
-   per-feature game loop. *Currently in progress.*
-2. **Leptos migration (feature 001)** — single-PR hard cutover; visual
-   regression as gate.
+   per-feature game loop. ✓ complete.
+2. **Leptos migration (feature 001)** — ✓ complete. Single-PR hard cutover; visual regression as gate.
 3. **Lockfile / supply-chain hardening** — pre-commit hook for
    manifest-vs-lock drift (issue #22 wontfix proposal); after-cutover this
    becomes Cargo-only.

@@ -11,7 +11,7 @@ app. Read [VISION.md](VISION.md) for product scope.
   notes, lints, gate set.
 - **Spec-kit artefacts** — `.specify/` (templates, hooks, extensions);
   per-feature `specs/<NNN-slug>/`.
-- **Timer engine** — `src/core/pomodoro-timer.js` (until Leptos cutover).
+- **Timer engine** — `src/src/engine/timer.rs`.
 - **Tauri backend** — `src-tauri/src/{lib.rs,helpers.rs,main.rs}`.
 - **Tauri mock for e2e** — `tests/e2e/fixtures/tauriMock.js`.
 - **Visual regression baselines** —
@@ -37,12 +37,12 @@ timer engine, persistence, the Tauri bridge, or auth/sync does.
 
 ## Stack
 
-| Layer | Today | Target (post-cutover) |
-|---|---|---|
-| Frontend | Vanilla JS + Vite | Leptos + Trunk |
-| Frontend tests | Vitest + happy-dom | wasm-bindgen-test |
-| Backend | Rust (Tauri 2.x) | Rust (Tauri 2.x) |
-| E2E | Playwright (chromium) | Playwright (chromium) |
+| Layer | Stack |
+|---|---|
+| Frontend | Leptos (CSR + WASM) + Trunk |
+| Frontend tests | wasm-bindgen-test |
+| Backend | Rust (Tauri 2.x) |
+| E2E | Playwright (chromium) |
 
 Single-user desktop. No server backend. Supabase is a thin optional sync
 layer, off by default in guest mode.
@@ -50,8 +50,7 @@ layer, off by default in guest mode.
 ## Conventions
 
 - **Heavy type safety.** `cargo clippy --all-targets -- -D warnings -W
-  clippy::pedantic` for both backend and (post-migration) frontend
-  crates. `cargo fmt`. Pre-Leptos: eslint, tsc --noEmit, prettier.
+  clippy::pedantic` for both backend and frontend crates. `cargo fmt`.
 - **Test-first** for the timer engine, manager state machines, and
   Tauri-backed persistence. Not required for UI plumbing — that's the
   e2e suite's job.

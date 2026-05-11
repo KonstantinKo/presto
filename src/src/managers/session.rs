@@ -171,21 +171,44 @@ impl SessionManager {
             .collect()
     }
 
+    /// Build a manager from the result of
+    /// `bridge::commands::load_manual_sessions()` (or any equivalent
+    /// loader). Only `BridgeUnavailable` (dev/browser context where
+    /// no Tauri runtime and therefore no file exists) falls back to
+    /// an empty cold-start list; all other errors are propagated so
+    /// the caller can avoid overwriting an unreadable but existing
+    /// file with an empty list.
+    ///
+    /// # Errors
+    /// Returns `Err(e)` for any `BridgeError` variant other than
+    /// `BridgeUnavailable`.
+    pub fn from_loaded_or_default(
+        loaded: Result<Vec<ManualSession>, BridgeError>,
+    ) -> Result<Self, BridgeError> {
+        match loaded {
+            Ok(sessions) => Ok(Self {
+                manual_sessions: sessions,
+            }),
+            Err(BridgeError::BridgeUnavailable) => Ok(Self::new()),
+            Err(e) => Err(e),
+        }
+    }
+
     /// Async cold-start path: ask the bridge for the persisted
-    /// manual sessions, fall back to an empty list on any error
-    /// (cold start, bridge unavailable, corrupted file). Mirrors
-    /// the JS-side `loadSessionsFromStorage` flow at
-    /// `src/managers/session-manager.js:25-52`, minus the
+    /// manual sessions. Returns `Ok` (empty list) only when the
+    /// bridge is unavailable (dev/browser context); propagates all
+    /// other errors so callers can avoid a silent data-loss
+    /// overwrite. Mirrors the JS-side `loadSessionsFromStorage`
+    /// flow at `src/managers/session-manager.js:25-52`, minus the
     /// localStorage fallback (Phase 1E
     /// `import_legacy_manual_sessions` migrated those records to
     /// the Rust-side store).
-    pub async fn load() -> Self {
-        commands::load_manual_sessions().await.map_or_else(
-            |_| Self::new(),
-            |loaded| Self {
-                manual_sessions: loaded,
-            },
-        )
+    ///
+    /// # Errors
+    /// Returns `Err(e)` for any bridge or I/O error other than
+    /// `BridgeUnavailable`.
+    pub async fn load() -> Result<Self, BridgeError> {
+        Self::from_loaded_or_default(commands::load_manual_sessions().await)
     }
 }
 
@@ -497,5 +520,28 @@ mod tests {
         let unknown_day = format_session_date(day_two_ms + 86_400_000);
         let none = mgr.list_by_date(&unknown_day);
         assert!(none.is_empty(), "unknown date returns an empty list");
+    }
+
+    #[test]
+    fn from_loaded_or_default_only_swallows_bridge_unavailable() {
+        use crate::bridge::error::BridgeError;
+
+        // BridgeUnavailable (dev context) → cold-start empty list
+        let result = SessionManager::from_loaded_or_default(Err(BridgeError::BridgeUnavailable));
+        assert!(result.is_ok());
+        assert!(result.unwrap().manual_sessions().is_empty());
+
+        // Internal error (e.g. corrupt file) → propagated
+        let err = BridgeError::Internal {
+            msg: "disk error".to_string(),
+        };
+        let result = SessionManager::from_loaded_or_default(Err(err));
+        assert!(result.is_err());
+
+        // Ok with sessions → passes through
+        let sessions = vec![sample_manual("m-1", 25, "Sat May 10 2026")];
+        let result = SessionManager::from_loaded_or_default(Ok(sessions));
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap().manual_sessions().len(), 1);
     }
 }

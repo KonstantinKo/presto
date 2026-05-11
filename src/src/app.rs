@@ -1,6 +1,6 @@
-// Top-level App router — Phase 4b (T216) of spec
-// 001-leptos-migration. Mounts the sidebar nav + the active view +
-// the always-on update banner + auth modal. Dispatches over
+// Top-level App router. Spec: 001-leptos-migration §Phase 4b.
+// Mounts the sidebar nav + the active view + the always-on update
+// banner + auth modal. Dispatches over
 // `NavigationManager::current()` to pick which view to render.
 //
 // **Selector contract** (consumed by `tests/e2e/fixtures/screens.js::tapTab`):
@@ -147,7 +147,6 @@ pub fn App() -> impl IntoView {
         })
     });
 
-    // Sidebar nav click handlers.
     let on_timer_nav = move |_| nav.update(|n| n.transition_to(NavView::Timer));
     let on_calendar_nav = move |_| nav.update(|n| n.transition_to(NavView::Calendar));
     let on_team_nav = move |_| nav.update(|n| n.transition_to(NavView::Team));
@@ -282,7 +281,6 @@ pub fn App() -> impl IntoView {
             if let Some(handle) = pending_handle.take() {
                 handle.clear();
             }
-            // Schedule the bridge save 300ms from now.
             let handle_clone = pending_handle.clone();
             let scheduled = leptos::leptos_dom::helpers::set_timeout_with_handle(
                 move || {
@@ -643,26 +641,6 @@ pub fn App() -> impl IntoView {
             <div class="view-host" class:hidden=move || !is_tasks.get()>
                 <TasksView/>
             </div>
-            // HistoryView is intentionally not mounted by the App
-            // router. Its `#sessions-table-body` /
-            // `#session-modal-overlay` selectors are now owned by
-            // CalendarView (which renders today's rows inline beneath
-            // the calendar grid — matches the JS-era surface where
-            // history was a sub-card on the calendar page). Mounting
-            // both produced duplicate ids and tripped Playwright's
-            // strict-mode locator resolution
-            // (`sessions-history.spec.js:42`). The HistoryView code
-            // remains in `components::history` for a future surface.
-            // Phase 4c: TagsView is intentionally not mounted by the
-            // App router. The JS-era surface had a single tag
-            // dropdown — anchored under `#timer-status` inside
-            // TimerView — so the e2e suite addresses
-            // `#tag-dropdown-menu` as a singleton. A standalone
-            // mount produced two elements with that id and tripped
-            // Playwright's strict-mode locator resolution
-            // (`tags.spec.js:11-12`). The TagsView code remains in
-            // `components::tags` for a future surface (e.g. a
-            // global tag-management screen).
         </main>
 
         // Always-on overlays — the update banner is mounted at the

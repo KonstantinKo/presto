@@ -1,18 +1,18 @@
 #!/bin/bash
 
-# Script di automazione per il rilascio di Presto
-# Gestisce versioning, commit, tag, push e build automaticamente
+# Automation script for releasing Presto
+# Handles versioning, commit, tag, push, and build automatically
 
-set -e  # Esce immediatamente se un comando fallisce
+set -euo pipefail
 
-# Colori per output
+# Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
-# Funzioni helper
+# Helper functions
 print_step() {
     echo -e "${BLUE}🔄 $1${NC}"
 }
@@ -29,16 +29,16 @@ print_error() {
     echo -e "${RED}❌ $1${NC}"
 }
 
-# Funzione per incrementare la versione
+# Function to increment version
 increment_version() {
     local version=$1
     local type=$2
-    
+
     IFS='.' read -ra VERSION_PARTS <<< "$version"
     local major=${VERSION_PARTS[0]}
     local minor=${VERSION_PARTS[1]}
     local patch=${VERSION_PARTS[2]}
-    
+
     case $type in
         "major")
             major=$((major + 1))
@@ -53,178 +53,206 @@ increment_version() {
             patch=$((patch + 1))
             ;;
         *)
-            echo "Tipo di versione non valido: $type"
+            echo "Invalid version type: $type"
             exit 1
             ;;
     esac
-    
+
     echo "$major.$minor.$patch"
 }
 
-# Funzione per aggiornare la versione nei file
+# Function to read the package version from a Cargo.toml
+_read_cargo_version() {
+    grep '^version' "$1" | head -1 | sed 's/version = "\(.*\)"/\1/'
+}
+
+# Function to update version in files
 update_version_in_files() {
     local old_version=$1
     local new_version=$2
-    
-    print_step "Aggiornamento versione da $old_version a $new_version..."
-    
-    # Aggiorna package.json
-    if [[ "$OSTYPE" == "darwin"* ]]; then
-        # macOS
-        sed -i '' "s/\"version\": \"$old_version\"/\"version\": \"$new_version\"/" package.json
-        sed -i '' "s/version = \"$old_version\"/version = \"$new_version\"/" src-tauri/Cargo.toml
-        sed -i '' "s/\"version\": \"$old_version\"/\"version\": \"$new_version\"/" src-tauri/tauri.conf.json
-        # Aggiorna version.js
-        sed -i '' "s/APP_VERSION = '$old_version'/APP_VERSION = '$new_version'/" src/version.js
-    else
-        # Linux
-        sed -i "s/\"version\": \"$old_version\"/\"version\": \"$new_version\"/" package.json
-        sed -i "s/version = \"$old_version\"/version = \"$new_version\"/" src-tauri/Cargo.toml
-        sed -i "s/\"version\": \"$old_version\"/\"version\": \"$new_version\"/" src-tauri/tauri.conf.json
-        # Aggiorna version.js
-        sed -i "s/APP_VERSION = '$old_version'/APP_VERSION = '$new_version'/" src/version.js
+
+    # Verify both manifests agree with old_version before editing anything
+    local tauri_pre src_pre
+    tauri_pre=$(_read_cargo_version src-tauri/Cargo.toml)
+    src_pre=$(_read_cargo_version src/Cargo.toml)
+    if [[ "$tauri_pre" != "$old_version" ]]; then
+        print_error "src-tauri/Cargo.toml has version '$tauri_pre', expected '$old_version' — aborting"
+        exit 1
     fi
-    
-    print_success "Versione aggiornata nei file di configurazione"
+    if [[ "$src_pre" != "$old_version" ]]; then
+        print_error "src/Cargo.toml has version '$src_pre', expected '$old_version' — manifests are out of sync, aborting"
+        exit 1
+    fi
+
+    print_step "Updating version from $old_version to $new_version..."
+
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        # macOS: restrict replacement to the [package] section to avoid hitting
+        # dependency-table lines such as [dependencies.web-sys] that also use
+        # the bare `version = "x.y"` syntax on their own line.
+        sed -i '' '/^\[package\]/,/^\[/{s/^version = "'"$old_version"'"/version = "'"$new_version"'"/;}' src-tauri/Cargo.toml
+        sed -i '' "s/\"version\": \"$old_version\"/\"version\": \"$new_version\"/" src-tauri/tauri.conf.json
+        sed -i '' '/^\[package\]/,/^\[/{s/^version = "'"$old_version"'"/version = "'"$new_version"'"/;}' src/Cargo.toml
+    else
+        # Linux: same [package]-scoped restriction
+        sed -i '/^\[package\]/,/^\[/{s/^version = "'"$old_version"'"/version = "'"$new_version"'"/;}' src-tauri/Cargo.toml
+        sed -i "s/\"version\": \"$old_version\"/\"version\": \"$new_version\"/" src-tauri/tauri.conf.json
+        sed -i '/^\[package\]/,/^\[/{s/^version = "'"$old_version"'"/version = "'"$new_version"'"/;}' src/Cargo.toml
+    fi
+
+    # Verify both manifests now carry new_version
+    local tauri_post src_post
+    tauri_post=$(_read_cargo_version src-tauri/Cargo.toml)
+    src_post=$(_read_cargo_version src/Cargo.toml)
+    if [[ "$tauri_post" != "$new_version" ]]; then
+        print_error "src-tauri/Cargo.toml update failed: got '$tauri_post', expected '$new_version'"
+        exit 1
+    fi
+    if [[ "$src_post" != "$new_version" ]]; then
+        print_error "src/Cargo.toml update failed: got '$src_post', expected '$new_version'"
+        exit 1
+    fi
+
+    print_success "Version updated in configuration files"
 }
 
-# Funzione per ottenere la versione corrente
+# Function to get current version
 get_current_version() {
-    grep '"version"' package.json | head -1 | sed 's/.*"version": "\(.*\)".*/\1/'
+    grep '^version' src-tauri/Cargo.toml | head -1 | sed 's/version = "\(.*\)"/\1/'
 }
 
-# Funzione per verificare se la directory è pulita
+# Function to check if the directory is clean
 check_git_status() {
     if [[ -n $(git status --porcelain) ]]; then
-        print_warning "Ci sono modifiche non committate. Vuoi continuare? (y/N)"
-        read -r response
-        if [[ ! "$response" =~ ^[Yy]$ ]]; then
-            print_error "Operazione annullata"
-            exit 1
-        fi
+        print_error "Working tree is dirty. Commit or stash changes before releasing."
+        exit 1
     fi
 }
 
-# Funzione per fare il commit e tag
+# Function to verify we are on the main branch before modifying any files
+check_branch_is_main() {
+    local current_branch
+    current_branch=$(git rev-parse --abbrev-ref HEAD)
+    if [[ "$current_branch" != "main" ]]; then
+        print_error "Current branch is '$current_branch', not 'main'. Refusing to release."
+        exit 1
+    fi
+}
+
+# Function to commit and tag
 commit_and_tag() {
     local version=$1
-    local message="$2"
-    
-    print_step "Aggiunta file modificati a git..."
-    git add package.json src-tauri/Cargo.toml src-tauri/Cargo.lock src-tauri/tauri.conf.json src/version.js
-    
-    # Se ci sono altri file modificati, chiedi se aggiungerli
-    if [[ -n $(git status --porcelain | grep -v "package.json\|Cargo.toml\|Cargo.lock\|tauri.conf.json\|version.js") ]]; then
-        print_warning "Ci sono altri file modificati. Vuoi aggiungerli al commit? (y/N)"
+    local message="${2:-}"
+
+    print_step "Adding modified files to git..."
+    git add src-tauri/Cargo.toml src-tauri/Cargo.lock src-tauri/tauri.conf.json src/Cargo.toml
+
+    # If there are other modified files, ask whether to add them
+    if [[ -n $(git status --porcelain | grep -v "Cargo.toml\|Cargo.lock\|tauri.conf.json") ]]; then
+        print_warning "There are other modified files. Do you want to add them to the commit? (y/N)"
         read -r response
         if [[ "$response" =~ ^[Yy]$ ]]; then
             git add .
         fi
     fi
-    
-    print_step "Commit delle modifiche..."
+
+    print_step "Committing changes..."
     git commit -m "chore: release v$version${message:+ - $message}"
-    
-    print_step "Creazione tag v$version..."
+
+    print_step "Creating tag v$version..."
     git tag -a "v$version" -m "Release v$version${message:+ - $message}"
-    
-    print_success "Commit e tag creati"
+
+    print_success "Commit and tag created"
 }
 
-# Funzione per fare il push
+# Function to push changes
 push_changes() {
     local version=$1
-    
-    print_step "Push del commit principale..."
+
+    print_step "Pushing main commit..."
     git push origin main
-    
-    print_step "Push del tag v$version..."
+
+    print_step "Pushing tag v$version..."
     git push origin "v$version"
-    
-    print_success "Push completato"
+
+    print_success "Push complete"
 }
 
-# Funzione per aggiornare il tap Homebrew
+# Function to update the Homebrew tap
 update_homebrew_tap() {
     local version=$1
-    local tap_repo_path="../homebrew-presto"
-    
-    print_step "Aggiornamento del tap Homebrew..."
-    
+    local tap_repo_path="${PRESTO_HOMEBREW_TAP:-../homebrew-presto}"
+
+    print_step "Updating Homebrew tap..."
+
     if [ ! -d "$tap_repo_path" ]; then
-        print_warning "Repository del tap Homebrew non trovato: $tap_repo_path"
-        print_warning "Saltando l'aggiornamento del tap Homebrew"
+        print_warning "Homebrew tap repository not found: $tap_repo_path"
+        print_warning "Skipping Homebrew tap update"
         return 0
     fi
-    
-    # Vai nella directory del tap
+
+    # Go to the tap directory
     cd "$tap_repo_path"
-    
-    # Esegui lo script di aggiornamento
+
+    # Run the update script
     if [ -x "./update-homebrew-tap.sh" ]; then
         ./update-homebrew-tap.sh "$version"
-        print_success "Tap Homebrew aggiornato alla versione $version"
+        print_success "Homebrew tap updated to version $version"
     else
-        print_warning "Script di aggiornamento del tap non trovato o non eseguibile"
+        print_warning "Tap update script not found or not executable"
     fi
-    
-    # Torna alla directory originale
+
+    # Return to the original directory
     cd - > /dev/null
 }
 
-# Funzione per fare la build
+# Function to build the app
 build_app() {
-    print_step "Avvio build dell'applicazione..."
-    # Modifica per utilizzare bundles app invece di dmg
+    print_step "Starting application build..."
     npm run tauri build -- --bundles app
-    print_success "Build completata"
+    print_success "Build complete"
 }
 
-# Funzione per aprire GitHub releases
+# Function to open GitHub releases
 open_github_releases() {
-    local repo_url=$(git config --get remote.origin.url)
-    if [[ $repo_url == *"github.com"* ]]; then
-        # Converte SSH URL in HTTPS
-        repo_url=$(echo $repo_url | sed 's/git@github.com:/https:\/\/github.com\//' | sed 's/\.git$//')
+    local repo_url
+    repo_url=$(git config --get remote.origin.url)
+    if [[ "$repo_url" == *"github.com"* ]]; then
+        # Convert SSH URL to HTTPS
+        repo_url=$(printf '%s' "$repo_url" | sed 's/git@github.com:/https:\/\/github.com\//' | sed 's/\.git$//')
         local releases_url="$repo_url/releases/new"
-        print_step "Aprendo pagina GitHub releases..."
+        print_step "Opening GitHub releases page..."
         if command -v open &> /dev/null; then
             open "$releases_url"
         elif command -v xdg-open &> /dev/null; then
             xdg-open "$releases_url"
         else
-            echo "Apri manualmente: $releases_url"
+            echo "Open manually: $releases_url"
         fi
     fi
 }
 
-# Funzione principale
+# Main function
 main() {
     echo -e "${BLUE}"
-    echo "🚀 Script di Rilascio Automatico per Presto"
-    echo "===========================================${NC}"
-    
-    # Controlla se siamo in una repo git
-    if [[ ! -d .git ]]; then
-        print_error "Non sei in una repository git"
-        exit 1
-    fi
-    
-    # Ottieni versione corrente
+    echo "🚀 Automated Release Script for Presto"
+    echo "=======================================${NC}"
+
+    # Get current version
     current_version=$(get_current_version)
-    print_step "Versione corrente: $current_version"
-    
-    # Chiedi tipo di rilascio
+    print_step "Current version: $current_version"
+
+    # Ask release type
     echo ""
-    echo "Che tipo di rilascio vuoi fare?"
+    echo "What type of release do you want to make?"
     echo "1) Patch (${current_version} → $(increment_version $current_version patch))"
     echo "2) Minor (${current_version} → $(increment_version $current_version minor))"
     echo "3) Major (${current_version} → $(increment_version $current_version major))"
-    echo "4) Versione specifica"
-    echo "5) Solo build (senza aggiornare versione)"
+    echo "4) Specific version"
+    echo "5) Build only (without updating version)"
     echo ""
-    read -p "Seleziona un'opzione (1-5): " choice
-    
+    read -p "Select an option (1-5): " choice
+
     case $choice in
         1)
             release_type="patch"
@@ -239,159 +267,178 @@ main() {
             new_version=$(increment_version $current_version major)
             ;;
         4)
-            read -p "Inserisci la nuova versione (formato x.y.z): " new_version
+            read -p "Enter the new version (format x.y.z): " new_version
             if [[ ! $new_version =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-                print_error "Formato versione non valido"
+                print_error "Invalid version format"
                 exit 1
             fi
             release_type="custom"
             ;;
         5)
-            print_step "Solo build senza aggiornamento versione..."
+            print_step "Build only without version update..."
             build_app
-            print_success "Build completata!"
+            print_success "Build complete!"
             exit 0
             ;;
         *)
-            print_error "Opzione non valida"
+            print_error "Invalid option"
             exit 1
             ;;
     esac
-    
-    # Messaggio opzionale per il rilascio
-    read -p "Messaggio opzionale per questo rilascio: " release_message
-    
+
+    # Optional release message
+    read -r -p "Optional message for this release: " release_message
+
     echo ""
-    print_step "Rilascio pianificato: $current_version → $new_version"
+    print_step "Planned release: $current_version → $new_version"
     if [[ -n "$release_message" ]]; then
-        echo "Messaggio: $release_message"
+        echo "Message: $release_message"
     fi
     echo ""
-    
-    # Conferma finale
-    read -p "Continuare con il rilascio? (y/N): " confirm
+
+    # Final confirmation
+    read -p "Continue with the release? (y/N): " confirm
     if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
-        print_error "Rilascio annullato"
+        print_error "Release cancelled"
         exit 1
     fi
-    
-    # Verifica stato git
+
+    # Check git status and branch before touching any files
     check_git_status
-    
-    # Aggiorna versione nei file
+    check_branch_is_main
+
+    # Update version in files
     update_version_in_files $current_version $new_version
+
+    # Commit and tag
+    commit_and_tag $new_version "$release_message"
 
     # Build
     build_app
-    
-    # Commit e tag
-    commit_and_tag $new_version "$release_message"
-    
+
     # Push
     push_changes $new_version
-    
-    # Aggiorna tap Homebrew
+
+    # Update Homebrew tap
     update_homebrew_tap $new_version
-    
-    # Apri GitHub releases
-    print_step "Vuoi aprire la pagina GitHub releases per completare il rilascio? (Y/n)"
+
+    # Open GitHub releases
+    print_step "Do you want to open the GitHub releases page to complete the release? (Y/n)"
     read -r open_github
     if [[ ! "$open_github" =~ ^[Nn]$ ]]; then
         open_github_releases
     fi
-    
+
     echo ""
-    print_success "🎉 Rilascio v$new_version completato con successo!"
+    print_success "🎉 Release v$new_version completed successfully!"
     echo ""
-    echo "Prossimi passi:"
-    echo "1. Verifica che la build sia completata correttamente"
-    echo "2. Se hai aperto GitHub, crea la release con i file compilati"
-    echo "3. Il tag v$new_version è stato creato per il sistema di aggiornamenti automatici"
-    echo "4. Testa l'aggiornamento automatico dell'app"
+    echo "Next steps:"
+    echo "1. Verify that the build completed correctly"
+    echo "2. If you opened GitHub, create the release with the compiled files"
+    echo "3. Tag v$new_version has been created for the automatic update system"
+    echo "4. Test the automatic app update"
     echo ""
-    
-    # Mostra informazioni sui file generati
-    if [[ -d "src-tauri/target" ]]; then
-        echo "File di build generati:"
-        find src-tauri/target -name "*.app.tar.gz" -o -name "*.app" -o -name "*.deb" -o -name "*.AppImage" 2>/dev/null | head -5
+
+    # Show information about generated files
+    build_artifacts=$(find src-tauri/target -name "*.app.tar.gz" -o -name "*.app" -o -name "*.deb" -o -name "*.AppImage" 2>/dev/null | head -5)
+    if [ -n "$build_artifacts" ]; then
+        echo "Generated build files:"
+        echo "$build_artifacts"
     fi
 }
 
-# Gestione parametri da riga di comando
+# Ensure we operate from the repository root for all invocation paths
+if ! git rev-parse --is-inside-work-tree &>/dev/null; then
+    print_error "Not in a git repository"
+    exit 1
+fi
+_repo_root=$(git rev-parse --show-toplevel 2>/dev/null) || { print_error "Cannot resolve repository root"; exit 1; }
+cd "$_repo_root"
+unset _repo_root
+
+# Command-line parameter handling
 if [[ $# -gt 0 ]]; then
     case $1 in
         "--help"|"-h")
-            echo "Uso: $0 [opzioni]"
+            echo "Usage: $0 [options]"
             echo ""
-            echo "Opzioni:"
-            echo "  --patch     Incrementa versione patch"
-            echo "  --minor     Incrementa versione minor"
-            echo "  --major     Incrementa versione major"
-            echo "  --version X.Y.Z  Imposta versione specifica"
-            echo "  --build-only     Solo build senza aggiornare versione"
-            echo "  --help      Mostra questo messaggio"
+            echo "Options:"
+            echo "  --patch     Increment patch version"
+            echo "  --minor     Increment minor version"
+            echo "  --major     Increment major version"
+            echo "  --version X.Y.Z  Set specific version"
+            echo "  --build-only     Build only without updating version"
+            echo "  --help      Show this message"
             echo ""
-            echo "Esempi:"
-            echo "  $0              # Modalità interattiva"
-            echo "  $0 --patch      # Rilascio patch automatico"
-            echo "  $0 --version 1.0.0  # Versione specifica"
+            echo "Examples:"
+            echo "  $0              # Interactive mode"
+            echo "  $0 --patch      # Automatic patch release"
+            echo "  $0 --version 1.0.0  # Specific version"
             exit 0
             ;;
         "--patch")
             current_version=$(get_current_version)
             new_version=$(increment_version $current_version patch)
+            check_git_status
+            check_branch_is_main
             update_version_in_files $current_version $new_version
             commit_and_tag $new_version
-            push_changes $new_version
             build_app
+            push_changes $new_version
             update_homebrew_tap $new_version
-            print_success "Rilascio patch v$new_version completato!"
+            print_success "Patch release v$new_version complete!"
             ;;
         "--minor")
             current_version=$(get_current_version)
             new_version=$(increment_version $current_version minor)
+            check_git_status
+            check_branch_is_main
             update_version_in_files $current_version $new_version
             commit_and_tag $new_version
-            push_changes $new_version
             build_app
+            push_changes $new_version
             update_homebrew_tap $new_version
-            print_success "Rilascio minor v$new_version completato!"
+            print_success "Minor release v$new_version complete!"
             ;;
         "--major")
             current_version=$(get_current_version)
             new_version=$(increment_version $current_version major)
+            check_git_status
+            check_branch_is_main
             update_version_in_files $current_version $new_version
             commit_and_tag $new_version
-            push_changes $new_version
             build_app
+            push_changes $new_version
             update_homebrew_tap $new_version
-            print_success "Rilascio major v$new_version completato!"
+            print_success "Major release v$new_version complete!"
             ;;
         "--version")
-            if [[ -z $2 ]] || [[ ! $2 =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-                print_error "Versione non specificata o formato non valido"
+            if [[ -z "${2-}" ]] || [[ ! "${2-}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+                print_error "Version not specified or invalid format"
                 exit 1
             fi
             current_version=$(get_current_version)
-            new_version=$2
+            new_version="${2-}"
+            check_git_status
+            check_branch_is_main
             update_version_in_files $current_version $new_version
             commit_and_tag $new_version
-            push_changes $new_version
             build_app
+            push_changes $new_version
             update_homebrew_tap $new_version
-            print_success "Rilascio v$new_version completato!"
+            print_success "Release v$new_version complete!"
             ;;
         "--build-only")
             build_app
-            print_success "Build completata!"
+            print_success "Build complete!"
             ;;
         *)
-            print_error "Opzione non riconosciuta: $1"
-            echo "Usa --help per vedere le opzioni disponibili"
+            print_error "Unrecognized option: $1"
+            echo "Use --help to see available options"
             exit 1
             ;;
     esac
 else
-    # Modalità interattiva
+    # Interactive mode
     main
 fi

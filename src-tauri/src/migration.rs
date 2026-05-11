@@ -180,10 +180,7 @@ pub(super) fn import_history(
     app_data_dir: &Path,
     payload: &LegacyHistoryPayload,
 ) -> Result<(), BridgeError> {
-    if app_data_dir.join("history.json").exists() {
-        return Ok(());
-    }
-    if payload.history.is_empty() {
+    if app_data_dir.join("history.json").exists() || payload.history.is_empty() {
         return Ok(());
     }
     std::fs::create_dir_all(app_data_dir).map_err(|e| BridgeError::Internal {
@@ -199,10 +196,7 @@ pub(super) fn import_tasks(
     app_data_dir: &Path,
     payload: &LegacyTasksPayload,
 ) -> Result<(), BridgeError> {
-    if app_data_dir.join("tasks.json").exists() {
-        return Ok(());
-    }
-    if payload.tasks.is_empty() {
+    if app_data_dir.join("tasks.json").exists() || payload.tasks.is_empty() {
         return Ok(());
     }
     helpers::write_tasks_to(app_data_dir, &payload.tasks)?;
@@ -221,9 +215,6 @@ pub(super) fn import_tags(
     if app_data_dir.join("tags.json").exists() {
         return Ok(());
     }
-    if payload.tags.is_empty() {
-        return Ok(());
-    }
     helpers::write_tags_to(app_data_dir, &payload.tags)?;
     Ok(())
 }
@@ -234,10 +225,7 @@ pub(super) fn import_manual_sessions(
     app_data_dir: &Path,
     payload: &LegacyManualSessionsPayload,
 ) -> Result<(), BridgeError> {
-    if app_data_dir.join("manual_sessions.json").exists() {
-        return Ok(());
-    }
-    if payload.sessions.is_empty() {
+    if app_data_dir.join("manual_sessions.json").exists() || payload.sessions.is_empty() {
         return Ok(());
     }
     helpers::write_manual_sessions_to(app_data_dir, &payload.sessions)?;
@@ -327,22 +315,16 @@ pub(super) fn import_supabase_session(
     // auth module persists. `expires_at` is intentionally not
     // forwarded — the post-cutover session re-derives expiry from
     // the JWT on next refresh.
-    let session_json = serde_json::json!({
-        "access_token": payload.access_token,
-        "refresh_token": payload.refresh_token,
-        "user": {
-            "id": payload.user.id,
-            "email": payload.user.email,
-            "user_metadata": payload.user.user_metadata,
+    let session = auth::AuthSession {
+        access_token: payload.access_token.clone(),
+        refresh_token: payload.refresh_token.clone(),
+        user: auth::AuthUser {
+            id: payload.user.id.clone(),
+            email: payload.user.email.clone(),
+            user_metadata: payload.user.user_metadata.clone(),
         },
-    });
-    let session: auth::AuthSession =
-        serde_json::from_value(session_json).map_err(|e| BridgeError::SerdeRoundtrip {
-            command: "import_legacy_supabase_session".to_string(),
-            error: format!("re-shape payload into AuthSession: {e}"),
-        })?;
-    auth::persist_session(app_data_dir, &session)?;
-    Ok(())
+    };
+    auth::persist_session(app_data_dir, &session)
 }
 
 #[cfg(test)]
@@ -573,6 +555,17 @@ mod tests {
         assert_eq!(first_bytes, second_bytes);
     }
 
+    #[test]
+    fn import_tasks_with_empty_vec_is_a_noop() {
+        let dir = tempdir().unwrap();
+        let payload = LegacyTasksPayload { tasks: Vec::new() };
+        import_tasks(dir.path(), &payload).unwrap();
+        assert!(
+            !dir.path().join("tasks.json").exists(),
+            "empty tasks payload must not create tasks.json"
+        );
+    }
+
     // ── import_tags ─────────────────────────────────────────────────────────
 
     fn sample_tag() -> Tag {
@@ -631,6 +624,23 @@ mod tests {
         assert_eq!(first_bytes, second_bytes);
     }
 
+    #[test]
+    fn import_tags_with_empty_vec_writes_empty_tags_json() {
+        let dir = tempdir().unwrap();
+        let payload = LegacyTagsPayload { tags: Vec::new() };
+        import_tags(dir.path(), &payload).unwrap();
+        assert!(
+            dir.path().join("tags.json").exists(),
+            "empty tags payload must create tags.json to prevent synthetic bootstrap tag"
+        );
+        let content = std::fs::read_to_string(dir.path().join("tags.json")).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&content).unwrap();
+        assert!(
+            parsed.as_array().unwrap().is_empty(),
+            "tags.json must contain empty array"
+        );
+    }
+
     // ── import_manual_sessions ──────────────────────────────────────────────
 
     fn sample_manual() -> ManualSession {
@@ -687,6 +697,19 @@ mod tests {
         import_manual_sessions(dir.path(), &payload2).unwrap();
         let second_bytes = std::fs::read(dir.path().join("manual_sessions.json")).unwrap();
         assert_eq!(first_bytes, second_bytes);
+    }
+
+    #[test]
+    fn import_manual_sessions_with_empty_vec_is_a_noop() {
+        let dir = tempdir().unwrap();
+        let payload = LegacyManualSessionsPayload {
+            sessions: Vec::new(),
+        };
+        import_manual_sessions(dir.path(), &payload).unwrap();
+        assert!(
+            !dir.path().join("manual_sessions.json").exists(),
+            "empty sessions payload must not create manual_sessions.json"
+        );
     }
 
     // ── import_user_state ───────────────────────────────────────────────────
@@ -908,5 +931,42 @@ mod tests {
         let second = super::auth::read_session(dir.path()).unwrap().unwrap();
         assert_eq!(first.access_token, second.access_token);
         assert_eq!(first.refresh_token, second.refresh_token);
+    }
+
+    #[test]
+    fn import_supabase_session_preserves_tokens_and_user_drops_expires_at() {
+        let dir = tempdir().unwrap();
+        let payload = SupabaseSessionPayload {
+            access_token: "access-tok-123".to_string(),
+            refresh_token: "refresh-tok-456".to_string(),
+            expires_at: 9_999_999_999,
+            user: SupabaseUserMirror {
+                id: "user-id-789".to_string(),
+                email: "test@example.com".to_string(),
+                user_metadata: serde_json::json!({"key": "value"}),
+            },
+        };
+        import_supabase_session(dir.path(), &payload).unwrap();
+
+        let session_file = dir.path().join("supabase-session.json");
+        assert!(session_file.exists());
+        let raw = std::fs::read_to_string(&session_file).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&raw).unwrap();
+
+        assert_eq!(parsed["access_token"].as_str().unwrap(), "access-tok-123");
+        assert_eq!(parsed["refresh_token"].as_str().unwrap(), "refresh-tok-456");
+        assert_eq!(parsed["user"]["id"].as_str().unwrap(), "user-id-789");
+        assert_eq!(
+            parsed["user"]["email"].as_str().unwrap(),
+            "test@example.com"
+        );
+        assert_eq!(
+            parsed["user"]["user_metadata"]["key"].as_str().unwrap(),
+            "value"
+        );
+        assert!(
+            parsed.get("expires_at").is_none(),
+            "expires_at must be dropped from persisted session"
+        );
     }
 }

@@ -6,14 +6,7 @@ use std::thread;
 use std::time::{Duration, Instant};
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::{TrayIconBuilder, TrayIconEvent};
-// Analytics (Aptabase) is disconnected: plugin not registered,
-// `are_analytics_enabled` hard-wired to `false`. `track_event` call
-// sites and the `EventTracker` import are preserved as a re-enable
-// scaffold; re-arm by re-registering the plugin and restoring the
-// settings-backed body of `are_analytics_enabled`.
 use tauri::{Emitter, Manager};
-#[allow(unused_imports)]
-use tauri_plugin_aptabase::EventTracker;
 use tauri_plugin_autostart::ManagerExt;
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut};
 use tauri_plugin_oauth::start;
@@ -168,7 +161,7 @@ struct ManualSession {
     notes: Option<String>,
     created_at: String, // ISO string
     date: String,
-    tags: Option<Vec<serde_json::Value>>, // Array of tag objects
+    tags: Option<Vec<serde_json::Value>>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -411,10 +404,6 @@ fn load_settings_sync(app: &AppHandle) -> AppSettings {
     helpers::read_settings_from(&app_data_dir).unwrap_or_default()
 }
 
-const fn are_analytics_enabled(_app: &AppHandle) -> bool {
-    false
-}
-
 /// User-facing notification preferences; each bool maps to an independent
 /// UI toggle, restructuring would not match the settings UI.
 #[allow(clippy::struct_excessive_bools)]
@@ -485,6 +474,14 @@ fn should_debounce_shortcut(action: &str) -> bool {
     helpers::is_debounced(&mut map, action, Instant::now(), Duration::from_millis(500))
 }
 
+fn get_app_data_dir(app: &AppHandle) -> Result<std::path::PathBuf, BridgeError> {
+    app.path()
+        .app_data_dir()
+        .map_err(|e| BridgeError::Internal {
+            msg: format!("Failed to get app data directory: {e}"),
+        })
+}
+
 impl ActivityMonitor {
     #[cfg(target_os = "macos")]
     fn new(app_handle: AppHandle, timeout_seconds: u64) -> Self {
@@ -552,7 +549,7 @@ impl ActivityMonitor {
                     }
                 }
 
-                thread::sleep(Duration::from_millis(500)); // Check every 500ms
+                thread::sleep(Duration::from_millis(500));
             }
         });
     }
@@ -633,86 +630,43 @@ async fn update_activity_timeout(timeout_seconds: u64) -> Result<(), BridgeError
 
 #[tauri::command]
 async fn save_session_data(session: PomodoroSession, app: AppHandle) -> Result<(), BridgeError> {
-    let app_data_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| BridgeError::Internal {
-            msg: format!("Failed to get app data directory: {e}"),
-        })?;
+    let app_data_dir = get_app_data_dir(&app)?;
 
     helpers::write_session_to(&app_data_dir, &session)?;
-
-    if are_analytics_enabled(&app) {
-        let properties = Some(serde_json::json!({
-            "completed_pomodoros": session.completed_pomodoros,
-            "total_focus_time": session.total_focus_time,
-            "current_session": session.current_session
-        }));
-        let _ = app.track_event("session_saved", properties);
-    }
 
     Ok(())
 }
 
 #[tauri::command]
 async fn load_session_data(app: AppHandle) -> Result<Option<PomodoroSession>, BridgeError> {
-    let app_data_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| BridgeError::Internal {
-            msg: format!("Failed to get app data directory: {e}"),
-        })?;
+    let app_data_dir = get_app_data_dir(&app)?;
     helpers::read_session_from(&app_data_dir).map_err(BridgeError::from)
 }
 
 #[tauri::command]
 async fn save_tasks(tasks: Vec<Task>, app: AppHandle) -> Result<(), BridgeError> {
-    let app_data_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| BridgeError::Internal {
-            msg: format!("Failed to get app data directory: {e}"),
-        })?;
+    let app_data_dir = get_app_data_dir(&app)?;
 
     helpers::write_tasks_to(&app_data_dir, &tasks)?;
-
-    if are_analytics_enabled(&app) {
-        let _ = app.track_event("tasks_saved", None);
-    }
 
     Ok(())
 }
 
 #[tauri::command]
 async fn load_tasks(app: AppHandle) -> Result<Vec<Task>, BridgeError> {
-    let app_data_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| BridgeError::Internal {
-            msg: format!("Failed to get app data directory: {e}"),
-        })?;
+    let app_data_dir = get_app_data_dir(&app)?;
     helpers::read_tasks_from(&app_data_dir).map_err(BridgeError::from)
 }
 
 #[tauri::command]
 async fn get_stats_history(app: AppHandle) -> Result<Vec<PomodoroSession>, BridgeError> {
-    let app_data_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| BridgeError::Internal {
-            msg: format!("Failed to get app data directory: {e}"),
-        })?;
+    let app_data_dir = get_app_data_dir(&app)?;
     helpers::read_history_from(&app_data_dir).map_err(BridgeError::from)
 }
 
 #[tauri::command]
 async fn save_daily_stats(session: PomodoroSession, app: AppHandle) -> Result<(), BridgeError> {
-    let app_data_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| BridgeError::Internal {
-            msg: format!("Failed to get app data directory: {e}"),
-        })?;
+    let app_data_dir = get_app_data_dir(&app)?;
     helpers::append_daily_stats_to(&app_data_dir, &session).map_err(BridgeError::from)
 }
 
@@ -786,14 +740,19 @@ async fn update_tray_icon(
     final_result
 }
 
+fn emit_tray_and_show(app: &AppHandle, event: &str) {
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.emit(event, ());
+    }
+    let app_clone = app.clone();
+    tauri::async_runtime::spawn(async move {
+        show_app_window(app_clone).await;
+    });
+}
+
 #[allow(clippy::unused_async)] // awaits run_on_main_thread on macOS
 async fn show_app_window(app: AppHandle) {
-    let settings = app
-        .state::<SettingsState>()
-        .0
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner)
-        .clone();
+    let settings = helpers::lock_or_recover(&app.state::<SettingsState>().0).clone();
     if settings.hide_icon_on_close {
         #[cfg(target_os = "macos")]
         {
@@ -810,31 +769,18 @@ async fn show_app_window(app: AppHandle) {
 
 #[tauri::command]
 async fn save_settings(settings: AppSettings, app: AppHandle) -> Result<(), BridgeError> {
-    let app_data_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| BridgeError::Internal {
-            msg: format!("Failed to get app data directory: {e}"),
-        })?;
+    let app_data_dir = get_app_data_dir(&app)?;
 
     helpers::write_settings_to(&app_data_dir, &settings)?;
 
-    *app.state::<SettingsState>()
-        .0
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner) = settings;
+    *helpers::lock_or_recover(&app.state::<SettingsState>().0) = settings;
 
     Ok(())
 }
 
 #[tauri::command]
 async fn load_settings(app: AppHandle) -> Result<AppSettings, BridgeError> {
-    let app_data_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| BridgeError::Internal {
-            msg: format!("Failed to get app data directory: {e}"),
-        })?;
+    let app_data_dir = get_app_data_dir(&app)?;
     helpers::read_settings_from(&app_data_dir).map_err(|e| BridgeError::Internal {
         msg: format!("Failed to read settings: {e}"),
     })
@@ -886,19 +832,11 @@ async fn register_global_shortcuts(
 
 #[tauri::command]
 async fn reset_all_data(app: AppHandle) -> Result<(), BridgeError> {
-    let app_data_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| BridgeError::Internal {
-            msg: format!("Failed to get app data directory: {e}"),
-        })?;
+    let app_data_dir = get_app_data_dir(&app)?;
 
     helpers::delete_all_data_in(&app_data_dir)?;
 
-    *app.state::<SettingsState>()
-        .0
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner) = AppSettings::default();
+    *helpers::lock_or_recover(&app.state::<SettingsState>().0) = AppSettings::default();
 
     Ok(())
 }
@@ -935,33 +873,16 @@ async fn save_manual_sessions(
     sessions: Vec<ManualSession>,
     app: AppHandle,
 ) -> Result<(), BridgeError> {
-    let app_data_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| BridgeError::Internal {
-            msg: format!("Failed to get app data directory: {e}"),
-        })?;
+    let app_data_dir = get_app_data_dir(&app)?;
 
     helpers::write_manual_sessions_to(&app_data_dir, &sessions)?;
-
-    if are_analytics_enabled(&app) {
-        let properties = Some(serde_json::json!({
-            "session_count": sessions.len()
-        }));
-        let _ = app.track_event("manual_sessions_saved", properties);
-    }
 
     Ok(())
 }
 
 #[tauri::command]
 async fn load_manual_sessions(app: AppHandle) -> Result<Vec<ManualSession>, BridgeError> {
-    let app_data_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| BridgeError::Internal {
-            msg: format!("Failed to get app data directory: {e}"),
-        })?;
+    let app_data_dir = get_app_data_dir(&app)?;
     helpers::read_manual_sessions_from(&app_data_dir).map_err(BridgeError::from)
 }
 
@@ -1037,7 +958,6 @@ pub fn run() {
                 delete_tag,
                 add_session_tag,
                 start_oauth_server,
-                track_event,
                 supabase_sign_in_with_password,
                 supabase_sign_out,
                 supabase_get_session,
@@ -1056,13 +976,6 @@ pub fn run() {
             .setup(|app| {
                 let initial_settings = load_settings_sync(app.handle());
                 app.manage(SettingsState(Mutex::new(initial_settings)));
-
-                let app_handle_analytics = app.handle().clone();
-                tauri::async_runtime::spawn(async move {
-                    if are_analytics_enabled(&app_handle_analytics) {
-                        let _ = app_handle_analytics.track_event("app_started", None);
-                    }
-                });
 
                 let show_item = MenuItem::with_id(app, "show", "Show Presto", true, None::<&str>)?;
                 let start_session_item =
@@ -1098,40 +1011,16 @@ pub fn run() {
                             });
                         }
                         "start_session" => {
-                            if let Some(window) = app_handle.get_webview_window("main") {
-                                let _ = window.emit("tray-start-session", ());
-                            }
-                            let app_clone = app_handle.clone();
-                            tauri::async_runtime::spawn(async move {
-                                show_app_window(app_clone).await;
-                            });
+                            emit_tray_and_show(&app_handle, "tray-start-session");
                         }
                         "pause" => {
-                            if let Some(window) = app_handle.get_webview_window("main") {
-                                let _ = window.emit("tray-pause", ());
-                            }
-                            let app_clone = app_handle.clone();
-                            tauri::async_runtime::spawn(async move {
-                                show_app_window(app_clone).await;
-                            });
+                            emit_tray_and_show(&app_handle, "tray-pause");
                         }
                         "skip" => {
-                            if let Some(window) = app_handle.get_webview_window("main") {
-                                let _ = window.emit("tray-skip", ());
-                            }
-                            let app_clone = app_handle.clone();
-                            tauri::async_runtime::spawn(async move {
-                                show_app_window(app_clone).await;
-                            });
+                            emit_tray_and_show(&app_handle, "tray-skip");
                         }
                         "cancel" => {
-                            if let Some(window) = app_handle.get_webview_window("main") {
-                                let _ = window.emit("tray-cancel", ());
-                            }
-                            let app_clone = app_handle.clone();
-                            tauri::async_runtime::spawn(async move {
-                                show_app_window(app_clone).await;
-                            });
+                            emit_tray_and_show(&app_handle, "tray-cancel");
                         }
                         "quit" => {
                             app_handle.exit(0);
@@ -1154,12 +1043,10 @@ pub fn run() {
                         if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                             api.prevent_close();
 
-                            let settings = app_handle_for_close
-                                .state::<SettingsState>()
-                                .0
-                                .lock()
-                                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                                .clone();
+                            let settings = helpers::lock_or_recover(
+                                &app_handle_for_close.state::<SettingsState>().0,
+                            )
+                            .clone();
                             let app_handle_clone = app_handle_for_close.clone();
                             tauri::async_runtime::spawn(async move {
                                 if let Some(window) = app_handle_clone.get_webview_window("main") {
@@ -1194,7 +1081,6 @@ pub fn run() {
                         }
                         Err(e) => {
                             log::error!("Failed to load settings on startup: {e}");
-                            // Try to register default shortcuts
                             let default_settings = AppSettings::default();
                             if let Err(e) = register_global_shortcuts(
                                 app_handle_for_shortcuts,
@@ -1213,10 +1099,6 @@ pub fn run() {
             .build(tauri::generate_context!())
             .expect("error while running tauri application")
             .run(|app_handle, event| match event {
-                tauri::RunEvent::Exit if are_analytics_enabled(app_handle) => {
-                    let _ = app_handle.track_event("app_exited", None);
-                    app_handle.flush_events_blocking();
-                }
                 #[cfg(target_os = "macos")]
                 tauri::RunEvent::Reopen { .. } => {
                     let app_handle_clone = app_handle.clone();
@@ -1224,52 +1106,34 @@ pub fn run() {
                         show_app_window(app_handle_clone).await;
                     });
                 }
-                _ => {}
+                _ => {
+                    let _ = app_handle;
+                }
             });
     });
 }
 
 #[tauri::command]
 async fn load_tags(app: AppHandle) -> Result<Vec<Tag>, BridgeError> {
-    let app_data_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| BridgeError::Internal {
-            msg: format!("Failed to get app data directory: {e}"),
-        })?;
+    let app_data_dir = get_app_data_dir(&app)?;
     helpers::read_tags_from(&app_data_dir).map_err(BridgeError::from)
 }
 
 #[tauri::command]
 async fn save_tag(tag: Tag, app: AppHandle) -> Result<(), BridgeError> {
-    let app_data_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| BridgeError::Internal {
-            msg: format!("Failed to get app data directory: {e}"),
-        })?;
+    let app_data_dir = get_app_data_dir(&app)?;
     helpers::upsert_tag_in(&app_data_dir, tag).map_err(BridgeError::from)
 }
 
 #[tauri::command]
 async fn delete_tag(tag_id: String, app: AppHandle) -> Result<(), BridgeError> {
-    let app_data_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| BridgeError::Internal {
-            msg: format!("Failed to get app data directory: {e}"),
-        })?;
+    let app_data_dir = get_app_data_dir(&app)?;
     helpers::delete_tag_in(&app_data_dir, &tag_id).map_err(BridgeError::from)
 }
 
 #[tauri::command]
 async fn add_session_tag(session_tag: SessionTag, app: AppHandle) -> Result<(), BridgeError> {
-    let app_data_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| BridgeError::Internal {
-            msg: format!("Failed to get app data directory: {e}"),
-        })?;
+    let app_data_dir = get_app_data_dir(&app)?;
     helpers::append_session_tag_in(&app_data_dir, session_tag).map_err(BridgeError::from)
 }
 
@@ -1372,40 +1236,6 @@ async fn start_oauth_server(window: tauri::Window) -> Result<u16, BridgeError> {
     })
 }
 
-// `track_event` — Phase 1D T086.
-//
-// Replaces the JS `@aptabase/tauri` shim that the migration deletes. The
-// shim's only behaviour was to forward `track_event(...)` to the Aptabase
-// plugin via `invoke()`. This handler does the same with one extra
-// guarantee (per spec FR-018 / Principle II): the `analytics_enabled`
-// opt-in toggle is checked Rust-side via `are_analytics_enabled` before
-// any forwarding happens — a Leptos call site cannot accidentally bypass
-// it because the gate lives below the bridge.
-//
-// `props` is `Option<HashMap<String, Value>>` — `None` matches the
-// bare-name path Aptabase's `EventTracker::track_event` accepts directly.
-// We construct a `serde_json::Value::Object` from the HashMap and pass it
-// to the plugin (the plugin's `track_event` API takes a serializable
-// payload). When the toggle is off, the handler returns `Ok(())` without
-// forwarding — the disabled path is silent, not an error (matches the
-// existing in-handler call sites at `lib.rs:474`, `lib.rs:500`, etc.).
-#[tauri::command]
-async fn track_event(
-    name: String,
-    props: Option<HashMap<String, serde_json::Value>>,
-    app: AppHandle,
-) -> Result<(), BridgeError> {
-    if are_analytics_enabled(&app) {
-        // The aptabase plugin's `EventTracker::track_event` takes a
-        // serde_json::Value bag (not a typed HashMap); we wrap the map
-        // into `Value::Object` here so the bridge stays typed at the
-        // boundary while the plugin keeps its `Value` shape internally.
-        let payload = props.map(|map| serde_json::Value::Object(map.into_iter().collect()));
-        let _ = app.track_event(&name, payload);
-    }
-    Ok(())
-}
-
 // `supabase_sign_in_with_password` — Phase 1D T089.
 //
 // Replaces the JS `supabase-js` `signInWithPassword` call. Authenticates
@@ -1427,12 +1257,7 @@ async fn supabase_sign_in_with_password(
     app: AppHandle,
 ) -> Result<auth::AuthSession, BridgeError> {
     let session = auth::sign_in_with_password(&email, &password).await?;
-    let app_data_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| BridgeError::Internal {
-            msg: format!("Failed to get app data directory: {e}"),
-        })?;
+    let app_data_dir = get_app_data_dir(&app)?;
     auth::persist_session(&app_data_dir, &session)?;
     Ok(session)
 }
@@ -1453,12 +1278,7 @@ async fn supabase_sign_in_with_password(
 #[tauri::command]
 async fn supabase_sign_out(refresh_token: String, app: AppHandle) -> Result<(), BridgeError> {
     auth::sign_out(&refresh_token).await?;
-    let app_data_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| BridgeError::Internal {
-            msg: format!("Failed to get app data directory: {e}"),
-        })?;
+    let app_data_dir = get_app_data_dir(&app)?;
     auth::clear_session(&app_data_dir)
 }
 
@@ -1472,12 +1292,7 @@ async fn supabase_sign_out(refresh_token: String, app: AppHandle) -> Result<(), 
 // source of truth lives below the bridge).
 #[tauri::command]
 async fn supabase_get_session(app: AppHandle) -> Result<Option<auth::AuthSession>, BridgeError> {
-    let app_data_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| BridgeError::Internal {
-            msg: format!("Failed to get app data directory: {e}"),
-        })?;
+    let app_data_dir = get_app_data_dir(&app)?;
     auth::read_session(&app_data_dir)
 }
 
@@ -1495,12 +1310,7 @@ async fn supabase_refresh_session(
     app: AppHandle,
 ) -> Result<auth::AuthSession, BridgeError> {
     let session = auth::refresh_session(&refresh_token).await?;
-    let app_data_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| BridgeError::Internal {
-            msg: format!("Failed to get app data directory: {e}"),
-        })?;
+    let app_data_dir = get_app_data_dir(&app)?;
     auth::persist_session(&app_data_dir, &session)?;
     Ok(session)
 }
@@ -1532,12 +1342,7 @@ async fn import_legacy_settings(
     payload: migration::LegacySettingsPayload,
     app: AppHandle,
 ) -> Result<(), BridgeError> {
-    let app_data_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| BridgeError::Internal {
-            msg: format!("Failed to get app data directory: {e}"),
-        })?;
+    let app_data_dir = get_app_data_dir(&app)?;
     migration::import_settings(&app_data_dir, &payload)
 }
 
@@ -1546,12 +1351,7 @@ async fn import_legacy_history(
     payload: migration::LegacyHistoryPayload,
     app: AppHandle,
 ) -> Result<(), BridgeError> {
-    let app_data_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| BridgeError::Internal {
-            msg: format!("Failed to get app data directory: {e}"),
-        })?;
+    let app_data_dir = get_app_data_dir(&app)?;
     migration::import_history(&app_data_dir, &payload)
 }
 
@@ -1560,12 +1360,7 @@ async fn import_legacy_tasks(
     payload: migration::LegacyTasksPayload,
     app: AppHandle,
 ) -> Result<(), BridgeError> {
-    let app_data_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| BridgeError::Internal {
-            msg: format!("Failed to get app data directory: {e}"),
-        })?;
+    let app_data_dir = get_app_data_dir(&app)?;
     migration::import_tasks(&app_data_dir, &payload)
 }
 
@@ -1574,12 +1369,7 @@ async fn import_legacy_tags(
     payload: migration::LegacyTagsPayload,
     app: AppHandle,
 ) -> Result<(), BridgeError> {
-    let app_data_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| BridgeError::Internal {
-            msg: format!("Failed to get app data directory: {e}"),
-        })?;
+    let app_data_dir = get_app_data_dir(&app)?;
     migration::import_tags(&app_data_dir, &payload)
 }
 
@@ -1588,12 +1378,7 @@ async fn import_legacy_manual_sessions(
     payload: migration::LegacyManualSessionsPayload,
     app: AppHandle,
 ) -> Result<(), BridgeError> {
-    let app_data_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| BridgeError::Internal {
-            msg: format!("Failed to get app data directory: {e}"),
-        })?;
+    let app_data_dir = get_app_data_dir(&app)?;
     migration::import_manual_sessions(&app_data_dir, &payload)
 }
 
@@ -1602,12 +1387,7 @@ async fn import_legacy_user_state(
     payload: migration::LegacyUserStatePayload,
     app: AppHandle,
 ) -> Result<(), BridgeError> {
-    let app_data_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| BridgeError::Internal {
-            msg: format!("Failed to get app data directory: {e}"),
-        })?;
+    let app_data_dir = get_app_data_dir(&app)?;
     migration::import_user_state(&app_data_dir, &payload)
 }
 
@@ -1616,12 +1396,7 @@ async fn import_legacy_supabase_session(
     payload: migration::SupabaseSessionPayload,
     app: AppHandle,
 ) -> Result<(), BridgeError> {
-    let app_data_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| BridgeError::Internal {
-            msg: format!("Failed to get app data directory: {e}"),
-        })?;
+    let app_data_dir = get_app_data_dir(&app)?;
     migration::import_supabase_session(&app_data_dir, &payload)
 }
 
@@ -1635,23 +1410,13 @@ async fn import_legacy_supabase_session(
 
 #[tauri::command]
 async fn is_legacy_migration_complete(app: AppHandle) -> Result<bool, BridgeError> {
-    let app_data_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| BridgeError::Internal {
-            msg: format!("Failed to get app data directory: {e}"),
-        })?;
+    let app_data_dir = get_app_data_dir(&app)?;
     Ok(app_data_dir.join("legacy-migration-done.marker").exists())
 }
 
 #[tauri::command]
 async fn mark_legacy_migration_complete(app: AppHandle) -> Result<(), BridgeError> {
-    let app_data_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| BridgeError::Internal {
-            msg: format!("Failed to get app data directory: {e}"),
-        })?;
+    let app_data_dir = get_app_data_dir(&app)?;
     std::fs::create_dir_all(&app_data_dir).map_err(|e| BridgeError::Internal {
         msg: format!("Failed to create app data directory: {e}"),
     })?;

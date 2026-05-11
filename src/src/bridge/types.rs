@@ -677,10 +677,14 @@ pub struct UpdateAvailablePayload {
 #[cfg(test)]
 mod tests {
     use super::{
-        AppearanceSettings, AuthSession, AuthUser, ManualSession, Session, Settings,
-        StatusBarDisplay, Task,
+        AppearanceSettings, AuthSession, AuthUser, LegacyHistoryPayload,
+        LegacyManualSessionsPayload, LegacyTagsPayload, LegacyTasksPayload, LegacyUserStatePayload,
+        ManualSession, NotificationSettings, Session, SessionTag, Settings, ShortcutSettings,
+        StatusBarDisplay, SupabaseSessionPayload, Tag, Task, TimerSettings, UpdateAvailablePayload,
+        UpdateTrayIconArgs,
     };
     use crate::bridge::session_type::SessionType;
+    use crate::bridge::timer_mode::TimerMode;
 
     #[test]
     fn session_round_trips_snake_case() {
@@ -913,5 +917,347 @@ mod tests {
         assert!(json.contains(r#""session_type":"longBreak""#));
         let decoded: ManualSession = serde_json::from_str(&json).unwrap();
         assert_eq!(decoded.session_type, SessionType::LongBreak);
+    }
+
+    #[test]
+    fn tag_round_trips_snake_case() {
+        let t = Tag {
+            id: "tag-abc".to_string(),
+            name: "Work".to_string(),
+            icon: "ri-briefcase-line".to_string(),
+            color: "#3b82f6".to_string(),
+            created_at: "2026-05-10T00:00:00Z".to_string(),
+        };
+        let json = serde_json::to_string(&t).unwrap();
+        assert!(json.contains(r#""id":"tag-abc""#));
+        assert!(json.contains(r#""name":"Work""#));
+        assert!(json.contains("\"color\":\"#3b82f6\""));
+        let decoded: Tag = serde_json::from_str(&json).unwrap();
+        assert_eq!(decoded.id, "tag-abc");
+        assert_eq!(decoded.name, "Work");
+        assert_eq!(decoded.icon, "ri-briefcase-line");
+        assert_eq!(decoded.color, "#3b82f6");
+    }
+
+    #[test]
+    fn session_tag_round_trips_snake_case() {
+        let st = SessionTag {
+            session_id: "sess-1".to_string(),
+            tag_id: "tag-abc".to_string(),
+            duration: 300,
+            created_at: "2026-05-10T09:00:00Z".to_string(),
+        };
+        let json = serde_json::to_string(&st).unwrap();
+        assert!(json.contains(r#""session_id":"sess-1""#));
+        assert!(json.contains(r#""tag_id":"tag-abc""#));
+        assert!(json.contains(r#""duration":300"#));
+        let decoded: SessionTag = serde_json::from_str(&json).unwrap();
+        assert_eq!(decoded.session_id, "sess-1");
+        assert_eq!(decoded.tag_id, "tag-abc");
+        assert_eq!(decoded.duration, 300);
+        assert_eq!(decoded.created_at, "2026-05-10T09:00:00Z");
+    }
+
+    /// Pins the default keyboard-shortcut bindings so an accidental
+    /// change to a default string fails a test rather than shipping
+    /// silently broken shortcuts to users.
+    #[test]
+    fn shortcut_settings_default_values_match_legacy_js_bindings() {
+        let s = ShortcutSettings::default();
+        assert_eq!(
+            s.start_stop.as_deref(),
+            Some("CommandOrControl+Alt+Space"),
+            "start_stop default must match the JS-era binding",
+        );
+        assert_eq!(
+            s.reset.as_deref(),
+            Some("CommandOrControl+Alt+R"),
+            "reset default must match the JS-era binding",
+        );
+        assert_eq!(
+            s.skip.as_deref(),
+            Some("CommandOrControl+Alt+S"),
+            "skip default must match the JS-era binding",
+        );
+    }
+
+    /// `ShortcutSettings` with null bindings (user-cleared) round-trips
+    /// through JSON with `null` on the wire per the JS-era convention.
+    #[test]
+    fn shortcut_settings_null_bindings_round_trip() {
+        let json = r#"{"start_stop":null,"reset":null,"skip":null}"#;
+        let decoded: ShortcutSettings = serde_json::from_str(json).unwrap();
+        assert!(decoded.start_stop.is_none());
+        assert!(decoded.reset.is_none());
+        assert!(decoded.skip.is_none());
+        let re_encoded = serde_json::to_string(&decoded).unwrap();
+        assert_eq!(re_encoded, json);
+    }
+
+    /// Pins the `NotificationSettings` defaults — each bool field has
+    /// a distinct value so a default-value swap would fail exactly one
+    /// assertion here.
+    #[test]
+    fn notification_settings_default_values() {
+        let n = NotificationSettings::default();
+        assert!(
+            n.desktop_notifications,
+            "desktop_notifications defaults true"
+        );
+        assert!(n.sound_notifications, "sound_notifications defaults true");
+        assert!(n.auto_start_timer, "auto_start_timer defaults true");
+        assert!(!n.auto_start_focus, "auto_start_focus defaults false");
+        assert!(
+            !n.allow_continuous_sessions,
+            "allow_continuous_sessions defaults false",
+        );
+        assert!(!n.smart_pause, "smart_pause defaults false");
+        assert_eq!(
+            n.smart_pause_timeout, 30,
+            "smart_pause_timeout defaults 30s"
+        );
+    }
+
+    /// Pins the `TimerSettings` defaults in isolation — the values are
+    /// also covered by `settings_round_trips_default_shape` but isolating
+    /// them here makes regressions in defaults immediately attributable.
+    #[test]
+    fn timer_settings_default_values() {
+        let t = TimerSettings::default();
+        assert_eq!(t.focus_duration, 25);
+        assert_eq!(t.break_duration, 5);
+        assert_eq!(t.long_break_duration, 20);
+        assert_eq!(t.total_sessions, 10);
+        assert_eq!(t.weekly_goal_minutes, 125);
+        assert_eq!(t.max_session_time, 120);
+    }
+
+    /// `StatusBarDisplay` serialises as kebab-case strings per the
+    /// wire contract (data-model.md §"Settings legacy migration").
+    #[test]
+    fn status_bar_display_serialises_kebab_case() {
+        let json_default = serde_json::to_string(&StatusBarDisplay::Default).unwrap();
+        assert_eq!(json_default, r#""default""#);
+        let json_icon_only = serde_json::to_string(&StatusBarDisplay::IconOnly).unwrap();
+        assert_eq!(json_icon_only, r#""icon-only""#);
+    }
+
+    #[test]
+    fn status_bar_display_round_trips_both_variants() {
+        for (wire, expected) in [
+            (r#""default""#, StatusBarDisplay::Default),
+            (r#""icon-only""#, StatusBarDisplay::IconOnly),
+        ] {
+            let decoded: StatusBarDisplay = serde_json::from_str(wire).unwrap();
+            assert_eq!(decoded, expected, "failed for wire form {wire}");
+            let re_encoded = serde_json::to_string(&decoded).unwrap();
+            assert_eq!(re_encoded, wire);
+        }
+    }
+
+    /// `UpdateAvailablePayload` round-trips with all optional fields
+    /// populated — pins the wire shape the `tauri-plugin-updater`
+    /// emits (`version`, `body`, `date`).
+    #[test]
+    fn update_available_payload_round_trips_with_all_fields() {
+        let p = UpdateAvailablePayload {
+            version: "0.6.0".to_string(),
+            body: Some("Bug fixes.".to_string()),
+            date: Some("2026-05-10T00:00:00Z".to_string()),
+        };
+        let json = serde_json::to_string(&p).unwrap();
+        assert!(json.contains(r#""version":"0.6.0""#));
+        let decoded: UpdateAvailablePayload = serde_json::from_str(&json).unwrap();
+        assert_eq!(decoded.version, "0.6.0");
+        assert_eq!(decoded.body.as_deref(), Some("Bug fixes."));
+        assert_eq!(decoded.date.as_deref(), Some("2026-05-10T00:00:00Z"));
+    }
+
+    /// When `body` and `date` are absent from the plugin's emit, the
+    /// `#[serde(default)]` markers must supply `None` so the
+    /// `UpdateManager::handle_event` path doesn't fail deserialisation
+    /// on minimal payloads.
+    #[test]
+    fn update_available_payload_handles_missing_optional_fields() {
+        let json = r#"{"version":"0.6.1"}"#;
+        let decoded: UpdateAvailablePayload = serde_json::from_str(json).unwrap();
+        assert_eq!(decoded.version, "0.6.1");
+        assert!(decoded.body.is_none());
+        assert!(decoded.date.is_none());
+    }
+
+    /// `UpdateTrayIconArgs` round-trips through JSON — the struct is
+    /// the single typed arg bundle handed to `update_tray_icon`; a
+    /// wire-shape drift here would silence a tray-icon update without
+    /// a compile error.
+    #[test]
+    fn update_tray_icon_args_round_trips() {
+        let args = UpdateTrayIconArgs {
+            timer_text: "24:59".to_string(),
+            is_running: true,
+            session_mode: TimerMode::Focus,
+            current_session: 3,
+            total_sessions: 10,
+            mode_icon: Some("🍅".to_string()),
+        };
+        let json = serde_json::to_string(&args).unwrap();
+        assert!(json.contains(r#""timer_text":"24:59""#));
+        assert!(json.contains(r#""is_running":true"#));
+        assert!(json.contains(r#""session_mode":"focus""#));
+        assert!(json.contains(r#""current_session":3"#));
+        assert!(json.contains(r#""total_sessions":10"#));
+        let decoded: UpdateTrayIconArgs = serde_json::from_str(&json).unwrap();
+        assert_eq!(decoded.timer_text, "24:59");
+        assert!(decoded.is_running);
+        assert_eq!(decoded.session_mode, TimerMode::Focus);
+        assert_eq!(decoded.current_session, 3);
+        assert_eq!(decoded.mode_icon.as_deref(), Some("🍅"));
+    }
+
+    #[test]
+    fn update_tray_icon_args_without_mode_icon_round_trips() {
+        let args = UpdateTrayIconArgs {
+            timer_text: "05:00".to_string(),
+            is_running: false,
+            session_mode: TimerMode::Break,
+            current_session: 1,
+            total_sessions: 10,
+            mode_icon: None,
+        };
+        let json = serde_json::to_string(&args).unwrap();
+        let decoded: UpdateTrayIconArgs = serde_json::from_str(&json).unwrap();
+        assert!(decoded.mode_icon.is_none());
+        assert_eq!(decoded.session_mode, TimerMode::Break);
+    }
+
+    #[test]
+    fn legacy_history_payload_round_trips() {
+        let p = LegacyHistoryPayload {
+            history: vec![Session {
+                completed_pomodoros: 2,
+                total_focus_time: 3000,
+                current_session: 3,
+                date: "Sat May 10 2026".to_string(),
+            }],
+        };
+        let json = serde_json::to_string(&p).unwrap();
+        let decoded: LegacyHistoryPayload = serde_json::from_str(&json).unwrap();
+        assert_eq!(decoded.history.len(), 1);
+        assert_eq!(decoded.history[0].completed_pomodoros, 2);
+    }
+
+    #[test]
+    fn legacy_tasks_payload_round_trips() {
+        let p = LegacyTasksPayload {
+            tasks: vec![Task {
+                id: 1,
+                text: "write tests".to_string(),
+                completed: false,
+                created_at: "2026-05-10T00:00:00Z".to_string(),
+                completed_at: None,
+            }],
+        };
+        let json = serde_json::to_string(&p).unwrap();
+        let decoded: LegacyTasksPayload = serde_json::from_str(&json).unwrap();
+        assert_eq!(decoded.tasks.len(), 1);
+        assert_eq!(decoded.tasks[0].text, "write tests");
+    }
+
+    #[test]
+    fn legacy_tags_payload_round_trips() {
+        let p = LegacyTagsPayload {
+            tags: vec![Tag {
+                id: "tag-1".to_string(),
+                name: "Focus".to_string(),
+                icon: "🎯".to_string(),
+                color: "#ff0000".to_string(),
+                created_at: "2026-05-10T00:00:00Z".to_string(),
+            }],
+        };
+        let json = serde_json::to_string(&p).unwrap();
+        let decoded: LegacyTagsPayload = serde_json::from_str(&json).unwrap();
+        assert_eq!(decoded.tags.len(), 1);
+        assert_eq!(decoded.tags[0].id, "tag-1");
+    }
+
+    #[test]
+    fn legacy_manual_sessions_payload_round_trips() {
+        let p = LegacyManualSessionsPayload {
+            sessions: vec![ManualSession {
+                id: "ms-1".to_string(),
+                session_type: SessionType::Focus,
+                duration: 25,
+                start_time: "09:00".to_string(),
+                end_time: "09:25".to_string(),
+                notes: None,
+                created_at: "2026-05-10T09:00:00Z".to_string(),
+                date: "Sat May 10 2026".to_string(),
+                tags: None,
+            }],
+        };
+        let json = serde_json::to_string(&p).unwrap();
+        let decoded: LegacyManualSessionsPayload = serde_json::from_str(&json).unwrap();
+        assert_eq!(decoded.sessions.len(), 1);
+        assert_eq!(decoded.sessions[0].id, "ms-1");
+        assert_eq!(decoded.sessions[0].duration, 25);
+    }
+
+    #[test]
+    fn legacy_user_state_payload_round_trips_with_all_fields() {
+        let p = LegacyUserStatePayload {
+            guest_mode: Some(true),
+            auth_seen: Some(false),
+            skipped_versions: vec!["0.5.0".to_string()],
+            active_session: Some(Session {
+                completed_pomodoros: 1,
+                total_focus_time: 1500,
+                current_session: 2,
+                date: "Sat May 10 2026".to_string(),
+            }),
+        };
+        let json = serde_json::to_string(&p).unwrap();
+        let decoded: LegacyUserStatePayload = serde_json::from_str(&json).unwrap();
+        assert_eq!(decoded.guest_mode, Some(true));
+        assert_eq!(decoded.auth_seen, Some(false));
+        assert_eq!(decoded.skipped_versions, vec!["0.5.0"]);
+        assert!(decoded.active_session.is_some());
+        assert_eq!(decoded.active_session.unwrap().completed_pomodoros, 1);
+    }
+
+    #[test]
+    fn legacy_user_state_payload_round_trips_with_absent_optional_fields() {
+        let json =
+            r#"{"guest_mode":null,"auth_seen":null,"skipped_versions":[],"active_session":null}"#;
+        let decoded: LegacyUserStatePayload = serde_json::from_str(json).unwrap();
+        assert!(decoded.guest_mode.is_none());
+        assert!(decoded.auth_seen.is_none());
+        assert!(decoded.skipped_versions.is_empty());
+        assert!(decoded.active_session.is_none());
+    }
+
+    /// `SupabaseSessionPayload` is the JS-era localStorage token shape
+    /// (distinct from `AuthSession` — it carries `expires_at`). Pinned
+    /// so the `import_legacy_supabase_session_from_storage` reader can
+    /// deserialise the raw supabase-js localStorage value without a
+    /// translation layer.
+    #[test]
+    fn supabase_session_payload_round_trips() {
+        let p = SupabaseSessionPayload {
+            access_token: "eyJ...".to_string(),
+            refresh_token: "rt-xyz".to_string(),
+            expires_at: 1_746_883_200,
+            user: AuthUser {
+                id: "user-1".to_string(),
+                email: "test@example.com".to_string(),
+                user_metadata: serde_json::json!({}),
+            },
+        };
+        let json = serde_json::to_string(&p).unwrap();
+        assert!(json.contains(r#""expires_at":1746883200"#));
+        let decoded: SupabaseSessionPayload = serde_json::from_str(&json).unwrap();
+        assert_eq!(decoded.access_token, "eyJ...");
+        assert_eq!(decoded.refresh_token, "rt-xyz");
+        assert_eq!(decoded.expires_at, 1_746_883_200);
+        assert_eq!(decoded.user.email, "test@example.com");
     }
 }

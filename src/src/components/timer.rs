@@ -1,12 +1,4 @@
-// Timer view component — Phase 4a (T189-T191) of spec
-// 001-leptos-migration.
-//
-// Skeleton (T189): mount the canonical pomodoro timer DOM with the
-// e2e selector contract preserved. Wiring (T190): consume an
-// `engine::TimerState` via a `RwSignal`, project countdown text +
-// running flag through derived signals, route start/pause/reset/
-// skip clicks into the engine state machine, and drive a 1Hz tick
-// loop. T191 lands the visual-regression check.
+// Timer view component. Spec: 001-leptos-migration §Phase 4a.
 //
 // **Selector contract** (consumed by `tests/e2e/timer.spec.js`,
 // `_smoke.spec.js`, `tags.spec.js`, `sessions-history.spec.js`,
@@ -52,6 +44,7 @@ use leptos::prelude::*;
 use leptos::task::spawn_local;
 use wasm_bindgen::JsCast;
 
+use super::browser_clock::BrowserClock;
 use crate::bridge::commands;
 use crate::bridge::session_type::SessionType;
 use crate::bridge::timer_mode::TimerMode;
@@ -81,40 +74,6 @@ const ICON_OPTIONS: &[&str] = &[
 /// A user picking an emoji from the dropdown overrides this with the
 /// raw glyph for `tags.spec.js:17` parity.
 const DEFAULT_NEW_TAG_ICON: &str = "ri-brain-line";
-
-/// Browser-backed `Clock` implementation. Wraps `js_sys::Date::now()`
-/// so the engine's tick loop reads wall-clock time without the
-/// engine itself depending on `js_sys` (Principle I — engine stays
-/// pure). Host-side tests never instantiate this; the
-/// `wasm32`-only `now_ms()` body is dead code on `cargo test` and
-/// is gated by the `target_arch` cfg accordingly.
-struct BrowserClock;
-
-impl Clock for BrowserClock {
-    #[cfg(target_arch = "wasm32")]
-    #[allow(
-        clippy::cast_possible_truncation,
-        clippy::cast_sign_loss,
-        // `Date.now()` is f64 milliseconds since the unix epoch;
-        // values up to year 2038 fit easily within i64 (and even
-        // i53 — the f64 mantissa). The cast is safe for any
-        // realistic wall-clock value during the engine's lifetime.
-    )]
-    fn now_ms(&self) -> i64 {
-        js_sys::Date::now() as i64
-    }
-
-    #[cfg(not(target_arch = "wasm32"))]
-    fn now_ms(&self) -> i64 {
-        // Host-side fallback for `cargo test` / `cargo clippy`
-        // builds. The component is never mounted on the host
-        // target — the binary is wasm-only — so this body is
-        // unreachable under real execution. Returning a constant
-        // keeps the trait satisfied without pulling `std::time`
-        // into the wasm target's dependency graph.
-        0
-    }
-}
 
 /// Project the engine's `TimerMode` to the JS-era status-text label.
 /// Mirrors the JS-side branch at `src/managers/navigation-manager.js`
@@ -470,11 +429,6 @@ pub fn TimerView() -> impl IntoView {
     // the in-memory state machine is correct even though
     // persistence is a no-op on the dev server.
     let on_play_pause = move |_| {
-        // Track whether we are starting (not-running → running) so we can
-        // fire the `timer_start` analytics event after the engine mutation.
-        let was_running_before = engine.with_untracked(TimerState::is_running);
-        let was_idle_before =
-            engine.with_untracked(|s| !s.is_running() && !s.is_paused() && !s.is_auto_paused());
         engine.update(|state| {
             if state.is_running() {
                 // Manual pause via the engine's public API. Unlike
@@ -494,25 +448,6 @@ pub fn TimerView() -> impl IntoView {
                 let _ = state.start(&BrowserClock);
             }
         });
-        // R-004: fire timer_start analytics on idle → running transitions.
-        // Gated on analytics_enabled; errors absorbed (bridge absent on
-        // dev server).
-        let analytics = settings.with_untracked(|s| s.analytics_enabled);
-        let _ = (was_running_before, was_idle_before); // suppress unused warnings
-        if analytics && !was_running_before {
-            spawn_local(async move {
-                let mut props = std::collections::HashMap::new();
-                props.insert(
-                    "action".to_string(),
-                    serde_json::Value::String(if was_idle_before {
-                        "start".to_string()
-                    } else {
-                        "resume".to_string()
-                    }),
-                );
-                let _ = commands::track_event("timer_start", Some(props)).await;
-            });
-        }
     };
     let on_stop = move |_| {
         engine.update(TimerState::reset);
@@ -610,25 +545,9 @@ pub fn TimerView() -> impl IntoView {
                             date: date_str,
                         };
                         let sd_for_stats = session_data.clone();
-                        let analytics = settings.with_untracked(|s| s.analytics_enabled);
-                        let total_for_event = total_focus;
                         spawn_local(async move {
                             let _ = commands::save_session_data(session_data).await;
                             let _ = commands::save_daily_stats(sd_for_stats).await;
-                            // R-004: pomodoro_completed analytics event.
-                            if analytics {
-                                let mut props = std::collections::HashMap::new();
-                                props.insert(
-                                    "completed_pomodoros".to_string(),
-                                    serde_json::Value::Number(completed.into()),
-                                );
-                                props.insert(
-                                    "total_focus_secs".to_string(),
-                                    serde_json::Value::Number(total_for_event.into()),
-                                );
-                                let _ =
-                                    commands::track_event("pomodoro_completed", Some(props)).await;
-                            }
                         });
                     }
                     if was_running && !state.is_running() {
@@ -638,7 +557,12 @@ pub fn TimerView() -> impl IntoView {
                         let auto_start =
                             settings.with_untracked(|s| s.notifications.auto_start_timer);
                         if auto_start {
-                            let _ = state.start(&BrowserClock);
+                            if let Err(e) = state.start(&BrowserClock) {
+                                leptos::logging::warn!(
+                                    "auto-start after completion failed: {:?}",
+                                    e
+                                );
+                            }
                         }
                     }
 

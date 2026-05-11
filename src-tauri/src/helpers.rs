@@ -280,27 +280,26 @@ pub(super) fn write_manual_sessions_to(
 #[allow(clippy::redundant_pub_crate)]
 pub(super) fn read_tags_from(dir: &Path) -> Result<Vec<super::Tag>, String> {
     let file_path = dir.join("tags.json");
-    if file_path.exists() {
-        let content =
-            fs::read_to_string(&file_path).map_err(|e| format!("Failed to read tags: {e}"))?;
-        return serde_json::from_str(&content)
-            .map_err(|e| format!("Failed to parse tags.json: {e}"));
+    if !file_path.exists() {
+        let default_tag = super::Tag {
+            id: "default-focus".to_string(),
+            name: "Focus".to_string(),
+            icon: "ri-brain-line".to_string(),
+            color: "#4CAF50".to_string(),
+            created_at: std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_secs()
+                .to_string(),
+        };
+        let tags = vec![default_tag];
+        fs::create_dir_all(dir).map_err(|e| format!("Failed to create directory: {e}"))?;
+        write_json_atomic(&file_path, &tags)?;
+        return Ok(tags);
     }
-    let default_tag = super::Tag {
-        id: "default-focus".to_string(),
-        name: "Focus".to_string(),
-        icon: "ri-brain-line".to_string(),
-        color: "#4CAF50".to_string(),
-        created_at: std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_secs()
-            .to_string(),
-    };
-    let tags = vec![default_tag];
-    fs::create_dir_all(dir).map_err(|e| format!("Failed to create directory: {e}"))?;
-    write_json_atomic(&file_path, &tags)?;
-    Ok(tags)
+    let content =
+        fs::read_to_string(&file_path).map_err(|e| format!("Failed to read tags: {e}"))?;
+    serde_json::from_str(&content).map_err(|e| format!("Failed to parse tags.json: {e}"))
 }
 
 /// Creates `dir` if necessary, then atomically writes `tags` to `tags.json`.
@@ -333,13 +332,12 @@ pub(super) fn delete_tag_in(dir: &Path, tag_id: &str) -> Result<(), String> {
 #[allow(clippy::redundant_pub_crate)]
 pub(super) fn read_session_tags_from(dir: &Path) -> Result<Vec<super::SessionTag>, String> {
     let file_path = dir.join("session_tags.json");
-    if file_path.exists() {
-        let content = fs::read_to_string(&file_path)
-            .map_err(|e| format!("Failed to read session tags: {e}"))?;
-        return serde_json::from_str(&content)
-            .map_err(|e| format!("Failed to parse session_tags.json: {e}"));
+    if !file_path.exists() {
+        return Ok(Vec::new());
     }
-    Ok(Vec::new())
+    let content =
+        fs::read_to_string(&file_path).map_err(|e| format!("Failed to read session tags: {e}"))?;
+    serde_json::from_str(&content).map_err(|e| format!("Failed to parse session_tags.json: {e}"))
 }
 
 /// Creates `dir` if necessary, then atomically writes `session_tags` to

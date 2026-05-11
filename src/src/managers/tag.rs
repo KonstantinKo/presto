@@ -144,19 +144,33 @@ impl TagManager {
     /// Spec 001-leptos-migration §Phase 3b T166.
     #[must_use]
     pub fn list_reduction(loaded: Vec<Tag>) -> Self {
-        let mut seen_ids: Vec<String> = Vec::with_capacity(loaded.len());
         let mut tags: Vec<Tag> = Vec::with_capacity(loaded.len());
         for tag in loaded {
             if tag.id.is_empty() || tag.name.is_empty() {
                 continue;
             }
-            if seen_ids.iter().any(|id| id == &tag.id) {
+            if tags.iter().any(|t| t.id == tag.id) {
                 continue;
             }
-            seen_ids.push(tag.id.clone());
             tags.push(tag);
         }
         Self { tags }
+    }
+
+    /// Build a manager from the result of
+    /// `bridge::commands::load_tags()` (or any equivalent loader),
+    /// applying the JS-side list-reduction validation and falling
+    /// back to an empty list on error. Mirrors the JS-side
+    /// catch-and-default at
+    /// `src/managers/tag-manager.js:168-196`: persistence failures
+    /// (missing file, deserialise error, bridge unavailable) must
+    /// not poison the manager's state.
+    ///
+    /// The reduction is applied unconditionally on success so a
+    /// corrupted record on disk doesn't poison the in-memory list.
+    #[must_use]
+    pub fn from_loaded_or_default(loaded: Result<Vec<Tag>, BridgeError>) -> Self {
+        loaded.map_or_else(|_| Self::new(), Self::list_reduction)
     }
 
     /// Async cold-start path: ask the bridge for the persisted
@@ -169,9 +183,7 @@ impl TagManager {
     /// The reduction is applied unconditionally so a corrupted
     /// record on disk doesn't poison the in-memory list.
     pub async fn load() -> Self {
-        commands::load_tags()
-            .await
-            .map_or_else(|_| Self::new(), Self::list_reduction)
+        Self::from_loaded_or_default(commands::load_tags().await)
     }
 }
 

@@ -44,3 +44,57 @@ impl Durations {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::Durations;
+    use crate::bridge::timer_mode::TimerMode;
+
+    /// Default values mirror `pomodoro-timer.js:48-52`: focus 25 min,
+    /// short break 5 min, long break 20 min. Pinned in seconds so a
+    /// unit change (e.g. accidentally switching to minutes) fails loud.
+    #[test]
+    fn default_values_are_standard_pomodoro_durations() {
+        let d = Durations::default();
+        assert_eq!(d.focus, 25 * 60, "focus must be 25 min in seconds");
+        assert_eq!(
+            d.short_break,
+            5 * 60,
+            "short break must be 5 min in seconds"
+        );
+        assert_eq!(
+            d.long_break,
+            20 * 60,
+            "long break must be 20 min in seconds"
+        );
+    }
+
+    /// `for_mode` routes each `TimerMode` variant to the matching
+    /// field. Pinned so a refactor that swaps two arms fails a test
+    /// rather than producing a silent timing regression.
+    #[test]
+    fn for_mode_returns_correct_duration_for_each_mode() {
+        let d = Durations {
+            focus: 1500,
+            short_break: 300,
+            long_break: 1200,
+        };
+        assert_eq!(d.for_mode(TimerMode::Focus), 1500);
+        assert_eq!(d.for_mode(TimerMode::Break), 300);
+        assert_eq!(d.for_mode(TimerMode::LongBreak), 1200);
+    }
+
+    /// Custom durations (non-default values) route correctly — guards
+    /// against a default-value coincidence masking a routing bug.
+    #[test]
+    fn for_mode_works_with_custom_durations() {
+        let d = Durations {
+            focus: 3000,
+            short_break: 600,
+            long_break: 1800,
+        };
+        assert_eq!(d.for_mode(TimerMode::Focus), 3000);
+        assert_eq!(d.for_mode(TimerMode::Break), 600);
+        assert_eq!(d.for_mode(TimerMode::LongBreak), 1800);
+    }
+}

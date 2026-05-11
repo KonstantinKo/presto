@@ -53,10 +53,7 @@ impl SettingsManager {
     /// applying the FR-005 "fall back to default on error" rule.
     #[must_use]
     pub fn new() -> Self {
-        Self {
-            state: Settings::default(),
-            needs_writeback: false,
-        }
+        Self::default()
     }
 
     /// Build a manager from the result of
