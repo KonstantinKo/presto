@@ -183,6 +183,7 @@ fn shortcut_row(
                             ShortcutSlot::Reset => s.shortcuts.reset = None,
                             ShortcutSlot::Skip => s.shortcuts.skip = None,
                         });
+                        recording.set(None);
                         toast.show("Settings saved");
                     }
                 >"×"</button>

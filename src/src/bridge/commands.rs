@@ -1161,14 +1161,15 @@ pub async fn mark_legacy_migration_complete() -> Result<(), BridgeError> {
 #[cfg(all(test, target_arch = "wasm32"))]
 mod tests {
     use super::{
-        add_session_tag, delete_tag, disable_autostart, enable_autostart, export_sessions_xlsx,
-        get_stats_history, is_autostart_enabled, is_legacy_migration_complete,
-        load_manual_sessions, load_session_data, load_settings, load_tags, load_tasks,
-        mark_legacy_migration_complete, register_global_shortcuts, reset_all_data,
-        save_daily_stats, save_manual_sessions, save_session_data, save_settings, save_tag,
-        save_tasks, start_activity_monitoring, start_oauth_server, stop_activity_monitoring,
-        supabase_get_session, supabase_refresh_session, supabase_sign_in_with_password,
-        supabase_sign_out, update_activity_timeout, update_tray_icon, update_tray_menu,
+        add_session_tag, delete_tag, dialog_save, disable_autostart, enable_autostart,
+        export_sessions_xlsx, get_stats_history, is_autostart_enabled,
+        is_legacy_migration_complete, load_manual_sessions, load_session_data, load_settings,
+        load_tags, load_tasks, mark_legacy_migration_complete, register_global_shortcuts,
+        reset_all_data, save_daily_stats, save_manual_sessions, save_session_data, save_settings,
+        save_tag, save_tasks, start_activity_monitoring, start_oauth_server,
+        stop_activity_monitoring, supabase_get_session, supabase_refresh_session,
+        supabase_sign_in_with_password, supabase_sign_out, update_activity_timeout,
+        update_tray_icon, update_tray_menu,
     };
     use crate::bridge::error::BridgeError;
     use crate::bridge::session_type::SessionType;
@@ -2059,5 +2060,41 @@ mod tests {
             mark_legacy_migration_complete().await
         }
         let _ = assert_signature().await;
+    }
+
+    // -----------------------------------------------------------------------
+    // Phase 4e — dialog_save (T???). Native file-save dialog for the
+    // CSV/XLSX export path; returns Ok(Some(path)) on selection, Ok(None)
+    // on cancel.
+    // -----------------------------------------------------------------------
+
+    #[wasm_bindgen_test]
+    async fn dialog_save_short_circuits_when_bridge_absent() {
+        let result = dialog_save(None, vec![]).await;
+        match result {
+            Err(BridgeError::BridgeUnavailable) => {}
+            other => panic!("expected BridgeUnavailable, got {other:?}"),
+        }
+    }
+
+    /// Compile-time signature pin:
+    /// `dialog_save(default_path: Option<String>, filters: Vec<(String, Vec<String>)>)
+    ///     -> Result<Option<String>, BridgeError>`.
+    /// Exercises `Args` and `FilterArg` serialisation inside `dialog_save`
+    /// — if either struct field is renamed or the `invoke_serde` call
+    /// signature drifts, this stops compiling (FR-008).
+    #[wasm_bindgen_test]
+    async fn dialog_save_signature_pinned() {
+        async fn assert_signature(
+            default_path: Option<String>,
+            filters: Vec<(String, Vec<String>)>,
+        ) -> Result<Option<String>, BridgeError> {
+            dialog_save(default_path, filters).await
+        }
+        let _ = assert_signature(
+            Some("/tmp/export.xlsx".to_string()),
+            vec![("Excel".to_string(), vec!["xlsx".to_string()])],
+        )
+        .await;
     }
 }

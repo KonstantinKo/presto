@@ -308,8 +308,10 @@ const TAURI_MOCK_INIT_SCRIPT = `
           case "plugin:dialog|ask":
             return false;
 
-          case "plugin:dialog|save":
-            return null;
+          case "plugin:dialog|save": {
+            var scfg = window.__E2E_CONFIG__ || {};
+            return scfg.dialogSaveResult !== undefined ? scfg.dialogSaveResult : null;
+          }
 
           case "plugin:shell|open":
             return;
@@ -334,7 +336,10 @@ const TAURI_MOCK_INIT_SCRIPT = `
     },
 
     dialog: {
-      save: async function () { return null; },
+      save: async function () {
+        var cfg = window.__E2E_CONFIG__ || {};
+        return cfg.dialogSaveResult !== undefined ? cfg.dialogSaveResult : null;
+      },
       open: async function () { return null; },
       message: async function () {},
       ask: async function () {

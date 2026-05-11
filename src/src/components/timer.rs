@@ -716,9 +716,8 @@ pub fn TimerView() -> impl IntoView {
             TimerMode::Break | TimerMode::LongBreak
         ) {
             engine.update(TimerState::decrement_completed_pomodoros);
-        } else {
-            engine.update(TimerState::reset);
         }
+        engine.update(TimerState::reset);
         warning_signal.set(false);
     };
     let on_skip = move |_| {
@@ -1166,7 +1165,10 @@ pub fn TimerView() -> impl IntoView {
             // <span> stand-ins would be zero-size boxes that
             // `toBeVisible()` rejects.
             <div class="controls">
-                <button id="stop-btn" class="control-btn" aria-label="Reset timer" title="Reset timer" on:click=on_stop>
+                <button id="stop-btn" class="control-btn"
+                    aria-label=move || if stop_icon_for_mode(engine.with(TimerState::current_mode)) == "undo" { "Undo last session" } else { "Reset timer" }
+                    title=move || if stop_icon_for_mode(engine.with(TimerState::current_mode)) == "undo" { "Undo last session" } else { "Reset timer" }
+                    on:click=on_stop>
                     // X icon — visible in Focus mode (full reset).
                     <svg
                         id="stop-icon"

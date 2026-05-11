@@ -647,7 +647,7 @@ pub fn CalendarView() -> impl IntoView {
                 id="session-modal-overlay"
                 style=move || if session_modal_open.get() { "" } else { "display: none" }
             >
-                <form class="session-modal" id="session-form">
+                <form class="session-modal" id="session-form" role="dialog" aria-modal="true" aria-labelledby="session-modal-title">
                     <div class="session-modal-header">
                         <h3 id="session-modal-title">"Edit session"</h3>
                         <button
@@ -734,7 +734,9 @@ pub fn CalendarView() -> impl IntoView {
                                 if let Some(id) = modal_session_id.get_untracked() {
                                     let dur = modal_duration.get_untracked();
                                     let start = modal_start.get_untracked();
-                                    let end = modal_end.get_untracked();
+                                    // Normalize end from start+duration so persisted records
+                                    // are always consistent (clamps overflow to "23:59").
+                                    let end = end_time_from_start_duration(&start, dur);
                                     sessions.update(|ss| {
                                         if let Some(s) = ss.iter_mut().find(|s| s.id == id) {
                                             s.duration = dur;
@@ -765,6 +767,8 @@ mod tests {
     use crate::bridge::types::ManualSession;
     use crate::engine::date_format::format_session_date;
     use chrono::{DateTime, Datelike, TimeZone, Utc};
+    #[cfg(target_arch = "wasm32")]
+    use wasm_bindgen_test::wasm_bindgen_test;
 
     /// T200 — visual-regression / selector contract pin for the
     /// calendar view. Sourced from
@@ -834,14 +838,16 @@ mod tests {
         );
     }
 
-    #[test]
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test)]
+    #[cfg_attr(not(target_arch = "wasm32"), test)]
     fn duration_from_start_end_minutes_simple() {
         assert_eq!(duration_from_start_end_minutes("09:00", "09:25"), 25);
         assert_eq!(duration_from_start_end_minutes("00:00", "00:00"), 0);
         assert_eq!(duration_from_start_end_minutes("08:30", "09:00"), 30);
     }
 
-    #[test]
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test)]
+    #[cfg_attr(not(target_arch = "wasm32"), test)]
     fn end_time_from_start_duration_simple() {
         assert_eq!(end_time_from_start_duration("09:00", 25), "09:25");
         assert_eq!(end_time_from_start_duration("23:50", 20), "23:59"); // clamps to 23:59
