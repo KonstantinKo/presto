@@ -176,10 +176,11 @@ build_app() {
 
 # Function to open GitHub releases
 open_github_releases() {
-    local repo_url=$(git config --get remote.origin.url)
-    if [[ $repo_url == *"github.com"* ]]; then
+    local repo_url
+    repo_url=$(git config --get remote.origin.url)
+    if [[ "$repo_url" == *"github.com"* ]]; then
         # Convert SSH URL to HTTPS
-        repo_url=$(echo $repo_url | sed 's/git@github.com:/https:\/\/github.com\//' | sed 's/\.git$//')
+        repo_url=$(printf '%s' "$repo_url" | sed 's/git@github.com:/https:\/\/github.com\//' | sed 's/\.git$//')
         local releases_url="$repo_url/releases/new"
         print_step "Opening GitHub releases page..."
         if command -v open &> /dev/null; then
@@ -253,7 +254,7 @@ main() {
     esac
 
     # Optional release message
-    read -p "Optional message for this release: " release_message
+    read -r -p "Optional message for this release: " release_message
 
     echo ""
     print_step "Planned release: $current_version → $new_version"
@@ -336,9 +337,9 @@ if [[ $# -gt 0 ]]; then
             current_version=$(get_current_version)
             new_version=$(increment_version $current_version patch)
             update_version_in_files $current_version $new_version
+            build_app
             commit_and_tag $new_version
             push_changes $new_version
-            build_app
             update_homebrew_tap $new_version
             print_success "Patch release v$new_version complete!"
             ;;
@@ -346,9 +347,9 @@ if [[ $# -gt 0 ]]; then
             current_version=$(get_current_version)
             new_version=$(increment_version $current_version minor)
             update_version_in_files $current_version $new_version
+            build_app
             commit_and_tag $new_version
             push_changes $new_version
-            build_app
             update_homebrew_tap $new_version
             print_success "Minor release v$new_version complete!"
             ;;
@@ -356,9 +357,9 @@ if [[ $# -gt 0 ]]; then
             current_version=$(get_current_version)
             new_version=$(increment_version $current_version major)
             update_version_in_files $current_version $new_version
+            build_app
             commit_and_tag $new_version
             push_changes $new_version
-            build_app
             update_homebrew_tap $new_version
             print_success "Major release v$new_version complete!"
             ;;
@@ -370,9 +371,9 @@ if [[ $# -gt 0 ]]; then
             current_version=$(get_current_version)
             new_version=$2
             update_version_in_files $current_version $new_version
+            build_app
             commit_and_tag $new_version
             push_changes $new_version
-            build_app
             update_homebrew_tap $new_version
             print_success "Release v$new_version complete!"
             ;;

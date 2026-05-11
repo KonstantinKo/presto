@@ -212,7 +212,7 @@ pub(super) fn import_tags(
     app_data_dir: &Path,
     payload: &LegacyTagsPayload,
 ) -> Result<(), BridgeError> {
-    if app_data_dir.join("tags.json").exists() || payload.tags.is_empty() {
+    if app_data_dir.join("tags.json").exists() {
         return Ok(());
     }
     helpers::write_tags_to(app_data_dir, &payload.tags)?;
@@ -611,6 +611,23 @@ mod tests {
         import_tags(dir.path(), &payload2).unwrap();
         let second_bytes = std::fs::read(dir.path().join("tags.json")).unwrap();
         assert_eq!(first_bytes, second_bytes);
+    }
+
+    #[test]
+    fn import_tags_with_empty_vec_writes_empty_tags_json() {
+        let dir = tempdir().unwrap();
+        let payload = LegacyTagsPayload { tags: Vec::new() };
+        import_tags(dir.path(), &payload).unwrap();
+        assert!(
+            dir.path().join("tags.json").exists(),
+            "empty tags payload must create tags.json to prevent synthetic bootstrap tag"
+        );
+        let content = std::fs::read_to_string(dir.path().join("tags.json")).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&content).unwrap();
+        assert!(
+            parsed.as_array().unwrap().is_empty(),
+            "tags.json must contain empty array"
+        );
     }
 
     // ── import_manual_sessions ──────────────────────────────────────────────
