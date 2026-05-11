@@ -24,4 +24,9 @@
 // nothing else stateful.
 
 pub mod loader;
-pub mod themes;
+pub mod themes {
+    // Generated into OUT_DIR by src/build.rs from `style/themes/*.css`.
+    // Trunk also regenerates the same content via the pre_build hook in
+    // `src/Trunk.toml`; plain `cargo build` / `cargo test` use this path.
+    include!(concat!(env!("OUT_DIR"), "/themes.rs"));
+}

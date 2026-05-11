@@ -95,6 +95,10 @@ fn render_themes_rs(stems: &[String]) -> String {
     out.push_str("/// `src/style/themes/`. Consumed by\n");
     out.push_str("/// `components::settings::theme::ThemeSettings` to render one\n");
     out.push_str("/// `<button data-timer-theme=\"...\">` per stem.\n");
+    // #[rustfmt::skip] keeps the one-item-per-line layout stable across
+    // rustfmt passes — without it, rustfmt collapses short arrays to a
+    // single line and the next codegen run immediately diverges again.
+    out.push_str("#[rustfmt::skip]\n");
     out.push_str("pub const ALL_THEMES: &[&str] = &[");
     if !stems.is_empty() {
         out.push('\n');
