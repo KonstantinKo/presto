@@ -455,6 +455,15 @@ impl TimerState {
         self.session_completed_but_not_saved = false;
     }
 
+    /// Decrement `completed_pomodoros` by one, saturating at zero.
+    ///
+    /// Called by the timer view's stop handler while in a break mode to
+    /// "undo" the last completed pomodoro without resetting the break
+    /// countdown. Mode-agnostic here; the caller gates on break mode.
+    pub const fn decrement_completed_pomodoros(&mut self) {
+        self.completed_pomodoros = self.completed_pomodoros.saturating_sub(1);
+    }
+
     /// Records a manual session backfill of `duration_secs`
     /// through the engine path (per Principle I — manual entries
     /// flow through the same accumulators as live sessions).
@@ -1625,6 +1634,27 @@ mod tests {
             state.time_remaining_secs_signed(),
             -5,
             "signed remaining must be -5 after 5 s of overtime",
+        );
+    }
+
+    /// `decrement_completed_pomodoros` saturates at zero — no underflow,
+    /// no panic, regardless of how many times it is called.
+    #[test]
+    fn decrement_completed_pomodoros_saturates_at_zero() {
+        let mut state = TimerState::new(Durations {
+            focus: 1500,
+            short_break: 300,
+            long_break: 1200,
+        });
+        assert_eq!(state.completed_pomodoros(), 0);
+        // Already at 0 — must stay at 0.
+        state.decrement_completed_pomodoros();
+        assert_eq!(state.completed_pomodoros(), 0, "must not underflow from 0");
+        state.decrement_completed_pomodoros();
+        assert_eq!(
+            state.completed_pomodoros(),
+            0,
+            "still 0 after second decrement"
         );
     }
 

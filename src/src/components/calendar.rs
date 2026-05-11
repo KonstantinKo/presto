@@ -29,8 +29,10 @@
 
 use chrono::{DateTime, Datelike, Days, Months, Utc};
 use leptos::prelude::*;
+use leptos::task::spawn_local;
 
 use super::browser_clock::BrowserClock;
+use crate::bridge::commands;
 use crate::bridge::session_type::SessionType;
 use crate::bridge::types::{ManualSession, Settings};
 use crate::engine::clock::Clock;
@@ -200,6 +202,42 @@ fn weekly_total_minutes(sessions: &[ManualSession], week_dates: &[String; 7]) ->
         .sum()
 }
 
+/// Compute the duration in minutes between two `"HH:MM"` time strings.
+///
+/// Handles same-day ranges (end > start) only. On midnight rollover
+/// (end < start) we add 24 × 60 to keep the result positive — the
+/// JS-era surface didn't support multi-day sessions, so this only
+/// covers the edge-case of a session that started just before midnight.
+fn duration_from_start_end_minutes(start: &str, end: &str) -> u32 {
+    let parse = |s: &str| -> u32 {
+        let mut p = s.splitn(2, ':');
+        let h = p.next().and_then(|v| v.parse::<u32>().ok()).unwrap_or(0);
+        let m = p.next().and_then(|v| v.parse::<u32>().ok()).unwrap_or(0);
+        h * 60 + m
+    };
+    let s = parse(start);
+    let e = parse(end);
+    if e >= s {
+        e - s
+    } else {
+        e + 24 * 60 - s
+    }
+}
+
+/// Compute the end time `"HH:MM"` from a start time and a duration in minutes.
+/// Clamps to `"23:59"` on overflow — the JS-era surface didn't support
+/// sessions spanning midnight.
+fn end_time_from_start_duration(start: &str, duration: u32) -> String {
+    let parse = |s: &str| -> u32 {
+        let mut p = s.splitn(2, ':');
+        let h = p.next().and_then(|v| v.parse::<u32>().ok()).unwrap_or(0);
+        let m = p.next().and_then(|v| v.parse::<u32>().ok()).unwrap_or(0);
+        h * 60 + m
+    };
+    let end_min = (parse(start) + duration).min(23 * 60 + 59);
+    format!("{:02}:{:02}", end_min / 60, end_min % 60)
+}
+
 /// Calendar view — renders the week-range navigation bar + the
 /// month grid backed by a `RwSignal<DateTime<Utc>>` cursor. Click
 /// handlers shift the cursor by one week or one month; derived
@@ -229,8 +267,14 @@ pub fn CalendarView() -> impl IntoView {
         use_context::<RwSignal<Vec<ManualSession>>>().unwrap_or_else(|| RwSignal::new(Vec::new()));
     let session_modal_open = RwSignal::new(false);
     let modal_duration = RwSignal::new(0_u32);
-    let on_open_modal = move |duration: u32| {
-        modal_duration.set(duration);
+    let modal_session_id = RwSignal::new(Option::<String>::None);
+    let modal_start = RwSignal::new(String::new());
+    let modal_end = RwSignal::new(String::new());
+    let on_open_modal = move |session: ManualSession| {
+        modal_session_id.set(Some(session.id.clone()));
+        modal_start.set(session.start_time.clone());
+        modal_end.set(session.end_time.clone());
+        modal_duration.set(session.duration);
         session_modal_open.set(true);
     };
     let on_close_modal = move |_| session_modal_open.set(false);
@@ -405,6 +449,24 @@ pub fn CalendarView() -> impl IntoView {
                     <div class="daily-chart-card">
                         <h3>"Today's Development"</h3>
                         <div class="daily-chart" id="daily-chart"></div>
+                        <div class="chart-legend">
+                            <span class="legend-item">
+                                <span class="legend-color focus-color"></span>
+                                "Focus"
+                            </span>
+                            <span class="legend-item">
+                                <span class="legend-color break-color"></span>
+                                "Break"
+                            </span>
+                        </div>
+                    </div>
+
+                    // Tag Usage pie-chart card.
+                    // TODO(#39): wire pie-chart slices to a tag-frequency
+                    // projection over sessions filtered by week_dates.
+                    <div class="tag-usage-card">
+                        <h3>"Tag Usage This Week"</h3>
+                        <div class="tag-usage-chart"></div>
                     </div>
                 </div>
 
@@ -513,6 +575,31 @@ pub fn CalendarView() -> impl IntoView {
             <div class="sessions-history-card">
                 <div class="sessions-header">
                     <h3>"Session History"</h3>
+                    <div class="sessions-controls">
+                        <button
+                            id="export-sessions-btn"
+                            class="export-btn"
+                            title="Export to Excel"
+                            on:click=move |_| {
+                                let snapshot = sessions.get_untracked();
+                                spawn_local(async move {
+                                    let path = commands::dialog_save(
+                                        Some("sessions.xlsx".to_string()),
+                                        vec![("Excel".to_string(), vec!["xlsx".to_string()])],
+                                    )
+                                    .await
+                                    .ok()
+                                    .flatten();
+                                    if let Some(p) = path {
+                                        let _ = commands::export_sessions_xlsx(p, snapshot).await;
+                                    }
+                                });
+                            }
+                        >
+                            <i class="ri-download-line"></i>
+                            " Export"
+                        </button>
+                    </div>
                 </div>
                 <div class="sessions-table-container">
                     <table class="sessions-table" id="sessions-table">
@@ -528,11 +615,9 @@ pub fn CalendarView() -> impl IntoView {
                                 each=move || sessions.get()
                                 key=|row| row.id.clone()
                                 children=move |row| {
-                                    let start_time = row.start_time;
-                                    let end_time = row.end_time;
-                                    let time_range = format!("{start_time} – {end_time}");
-                                    let duration = row.duration;
-                                    let duration_text = format!("{duration} min");
+                                    let session_for_modal = row.clone();
+                                    let time_range = format!("{} – {}", row.start_time, row.end_time);
+                                    let duration_text = format!("{} min", row.duration);
                                     view! {
                                         <tr class="session-row" role="row">
                                             <td>{time_range}</td>
@@ -541,7 +626,7 @@ pub fn CalendarView() -> impl IntoView {
                                                 <button
                                                     class="edit-session-btn"
                                                     aria-label="Edit session"
-                                                    on:click=move |_| on_open_modal(duration)
+                                                    on:click=move |_| on_open_modal(session_for_modal.clone())
                                                 >"Edit"</button>
                                             </td>
                                         </tr>
@@ -553,22 +638,20 @@ pub fn CalendarView() -> impl IntoView {
                 </div>
             </div>
 
-            // Per-row edit modal. The spec opens the modal via the
-            // first row's "Edit session" button and asserts the
-            // `#session-duration` input is visible, then closes via
-            // `#close-session-modal`. Implementation is intentionally
-            // minimal — the JS-era surface had a richer form (notes,
-            // tag picker); Phase 4c attaches those alongside the
-            // SessionManager hop.
+            // Per-row edit modal. Start/end/duration inputs tri-recalculate:
+            // editing any one field recomputes the other two via the pure
+            // helpers above. `on:input` fires only on user interaction so
+            // there are no feedback loops when `prop:value` updates.
             <div
                 class="session-modal-overlay"
                 id="session-modal-overlay"
                 style=move || if session_modal_open.get() { "" } else { "display: none" }
             >
-                <div class="session-modal">
+                <form class="session-modal" id="session-form">
                     <div class="session-modal-header">
-                        <h3>"Edit session"</h3>
+                        <h3 id="session-modal-title">"Edit session"</h3>
                         <button
+                            type="button"
                             id="close-session-modal"
                             class="close-btn"
                             aria-label="Close edit modal"
@@ -576,6 +659,36 @@ pub fn CalendarView() -> impl IntoView {
                         >"×"</button>
                     </div>
                     <div class="session-modal-body">
+                        <label for="session-start-time">"Start Time"</label>
+                        <input
+                            type="time"
+                            id="session-start-time"
+                            prop:value=move || modal_start.get()
+                            on:input=move |ev| {
+                                let new_start = event_target_value(&ev);
+                                let new_end = end_time_from_start_duration(
+                                    &new_start,
+                                    modal_duration.get_untracked(),
+                                );
+                                modal_start.set(new_start);
+                                modal_end.set(new_end);
+                            }
+                        />
+                        <label for="session-end-time">"End Time"</label>
+                        <input
+                            type="time"
+                            id="session-end-time"
+                            prop:value=move || modal_end.get()
+                            on:input=move |ev| {
+                                let new_end = event_target_value(&ev);
+                                let new_dur = duration_from_start_end_minutes(
+                                    &modal_start.get_untracked(),
+                                    &new_end,
+                                );
+                                modal_end.set(new_end);
+                                modal_duration.set(new_dur);
+                            }
+                        />
                         <label for="session-duration">"Duration (minutes)"</label>
                         <input
                             type="number"
@@ -583,9 +696,58 @@ pub fn CalendarView() -> impl IntoView {
                             min="1"
                             max="180"
                             prop:value=move || modal_duration.get().to_string()
+                            on:input=move |ev| {
+                                let new_dur: u32 =
+                                    event_target_value(&ev).parse().unwrap_or(0);
+                                let new_end = end_time_from_start_duration(
+                                    &modal_start.get_untracked(),
+                                    new_dur,
+                                );
+                                modal_duration.set(new_dur);
+                                modal_end.set(new_end);
+                            }
                         />
                     </div>
-                </div>
+                    <div class="modal-actions">
+                        <button
+                            type="button"
+                            id="cancel-session-btn"
+                            class="btn-secondary"
+                            on:click=on_close_modal
+                        >"Cancel"</button>
+                        <button
+                            type="button"
+                            id="delete-session-btn"
+                            class="btn-danger"
+                            on:click=move |_| {
+                                if let Some(id) = modal_session_id.get_untracked() {
+                                    sessions.update(|ss| ss.retain(|s| s.id != id));
+                                }
+                                session_modal_open.set(false);
+                            }
+                        >"Delete"</button>
+                        <button
+                            type="button"
+                            id="save-session-btn"
+                            class="btn-primary"
+                            on:click=move |_| {
+                                if let Some(id) = modal_session_id.get_untracked() {
+                                    let dur = modal_duration.get_untracked();
+                                    let start = modal_start.get_untracked();
+                                    let end = modal_end.get_untracked();
+                                    sessions.update(|ss| {
+                                        if let Some(s) = ss.iter_mut().find(|s| s.id == id) {
+                                            s.duration = dur;
+                                            s.start_time = start;
+                                            s.end_time = end;
+                                        }
+                                    });
+                                }
+                                session_modal_open.set(false);
+                            }
+                        >"Save"</button>
+                    </div>
+                </form>
             </div>
         </div>
     }
@@ -594,9 +756,10 @@ pub fn CalendarView() -> impl IntoView {
 #[cfg(test)]
 mod tests {
     use super::{
-        build_month_grid, format_month_label, format_week_range, month_full, month_short,
-        start_of_week_monday, start_of_week_sunday, week_date_set, weekly_focus_minutes,
-        weekly_sessions_count, weekly_total_minutes,
+        build_month_grid, duration_from_start_end_minutes, end_time_from_start_duration,
+        format_month_label, format_week_range, month_full, month_short, start_of_week_monday,
+        start_of_week_sunday, week_date_set, weekly_focus_minutes, weekly_sessions_count,
+        weekly_total_minutes,
     };
     use crate::bridge::session_type::SessionType;
     use crate::bridge::types::ManualSession;
@@ -640,6 +803,17 @@ mod tests {
             "next-month",
             "current-month",
             "calendar-grid",
+            "export-sessions-btn",
+            "session-modal-overlay",
+            "session-form",
+            "session-modal-title",
+            "close-session-modal",
+            "session-start-time",
+            "session-end-time",
+            "session-duration",
+            "cancel-session-btn",
+            "delete-session-btn",
+            "save-session-btn",
         ];
         const TODAY_ARIA_CURRENT_VALUE: &str = "date";
         let mut seen: Vec<&str> = Vec::with_capacity(REQUIRED_IDS.len());
@@ -658,6 +832,20 @@ mod tests {
             TODAY_ARIA_CURRENT_VALUE, "date",
             "today-cell must carry aria-current=\"date\" per ARIA spec for sessions-history.spec.js:34",
         );
+    }
+
+    #[test]
+    fn duration_from_start_end_minutes_simple() {
+        assert_eq!(duration_from_start_end_minutes("09:00", "09:25"), 25);
+        assert_eq!(duration_from_start_end_minutes("00:00", "00:00"), 0);
+        assert_eq!(duration_from_start_end_minutes("08:30", "09:00"), 30);
+    }
+
+    #[test]
+    fn end_time_from_start_duration_simple() {
+        assert_eq!(end_time_from_start_duration("09:00", 25), "09:25");
+        assert_eq!(end_time_from_start_duration("23:50", 20), "23:59"); // clamps to 23:59
+        assert_eq!(end_time_from_start_duration("00:00", 0), "00:00");
     }
 
     fn day(year: i32, month: u32, d: u32) -> DateTime<Utc> {

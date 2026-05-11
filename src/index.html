@@ -4,6 +4,14 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Presto</title>
+    <!-- Roboto Flex display font — referenced by style/timer.css and
+         style/settings.css for timer digits and mode badge. CSP allows
+         fonts.googleapis.com / fonts.gstatic.com. Blocked in the e2e
+         test environment (_blockExternal fixture) so baselines won't
+         drift from the font; production tauri dev loads it. -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Roboto+Flex:wght@400;800&display=swap" rel="stylesheet" />
     <!-- data-wasm-opt="0" disables Trunk's wasm-opt step. The bundled
          binaryen on Fedora (<= 126) cannot validate wasm emitted by
          rustc 1.95+; flip back to default once the toolchain catches up. -->

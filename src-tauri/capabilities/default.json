@@ -20,6 +20,7 @@
     "dialog:default",
     "dialog:allow-ask",
     "dialog:allow-message",
+    "dialog:allow-save",
     "global-shortcut:default",
     "global-shortcut:allow-register",
     "global-shortcut:allow-unregister",

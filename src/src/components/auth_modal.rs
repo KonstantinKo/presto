@@ -72,6 +72,19 @@ fn user_display_name(state: &AuthState) -> String {
     }
 }
 
+/// Project the current `AuthState` to the subtitle line in
+/// `#user-dropdown-header`. The subtitle distinguishes the guest-mode
+/// path from the authenticated path without requiring the user to read
+/// the display name. Empty for `Unauthenticated` (the overlay hasn't
+/// been dismissed yet; no subtitle is shown).
+const fn user_status_text(state: &AuthState) -> &'static str {
+    match state {
+        AuthState::Unauthenticated => "",
+        AuthState::Guest => "Guest Mode",
+        AuthState::SignedIn { .. } => "Signed In",
+    }
+}
+
 /// Auth modal — sidebar avatar + dropdown + sign-in overlay.
 ///
 /// Renders BOTH the avatar+dropdown (intended to live inside the
@@ -236,6 +249,7 @@ pub fn AuthModal(auth_state: RwSignal<AuthState>) -> impl IntoView {
                 >
                     <div class="user-dropdown-header" id="user-dropdown-header">
                         <span class="user-name" id="user-name">{move || display_name.get()}</span>
+                        <span class="user-status" id="user-status">{move || auth_state.with(user_status_text)}</span>
                     </div>
                     <div class="user-dropdown-actions">
                         <button
@@ -375,7 +389,7 @@ pub fn AuthModal(auth_state: RwSignal<AuthState>) -> impl IntoView {
 
 #[cfg(test)]
 mod tests {
-    use super::user_display_name;
+    use super::{user_display_name, user_status_text};
     use crate::bridge::types::AuthUser;
     use crate::managers::auth::AuthState;
 
@@ -426,6 +440,7 @@ mod tests {
             "user-avatar-btn",
             "user-dropdown",
             "user-name",
+            "user-status",
             "user-sign-in",
             "user-sign-out",
             "auth-overlay",
@@ -440,5 +455,17 @@ mod tests {
             assert!(!seen.contains(id), "duplicate selector ID: {id}");
             seen.push(id);
         }
+    }
+
+    #[test]
+    fn user_status_text_covers_all_variants() {
+        assert_eq!(user_status_text(&AuthState::Unauthenticated), "");
+        assert_eq!(user_status_text(&AuthState::Guest), "Guest Mode");
+        let user = AuthUser {
+            id: "u".to_string(),
+            email: "u@example.com".to_string(),
+            user_metadata: serde_json::json!({}),
+        };
+        assert_eq!(user_status_text(&AuthState::SignedIn { user }), "Signed In",);
     }
 }

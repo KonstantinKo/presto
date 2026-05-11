@@ -54,13 +54,14 @@ use crate::engine::clock::Clock;
 use crate::engine::durations::Durations;
 use crate::engine::timer::{TimerEvent, TimerState};
 
-/// Icon-picker catalogue. Mirrors the JS-era set in
-/// `tags.spec.js:17` (which clicks `.emoji-option[data-icon="🎯"]`).
-/// The set is duplicated from `components::tags::ICON_OPTIONS`
-/// because the standalone `TagsView` is no longer mounted alongside
-/// the in-timer popover; once the standalone `TagsView` is reaped the
-/// catalogue lives in one place.
+/// Icon-picker catalogue (#39: 3 remixicon entries + 5 emoji entries).
+/// The `ri-` entries render via the remixicon webfont; emoji entries
+/// render as raw glyphs. `tags.spec.js:17` clicks `[data-icon="🎯"]`
+/// which is still present in this expanded set.
 const ICON_OPTIONS: &[&str] = &[
+    "ri-brain-line",
+    "ri-focus-3-line",
+    "ri-lightbulb-line",
     "\u{1f9e0}",
     "\u{1f4aa}",
     "\u{1f3af}",
@@ -155,6 +156,38 @@ fn indicator_icon_class(stem: &str, enabled: bool) -> &'static str {
 /// 60 minutes per the settings clamps).
 fn pad_two(value: u32) -> String {
     format!("{value:02}")
+}
+
+/// Project the stop-button icon name for the current mode.
+///
+/// In Focus mode the stop button resets the timer (× close icon).
+/// In Break/LongBreak mode it undoes the last completed pomodoro
+/// (back-arrow undo icon) so the user can restart focus without
+/// counting the session.
+const fn stop_icon_for_mode(mode: TimerMode) -> &'static str {
+    match mode {
+        TimerMode::Focus => "close",
+        TimerMode::Break | TimerMode::LongBreak => "undo",
+    }
+}
+
+/// Project the skip-button icon name given the current mode and whether
+/// the NEXT mode will be a long break.
+///
+/// - Focus + `!next_long` → "coffee" (short break ahead)
+/// - Focus + `next_long` → "moon" (long break ahead)
+/// - Break | `LongBreak` → "brain" (focus ahead)
+const fn skip_icon_for_mode(mode: TimerMode, next_is_long_break: bool) -> &'static str {
+    match mode {
+        TimerMode::Focus => {
+            if next_is_long_break {
+                "moon"
+            } else {
+                "coffee"
+            }
+        }
+        TimerMode::Break | TimerMode::LongBreak => "brain",
+    }
 }
 
 /// Synthesise a `ManualSession` for a just-completed focus session.
@@ -675,7 +708,17 @@ pub fn TimerView() -> impl IntoView {
         );
     };
     let on_stop = move |_| {
-        engine.update(TimerState::reset);
+        // In break/long-break mode, undo the last completed pomodoro so the
+        // user can restart focus without counting the session. In focus mode,
+        // full reset back to the start of the focus period.
+        if matches!(
+            engine.with(TimerState::current_mode),
+            TimerMode::Break | TimerMode::LongBreak
+        ) {
+            engine.update(TimerState::decrement_completed_pomodoros);
+        } else {
+            engine.update(TimerState::reset);
+        }
         warning_signal.set(false);
     };
     let on_skip = move |_| {
@@ -1039,15 +1082,29 @@ pub fn TimerView() -> impl IntoView {
                                                 key=|icon| (*icon).to_string()
                                                 children=move |icon| {
                                                     let icon_for_pick = icon.to_string();
-                                                    view! {
-                                                        <div
-                                                            class="emoji-option"
-                                                            data-icon=icon
-                                                            on:click=move |ev| {
-                                                                ev.stop_propagation();
-                                                                on_pick_icon(icon_for_pick.clone());
-                                                            }
-                                                        >{icon}</div>
+                                                    let is_ri = icon.starts_with("ri-");
+                                                    if is_ri {
+                                                        view! {
+                                                            <div
+                                                                class="icon-option"
+                                                                data-icon=icon
+                                                                on:click=move |ev| {
+                                                                    ev.stop_propagation();
+                                                                    on_pick_icon(icon_for_pick.clone());
+                                                                }
+                                                            ><i class=icon></i></div>
+                                                        }.into_any()
+                                                    } else {
+                                                        view! {
+                                                            <div
+                                                                class="emoji-option"
+                                                                data-icon=icon
+                                                                on:click=move |ev| {
+                                                                    ev.stop_propagation();
+                                                                    on_pick_icon(icon_for_pick.clone());
+                                                                }
+                                                            >{icon}</div>
+                                                        }.into_any()
                                                     }
                                                 }
                                             />
@@ -1109,12 +1166,31 @@ pub fn TimerView() -> impl IntoView {
             // <span> stand-ins would be zero-size boxes that
             // `toBeVisible()` rejects.
             <div class="controls">
-                <button id="stop-btn" class="control-btn" aria-label="Reset timer" on:click=on_stop>
-                    <svg id="stop-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <button id="stop-btn" class="control-btn" aria-label="Reset timer" title="Reset timer" on:click=on_stop>
+                    // X icon — visible in Focus mode (full reset).
+                    <svg
+                        id="stop-icon"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2.5"
+                        style=move || if stop_icon_for_mode(engine.with(TimerState::current_mode)) == "close" { "" } else { "display: none" }
+                    >
                         <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
                     </svg>
+                    // Back-arrow icon — visible in Break/LongBreak mode (undo last session).
+                    <svg
+                        id="undo-icon"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2.5"
+                        style=move || if stop_icon_for_mode(engine.with(TimerState::current_mode)) == "undo" { "" } else { "display: none" }
+                    >
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l-2-2m0 0l2-2m-2 2h10.5a4.5 4.5 0 110 9h-4" />
+                    </svg>
                 </button>
-                <button id="play-pause-btn" class="control-btn primary" aria-label="Start or pause timer" on:click=on_play_pause>
+                <button id="play-pause-btn" class="control-btn primary" aria-label="Start or pause timer" title="Start or pause timer" on:click=on_play_pause>
                     <svg id="play-icon" viewBox="0 0 24 24" fill="currentColor" style=move || play_icon_style.get()>
                         <path fill-rule="evenodd" clip-rule="evenodd"
                             d="M4.5 5.653c0-1.427 1.529-2.33 2.779-1.643l11.54 6.347c1.295.712 1.295 2.573 0 3.286L7.28 19.99c-1.25.687-2.779-.217-2.779-1.643V5.653Z" />
@@ -1124,20 +1200,35 @@ pub fn TimerView() -> impl IntoView {
                             d="M6.75 5.25a.75.75 0 0 1 .75-.75H9a.75.75 0 0 1 .75.75v13.5a.75.75 0 0 1-.75.75H7.5a.75.75 0 0 1-.75-.75V5.25Zm7.5 0A.75.75 0 0 1 15 4.5h1.5a.75.75 0 0 1 .75.75v13.5a.75.75 0 0 1-.75.75H15a.75.75 0 0 1-.75-.75V5.25Z" />
                     </svg>
                 </button>
-                // Skip button — JS-era surface had THREE icon
-                // variants gated by the upcoming mode: coffee for
-                // break, moon for long break, brain for focus
-                // (visible when the next mode is focus, i.e. when
-                // we're currently in break). Mirrors
-                // `pomodoro-timer.js:updateSkipButtonIcon`. The
-                // visual-regression baseline is captured in Focus
-                // mode (the next mode is Break) → coffee icon.
-                <button id="skip-btn" class="control-btn" aria-label="Skip session" on:click=on_skip>
+                // Skip button — four icon variants gated by upcoming mode:
+                // coffee for short break, moon for long break, brain for
+                // focus (next mode after a break), and a defensive
+                // forward-arrow fallback for any future mode addition.
+                // `skip_icon_for_mode` drives the per-icon visibility.
+                // The visual-regression baseline is Focus mode (next =
+                // short break) → coffee icon.
+                <button id="skip-btn" class="control-btn" aria-label="Skip session" title="Skip session" on:click=on_skip>
                     <i
                         id="skip-coffee-icon"
                         class="ri-cup-line"
                         style=move || {
-                            if matches!(engine.with(TimerState::current_mode), TimerMode::Focus) {
+                            let mode = engine.with(TimerState::current_mode);
+                            // (completed + 1) % 4 == 0 → next is long break
+                            let next_long = (engine.with(TimerState::completed_pomodoros) + 1) % 4 == 0;
+                            if skip_icon_for_mode(mode, next_long) == "coffee" {
+                                "font-size: 24px"
+                            } else {
+                                "display: none; font-size: 24px"
+                            }
+                        }
+                    ></i>
+                    <i
+                        id="skip-sleep-icon"
+                        class="ri-moon-line"
+                        style=move || {
+                            let mode = engine.with(TimerState::current_mode);
+                            let next_long = (engine.with(TimerState::completed_pomodoros) + 1) % 4 == 0;
+                            if skip_icon_for_mode(mode, next_long) == "moon" {
                                 "font-size: 24px"
                             } else {
                                 "display: none; font-size: 24px"
@@ -1148,16 +1239,27 @@ pub fn TimerView() -> impl IntoView {
                         id="skip-brain-icon"
                         class="ri-brain-line"
                         style=move || {
-                            if matches!(
-                                engine.with(TimerState::current_mode),
-                                TimerMode::Break | TimerMode::LongBreak
-                            ) {
+                            let mode = engine.with(TimerState::current_mode);
+                            let next_long = (engine.with(TimerState::completed_pomodoros) + 1) % 4 == 0;
+                            if skip_icon_for_mode(mode, next_long) == "brain" {
                                 "font-size: 24px"
                             } else {
                                 "display: none; font-size: 24px"
                             }
                         }
                     ></i>
+                    // Defensive forward-arrow fallback — display: none for all currently-
+                    // defined modes; present for future-proofing against new mode variants.
+                    <svg
+                        id="skip-default-icon"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2.5"
+                        style="display: none"
+                    >
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
+                    </svg>
                 </button>
             </div>
 
@@ -1189,6 +1291,7 @@ pub fn TimerView() -> impl IntoView {
                         )
                         style="display: block"
                         data-tooltip="Smart Pause: Click to toggle automatic pause when inactive"
+                        title="Smart Pause: Click to toggle automatic pause when inactive"
                         on:click=move |_| settings.update(|s| {
                             s.notifications.smart_pause = !s.notifications.smart_pause;
                         })
@@ -1201,6 +1304,7 @@ pub fn TimerView() -> impl IntoView {
                         settings.with(|s| s.notifications.auto_start_timer),
                     )
                     data-tooltip="Auto-start: Click to toggle automatic session start"
+                    title="Auto-start: Click to toggle automatic session start"
                     on:click=move |_| settings.update(|s| {
                         s.notifications.auto_start_timer = !s.notifications.auto_start_timer;
                     })
@@ -1212,6 +1316,7 @@ pub fn TimerView() -> impl IntoView {
                         settings.with(|s| s.notifications.allow_continuous_sessions),
                     )
                     data-tooltip="Continuous Sessions: Click to toggle continuous mode"
+                    title="Continuous Sessions: Click to toggle continuous mode"
                     on:click=move |_| settings.update(|s| {
                         s.notifications.allow_continuous_sessions =
                             !s.notifications.allow_continuous_sessions;
@@ -1248,7 +1353,10 @@ fn dot_count(total: u32) -> u32 {
 
 #[cfg(test)]
 mod tests {
-    use super::{dot_count, indicator_icon_class, mode_label, mode_label_with_status, pad_two};
+    use super::{
+        dot_count, indicator_icon_class, mode_label, mode_label_with_status, pad_two,
+        skip_icon_for_mode, stop_icon_for_mode,
+    };
     use crate::bridge::timer_mode::TimerMode;
 
     /// T191 — visual-regression / selector contract pin.
@@ -1309,11 +1417,19 @@ mod tests {
             "skip-btn",
             "play-icon",
             "pause-icon",
+            "stop-icon",
+            "undo-icon",
+            "skip-coffee-icon",
+            "skip-sleep-icon",
+            "skip-brain-icon",
             "timer-status",
             "status-text",
             "status-icon",
             "progress-dots",
             "tag-dropdown-arrow",
+            "smart-indicator",
+            "auto-start-indicator",
+            "continuous-session-indicator",
         ];
         let mut seen: Vec<&str> = Vec::with_capacity(REQUIRED_IDS.len());
         for id in REQUIRED_IDS {
@@ -1469,6 +1585,23 @@ mod tests {
             mode_label_with_status(TimerMode::Focus, false, true, false, true),
             "Focus (Paused)"
         );
+    }
+
+    #[test]
+    fn stop_icon_for_mode_covers_all_variants() {
+        assert_eq!(stop_icon_for_mode(TimerMode::Focus), "close");
+        assert_eq!(stop_icon_for_mode(TimerMode::Break), "undo");
+        assert_eq!(stop_icon_for_mode(TimerMode::LongBreak), "undo");
+    }
+
+    #[test]
+    fn skip_icon_for_mode_covers_all_variants() {
+        assert_eq!(skip_icon_for_mode(TimerMode::Focus, false), "coffee");
+        assert_eq!(skip_icon_for_mode(TimerMode::Focus, true), "moon");
+        assert_eq!(skip_icon_for_mode(TimerMode::Break, false), "brain");
+        assert_eq!(skip_icon_for_mode(TimerMode::Break, true), "brain");
+        assert_eq!(skip_icon_for_mode(TimerMode::LongBreak, false), "brain");
+        assert_eq!(skip_icon_for_mode(TimerMode::LongBreak, true), "brain");
     }
 
     #[test]

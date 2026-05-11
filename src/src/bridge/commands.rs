@@ -1084,6 +1084,44 @@ pub async fn dialog_ask(message: &str, title: &str) -> Result<bool, BridgeError>
     .await
 }
 
+/// Ask the user for a save path via the native file-save dialog.
+///
+/// Returns `Ok(Some(path))` when the user selects a path, `Ok(None)` when
+/// they cancel. The bridge mock maps `plugin:dialog|save` to `null` by
+/// default so any spec that asserts no-export-on-cancel passes automatically.
+///
+/// # Errors
+/// Returns `BridgeError::BridgeUnavailable` when the Tauri JS bridge is
+/// not present. Otherwise returns whatever the plugin returns.
+pub async fn dialog_save(
+    default_path: Option<String>,
+    filters: Vec<(String, Vec<String>)>,
+) -> Result<Option<String>, BridgeError> {
+    #[derive(Serialize)]
+    struct FilterArg {
+        name: String,
+        extensions: Vec<String>,
+    }
+    #[derive(Serialize)]
+    struct Args {
+        #[serde(rename = "defaultPath")]
+        default_path: Option<String>,
+        filters: Vec<FilterArg>,
+    }
+    let filters = filters
+        .into_iter()
+        .map(|(name, extensions)| FilterArg { name, extensions })
+        .collect();
+    invoke_serde(
+        "plugin:dialog|save",
+        &Args {
+            default_path,
+            filters,
+        },
+    )
+    .await
+}
+
 /// Check whether the legacy localStorage migration has already run to
 /// completion. Returns `Ok(true)` when the sentinel file
 /// `<app-data>/legacy-migration-done.marker` exists.

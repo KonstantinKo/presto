@@ -308,6 +308,9 @@ const TAURI_MOCK_INIT_SCRIPT = `
           case "plugin:dialog|ask":
             return false;
 
+          case "plugin:dialog|save":
+            return null;
+
           case "plugin:shell|open":
             return;
 
