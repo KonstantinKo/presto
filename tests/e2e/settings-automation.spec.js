@@ -44,6 +44,11 @@ test("automation settings: toggles update UI state and smart-pause timeout shows
   await page.locator("#auto-start-timer").click();
   await expect(page.locator("#auto-start-timer")).toBeChecked();
 
+  // Turn off allow-continuous-sessions: with it enabled the engine enters overtime instead
+  // of transitioning to Break, which would block the Focus→Break→auto-restart behavioral test.
+  await page.locator("#allow-continuous-sessions").click();
+  await expect(page.locator("#allow-continuous-sessions")).not.toBeChecked();
+
   // Enable 3-second debug timers so the end-to-end flow completes quickly
   await enableDebugTimers(page);
 
