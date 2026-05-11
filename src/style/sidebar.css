@@ -87,9 +87,19 @@
   height: 24px;
 }
 
+.sidebar-icon i {
+  font-size: 24px;
+  line-height: 1;
+}
+
 .sidebar-icon-large svg {
   width: 26px;
   height: 26px;
+}
+
+.sidebar-icon-large i {
+  font-size: 26px;
+  line-height: 1;
 }
 
 /* Sidebar icon theme states */

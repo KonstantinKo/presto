@@ -121,6 +121,16 @@
     height: 22px;
   }
 
+  .sidebar-icon i {
+    font-size: 22px;
+    line-height: 1;
+  }
+
+  .sidebar-icon-large i {
+    font-size: 22px;
+    line-height: 1;
+  }
+
   /* Use scale instead of vertical transform on mobile */
   .sidebar.focus .sidebar-icon:hover,
   .sidebar.break .sidebar-icon:hover,
@@ -244,6 +254,16 @@
   .sidebar-icon-large svg {
     width: 20px;
     height: 20px;
+  }
+
+  .sidebar-icon i {
+    font-size: 20px;
+    line-height: 1;
+  }
+
+  .sidebar-icon-large i {
+    font-size: 20px;
+    line-height: 1;
   }
 
   /* User avatar adjustments for extra small screens */

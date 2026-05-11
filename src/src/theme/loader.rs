@@ -218,8 +218,8 @@ mod tests {
     /// theme additions / removals.
     #[test]
     fn resolve_known_theme_returns_input() {
-        for stem in themes::ALL_THEMES {
-            assert_eq!(resolve_theme(stem), *stem);
+        for &stem in themes::ALL_THEMES {
+            assert_eq!(resolve_theme(stem), stem);
         }
     }
 

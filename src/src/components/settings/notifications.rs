@@ -99,7 +99,12 @@ pub fn NotificationsSettings(settings: RwSignal<Settings>, toast: SettingsToast)
                 // `expect(#notification-status).toBeVisible()` at
                 // `spec.js:16` resolves; CSS handles the in/out
                 // transition based on permission state.
-                <div id="notification-status" class="notification-status">
+                <div
+                    id="notification-status"
+                    class="notification-status"
+                    class:status-ready=move || desktop_enabled.get()
+                    class:status-disabled=move || !desktop_enabled.get()
+                >
                     <span id="notification-status-text">{move || status_text.get()}</span>
                     <button id="test-notifications-btn" on:click=on_test>
                         "Test"
