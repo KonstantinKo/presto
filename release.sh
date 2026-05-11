@@ -202,12 +202,6 @@ main() {
     echo "🚀 Automated Release Script for Presto"
     echo "=======================================${NC}"
 
-    # Check if we are in a git repo
-    if ! git rev-parse --is-inside-work-tree &>/dev/null; then
-        print_error "Not in a git repository"
-        exit 1
-    fi
-
     # Get current version
     current_version=$(get_current_version)
     print_step "Current version: $current_version"
@@ -316,6 +310,15 @@ main() {
     fi
 }
 
+# Ensure we operate from the repository root for all invocation paths
+if ! git rev-parse --is-inside-work-tree &>/dev/null; then
+    print_error "Not in a git repository"
+    exit 1
+fi
+_repo_root=$(git rev-parse --show-toplevel 2>/dev/null) || { print_error "Cannot resolve repository root"; exit 1; }
+cd "$_repo_root"
+unset _repo_root
+
 # Command-line parameter handling
 if [[ $# -gt 0 ]]; then
     case $1 in
@@ -370,12 +373,12 @@ if [[ $# -gt 0 ]]; then
             print_success "Major release v$new_version complete!"
             ;;
         "--version")
-            if [[ -z $2 ]] || [[ ! $2 =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            if [[ -z "${2-}" ]] || [[ ! "${2-}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
                 print_error "Version not specified or invalid format"
                 exit 1
             fi
             current_version=$(get_current_version)
-            new_version=$2
+            new_version="${2-}"
             check_git_status
             update_version_in_files $current_version $new_version
             commit_and_tag $new_version
