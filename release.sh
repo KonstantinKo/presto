@@ -61,23 +61,56 @@ increment_version() {
     echo "$major.$minor.$patch"
 }
 
+# Function to read the package version from a Cargo.toml
+_read_cargo_version() {
+    grep '^version' "$1" | head -1 | sed 's/version = "\(.*\)"/\1/'
+}
+
 # Function to update version in files
 update_version_in_files() {
     local old_version=$1
     local new_version=$2
 
+    # Verify both manifests agree with old_version before editing anything
+    local tauri_pre src_pre
+    tauri_pre=$(_read_cargo_version src-tauri/Cargo.toml)
+    src_pre=$(_read_cargo_version src/Cargo.toml)
+    if [[ "$tauri_pre" != "$old_version" ]]; then
+        print_error "src-tauri/Cargo.toml has version '$tauri_pre', expected '$old_version' — aborting"
+        exit 1
+    fi
+    if [[ "$src_pre" != "$old_version" ]]; then
+        print_error "src/Cargo.toml has version '$src_pre', expected '$old_version' — manifests are out of sync, aborting"
+        exit 1
+    fi
+
     print_step "Updating version from $old_version to $new_version..."
 
     if [[ "$OSTYPE" == "darwin"* ]]; then
-        # macOS
-        sed -i '' "s/version = \"$old_version\"/version = \"$new_version\"/" src-tauri/Cargo.toml
+        # macOS: restrict replacement to the [package] section to avoid hitting
+        # dependency-table lines such as [dependencies.web-sys] that also use
+        # the bare `version = "x.y"` syntax on their own line.
+        sed -i '' '/^\[package\]/,/^\[/{s/^version = "'"$old_version"'"/version = "'"$new_version"'"/;}' src-tauri/Cargo.toml
         sed -i '' "s/\"version\": \"$old_version\"/\"version\": \"$new_version\"/" src-tauri/tauri.conf.json
-        sed -i '' "s/version = \"$old_version\"/version = \"$new_version\"/" src/Cargo.toml
+        sed -i '' '/^\[package\]/,/^\[/{s/^version = "'"$old_version"'"/version = "'"$new_version"'"/;}' src/Cargo.toml
     else
-        # Linux
-        sed -i "s/version = \"$old_version\"/version = \"$new_version\"/" src-tauri/Cargo.toml
+        # Linux: same [package]-scoped restriction
+        sed -i '/^\[package\]/,/^\[/{s/^version = "'"$old_version"'"/version = "'"$new_version"'"/;}' src-tauri/Cargo.toml
         sed -i "s/\"version\": \"$old_version\"/\"version\": \"$new_version\"/" src-tauri/tauri.conf.json
-        sed -i "s/version = \"$old_version\"/version = \"$new_version\"/" src/Cargo.toml
+        sed -i '/^\[package\]/,/^\[/{s/^version = "'"$old_version"'"/version = "'"$new_version"'"/;}' src/Cargo.toml
+    fi
+
+    # Verify both manifests now carry new_version
+    local tauri_post src_post
+    tauri_post=$(_read_cargo_version src-tauri/Cargo.toml)
+    src_post=$(_read_cargo_version src/Cargo.toml)
+    if [[ "$tauri_post" != "$new_version" ]]; then
+        print_error "src-tauri/Cargo.toml update failed: got '$tauri_post', expected '$new_version'"
+        exit 1
+    fi
+    if [[ "$src_post" != "$new_version" ]]; then
+        print_error "src/Cargo.toml update failed: got '$src_post', expected '$new_version'"
+        exit 1
     fi
 
     print_success "Version updated in configuration files"
@@ -92,6 +125,16 @@ get_current_version() {
 check_git_status() {
     if [[ -n $(git status --porcelain) ]]; then
         print_error "Working tree is dirty. Commit or stash changes before releasing."
+        exit 1
+    fi
+}
+
+# Function to verify we are on the main branch before modifying any files
+check_branch_is_main() {
+    local current_branch
+    current_branch=$(git rev-parse --abbrev-ref HEAD)
+    if [[ "$current_branch" != "main" ]]; then
+        print_error "Current branch is '$current_branch', not 'main'. Refusing to release."
         exit 1
     fi
 }
@@ -125,13 +168,6 @@ commit_and_tag() {
 # Function to push changes
 push_changes() {
     local version=$1
-
-    local current_branch
-    current_branch=$(git rev-parse --abbrev-ref HEAD)
-    if [[ "$current_branch" != "main" ]]; then
-        print_error "Current branch is '$current_branch', not 'main'. Refusing to push."
-        exit 1
-    fi
 
     print_step "Pushing main commit..."
     git push origin main
@@ -267,8 +303,9 @@ main() {
         exit 1
     fi
 
-    # Check git status
+    # Check git status and branch before touching any files
     check_git_status
+    check_branch_is_main
 
     # Update version in files
     update_version_in_files $current_version $new_version
@@ -343,6 +380,7 @@ if [[ $# -gt 0 ]]; then
             current_version=$(get_current_version)
             new_version=$(increment_version $current_version patch)
             check_git_status
+            check_branch_is_main
             update_version_in_files $current_version $new_version
             commit_and_tag $new_version
             build_app
@@ -354,6 +392,7 @@ if [[ $# -gt 0 ]]; then
             current_version=$(get_current_version)
             new_version=$(increment_version $current_version minor)
             check_git_status
+            check_branch_is_main
             update_version_in_files $current_version $new_version
             commit_and_tag $new_version
             build_app
@@ -365,6 +404,7 @@ if [[ $# -gt 0 ]]; then
             current_version=$(get_current_version)
             new_version=$(increment_version $current_version major)
             check_git_status
+            check_branch_is_main
             update_version_in_files $current_version $new_version
             commit_and_tag $new_version
             build_app
@@ -380,6 +420,7 @@ if [[ $# -gt 0 ]]; then
             current_version=$(get_current_version)
             new_version="${2-}"
             check_git_status
+            check_branch_is_main
             update_version_in_files $current_version $new_version
             commit_and_tag $new_version
             build_app
