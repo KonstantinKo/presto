@@ -39,6 +39,7 @@ claude.md
 /test-results/
 /tests/e2e/playwright-report/
 /tests/e2e/test-results/
+src/test-results/
 
 # Cargo workspace: only the repo-root Cargo.lock is tracked; ignore any
 # per-member Cargo.lock that an `cd <member> && cargo` invocation might

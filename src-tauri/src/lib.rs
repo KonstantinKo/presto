@@ -1000,7 +1000,11 @@ pub fn run() {
                 let app_handle = app.handle().clone();
                 let app_handle_for_click = app_handle.clone();
 
-                let _tray = TrayIconBuilder::with_id("main")
+                // macOS: TrayIconBuilder does NOT auto-load default_window_icon. Without
+                // an explicit icon AND with no title (the title is set later by
+                // update_tray_icon, only on mode/running changes), the NSStatusItem
+                // renders at zero width and is invisible. See tauri-apps/tauri#11931.
+                let mut tray_builder = TrayIconBuilder::with_id("main")
                     .menu(&menu)
                     .show_menu_on_left_click(true)
                     .on_menu_event(move |_tray, event| match event.id.as_ref() {
@@ -1034,8 +1038,13 @@ pub fn run() {
                                 show_app_window(app_clone).await;
                             });
                         }
-                    })
-                    .build(app)?;
+                    });
+
+                if let Some(icon) = app.default_window_icon() {
+                    tray_builder = tray_builder.icon(icon.clone());
+                }
+
+                let _tray = tray_builder.build(app)?;
 
                 if let Some(window) = app.get_webview_window("main") {
                     let app_handle_for_close = app.handle().clone();
@@ -1457,6 +1466,31 @@ mod tests {
         default_analytics_enabled, default_weekly_goal, AppSettings, ManualSession,
         PomodoroSession, SessionTag, StatusBarDisplay, Tag, Task,
     };
+
+    #[test]
+    fn bundle_config_has_at_least_one_icon() {
+        // Guard against a future cleanup pass deleting bundle.icon, which
+        // would make Manager::default_window_icon() return None and silently
+        // re-break the macOS tray (see issue #40).
+        let conf = include_str!("../tauri.conf.json");
+        let parsed: serde_json::Value = serde_json::from_str(conf).expect("valid tauri.conf.json");
+        let icons = parsed["bundle"]["icon"]
+            .as_array()
+            .expect("bundle.icon array");
+        assert!(
+            !icons.is_empty(),
+            "bundle.icon must be non-empty to populate default_window_icon"
+        );
+        let manifest_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+        for icon in icons {
+            let icon_path = icon.as_str().expect("icon entry must be a string");
+            let full_path = manifest_dir.join(icon_path);
+            assert!(
+                full_path.exists(),
+                "bundle.icon references missing file: {icon_path}"
+            );
+        }
+    }
 
     #[test]
     fn weekly_goal_default_is_125() {
