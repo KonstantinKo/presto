@@ -6,9 +6,9 @@
 // - `themes` — the auto-generated catalogue
 //   (`pub const ALL_THEMES: &[&str]`,
 //   `pub const DEFAULT_THEME: &str`). Code-gen lives in
-//   `tools/build-themes`; the Trunk pre-build hook in
-//   `src/Trunk.toml` regenerates `themes.rs` on every build, and
-//   the file is `.gitignore`-tracked. Consumed by
+//   `tools/build-themes`; the Cargo build script at `src/build.rs`
+//   regenerates `themes.rs` into `OUT_DIR` on every `cargo build`
+//   or `cargo test`. Consumed by
 //   `components::settings::theme::ThemeSettings`.
 //
 // - `loader` — runtime DOM application + system-theme detection.
@@ -26,7 +26,5 @@
 pub mod loader;
 pub mod themes {
     // Generated into OUT_DIR by src/build.rs from `style/themes/*.css`.
-    // Trunk also regenerates the same content via the pre_build hook in
-    // `src/Trunk.toml`; plain `cargo build` / `cargo test` use this path.
     include!(concat!(env!("OUT_DIR"), "/themes.rs"));
 }

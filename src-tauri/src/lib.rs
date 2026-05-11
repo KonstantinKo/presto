@@ -1481,6 +1481,15 @@ mod tests {
             !icons.is_empty(),
             "bundle.icon must be non-empty to populate default_window_icon"
         );
+        let manifest_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+        for icon in icons {
+            let icon_path = icon.as_str().expect("icon entry must be a string");
+            let full_path = manifest_dir.join(icon_path);
+            assert!(
+                full_path.exists(),
+                "bundle.icon references missing file: {icon_path}"
+            );
+        }
     }
 
     #[test]
