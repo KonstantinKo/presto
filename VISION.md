@@ -76,7 +76,7 @@ Benefits realized:
 | Layer | Stack |
 |---|---|
 | Frontend | Leptos (CSR + WASM) |
-| Build | Trunk / cargo-leptos |
+| Build | Trunk |
 | Frontend tests | wasm-bindgen-test |
 | E2E | Playwright (chromium) |
 | Visual regression | 14 PNG baselines |
