@@ -308,6 +308,11 @@ const TAURI_MOCK_INIT_SCRIPT = `
           case "plugin:dialog|ask":
             return false;
 
+          case "plugin:dialog|save": {
+            var scfg = window.__E2E_CONFIG__ || {};
+            return scfg.dialogSaveResult !== undefined ? scfg.dialogSaveResult : null;
+          }
+
           case "plugin:shell|open":
             return;
 
@@ -331,7 +336,10 @@ const TAURI_MOCK_INIT_SCRIPT = `
     },
 
     dialog: {
-      save: async function () { return null; },
+      save: async function () {
+        var cfg = window.__E2E_CONFIG__ || {};
+        return cfg.dialogSaveResult !== undefined ? cfg.dialogSaveResult : null;
+      },
       open: async function () { return null; },
       message: async function () {},
       ask: async function () {
@@ -507,10 +515,15 @@ window.__E2E_CONFIG__.initialTags = ${JSON.stringify(tags)};
     async enableTeamButton() {
       await page.addInitScript({
         content: `
-document.addEventListener('DOMContentLoaded', function () {
+// TrunkApplicationStarted fires after WASM init() resolves, i.e. after
+// Leptos has fully rendered and set all static attributes (including
+// the disabled attribute on #team-nav). DOMContentLoaded is too early
+// because module scripts (boot.js) run after it.
+window.addEventListener('TrunkApplicationStarted', function () {
   var el = document.getElementById('team-nav');
   if (el) {
     el.disabled = false;
+    el.removeAttribute('disabled');
     el.style.opacity = '';
     el.style.cursor = '';
     el.title = 'Team';

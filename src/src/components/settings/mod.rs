@@ -276,6 +276,24 @@ pub fn SettingsView(
                 </div>
             </div>
 
+            // Footer: auto-save acknowledgement + Reset to Defaults.
+            // Rendered inside `#settings-view` below `.settings-layout`
+            // so it doesn't push the tab content. Reset fires
+            // `Settings::default()` and lets the debounced persistence
+            // sink at `app.rs` write it to disk.
+            <div class="settings-actions setting-item">
+                <div class="auto-save-info">
+                    <span class="auto-save-text">"✓ Settings are saved automatically"</span>
+                </div>
+                <button
+                    class="btn-secondary"
+                    on:click=move |_| {
+                        settings.set(Settings::default());
+                        toast.show("Settings reset to defaults");
+                    }
+                >"Reset to Defaults"</button>
+            </div>
+
             // Shell-level toast surface. `role="alert"` so the e2e
             // suite's `getByRole("alert").filter({ hasText: "Settings
             // saved" })` resolves; `.notification-ping` so the

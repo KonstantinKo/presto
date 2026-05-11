@@ -671,6 +671,7 @@ pub fn App() -> impl IntoView {
                     id="timer-nav"
                     data-view="timer"
                     title="Timer"
+                    attr:aria-current=move || if is_timer.get() { "page" } else { "" }
                     on:click=on_timer_nav
                 >
                     <i class="ri-timer-line"></i>
@@ -681,6 +682,7 @@ pub fn App() -> impl IntoView {
                     id="calendar-nav"
                     data-view="calendar"
                     title="Calendar"
+                    attr:aria-current=move || if is_calendar.get() { "page" } else { "" }
                     on:click=on_calendar_nav
                 >
                     <i class="ri-calendar-line"></i>
@@ -690,7 +692,10 @@ pub fn App() -> impl IntoView {
                     class:active=move || is_team.get()
                     id="team-nav"
                     data-view="team"
-                    title="Team"
+                    title="Team (Coming Soon)"
+                    disabled
+                    style="opacity: 0.5; cursor: not-allowed"
+                    attr:aria-current=move || if is_team.get() { "page" } else { "" }
                     on:click=on_team_nav
                 >
                     <i class="ri-group-line"></i>
@@ -703,6 +708,7 @@ pub fn App() -> impl IntoView {
                     id="settings-nav"
                     data-view="settings"
                     title="Settings"
+                    attr:aria-current=move || if is_settings.get() { "page" } else { "" }
                     on:click=on_settings_nav
                 >
                     <i class="ri-settings-3-line"></i>

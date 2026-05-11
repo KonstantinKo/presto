@@ -73,6 +73,14 @@ impl ShortcutSlot {
             Self::Skip => "CommandOrControl+Alt+S",
         }
     }
+
+    const fn description(self) -> &'static str {
+        match self {
+            Self::StartStop => "Start or pause the current Pomodoro session.",
+            Self::Reset => "Delete the current session or undo the last completed Pomodoro.",
+            Self::Skip => "Save the current session and start the next one.",
+        }
+    }
 }
 
 /// Format a captured `KeyboardEvent` as the JS-era
@@ -164,7 +172,23 @@ fn shortcut_row(
                     on:click=on_focus_click
                     on:keydown=on_keydown
                 />
+                <button
+                    type="button"
+                    class="shortcut-clear"
+                    data-shortcut=slot.input_id()
+                    aria-label=format!("Clear {} shortcut", slot.label())
+                    on:click=move |_| {
+                        settings.update(|s| match slot {
+                            ShortcutSlot::StartStop => s.shortcuts.start_stop = None,
+                            ShortcutSlot::Reset => s.shortcuts.reset = None,
+                            ShortcutSlot::Skip => s.shortcuts.skip = None,
+                        });
+                        recording.set(None);
+                        toast.show("Settings saved");
+                    }
+                >"×"</button>
             </div>
+            <p class="setting-description">{slot.description()}</p>
         </div>
     }
 }
