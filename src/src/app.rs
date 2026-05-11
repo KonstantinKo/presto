@@ -54,6 +54,7 @@ use crate::bridge::events::{
     self, GLOBAL_SHORTCUT, UPDATE_AVAILABLE, USER_ACTIVITY, USER_INACTIVITY,
 };
 use crate::bridge::storage;
+use crate::bridge::timer_mode::TimerMode;
 use crate::bridge::types::{Session, Settings, UpdateAvailablePayload};
 use crate::components::auth_modal::AuthModal;
 use crate::components::browser_clock::BrowserClock;
@@ -603,6 +604,29 @@ pub fn App() -> impl IntoView {
             engine.update(|state| state.set_smart_pause_enabled(enabled));
         });
 
+        // Mirror the current timer mode onto `document.body` so the
+        // `body.focus { background: var(--focus-bg) }` rules in
+        // `style/layout.css` apply the per-mode backdrop tint.
+        // Leptos owns `<App>`'s subtree, not `<body>` itself, so
+        // imperative `class_list` mutation is the only correct way to
+        // project state onto an element outside the render tree.
+        // `remove_3` is a no-op on absent tokens, so the clear is
+        // unconditionally safe.
+        Effect::new(move |_| {
+            let token = match engine.with(TimerState::current_mode) {
+                TimerMode::Focus => "focus",
+                TimerMode::Break => "break",
+                TimerMode::LongBreak => "longBreak",
+            };
+            if let Some(body) = web_sys::window()
+                .and_then(|w| w.document())
+                .and_then(|d| d.body())
+            {
+                let _ = body.class_list().remove_3("focus", "break", "longBreak");
+                let _ = body.class_list().add_1(token);
+            }
+        });
+
         // Subscribe to global-shortcut emits. Each emit carries
         // the binding name as a primitive `String` payload (per
         // contracts/tauri-bridge.md §"Tauri events"); the
@@ -632,12 +656,14 @@ pub fn App() -> impl IntoView {
         // var(--focus-primary-btn) }` rule applies — the
         // visual-regression baseline shows the active nav button
         // with a saturated red background, which is gated on this
-        // theme class. The Phase 4d cut wires only `focus` since
-        // the timer engine starts in `Focus` mode and the visual
-        // baseline is captured pre-start; Phase 4e attaches the
-        // engine-mode → sidebar-class projection so break/long-break
-        // states also flip the highlight color.
-        <nav class="sidebar focus">
+        // theme class. The class is driven by `engine.current_mode()`
+        // so break/long-break states also flip the highlight color.
+        <nav
+            class="sidebar"
+            class:focus=move || matches!(engine.with(TimerState::current_mode), TimerMode::Focus)
+            class:break=move || matches!(engine.with(TimerState::current_mode), TimerMode::Break)
+            class:longBreak=move || matches!(engine.with(TimerState::current_mode), TimerMode::LongBreak)
+        >
             <div class="sidebar-icons">
                 <button
                     class="sidebar-icon"

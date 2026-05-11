@@ -192,6 +192,10 @@
 
 /* Notification status indicator styles */
 .notification-status {
+  padding: 8px 12px;
+  border-radius: 6px;
+  margin-top: 8px;
+  font-size: 13px;
   border-left: 3px solid #ccc;
   background-color: var(--bg-secondary);
   color: var(--text-secondary);

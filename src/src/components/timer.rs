@@ -90,6 +90,60 @@ const fn mode_label(mode: TimerMode) -> &'static str {
     }
 }
 
+/// Extend `mode_label` with the JS-era pause / overtime suffixes.
+///
+/// Tie-break ordering: `is_paused` wins over `is_auto_paused` wins
+/// over overtime — overtime can only show while `is_running`, so it
+/// is mutually exclusive with both pause states.
+//
+// Four bool params reflect four orthogonal `TimerState` predicates.
+// Grouping them into a struct would add ceremony without improving
+// readability at the single call site.
+#[allow(clippy::fn_params_excessive_bools)]
+fn mode_label_with_status(
+    mode: TimerMode,
+    is_running: bool,
+    is_paused: bool,
+    is_auto_paused: bool,
+    is_overtime: bool,
+) -> String {
+    let base = mode_label(mode);
+    if is_paused {
+        format!("{base} (Paused)")
+    } else if is_auto_paused {
+        format!("{base} (Auto-paused)")
+    } else if is_running && is_overtime {
+        format!("{base} (Overtime)")
+    } else {
+        base.to_string()
+    }
+}
+
+/// Project a settings-indicator enabled flag onto its Remix Icon class string.
+///
+/// When enabled the icon uses the `-fill` variant plus the `active` class so
+/// the CSS's `.settings-indicators i.active` rule applies the accent colour.
+fn indicator_icon_class(stem: &str, enabled: bool) -> &'static str {
+    // The match table is exhaustive over the three stems used by the
+    // right-rail indicators.  Any new stem must be added here and
+    // covered by a test.
+    if enabled {
+        match stem {
+            "lightbulb" => "ri-lightbulb-fill active",
+            "play-circle" => "ri-play-circle-fill active",
+            "repeat" => "ri-repeat-fill active",
+            _ => "",
+        }
+    } else {
+        match stem {
+            "lightbulb" => "ri-lightbulb-line",
+            "play-circle" => "ri-play-circle-line",
+            "repeat" => "ri-repeat-line",
+            _ => "",
+        }
+    }
+}
+
 /// Project a non-negative seconds value to a zero-padded two-digit
 /// string. Used for both the minutes and seconds columns of the
 /// countdown display.
@@ -546,7 +600,17 @@ pub fn TimerView() -> impl IntoView {
         })
     });
 
-    let mode_text = Signal::derive(move || engine.with(|s| mode_label(s.current_mode())));
+    let mode_text = Signal::derive(move || {
+        engine.with(|s| {
+            mode_label_with_status(
+                s.current_mode(),
+                s.is_running(),
+                s.is_paused(),
+                s.is_auto_paused(),
+                s.time_remaining_secs_signed() < 0,
+            )
+        })
+    });
     let is_running = Signal::derive(move || engine.with(TimerState::is_running));
 
     // Update document title with overtime prefix when running in overtime.
@@ -1119,20 +1183,39 @@ pub fn TimerView() -> impl IntoView {
                     ></span>
                     <i
                         id="smart-indicator"
-                        class="ri-lightbulb-line"
+                        class=move || indicator_icon_class(
+                            "lightbulb",
+                            settings.with(|s| s.notifications.smart_pause),
+                        )
                         style="display: block"
                         data-tooltip="Smart Pause: Click to toggle automatic pause when inactive"
+                        on:click=move |_| settings.update(|s| {
+                            s.notifications.smart_pause = !s.notifications.smart_pause;
+                        })
                     ></i>
                 </div>
                 <i
                     id="auto-start-indicator"
-                    class="ri-play-circle-line"
+                    class=move || indicator_icon_class(
+                        "play-circle",
+                        settings.with(|s| s.notifications.auto_start_timer),
+                    )
                     data-tooltip="Auto-start: Click to toggle automatic session start"
+                    on:click=move |_| settings.update(|s| {
+                        s.notifications.auto_start_timer = !s.notifications.auto_start_timer;
+                    })
                 ></i>
                 <i
                     id="continuous-session-indicator"
-                    class="ri-repeat-line"
+                    class=move || indicator_icon_class(
+                        "repeat",
+                        settings.with(|s| s.notifications.allow_continuous_sessions),
+                    )
                     data-tooltip="Continuous Sessions: Click to toggle continuous mode"
+                    on:click=move |_| settings.update(|s| {
+                        s.notifications.allow_continuous_sessions =
+                            !s.notifications.allow_continuous_sessions;
+                    })
                 ></i>
                 <button
                     class="timer-adjust-btn"
@@ -1165,7 +1248,7 @@ fn dot_count(total: u32) -> u32 {
 
 #[cfg(test)]
 mod tests {
-    use super::{dot_count, mode_label, pad_two};
+    use super::{dot_count, indicator_icon_class, mode_label, mode_label_with_status, pad_two};
     use crate::bridge::timer_mode::TimerMode;
 
     /// T191 — visual-regression / selector contract pin.
@@ -1266,10 +1349,126 @@ mod tests {
     }
 
     #[test]
+    fn indicator_icon_class_lightbulb() {
+        assert_eq!(
+            indicator_icon_class("lightbulb", true),
+            "ri-lightbulb-fill active"
+        );
+        assert_eq!(
+            indicator_icon_class("lightbulb", false),
+            "ri-lightbulb-line"
+        );
+    }
+
+    #[test]
+    fn indicator_icon_class_play_circle() {
+        assert_eq!(
+            indicator_icon_class("play-circle", true),
+            "ri-play-circle-fill active"
+        );
+        assert_eq!(
+            indicator_icon_class("play-circle", false),
+            "ri-play-circle-line"
+        );
+    }
+
+    #[test]
+    fn indicator_icon_class_repeat() {
+        assert_eq!(
+            indicator_icon_class("repeat", true),
+            "ri-repeat-fill active"
+        );
+        assert_eq!(indicator_icon_class("repeat", false), "ri-repeat-line");
+    }
+
+    #[test]
     fn mode_label_covers_every_variant() {
         assert_eq!(mode_label(TimerMode::Focus), "Focus");
         assert_eq!(mode_label(TimerMode::Break), "Break");
         assert_eq!(mode_label(TimerMode::LongBreak), "Long Break");
+    }
+
+    #[test]
+    fn mode_label_with_status_idle_returns_plain_label() {
+        assert_eq!(
+            mode_label_with_status(TimerMode::Focus, false, false, false, false),
+            "Focus"
+        );
+        assert_eq!(
+            mode_label_with_status(TimerMode::Break, false, false, false, false),
+            "Break"
+        );
+        assert_eq!(
+            mode_label_with_status(TimerMode::LongBreak, false, false, false, false),
+            "Long Break"
+        );
+    }
+
+    #[test]
+    fn mode_label_with_status_running_no_suffix() {
+        // Running but not paused/overtime → plain label (matches e2e
+        // contracts in `_smoke.spec.js` and `sessions-history.spec.js`).
+        assert_eq!(
+            mode_label_with_status(TimerMode::Focus, true, false, false, false),
+            "Focus"
+        );
+        assert_eq!(
+            mode_label_with_status(TimerMode::Break, true, false, false, false),
+            "Break"
+        );
+    }
+
+    #[test]
+    fn mode_label_with_status_paused_suffix() {
+        assert_eq!(
+            mode_label_with_status(TimerMode::Focus, false, true, false, false),
+            "Focus (Paused)"
+        );
+        assert_eq!(
+            mode_label_with_status(TimerMode::Break, false, true, false, false),
+            "Break (Paused)"
+        );
+        assert_eq!(
+            mode_label_with_status(TimerMode::LongBreak, false, true, false, false),
+            "Long Break (Paused)"
+        );
+    }
+
+    #[test]
+    fn mode_label_with_status_auto_paused_suffix() {
+        assert_eq!(
+            mode_label_with_status(TimerMode::Focus, false, false, true, false),
+            "Focus (Auto-paused)"
+        );
+        assert_eq!(
+            mode_label_with_status(TimerMode::Break, false, false, true, false),
+            "Break (Auto-paused)"
+        );
+    }
+
+    #[test]
+    fn mode_label_with_status_overtime_suffix_requires_running() {
+        // Overtime only shows while running.
+        assert_eq!(
+            mode_label_with_status(TimerMode::Focus, true, false, false, true),
+            "Focus (Overtime)"
+        );
+        // Not running + overtime → plain (can't be in overtime while stopped).
+        assert_eq!(
+            mode_label_with_status(TimerMode::Focus, false, false, false, true),
+            "Focus"
+        );
+    }
+
+    #[test]
+    fn mode_label_with_status_paused_wins_over_overtime() {
+        // Paused takes precedence; overtime can only occur while running,
+        // so this combination shouldn't arise in practice, but the
+        // tie-break is pinned here.
+        assert_eq!(
+            mode_label_with_status(TimerMode::Focus, false, true, false, true),
+            "Focus (Paused)"
+        );
     }
 
     #[test]

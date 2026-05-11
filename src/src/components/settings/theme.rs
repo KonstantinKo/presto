@@ -96,6 +96,10 @@ pub fn ThemeSettings(settings: RwSignal<Settings>, toast: SettingsToast) -> impl
         toast.show("Settings saved");
     };
 
+    let current_theme = Signal::derive(move || settings.with(|s| s.appearance.theme.clone()));
+    let current_timer_theme =
+        Signal::derive(move || settings.with(|s| s.appearance.timer_theme.clone()));
+
     view! {
         <div class="category-header">
             <h1>"Theme"</h1>
@@ -110,6 +114,7 @@ pub fn ThemeSettings(settings: RwSignal<Settings>, toast: SettingsToast) -> impl
                 <div class="theme-selector" id="theme-selector">
                     <button
                         class="theme-option"
+                        class:active=move || current_theme.get() == "auto"
                         data-theme="auto"
                         title="Auto (Follow System)"
                         on:click=move |_| on_theme("auto")
@@ -119,6 +124,7 @@ pub fn ThemeSettings(settings: RwSignal<Settings>, toast: SettingsToast) -> impl
                     </button>
                     <button
                         class="theme-option"
+                        class:active=move || current_theme.get() == "light"
                         data-theme="light"
                         title="Light Mode"
                         on:click=move |_| on_theme("light")
@@ -128,6 +134,7 @@ pub fn ThemeSettings(settings: RwSignal<Settings>, toast: SettingsToast) -> impl
                     </button>
                     <button
                         class="theme-option"
+                        class:active=move || current_theme.get() == "dark"
                         data-theme="dark"
                         title="Dark Mode"
                         on:click=move |_| on_theme("dark")
@@ -154,6 +161,7 @@ pub fn ThemeSettings(settings: RwSignal<Settings>, toast: SettingsToast) -> impl
                             view! {
                                 <button
                                     class="timer-theme-option"
+                                    class:active=move || current_timer_theme.get() == id
                                     data-timer-theme=id
                                     on:click=move |_| on_timer_theme(id)
                                 >
