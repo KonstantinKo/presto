@@ -24,6 +24,7 @@
 // nothing else stateful.
 
 pub mod loader;
+pub mod metadata;
 pub mod themes {
     // Generated into OUT_DIR by src/build.rs from `style/themes/*.css`.
     include!(concat!(env!("OUT_DIR"), "/themes.rs"));

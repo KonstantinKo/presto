@@ -31,7 +31,7 @@ use super::commands::{
     import_legacy_supabase_session, import_legacy_tags, import_legacy_tasks,
     import_legacy_user_state,
 };
-use super::error::BridgeError;
+use super::types::BridgeError;
 use super::types::{
     LegacyHistoryPayload, LegacyManualSessionsPayload, LegacySettingsPayload, LegacyTagsPayload,
     LegacyTasksPayload, LegacyUserStatePayload, ManualSession, Session, Settings,

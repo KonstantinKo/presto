@@ -22,7 +22,7 @@
 #![allow(clippy::future_not_send)]
 
 use crate::bridge::commands;
-use crate::bridge::error::BridgeError;
+use crate::bridge::types::BridgeError;
 use crate::bridge::types::Settings;
 
 /// Wrapper over the user's `Settings` record. Phase 3a wires up the
@@ -531,7 +531,7 @@ mod tests {
         // `bridge::commands::load_settings`. The manager must produce a
         // record matching `Settings::default()`.
         let manager = SettingsManager::from_loaded_or_default(Err(
-            crate::bridge::error::BridgeError::BridgeUnavailable,
+            crate::bridge::types::BridgeError::BridgeUnavailable,
         ));
         let defaults = crate::bridge::types::Settings::default();
         assert_eq!(

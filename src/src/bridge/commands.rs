@@ -30,12 +30,15 @@ use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::JsFuture;
 
 use super::availability::bridge_available;
-use super::error::BridgeError;
-use super::timer_mode::TimerMode;
+use super::types::BridgeError;
+use super::types::TimerMode;
 use super::types::{
-    AuthSession, LegacyHistoryPayload, LegacyManualSessionsPayload, LegacySettingsPayload,
-    LegacyTagsPayload, LegacyTasksPayload, LegacyUserStatePayload, ManualSession, Session,
-    SessionTag, Settings, ShortcutSettings, SupabaseSessionPayload, Tag, Task, UpdateTrayIconArgs,
+    AddSessionTagArgs, AuthSession, DeleteTagArgs, LegacyHistoryPayload,
+    LegacyManualSessionsPayload, LegacySettingsPayload, LegacyTagsPayload, LegacyTasksPayload,
+    LegacyUserStatePayload, ManualSession, Session, SessionTag, Settings, ShortcutSettings,
+    StartActivityMonitoringArgs, SupabaseRefreshSessionArgs, SupabaseSessionPayload,
+    SupabaseSignOutArgs, Tag, Task, UpdateActivityTimeoutArgs, UpdateTrayIconArgs,
+    UpdateTrayMenuArgs,
 };
 
 #[wasm_bindgen]
@@ -87,6 +90,32 @@ where
     })
 }
 
+/// Invoke a command whose argument bag carries a single named key.
+///
+/// Collapses the boilerplate `Args` struct that ~15 wrappers shared
+/// (`#[derive(Serialize)] struct Args { x }` then
+/// `invoke_serde(cmd, &Args { x })`). The `key` is the Tauri-side
+/// handler's parameter name.
+///
+/// Single-word keys (e.g. `"session"`, `"tag"`, `"settings"`) are
+/// camelCase-stable, so this helper does NOT apply `rename_all`. For
+/// multi-word keys (`tag_id`, `refresh_token`, etc.) use a dedicated
+/// `Args` struct from `presto-ipc::args` instead — those need
+/// camelCase wire renaming and benefit from being part of the shared
+/// IPC contract.
+async fn invoke_named_arg<V, R>(
+    cmd: &'static str,
+    key: &'static str,
+    value: V,
+) -> Result<R, BridgeError>
+where
+    V: Serialize,
+    R: DeserializeOwned,
+{
+    let map = std::collections::BTreeMap::from([(key, value)]);
+    invoke_serde(cmd, &map).await
+}
+
 /// Translate a rejected Tauri-side `Promise` into a `BridgeError`. The
 /// Tauri runtime wraps Rust-side `Err(BridgeError)` returns as the
 /// rejected value; if it deserialises cleanly we keep the structured
@@ -119,11 +148,7 @@ fn map_promise_rejection(cmd: &'static str, raw: &JsValue) -> BridgeError {
 /// whatever variant the Tauri-side handler maps its filesystem failure to
 /// (typically `BridgeError::Internal`).
 pub async fn save_session_data(session: Session) -> Result<(), BridgeError> {
-    #[derive(Serialize)]
-    struct Args {
-        session: Session,
-    }
-    invoke_serde("save_session_data", &Args { session }).await
+    invoke_named_arg("save_session_data", "session", session).await
 }
 
 /// Read the persisted live session from disk. Tauri-side handler:
@@ -172,11 +197,7 @@ pub async fn get_stats_history() -> Result<Vec<Session>, BridgeError> {
 /// not present. Otherwise returns whatever variant the Tauri-side handler
 /// maps its filesystem failure to (typically `BridgeError::Internal`).
 pub async fn save_daily_stats(session: Session) -> Result<(), BridgeError> {
-    #[derive(Serialize)]
-    struct Args {
-        session: Session,
-    }
-    invoke_serde("save_daily_stats", &Args { session }).await
+    invoke_named_arg("save_daily_stats", "session", session).await
 }
 
 // ---------------------------------------------------------------------------
@@ -192,11 +213,7 @@ pub async fn save_daily_stats(session: Session) -> Result<(), BridgeError> {
 /// not present. Otherwise returns whatever variant the Tauri-side handler
 /// maps its filesystem failure to (typically `BridgeError::Internal`).
 pub async fn save_tasks(tasks: Vec<Task>) -> Result<(), BridgeError> {
-    #[derive(Serialize)]
-    struct Args {
-        tasks: Vec<Task>,
-    }
-    invoke_serde("save_tasks", &Args { tasks }).await
+    invoke_named_arg("save_tasks", "tasks", tasks).await
 }
 
 /// Read the persisted task list. Tauri-side handler:
@@ -234,11 +251,7 @@ pub async fn load_tasks() -> Result<Vec<Task>, BridgeError> {
 /// not present. Otherwise returns whatever variant the Tauri-side handler
 /// maps its filesystem failure to (typically `BridgeError::Internal`).
 pub async fn save_manual_sessions(sessions: Vec<ManualSession>) -> Result<(), BridgeError> {
-    #[derive(Serialize)]
-    struct Args {
-        sessions: Vec<ManualSession>,
-    }
-    invoke_serde("save_manual_sessions", &Args { sessions }).await
+    invoke_named_arg("save_manual_sessions", "sessions", sessions).await
 }
 
 /// Read the persisted manual-session entries. Tauri-side handler:
@@ -298,11 +311,7 @@ pub async fn load_tags() -> Result<Vec<Tag>, BridgeError> {
 /// not present. Otherwise returns whatever variant the Tauri-side handler
 /// maps its filesystem failure to (typically `BridgeError::Internal`).
 pub async fn save_tag(tag: Tag) -> Result<(), BridgeError> {
-    #[derive(Serialize)]
-    struct Args {
-        tag: Tag,
-    }
-    invoke_serde("save_tag", &Args { tag }).await
+    invoke_named_arg("save_tag", "tag", tag).await
 }
 
 /// Delete a tag by its id. Tauri-side handler:
@@ -318,11 +327,7 @@ pub async fn save_tag(tag: Tag) -> Result<(), BridgeError> {
 /// not present. Otherwise returns whatever variant the Tauri-side handler
 /// maps its filesystem failure to (typically `BridgeError::Internal`).
 pub async fn delete_tag(tag_id: String) -> Result<(), BridgeError> {
-    #[derive(Serialize)]
-    struct Args {
-        tag_id: String,
-    }
-    invoke_serde("delete_tag", &Args { tag_id }).await
+    invoke_serde("delete_tag", &DeleteTagArgs { tag_id }).await
 }
 
 /// Append a session-tag join row recording time spent on `tag_id` during
@@ -342,11 +347,7 @@ pub async fn delete_tag(tag_id: String) -> Result<(), BridgeError> {
 /// not present. Otherwise returns whatever variant the Tauri-side handler
 /// maps its filesystem failure to (typically `BridgeError::Internal`).
 pub async fn add_session_tag(session_tag: SessionTag) -> Result<(), BridgeError> {
-    #[derive(Serialize)]
-    struct Args {
-        session_tag: SessionTag,
-    }
-    invoke_serde("add_session_tag", &Args { session_tag }).await
+    invoke_serde("add_session_tag", &AddSessionTagArgs { session_tag }).await
 }
 
 // ---------------------------------------------------------------------------
@@ -367,11 +368,7 @@ pub async fn add_session_tag(session_tag: SessionTag) -> Result<(), BridgeError>
 /// not present. Otherwise returns whatever variant the Tauri-side handler
 /// maps its filesystem failure to (typically `BridgeError::Internal`).
 pub async fn save_settings(settings: Settings) -> Result<(), BridgeError> {
-    #[derive(Serialize)]
-    struct Args {
-        settings: Settings,
-    }
-    invoke_serde("save_settings", &Args { settings }).await
+    invoke_named_arg("save_settings", "settings", settings).await
 }
 
 /// Read the persisted settings record. Tauri-side handler:
@@ -440,11 +437,7 @@ pub async fn reset_all_data() -> Result<(), BridgeError> {
 /// maps its plugin failure to (typically `BridgeError::Internal` for an
 /// invalid shortcut spec or for the global-shortcut plugin's own errors).
 pub async fn register_global_shortcuts(shortcuts: ShortcutSettings) -> Result<(), BridgeError> {
-    #[derive(Serialize)]
-    struct Args {
-        shortcuts: ShortcutSettings,
-    }
-    invoke_serde("register_global_shortcuts", &Args { shortcuts }).await
+    invoke_named_arg("register_global_shortcuts", "shortcuts", shortcuts).await
 }
 
 // ---------------------------------------------------------------------------
@@ -471,11 +464,11 @@ pub async fn register_global_shortcuts(shortcuts: ShortcutSettings) -> Result<()
 /// failures, or whatever the non-macOS stub returns (typically also
 /// `BridgeError::Internal`).
 pub async fn start_activity_monitoring(timeout_seconds: u64) -> Result<(), BridgeError> {
-    #[derive(Serialize)]
-    struct Args {
-        timeout_seconds: u64,
-    }
-    invoke_serde("start_activity_monitoring", &Args { timeout_seconds }).await
+    invoke_serde(
+        "start_activity_monitoring",
+        &StartActivityMonitoringArgs { timeout_seconds },
+    )
+    .await
 }
 
 /// Stop the macOS-side `ActivityMonitor`. Tauri-side handler:
@@ -517,11 +510,11 @@ pub async fn stop_activity_monitoring() -> Result<(), BridgeError> {
 /// not present. Returns `BridgeError::Internal` if no monitor is
 /// installed (Tauri-side handler condition).
 pub async fn update_activity_timeout(timeout_seconds: u64) -> Result<(), BridgeError> {
-    #[derive(Serialize)]
-    struct Args {
-        timeout_seconds: u64,
-    }
-    invoke_serde("update_activity_timeout", &Args { timeout_seconds }).await
+    invoke_serde(
+        "update_activity_timeout",
+        &UpdateActivityTimeoutArgs { timeout_seconds },
+    )
+    .await
 }
 
 // ---------------------------------------------------------------------------
@@ -678,15 +671,9 @@ pub async fn update_tray_menu(
     is_paused: bool,
     current_mode: TimerMode,
 ) -> Result<(), BridgeError> {
-    #[derive(Serialize)]
-    struct Args {
-        is_running: bool,
-        is_paused: bool,
-        current_mode: TimerMode,
-    }
     invoke_serde(
         "update_tray_menu",
-        &Args {
+        &UpdateTrayMenuArgs {
             is_running,
             is_paused,
             current_mode,
@@ -780,11 +767,7 @@ pub async fn supabase_sign_in_with_password(
 /// does). Returns `BridgeError::Internal` for filesystem errors
 /// during the local clear (other than `NotFound`, which is absorbed).
 pub async fn supabase_sign_out(refresh_token: String) -> Result<(), BridgeError> {
-    #[derive(Serialize)]
-    struct Args {
-        refresh_token: String,
-    }
-    invoke_serde("supabase_sign_out", &Args { refresh_token }).await
+    invoke_serde("supabase_sign_out", &SupabaseSignOutArgs { refresh_token }).await
 }
 
 /// Read the currently persisted Supabase session from the app-data dir.
@@ -835,11 +818,11 @@ pub async fn supabase_get_session() -> Result<Option<AuthSession>, BridgeError> 
 /// Returns `BridgeError::Internal` for network failures or 5xx
 /// responses.
 pub async fn supabase_refresh_session(refresh_token: String) -> Result<AuthSession, BridgeError> {
-    #[derive(Serialize)]
-    struct Args {
-        refresh_token: String,
-    }
-    invoke_serde("supabase_refresh_session", &Args { refresh_token }).await
+    invoke_serde(
+        "supabase_refresh_session",
+        &SupabaseRefreshSessionArgs { refresh_token },
+    )
+    .await
 }
 
 /// Build an XLSX workbook from `sessions` and write it to `path`.
@@ -907,11 +890,7 @@ pub async fn export_sessions_xlsx(
 /// is not present. Returns `BridgeError::Internal` for filesystem
 /// errors writing the imported settings file.
 pub async fn import_legacy_settings(payload: LegacySettingsPayload) -> Result<(), BridgeError> {
-    #[derive(Serialize)]
-    struct Args {
-        payload: LegacySettingsPayload,
-    }
-    invoke_serde("import_legacy_settings", &Args { payload }).await
+    invoke_named_arg("import_legacy_settings", "payload", payload).await
 }
 
 /// Hand the JS-era `pomodoro-history` localStorage payload to the
@@ -927,11 +906,7 @@ pub async fn import_legacy_settings(payload: LegacySettingsPayload) -> Result<()
 /// is not present. Returns `BridgeError::Internal` for filesystem
 /// errors writing the imported history file.
 pub async fn import_legacy_history(payload: LegacyHistoryPayload) -> Result<(), BridgeError> {
-    #[derive(Serialize)]
-    struct Args {
-        payload: LegacyHistoryPayload,
-    }
-    invoke_serde("import_legacy_history", &Args { payload }).await
+    invoke_named_arg("import_legacy_history", "payload", payload).await
 }
 
 /// Hand the JS-era `pomodoro-tasks` localStorage payload to the
@@ -947,11 +922,7 @@ pub async fn import_legacy_history(payload: LegacyHistoryPayload) -> Result<(), 
 /// is not present. Returns `BridgeError::Internal` for filesystem
 /// errors writing the imported tasks file.
 pub async fn import_legacy_tasks(payload: LegacyTasksPayload) -> Result<(), BridgeError> {
-    #[derive(Serialize)]
-    struct Args {
-        payload: LegacyTasksPayload,
-    }
-    invoke_serde("import_legacy_tasks", &Args { payload }).await
+    invoke_named_arg("import_legacy_tasks", "payload", payload).await
 }
 
 /// Hand the JS-era `presto-tags` localStorage payload to the
@@ -971,11 +942,7 @@ pub async fn import_legacy_tasks(payload: LegacyTasksPayload) -> Result<(), Brid
 /// is not present. Returns `BridgeError::Internal` for filesystem
 /// errors writing the imported tags file.
 pub async fn import_legacy_tags(payload: LegacyTagsPayload) -> Result<(), BridgeError> {
-    #[derive(Serialize)]
-    struct Args {
-        payload: LegacyTagsPayload,
-    }
-    invoke_serde("import_legacy_tags", &Args { payload }).await
+    invoke_named_arg("import_legacy_tags", "payload", payload).await
 }
 
 /// Hand the JS-era `presto_manual_sessions` localStorage payload to
@@ -994,11 +961,7 @@ pub async fn import_legacy_tags(payload: LegacyTagsPayload) -> Result<(), Bridge
 pub async fn import_legacy_manual_sessions(
     payload: LegacyManualSessionsPayload,
 ) -> Result<(), BridgeError> {
-    #[derive(Serialize)]
-    struct Args {
-        payload: LegacyManualSessionsPayload,
-    }
-    invoke_serde("import_legacy_manual_sessions", &Args { payload }).await
+    invoke_named_arg("import_legacy_manual_sessions", "payload", payload).await
 }
 
 /// Hand the JS-era user-state flags (`presto-guest-mode`,
@@ -1018,11 +981,7 @@ pub async fn import_legacy_manual_sessions(
 /// errors writing the sentinel marker file or the active-session
 /// file.
 pub async fn import_legacy_user_state(payload: LegacyUserStatePayload) -> Result<(), BridgeError> {
-    #[derive(Serialize)]
-    struct Args {
-        payload: LegacyUserStatePayload,
-    }
-    invoke_serde("import_legacy_user_state", &Args { payload }).await
+    invoke_named_arg("import_legacy_user_state", "payload", payload).await
 }
 
 /// Hand the JS-era Supabase auth token (`sb-<project-ref>-auth-token`
@@ -1044,11 +1003,7 @@ pub async fn import_legacy_user_state(payload: LegacyUserStatePayload) -> Result
 pub async fn import_legacy_supabase_session(
     payload: SupabaseSessionPayload,
 ) -> Result<(), BridgeError> {
-    #[derive(Serialize)]
-    struct Args {
-        payload: SupabaseSessionPayload,
-    }
-    invoke_serde("import_legacy_supabase_session", &Args { payload }).await
+    invoke_named_arg("import_legacy_supabase_session", "payload", payload).await
 }
 
 // ---------------------------------------------------------------------------
@@ -1171,9 +1126,9 @@ mod tests {
         supabase_sign_in_with_password, supabase_sign_out, update_activity_timeout,
         update_tray_icon, update_tray_menu,
     };
-    use crate::bridge::error::BridgeError;
-    use crate::bridge::session_type::SessionType;
-    use crate::bridge::timer_mode::TimerMode;
+    use crate::bridge::types::BridgeError;
+    use crate::bridge::types::SessionType;
+    use crate::bridge::types::TimerMode;
     use crate::bridge::types::{
         AuthSession, ManualSession, Session, SessionTag, Settings, ShortcutSettings, Tag, Task,
         UpdateTrayIconArgs,

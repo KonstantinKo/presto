@@ -40,15 +40,29 @@
 // bridge) is the post-merge plan's larger refactor.
 #![allow(clippy::must_use_candidate, clippy::too_many_lines)]
 
+mod messages;
+mod tag_tracking;
+mod tray;
+
+use std::collections::HashMap;
+
 use leptos::prelude::*;
 use leptos::task::spawn_local;
 use wasm_bindgen::JsCast;
 
+use self::messages::{
+    break_completed_desktop_body, break_completed_toast, overtime_started_messages,
+    pomodoro_completed_desktop_body, pomodoro_completed_toast, session_skipped_toast,
+};
+use self::tag_tracking::{
+    apply_tag_tracking_events, tag_tracking_flush_all, tag_tracking_flush_one, tag_tracking_start,
+};
+use self::tray::{build_tray_text, dispatch_tray_update};
 use super::browser_clock::BrowserClock;
 use crate::app::AppToast;
 use crate::bridge::commands;
-use crate::bridge::session_type::SessionType;
-use crate::bridge::timer_mode::TimerMode;
+use crate::bridge::types::SessionType;
+use crate::bridge::types::TimerMode;
 use crate::bridge::types::{ManualSession, Session, Settings, Tag};
 use crate::engine::clock::Clock;
 use crate::engine::durations::Durations;
@@ -250,6 +264,45 @@ fn play_chime() {
 #[cfg(not(target_arch = "wasm32"))]
 const fn play_chime() {}
 
+/// ISO-8601 timestamp string for the current wall clock. Mirrors the
+/// JS-era `new Date().toISOString()` used by `tag-manager.js` for
+/// `created_at` fields on new tags + session-tag records.
+#[cfg(target_arch = "wasm32")]
+fn now_iso() -> String {
+    js_sys::Date::new_0()
+        .to_iso_string()
+        .as_string()
+        .unwrap_or_default()
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+const fn now_iso() -> String {
+    String::new()
+}
+
+/// Cryptographically-random UUID v4 string. Mirrors the JS-era
+/// `crypto.randomUUID()` used by `tag-manager.js:287` for new tag
+/// ids. Falls back to a timestamp-derived id when `window.crypto` is
+/// unavailable (host tests / SSR).
+#[cfg(target_arch = "wasm32")]
+fn random_uuid() -> String {
+    web_sys::window()
+        .as_ref()
+        .and_then(|w| w.crypto().ok())
+        .map_or_else(
+            || format!("tag-{}", BrowserClock.now_ms()),
+            |c| c.random_uuid(),
+        )
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+const fn random_uuid() -> String {
+    String::new()
+}
+
+// Tray-icon formatter + dispatch moved to the `tray` submodule.
+// `tag_tracking_*` helpers + dispatch moved to `tag_tracking`.
+
 fn handle_events(
     events: &[TimerEvent],
     settings: &Settings,
@@ -261,23 +314,37 @@ fn handle_events(
         .any(|e| matches!(e, TimerEvent::OvertimeStarted { .. }));
     for e in events {
         match e {
-            TimerEvent::PomodoroCompleted { .. } => {
+            TimerEvent::PomodoroCompleted {
+                completed_pomodoros,
+            } => {
                 if !has_overtime {
-                    toast.show("Pomodoro completed! Take a break \u{1f60c}");
+                    toast.show(pomodoro_completed_toast(*completed_pomodoros));
                     if settings.notifications.sound_notifications {
                         play_chime();
                     }
                     if settings.notifications.desktop_notifications {
-                        spawn_local(async {
-                            let _ = crate::bridge::notification::send_notification(
-                                "Presto",
-                                "Focus session complete \u{2014} take a break",
-                            )
-                            .await;
+                        let desk_body = pomodoro_completed_desktop_body(*completed_pomodoros);
+                        spawn_local(async move {
+                            let _ =
+                                crate::bridge::notification::send_notification("Presto", desk_body)
+                                    .await;
                         });
                     }
                 }
                 warning_signal.set(false);
+            }
+            TimerEvent::BreakCompleted { mode } => {
+                toast.show(break_completed_toast(*mode));
+                if settings.notifications.sound_notifications {
+                    play_chime();
+                }
+                if settings.notifications.desktop_notifications {
+                    let desk_body = break_completed_desktop_body(*mode);
+                    spawn_local(async move {
+                        let _ = crate::bridge::notification::send_notification("Presto", desk_body)
+                            .await;
+                    });
+                }
             }
             TimerEvent::TwoMinutesRemaining => {
                 toast.show("2 minutes remaining! \u{1f525}");
@@ -287,14 +354,21 @@ fn handle_events(
                 toast.show("30 seconds left! \u{23f0}");
                 warning_signal.set(true);
             }
+            TimerEvent::SessionStarted => {
+                toast.show("Timer started! \u{1f345}");
+                if settings.notifications.sound_notifications {
+                    play_chime();
+                }
+            }
             TimerEvent::SessionPaused => toast.show("Timer paused \u{23f8}\u{fe0f}"),
-            TimerEvent::SessionResumed => toast.show("Timer resumed \u{25b6}\u{fe0f}"),
+            TimerEvent::SessionResumed => {
+                toast.show("Timer resumed \u{25b6}\u{fe0f}");
+                if settings.notifications.sound_notifications {
+                    play_chime();
+                }
+            }
             TimerEvent::SessionSkipped { skipped_mode, .. } => {
-                toast.show(match skipped_mode {
-                    TimerMode::Focus => "Focus session skipped \u{1f60c}",
-                    TimerMode::Break => "Break skipped \u{2014} ready to focus? \u{1f345}",
-                    TimerMode::LongBreak => "Long break skipped \u{2014} back to work \u{1f680}",
-                });
+                toast.show(session_skipped_toast(*skipped_mode));
                 warning_signal.set(false);
             }
             TimerEvent::AutoPaused => {
@@ -302,18 +376,16 @@ fn handle_events(
             }
             TimerEvent::AutoResumed => toast.show("Welcome back! Timer resumed \u{25b6}\u{fe0f}"),
             TimerEvent::ManualSessionRecorded { .. } => toast.show("Manual session recorded"),
-            TimerEvent::OvertimeStarted { .. } => {
-                toast.show("Pomodoro completed! Continue working or take a break \u{1f345}");
+            TimerEvent::OvertimeStarted { mode } => {
+                let (toast_msg, desk_body) = overtime_started_messages(*mode);
+                toast.show(toast_msg);
                 if settings.notifications.sound_notifications {
                     play_chime();
                 }
                 if settings.notifications.desktop_notifications {
-                    spawn_local(async {
-                        let _ = crate::bridge::notification::send_notification(
-                            "Presto",
-                            "Focus session complete \u{2014} overtime started",
-                        )
-                        .await;
+                    spawn_local(async move {
+                        let _ = crate::bridge::notification::send_notification("Presto", desk_body)
+                            .await;
                     });
                 }
             }
@@ -435,13 +507,17 @@ pub fn TimerView() -> impl IntoView {
     let new_tag_name = RwSignal::new(String::new());
     let new_tag_icon = RwSignal::new(DEFAULT_NEW_TAG_ICON.to_string());
     let icon_picker_open = RwSignal::new(false);
-    // The currently-selected tag id. Defaults to the seeded
-    // "default-focus" tag so the visual-regression baseline shows the
-    // first row pre-highlighted; clicking another row would update
-    // this signal (the click-to-select handler is a Phase 4c hop;
-    // today the selection is read-only — the e2e suite asserts on
-    // the highlight existing for the seed tag, not on switching).
-    let selected_tag_id = RwSignal::new("default-focus".to_string());
+    // Currently-selected tag ids. Multi-select per the JS-era
+    // `tag-manager.js:toggleTag` semantics — clicking a row toggles
+    // its presence in `currentTags`. Seeds with the default focus
+    // tag so the visual baseline shows the first row pre-highlighted.
+    let selected_tag_ids = RwSignal::new(vec!["default-focus".to_string()]);
+    // Per-tag wall-clock anchors for the time-spent ledger. Mirrors
+    // `tag-manager.js:activeSessionTags`: keys are tag ids, values
+    // are `Date.now()` capture points. Flushed on pause / stop /
+    // completion / skip through `add_session_tag`. `StoredValue`
+    // (not `RwSignal`) — the map never drives reactive rendering.
+    let active_session_tags: StoredValue<HashMap<String, i64>> = StoredValue::new(HashMap::new());
 
     let on_status_click = move |ev: leptos::ev::MouseEvent| {
         // Stop propagation so the document-level click-outside
@@ -505,10 +581,7 @@ pub fn TimerView() -> impl IntoView {
                             } else if state.is_paused() || state.is_auto_paused() {
                                 state.resume(&BrowserClock).unwrap_or_default()
                             } else {
-                                state
-                                    .start(&BrowserClock)
-                                    .map(|()| Vec::new())
-                                    .unwrap_or_default()
+                                state.start(&BrowserClock).unwrap_or_default()
                             }
                         })
                         .unwrap_or_default();
@@ -518,6 +591,7 @@ pub fn TimerView() -> impl IntoView {
                         app_toast,
                         warning_signal,
                     );
+                    apply_tag_tracking_events(&events, active_session_tags, selected_tag_ids);
                 }
             },
         );
@@ -571,27 +645,48 @@ pub fn TimerView() -> impl IntoView {
         // WASM runtime tears down.
         closure.forget();
     });
-    let on_create_tag = move |_| {
+    let on_create_tag = move || {
         let name = new_tag_name.with(|s| s.trim().to_string());
         if name.is_empty() {
             return;
         }
-        let id_index = tags.with(Vec::len) + 1;
         let icon = new_tag_icon.get();
-        tags.update(|list| {
-            list.push(Tag {
-                id: format!("tag-{id_index}"),
-                name,
-                icon,
-                color: "#4CAF50".to_string(),
-                created_at: String::new(),
-            });
-        });
+        // Use `crypto.randomUUID()` for collision-free ids (legacy
+        // `tag-manager.js:287` parity). The previous `tag-{index}`
+        // scheme collided after delete-then-recreate: deleting the
+        // 3rd of 4 tags then creating a new one re-derived `tag-4`,
+        // overlapping with the surviving tag.
+        let id = format!("tag-{}", random_uuid());
+        let new_tag = Tag {
+            id,
+            name,
+            icon,
+            color: "#4CAF50".to_string(),
+            created_at: now_iso(),
+        };
+        let new_tag_for_save = new_tag.clone();
+        tags.update(|list| list.push(new_tag));
         new_tag_name.set(String::new());
         new_tag_icon.set(DEFAULT_NEW_TAG_ICON.to_string());
+        // Persist immediately — the bulk-save sink in `app.rs` only
+        // re-saves the in-memory list; per-tag save is what makes
+        // creation durable across restarts.
+        spawn_local(async move {
+            let _ = commands::save_tag(new_tag_for_save).await;
+        });
     };
     let on_delete_tag = move |id: String| {
+        // Flush any active tracking before the tag id disappears
+        // from the system; otherwise the accumulator would leak.
+        tag_tracking_flush_one(active_session_tags, &id, BrowserClock.now_ms());
         tags.update(|list| list.retain(|t| t.id != id));
+        selected_tag_ids.update(|sel| sel.retain(|t| t != &id));
+        // Persist the deletion through the Tauri bridge. Without
+        // this call the on-disk catalogue still contains the
+        // dropped tag and it reappears on next launch.
+        spawn_local(async move {
+            let _ = commands::delete_tag(id).await;
+        });
     };
     let on_toggle_picker = move |ev: leptos::ev::MouseEvent| {
         // The icon-selector lives inside `#timer-status`-anchored
@@ -633,16 +728,71 @@ pub fn TimerView() -> impl IntoView {
         })
     });
 
-    let mode_text = Signal::derive(move || {
-        engine.with(|s| {
-            mode_label_with_status(
+    // Tag-aware label + icon for `#status-text` / `#status-icon`.
+    // Legacy `pomodoro-timer.js:1421-1448` overrides the mode label
+    // with the active tag's name (or "N Tags" for multi-select) when
+    // in Focus mode; the state suffixes (Paused / Auto-paused /
+    // Overtime) still append. Break / LongBreak modes keep the mode
+    // label regardless of tag selection.
+    let status_label = Signal::derive(move || {
+        let (mode, is_running_v, is_paused_v, is_auto_paused_v, is_ot) = engine.with(|s| {
+            (
                 s.current_mode(),
                 s.is_running(),
                 s.is_paused(),
                 s.is_auto_paused(),
                 s.time_remaining_secs_signed() < 0,
             )
-        })
+        });
+        let suffix = if is_paused_v {
+            " (Paused)"
+        } else if is_auto_paused_v {
+            " (Auto-paused)"
+        } else if is_running_v && is_ot {
+            " (Overtime)"
+        } else {
+            ""
+        };
+        if mode == TimerMode::Focus {
+            let matched: Vec<String> = selected_tag_ids.with(|sel| {
+                tags.with(|all| {
+                    all.iter()
+                        .filter(|t| sel.contains(&t.id))
+                        .map(|t| t.name.clone())
+                        .collect()
+                })
+            });
+            if !matched.is_empty() {
+                let base = if matched.len() == 1 {
+                    matched[0].clone()
+                } else {
+                    format!("{} Tags", matched.len())
+                };
+                return format!("{base}{suffix}");
+            }
+        }
+        mode_label_with_status(mode, is_running_v, is_paused_v, is_auto_paused_v, is_ot)
+    });
+    let status_icon = Signal::derive(move || {
+        let mode = engine.with(TimerState::current_mode);
+        if mode != TimerMode::Focus {
+            return "ri-brain-line".to_string();
+        }
+        let icons: Vec<String> = selected_tag_ids.with(|sel| {
+            tags.with(|all| {
+                all.iter()
+                    .filter(|t| sel.contains(&t.id))
+                    .map(|t| t.icon.clone())
+                    .collect()
+            })
+        });
+        if icons.is_empty() {
+            "ri-brain-line".to_string()
+        } else if icons.len() == 1 {
+            icons[0].clone()
+        } else {
+            "ri-price-tag-3-line".to_string()
+        }
     });
     let is_running = Signal::derive(move || engine.with(TimerState::is_running));
 
@@ -693,10 +843,7 @@ pub fn TimerView() -> impl IntoView {
                 } else if state.is_paused() || state.is_auto_paused() {
                     state.resume(&BrowserClock).unwrap_or_default()
                 } else {
-                    state
-                        .start(&BrowserClock)
-                        .map(|()| Vec::new())
-                        .unwrap_or_default()
+                    state.start(&BrowserClock).unwrap_or_default()
                 }
             })
             .unwrap_or_default();
@@ -706,6 +853,8 @@ pub fn TimerView() -> impl IntoView {
             app_toast,
             warning_signal,
         );
+        apply_tag_tracking_events(&events, active_session_tags, selected_tag_ids);
+        dispatch_tray_update(engine, settings, true);
     };
     let on_stop = move |_| {
         // In break/long-break mode, undo the last completed pomodoro so the
@@ -719,6 +868,13 @@ pub fn TimerView() -> impl IntoView {
         }
         engine.update(TimerState::reset);
         warning_signal.set(false);
+        // Mirrors `tag-manager.js:onTimerStop` — flush every active
+        // tag tracker so the partial duration is persisted before
+        // the session resets.
+        tag_tracking_flush_all(active_session_tags, BrowserClock.now_ms());
+        // Toast mirrors `pomodoro-timer.js:871` ("Session deleted ❌").
+        app_toast.show("Session deleted \u{274c}");
+        dispatch_tray_update(engine, settings, true);
     };
     let on_skip = move |_| {
         let events = engine.try_update(TimerState::skip).unwrap_or_default();
@@ -728,14 +884,10 @@ pub fn TimerView() -> impl IntoView {
             app_toast,
             warning_signal,
         );
+        apply_tag_tracking_events(&events, active_session_tags, selected_tag_ids);
         if settings.with_untracked(|s| s.notifications.auto_start_timer) {
             let start_events = engine
-                .try_update(|state| {
-                    state
-                        .start(&BrowserClock)
-                        .map(|()| Vec::new())
-                        .unwrap_or_default()
-                })
+                .try_update(|state| state.start(&BrowserClock).unwrap_or_default())
                 .unwrap_or_default();
             handle_events(
                 &start_events,
@@ -743,7 +895,9 @@ pub fn TimerView() -> impl IntoView {
                 app_toast,
                 warning_signal,
             );
+            apply_tag_tracking_events(&start_events, active_session_tags, selected_tag_ids);
         }
+        dispatch_tray_update(engine, settings, true);
     };
 
     // Right-rail timer-adjust handlers. Per the JS-era
@@ -756,6 +910,9 @@ pub fn TimerView() -> impl IntoView {
         engine.update(|state| {
             state.adjust_remaining_secs(-300, &BrowserClock);
         });
+        // Toast mirrors `pomodoro-timer.js:902-904` ("5 minutes
+        // subtracted from timer ⏰").
+        app_toast.show("5 minutes subtracted from timer \u{23f0}");
     };
     let on_adjust_plus = move |_| {
         engine.update(|state| {
@@ -764,6 +921,7 @@ pub fn TimerView() -> impl IntoView {
         if engine.with(|s| s.time_remaining_secs() > 120) {
             warning_signal.set(false);
         }
+        app_toast.show("5 minutes added to timer \u{23f0}");
     };
 
     // 1 Hz tick loop. Ticking unconditionally (not gated on
@@ -793,7 +951,7 @@ pub fn TimerView() -> impl IntoView {
                         let mode_before = state.current_mode();
                         let focus_secs_at_tick =
                             settings.with_untracked(durations_from_settings).focus;
-                        let events = state.tick(&BrowserClock);
+                        let mut events = state.tick(&BrowserClock);
                         let completed_focus = was_focus
                             && events
                                 .iter()
@@ -821,44 +979,54 @@ pub fn TimerView() -> impl IntoView {
                             let auto_start =
                                 settings.with_untracked(|s| s.notifications.auto_start_timer);
                             if auto_start {
-                                if let Err(e) = state.start(&BrowserClock) {
-                                    leptos::logging::warn!(
+                                match state.start(&BrowserClock) {
+                                    Ok(start_events) => events.extend(start_events),
+                                    Err(e) => leptos::logging::warn!(
                                         "auto-start after completion failed: {:?}",
                                         e
-                                    );
+                                    ),
                                 }
                             }
                         }
                         let mode_after = state.current_mode();
                         let mode_changed = mode_before != mode_after;
                         let running_changed = was_running != state.is_running();
-                        if mode_changed || running_changed {
+                        // Tray icon (title + tooltip) refreshes every
+                        // tick to match the legacy `updateDisplay() →
+                        // updateTrayIcon()` chain at
+                        // `pomodoro-timer.js:1630`. Tray menu rebuilds
+                        // only on mode/running transitions (the menu
+                        // labels don't depend on the second-by-second
+                        // countdown), avoiding the macOS NSStatusItem
+                        // menu-flicker bug noted in issue #40.
+                        {
                             use crate::bridge::types::UpdateTrayIconArgs;
-                            let mins = state.time_remaining_secs() / 60;
-                            let secs = state.time_remaining_secs() % 60;
-                            let timer_text = format!("{mins:02}:{secs:02}");
+                            let settings_snapshot = settings.get_untracked();
+                            let (timer_text, mode_icon) =
+                                build_tray_text(state, &settings_snapshot);
                             let is_running = state.is_running();
                             let is_paused = state.is_paused() || state.is_auto_paused();
                             let current_session = state.completed_pomodoros().saturating_add(1);
-                            let total_sessions =
-                                settings.with_untracked(|s| s.timer.total_sessions);
                             let tray_args = UpdateTrayIconArgs {
                                 timer_text,
                                 is_running,
                                 session_mode: mode_after,
                                 current_session,
-                                total_sessions,
-                                mode_icon: None,
+                                total_sessions: settings_snapshot.timer.total_sessions,
+                                mode_icon,
                             };
+                            let menu_dirty = mode_changed || running_changed;
                             let mode_for_menu = mode_after;
                             spawn_local(async move {
                                 let _ = commands::update_tray_icon(tray_args).await;
-                                let _ = commands::update_tray_menu(
-                                    is_running,
-                                    is_paused,
-                                    mode_for_menu,
-                                )
-                                .await;
+                                if menu_dirty {
+                                    let _ = commands::update_tray_menu(
+                                        is_running,
+                                        is_paused,
+                                        mode_for_menu,
+                                    )
+                                    .await;
+                                }
                             });
                         }
                         events
@@ -870,6 +1038,7 @@ pub fn TimerView() -> impl IntoView {
                     app_toast,
                     warning_signal,
                 );
+                apply_tag_tracking_events(&events, active_session_tags, selected_tag_ids);
             },
             std::time::Duration::from_secs(1),
         );
@@ -915,8 +1084,15 @@ pub fn TimerView() -> impl IntoView {
                         id="timer-status"
                         on:click=on_status_click
                     >
-                        <i id="status-icon" class="ri-brain-line"></i>
-                        <span id="status-text">{move || mode_text.get()}</span>
+                        {move || {
+                            let raw = status_icon.get();
+                            if raw.starts_with("ri-") {
+                                view! { <i id="status-icon" class=raw></i> }.into_any()
+                            } else {
+                                view! { <span id="status-icon">{raw}</span> }.into_any()
+                            }
+                        }}
+                        <span id="status-text">{move || status_label.get()}</span>
                         <i class="ri-arrow-down-s-line tag-dropdown-arrow" id="tag-dropdown-arrow"></i>
                     </div>
 
@@ -963,33 +1139,56 @@ pub fn TimerView() -> impl IntoView {
                                         "Delete {name} tag",
                                         name = tag.name,
                                     );
-                                    // Match-state for the saturated
-                                    // "selected tag" highlight. The
-                                    // visual-regression baseline pins
-                                    // the seed tag pre-selected — the
-                                    // `selected_tag_id` signal seeds with
-                                    // "default-focus" at component init
-                                    // and updates on row click.
-                                    // Match-state for the saturated
-                                    // "selected tag" highlight. The
-                                    // visual-regression baseline pins
-                                    // the seed tag pre-selected — the
-                                    // `selected_tag_id` signal seeds with
-                                    // "default-focus" at component init
-                                    // and updates on row click.
-                                    let tag_id_for_class = tag_id_for_match.clone();
-                                    let tag_id_for_delete_branch = tag_id_for_match;
+                                    // Multi-select highlight: a row is
+                                    // `selected` whenever its id is in
+                                    // `selected_tag_ids`. Clicking the
+                                    // row toggles membership, mirroring
+                                    // `tag-manager.js:toggleTag`.
+                                    let tag_id_for_class = tag_id_for_match;
+                                    let id_for_delete = tag_id_for_delete;
                                     view! {
                                         <div
                                             class="tag-item"
                                             class:selected=move || {
-                                                selected_tag_id.with(|sel| sel == &tag_id_for_class)
+                                                selected_tag_ids.with(|sel| sel.contains(&tag_id_for_class))
                                             }
                                             role="listitem"
                                             aria-label=aria_row
                                             on:click=move |ev| {
                                                 ev.stop_propagation();
-                                                selected_tag_id.set(tag_id_for_select.clone());
+                                                let tid = tag_id_for_select.clone();
+                                                let now = BrowserClock.now_ms();
+                                                let was_present = selected_tag_ids
+                                                    .with_untracked(|sel| sel.contains(&tid));
+                                                selected_tag_ids.update(|sel| {
+                                                    if let Some(pos) =
+                                                        sel.iter().position(|x| x == &tid)
+                                                    {
+                                                        sel.remove(pos);
+                                                    } else {
+                                                        sel.push(tid.clone());
+                                                    }
+                                                });
+                                                // Mirror `tag-manager.js:toggleTag`:
+                                                // removing a tag mid-session flushes
+                                                // its accumulated duration; adding a
+                                                // tag while running starts a fresh
+                                                // tracker so its time-spent counter
+                                                // starts at zero rather than
+                                                // back-dating to the session start.
+                                                if was_present {
+                                                    tag_tracking_flush_one(
+                                                        active_session_tags,
+                                                        &tid,
+                                                        now,
+                                                    );
+                                                } else if engine.with_untracked(TimerState::is_running) {
+                                                    tag_tracking_start(
+                                                        active_session_tags,
+                                                        &tid,
+                                                        now,
+                                                    );
+                                                }
                                             }
                                         >
                                             <span class="tag-item-icon">
@@ -1000,39 +1199,20 @@ pub fn TimerView() -> impl IntoView {
                                                 }}
                                             </span>
                                             <span class="tag-item-name">{display_name}</span>
-                                            // The × delete affordance is hidden
-                                            // for the currently-selected tag so the
-                                            // baseline matches (saturated red row
-                                            // with NO trailing ×). For non-selected
-                                            // rows the button still renders and
-                                            // CSS gates visibility on `:hover` via
-                                            // `.tag-item:hover .tag-item-delete`.
-                                            // The `tags.spec.js:39` flow asserts
-                                            // the button can be clicked on a non-
-                                            // selected row; that path stays live.
-                                            {move || {
-                                                let is_sel = selected_tag_id
-                                                    .with(|sel| sel == &tag_id_for_delete_branch);
-                                                if is_sel {
-                                                    view! {
-                                                        <span class="tag-item-delete-placeholder"></span>
-                                                    }.into_any()
-                                                } else {
-                                                    let label = delete_label.clone();
-                                                    let id_for_delete =
-                                                        tag_id_for_delete.clone();
-                                                    view! {
-                                                        <button
-                                                            class="tag-item-delete"
-                                                            aria-label=label
-                                                            on:click=move |ev| {
-                                                                ev.stop_propagation();
-                                                                on_delete_tag(id_for_delete.clone());
-                                                            }
-                                                        >"×"</button>
-                                                    }.into_any()
+                                            // Delete affordance renders on every row;
+                                            // CSS (`.tag-item:hover .tag-item-delete`)
+                                            // gates visibility on hover, matching the
+                                            // JS-era `tag-manager.js:renderTagList`
+                                            // behaviour.
+                                            <div
+                                                class="tag-item-delete ri-delete-bin-line"
+                                                role="button"
+                                                aria-label=delete_label
+                                                on:click=move |ev| {
+                                                    ev.stop_propagation();
+                                                    on_delete_tag(id_for_delete.clone());
                                                 }
-                                            }}
+                                            ></div>
                                         </div>
                                     }
                                 }
@@ -1117,13 +1297,23 @@ pub fn TimerView() -> impl IntoView {
                                         prop:value=move || new_tag_name.get()
                                         on:click=move |ev| ev.stop_propagation()
                                         on:input=move |ev| new_tag_name.set(event_target_value(&ev))
+                                        on:keydown=move |ev: leptos::ev::KeyboardEvent| {
+                                            // Enter submits — mirrors the JS-era
+                                            // `tag-manager.js:setupEventListeners`
+                                            // `keydown === "Enter"` handler on
+                                            // `#new-tag-name`.
+                                            if ev.key() == "Enter" {
+                                                ev.prevent_default();
+                                                on_create_tag();
+                                            }
+                                        }
                                     />
                                     <button
                                         class="create-tag-btn"
                                         id="create-tag-btn"
                                         on:click=move |ev| {
                                             ev.stop_propagation();
-                                            on_create_tag(ev);
+                                            on_create_tag();
                                         }
                                     >"+"</button>
                                 </div>
@@ -1359,7 +1549,7 @@ mod tests {
         dot_count, indicator_icon_class, mode_label, mode_label_with_status, pad_two,
         skip_icon_for_mode, stop_icon_for_mode,
     };
-    use crate::bridge::timer_mode::TimerMode;
+    use crate::bridge::types::TimerMode;
 
     /// T191 — visual-regression / selector contract pin.
     ///
@@ -1618,4 +1808,19 @@ mod tests {
         assert_eq!(dot_count(11), 11);
         assert_eq!(dot_count(20), 20);
     }
+
+    // -------------------------------------------------------------
+    // `build_tray_text` regression tests.
+    //
+    // Pre-fix, the tray title silently failed to update because the
+    // dispatch only fired on mode/running transitions (not every
+    // tick), the `UpdateTrayIconArgs` wire shape was snake_case
+    // (Tauri auto-renames to camelCase, rejecting our payload), and
+    // the macOS NSStatusItem rendered an icon-only tray with no
+    // countdown text. The wire shape is pinned in
+    // `presto-ipc::args::UpdateTrayIconArgs` tests; this block pins
+    // the formatter that produces the title string.
+    // Build-tray-text + message-helper + tag-tracking tests now
+    // live alongside their helpers in the `tray`, `messages`, and
+    // `tag_tracking` submodules.
 }

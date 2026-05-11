@@ -8,7 +8,7 @@
 //
 // See `engine/mod.rs` for module-level Principle I rationale.
 
-use crate::bridge::timer_mode::TimerMode;
+use crate::bridge::types::TimerMode;
 use crate::engine::activity_signal::ActivitySignal;
 use crate::engine::clock::Clock;
 use crate::engine::durations::Durations;
@@ -81,6 +81,21 @@ pub enum TimerEvent {
     /// Mirrors the continuous-session overtime branch at
     /// `pomodoro-timer.js:776-785`.
     OvertimeStarted { mode: TimerMode },
+    /// `start()` transitioned the engine from idle to running.
+    /// Drives the start-side effects the JS-era `startTimer()`
+    /// inlined at `pomodoro-timer.js:709-712` (chime when
+    /// `enableSoundNotifications` is on, "Timer started!" ping).
+    /// Resume flows emit `SessionResumed` instead — distinct so
+    /// the UI can choose a different toast even though both
+    /// trigger the same chime.
+    SessionStarted,
+    /// A break (short or long) just finished (countdown crossed
+    /// zero in `Break` or `LongBreak` mode and traditional —
+    /// non-continuous — mode is in effect). Carries the mode that
+    /// just completed so the UI can pick the mode-specific
+    /// completion message. Mirrors the legacy `completeSession`
+    /// break-branch toast at `pomodoro-timer.js:1276-1281`.
+    BreakCompleted { mode: TimerMode },
 }
 
 /// Pomodoro state machine.
@@ -581,9 +596,9 @@ impl TimerState {
     /// to start a new focus session after the configured
     /// `total_sessions` cap has been hit. Mirrors `totalSessions`
     /// at `pomodoro-timer.js:31`.
-    pub fn start(&mut self, clock: &dyn Clock) -> Result<(), TimerError> {
+    pub fn start(&mut self, clock: &dyn Clock) -> Result<Vec<TimerEvent>, TimerError> {
         if self.is_running {
-            return Ok(());
+            return Ok(Vec::new());
         }
         // Cap-check: refuse a fresh focus start once the total has
         // been reached. The engine still permits in-progress
@@ -600,7 +615,7 @@ impl TimerState {
         self.is_paused = false;
         self.timer_start_ms = Some(now);
         self.timer_duration_secs = Some(self.time_remaining_secs);
-        Ok(())
+        Ok(vec![TimerEvent::SessionStarted])
     }
 
     /// Manually pause the countdown.
@@ -828,12 +843,16 @@ impl TimerState {
                     // Break-mode completion returns to focus. Mirrors
                     // `pomodoro-timer.js:1213` (`this.currentMode =
                     // "focus"`).
+                    let completed_mode = self.current_mode;
                     self.current_mode = TimerMode::Focus;
                     self.time_remaining_secs =
                         i64::from(self.durations.for_mode(self.current_mode));
                     self.is_running = false;
                     self.timer_start_ms = None;
                     self.timer_duration_secs = None;
+                    events.push(TimerEvent::BreakCompleted {
+                        mode: completed_mode,
+                    });
                 }
             }
         }
@@ -871,7 +890,7 @@ pub enum TimerError {
 #[cfg(test)]
 mod tests {
     use super::TimerState;
-    use crate::bridge::timer_mode::TimerMode;
+    use crate::bridge::types::TimerMode;
     use crate::engine::activity_signal::ActivitySignal;
     use crate::engine::clock::Clock;
     use crate::engine::durations::Durations;
@@ -1681,5 +1700,140 @@ mod tests {
             "skip during overtime must not re-increment completed_pomodoros",
         );
         assert_eq!(state.current_mode(), TimerMode::Break);
+    }
+
+    /// Regression test: the start-chime side-effect depends on
+    /// `start()` emitting `SessionStarted`. Pre-fix the engine
+    /// returned `()` and the chime fired only on resume; users heard
+    /// nothing on first start. Mirrors `pomodoro-timer.js:709-712`.
+    #[test]
+    fn start_emits_session_started_event() {
+        let clock = MockClock::new(0);
+        let mut state = TimerState::new(Durations::default());
+        let events = state.start(&clock).expect("start");
+        assert_eq!(
+            events,
+            vec![super::TimerEvent::SessionStarted],
+            "first start must emit SessionStarted so the UI can chime",
+        );
+    }
+
+    /// Calling `start()` while already running is a no-op — it MUST
+    /// NOT re-emit `SessionStarted` (would double-fire the chime).
+    #[test]
+    fn start_when_already_running_is_silent_no_op() {
+        let clock = MockClock::new(0);
+        let mut state = TimerState::new(Durations::default());
+        let _ = state.start(&clock).expect("first start");
+        let events = state.start(&clock).expect("second start no-op");
+        assert!(
+            events.is_empty(),
+            "second start must be a silent no-op; got {events:?}",
+        );
+    }
+
+    /// Regression test: short break completion was emitting no event
+    /// in the post-cutover engine. Pre-fix, the UI showed no toast,
+    /// no chime, no desktop notification on break end. The fix added
+    /// `BreakCompleted { mode }` to the engine; this pins it.
+    #[test]
+    fn short_break_zero_cross_emits_break_completed_with_mode() {
+        let clock = MockClock::new(0);
+        let mut state = TimerState::new(Durations::default());
+        // Roll through one focus → break transition.
+        state.start(&clock).expect("focus start");
+        clock.advance(25 * 60 * 1000);
+        let _ = state.tick(&clock); // focus completes, mode → Break
+        assert_eq!(state.current_mode(), TimerMode::Break);
+
+        // Start the break and run it to completion.
+        state.start(&clock).expect("break start");
+        clock.advance(5 * 60 * 1000);
+        let events = state.tick(&clock);
+
+        let break_completed = events.iter().find_map(|e| match e {
+            super::TimerEvent::BreakCompleted { mode } => Some(*mode),
+            _ => None,
+        });
+        assert_eq!(
+            break_completed,
+            Some(TimerMode::Break),
+            "break completion must emit BreakCompleted {{ mode: Break }} \
+             so the UI can show 'Break over! Ready to focus?'; got {events:?}",
+        );
+        assert_eq!(state.current_mode(), TimerMode::Focus);
+    }
+
+    /// Long-break completion carries the `LongBreak` variant so the
+    /// UI can pick the long-break-specific message ("Long break
+    /// over! Time to get back to work 🚀") vs the short-break one.
+    #[test]
+    fn long_break_zero_cross_emits_break_completed_with_long_break_mode() {
+        let clock = MockClock::new(0);
+        let mut state = TimerState::new(Durations::default());
+        // Roll through 4 focus → break cycles to reach LongBreak.
+        for _ in 0..4 {
+            state.start(&clock).expect("focus start");
+            clock.advance(25 * 60 * 1000);
+            let _ = state.tick(&clock);
+            if state.current_mode() == TimerMode::Break {
+                state.start(&clock).expect("break start");
+                clock.advance(5 * 60 * 1000);
+                let _ = state.tick(&clock);
+            }
+        }
+        assert_eq!(state.current_mode(), TimerMode::LongBreak);
+
+        state.start(&clock).expect("long break start");
+        clock.advance(20 * 60 * 1000);
+        let events = state.tick(&clock);
+
+        let long_break_completed = events.iter().find_map(|e| match e {
+            super::TimerEvent::BreakCompleted { mode } => Some(*mode),
+            _ => None,
+        });
+        assert_eq!(
+            long_break_completed,
+            Some(TimerMode::LongBreak),
+            "long break completion must emit \
+             BreakCompleted {{ mode: LongBreak }}; got {events:?}",
+        );
+    }
+
+    /// Continuous (`allow_continuous_sessions`) break overtime does
+    /// NOT emit `BreakCompleted` — it emits `OvertimeStarted` and
+    /// keeps the timer running. Pin this to prevent a future engine
+    /// rewrite from accidentally double-firing both events.
+    #[test]
+    fn continuous_break_zero_cross_does_not_emit_break_completed() {
+        let clock = MockClock::new(0);
+        let mut state = TimerState::new(Durations::default());
+        // Roll a non-continuous focus session to reach Break mode
+        // (continuous focus would stay in Focus on zero-cross).
+        state.start(&clock).expect("focus start");
+        clock.advance(25 * 60 * 1000);
+        let _ = state.tick(&clock);
+        assert_eq!(state.current_mode(), TimerMode::Break);
+
+        // Now flip into continuous mode for the break session.
+        state.set_allow_continuous_sessions(true);
+        state.start(&clock).expect("break start");
+        clock.advance(5 * 60 * 1000);
+        let events = state.tick(&clock);
+
+        assert!(
+            !events
+                .iter()
+                .any(|e| matches!(e, super::TimerEvent::BreakCompleted { .. })),
+            "continuous mode must NOT emit BreakCompleted on break overtime; \
+             OvertimeStarted is the correct event. Got {events:?}",
+        );
+        assert!(
+            events
+                .iter()
+                .any(|e| matches!(e, super::TimerEvent::OvertimeStarted { .. })),
+            "continuous mode must emit OvertimeStarted on break zero-cross; \
+             got {events:?}",
+        );
     }
 }

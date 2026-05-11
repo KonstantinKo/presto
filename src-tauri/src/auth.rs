@@ -39,7 +39,7 @@
 use std::path::Path;
 use std::time::Duration;
 
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 
 use crate::BridgeError;
 
@@ -64,32 +64,8 @@ const SUPABASE_URL: &str = "https://lopgwwppinkqvttozqfx.supabase.co";
 const SUPABASE_ANON_KEY: &str = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxvcGd3d3BwaW5rcXZ0dG96cWZ4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTA2NzgxMDIsImV4cCI6MjA2NjI1NDEwMn0.DqPcwsBJdPeV5iWsMkZLMn6-xZ_A9l-Xh7R-wi7kc2k";
 const SESSION_FILENAME: &str = "supabase-session.json";
 
-/// Supabase auth user — embedded in [`AuthSession`].
-///
-/// `user_metadata` is a [`serde_json::Value`] (open shape) so apps can
-/// carry arbitrary OAuth-provider claims without a closed-shape
-/// migration. Mirrors the Leptos-side `bridge::types::AuthUser` (in the
-/// `presto-web` crate) byte-for-byte on the wire (`snake_case` via
-/// serde defaults).
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub(super) struct AuthUser {
-    pub id: String,
-    pub email: String,
-    pub user_metadata: serde_json::Value,
-}
-
-/// Supabase auth session — returned by sign-in / refresh, persisted
-/// to the app-data dir, read back by `supabase_get_session`.
-///
-/// Mirrors `bridge::types::AuthSession` on the Leptos side. `snake_case`
-/// JSON via serde defaults so the Supabase REST `/auth/v1/token`
-/// response deserialises directly into this struct.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub(super) struct AuthSession {
-    pub access_token: String,
-    pub refresh_token: String,
-    pub user: AuthUser,
-}
+// `AuthSession` and `AuthUser` live in `presto-ipc::auth` (Phase F).
+pub(super) use presto_ipc::{AuthSession, AuthUser};
 
 /// Supabase REST `/auth/v1/token` request body (`grant_type=password`).
 #[derive(Serialize)]

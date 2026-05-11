@@ -1,4 +1,3 @@
-use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::{Arc, LazyLock, Mutex};
 #[cfg(target_os = "macos")]
@@ -40,84 +39,14 @@ mod migration;
 // definition so the wire format cannot drift; the variant is consumed
 // solely by the Leptos wrappers when `window.__TAURI_INTERNALS__` is
 // absent.
-#[derive(Debug, Clone, Serialize, Deserialize, thiserror::Error)]
-#[serde(tag = "kind", rename_all = "snake_case")]
-pub enum BridgeError {
-    /// `window.__TAURI_INTERNALS__` is absent (Leptos-side only).
-    #[error("bridge unavailable")]
-    BridgeUnavailable,
-    /// The caller lacks the required session for this command.
-    #[error("not authenticated")]
-    NotAuthenticated,
-    /// An argument failed validation at the boundary.
-    #[error("invalid argument {field}: {reason}")]
-    InvalidArgument { field: String, reason: String },
-    /// The requested file, key, or row does not exist.
-    #[error("not found: {resource}")]
-    NotFound { resource: String },
-    /// `serde-wasm-bindgen` failed to deserialise the return on the Leptos
-    /// side. Tauri-side handlers do not produce this variant; it exists in
-    /// the mirror so the type definition stays single-sourced.
-    ///
-    /// `command: String` (not `&'static str`) so the enum's `Deserialize`
-    /// impl works for non-static input. See the matching note in
-    /// `presto-web/src/bridge/error.rs` for the full rationale.
-    #[error("serde roundtrip failed in {command}: {error}")]
-    SerdeRoundtrip { command: String, error: String },
-    /// Catch-all for unexpected Tauri-side failures.
-    #[error("internal: {msg}")]
-    Internal { msg: String },
-}
+// `BridgeError`, `TimerMode`, and `SessionType` live in the shared
+// `presto-ipc` crate so a wire-shape change can't drift between the
+// Tauri backend and the Leptos frontend. Re-exported here for
+// in-crate path stability.
+pub use presto_ipc::{BridgeError, SessionType, TimerMode};
 
-/// `TimerMode` — closed-domain enum for the live-engine session mode.
-///
-/// Spec 001-leptos-migration §Phase 1A T027; data-model.md §`TimerMode`.
-/// On-disk wire form is camelCase strings (`"focus"`, `"break"`,
-/// `"longBreak"`). Tray-handler args (`update_tray_menu.current_mode`,
-/// `update_tray_icon.session_mode`) tighten from `String` to this enum.
-/// The Leptos-side mirror lands in Phase 1C (T076-T079).
-///
-/// Distinct from `SessionType` (T028-T029): manual sessions can carry the
-/// `Custom` variant; the live engine cannot.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub enum TimerMode {
-    Focus,
-    Break,
-    LongBreak,
-}
-
-/// `SessionType` — closed-domain enum for manual-session entries.
-///
-/// Spec 001-leptos-migration §Phase 1A T029; data-model.md §`SessionType`.
-/// Mirrors `presto-web/src/bridge/session_type.rs`. Wire form: camelCase
-/// strings (`"focus"`, `"break"`, `"longBreak"`, `"custom"`).
-///
-/// Distinct from `TimerMode` because manual entries can carry the
-/// `Custom` variant for user-defined session shapes.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub enum SessionType {
-    Focus,
-    Break,
-    LongBreak,
-    Custom,
-}
-
-// `String → BridgeError` via Internal. Lets `?` auto-convert legacy
-// `Result<_, String>` returns from `helpers.rs` (which keeps the legacy
-// error type for now) into `BridgeError` at the handler boundary. The
-// conversion is a "no semantic context" mapping. Tighter variants
-// (NotFound / InvalidArgument / NotAuthenticated) are still spelled out
-// at the call sites that warrant them — `From<String>` is the catch-all
-// fallback for plumbing.
-//
-// Spec 001-leptos-migration §Phase 1A T027.
-impl From<String> for BridgeError {
-    fn from(msg: String) -> Self {
-        Self::Internal { msg }
-    }
-}
+// `From<String> for BridgeError` lives in the shared crate (orphan
+// rules — both `String` and `BridgeError` are foreign here).
 
 // Type alias for the app handle to avoid generic complexity
 type AppHandle = tauri::AppHandle<tauri::Wry>;
@@ -139,259 +68,22 @@ struct ActivityMonitor {
     inactivity_threshold: Arc<Mutex<Duration>>,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
-struct PomodoroSession {
-    completed_pomodoros: u32,
-    total_focus_time: u32, // in seconds
-    current_session: u32,
-    date: String,
-}
+// Domain records moved to `presto_ipc` (Phase F). Backend keeps
+// `PomodoroSession` as a local alias for the shared `Session` to
+// minimise call-site churn (helpers.rs uses `PomodoroSession`
+// pervasively).
+pub use presto_ipc::{ManualSession, Session as PomodoroSession, SessionTag, Tag, Task};
 
-// `session_type: SessionType` (was `String`) per spec 001 T029 —
-// closed-domain enum tightening. Wire format unchanged: camelCase
-// strings via `#[serde(rename_all = "camelCase")]` on `SessionType`.
-// On-disk shape preserved exactly (FR-005 idempotent round-trip).
-#[derive(Debug, Serialize, Deserialize, Clone)]
-struct ManualSession {
-    id: String,
-    session_type: SessionType,
-    duration: u32,      // in minutes
-    start_time: String, // "HH:MM"
-    end_time: String,   // "HH:MM"
-    notes: Option<String>,
-    created_at: String, // ISO string
-    date: String,
-    tags: Option<Vec<serde_json::Value>>,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-struct Tag {
-    id: String,
-    name: String,
-    icon: String,  // emoji or remix icon class
-    color: String, // hex color code
-    created_at: String,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-struct SessionTag {
-    session_id: String,
-    tag_id: String,
-    duration: u32, // time spent on this tag in seconds
-    created_at: String,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-struct Task {
-    id: u64,
-    text: String,
-    completed: bool,
-    created_at: String,
-    completed_at: Option<String>,
-}
-
-/// Status-bar visibility mode.
-///
-/// Replaces the legacy `hide_status_bar: bool` shape with a typed
-/// enum so future "compact" or "hidden" modes don't fork the
-/// on-disk encoding (data-model.md §"Settings legacy migration";
-/// F1/M3 lockstep migration with the Leptos-side mirror in
-/// `presto-web::bridge::types::StatusBarDisplay`).
-///
-/// Wire shape: kebab-case strings (`"default"`, `"icon-only"`).
-///
-/// Spec 001-leptos-migration §Phase 3a T150.
-#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Default)]
-#[serde(rename_all = "kebab-case")]
-enum StatusBarDisplay {
-    #[default]
-    Default,
-    IconOnly,
-}
-
-/// User-facing settings; the bool fields are independent toggles, splitting
-/// them into nested structs would hurt config readability.
-///
-/// **Phase 3a F1/M3 migration**: `hide_status_bar: bool` is replaced
-/// by `status_bar_display: StatusBarDisplay`. Legacy 0.4.x settings
-/// JSONs that still carry `hide_status_bar` are projected into the
-/// new shape by the `#[serde(from = "AppSettingsOnDisk")]` shim
-/// below; the derived `Serialize` impl emits only the new shape on
-/// save (legacy field is dropped — no field for it exists).
-#[allow(clippy::struct_excessive_bools)]
-#[derive(Debug, Serialize, Deserialize, Clone)]
-#[serde(from = "AppSettingsOnDisk")]
-struct AppSettings {
-    shortcuts: ShortcutSettings,
-    timer: TimerSettings,
-    notifications: NotificationSettings,
-    #[serde(default)]
-    advanced: AdvancedSettings,
-    #[serde(default)]
-    appearance: AppearanceSettings,
-    autostart: bool,
-    #[serde(default = "default_analytics_enabled")]
-    analytics_enabled: bool,
-    #[serde(default)]
-    hide_icon_on_close: bool,
-    status_bar_display: StatusBarDisplay,
-    // Phase 4e R-002: user-state slice — broadens the on-disk
-    // settings shape to carry the JS-era user-state flags that
-    // `import_user_state` would otherwise drop. Each is `serde-default`
-    // so 0.4.x settings JSONs predating this widening still
-    // deserialise (the missing-field branch falls back to the
-    // unauthenticated cold-start shape).
-    //
-    // - `guest_mode`: `presto-guest-mode == "true"` localStorage
-    //   flag, projected here so post-migration cold starts can read
-    //   the canonical signal from `Settings` rather than
-    //   localStorage. Once the migration runs, the localStorage key
-    //   is cleared and this field becomes the source of truth.
-    // - `auth_seen`: `presto-auth-seen` flag — the user has dismissed
-    //   the welcome-overlay at least once.
-    // - `skipped_versions`: the JSON-encoded `Vec<String>` from the
-    //   `presto-skipped-versions` localStorage key.
-    #[serde(default)]
-    guest_mode: bool,
-    #[serde(default)]
-    auth_seen: bool,
-    #[serde(default)]
-    skipped_versions: Vec<String>,
-}
-
-/// On-disk shape of the settings JSON, accepting either the new
-/// `status_bar_display` field or the legacy `hide_status_bar: bool`
-/// field. The `From<AppSettingsOnDisk> for AppSettings` impl
-/// below mirrors the JS-side migration logic at
-/// `src/managers/settings-manager.js:109-119` ported to Rust:
-///
-/// 1. If `status_bar_display` is present, use it.
-/// 2. Else if `hide_status_bar: true`, use `IconOnly`.
-/// 3. Else if `hide_status_bar: false`, use `Default`.
-/// 4. Else, use `StatusBarDisplay::default()` (i.e. `Default`).
-///
-/// Tie-breaker: when both fields are present, the new field wins
-/// (matches the JS-side behaviour at lines 111-113 where the
-/// migration only runs when `status_bar_display === undefined`).
-///
-/// Spec 001-leptos-migration §Phase 3a T152;
-/// data-model.md §"Settings legacy migration". The Leptos-side
-/// mirror is `presto-web::bridge::types::SettingsOnDisk`.
-#[allow(clippy::struct_excessive_bools)]
-#[derive(Debug, Clone, Deserialize)]
-struct AppSettingsOnDisk {
-    shortcuts: ShortcutSettings,
-    timer: TimerSettings,
-    notifications: NotificationSettings,
-    #[serde(default)]
-    advanced: AdvancedSettings,
-    #[serde(default)]
-    appearance: AppearanceSettings,
-    autostart: bool,
-    #[serde(default = "default_analytics_enabled")]
-    analytics_enabled: bool,
-    #[serde(default)]
-    hide_icon_on_close: bool,
-    #[serde(default)]
-    status_bar_display: Option<StatusBarDisplay>,
-    /// Legacy read-only fallback. Never re-emitted on save — the
-    /// post-conversion `AppSettings` has no field for it.
-    #[serde(default)]
-    hide_status_bar: Option<bool>,
-    /// Phase 4e R-002 user-state slice — see `AppSettings` doc-comment
-    /// for the per-field semantics. Each is `serde-default` so the
-    /// pre-widening shape (no user-state slice on the wire) still
-    /// deserialises into the cold-start shape.
-    #[serde(default)]
-    guest_mode: bool,
-    #[serde(default)]
-    auth_seen: bool,
-    #[serde(default)]
-    skipped_versions: Vec<String>,
-}
-
-impl From<AppSettingsOnDisk> for AppSettings {
-    fn from(raw: AppSettingsOnDisk) -> Self {
-        let status_bar_display = raw.status_bar_display.unwrap_or(match raw.hide_status_bar {
-            Some(true) => StatusBarDisplay::IconOnly,
-            Some(false) | None => StatusBarDisplay::Default,
-        });
-        Self {
-            shortcuts: raw.shortcuts,
-            timer: raw.timer,
-            notifications: raw.notifications,
-            advanced: raw.advanced,
-            appearance: raw.appearance,
-            autostart: raw.autostart,
-            analytics_enabled: raw.analytics_enabled,
-            hide_icon_on_close: raw.hide_icon_on_close,
-            status_bar_display,
-            guest_mode: raw.guest_mode,
-            auth_seen: raw.auth_seen,
-            skipped_versions: raw.skipped_versions,
-        }
-    }
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-struct ShortcutSettings {
-    start_stop: Option<String>,
-    reset: Option<String>,
-    skip: Option<String>,
-}
-
-/// Appearance / theme preferences. `theme` is the color-mode preference
-/// ("auto" / "light" / "dark"); `timer_theme` is the timer palette stem
-/// (e.g. "espresso"). Both carry `#[serde(default)]` so pre-widening
-/// settings JSONs fill in the JS-era cold-start values.
-#[derive(Debug, Serialize, Deserialize, Clone)]
-struct AppearanceSettings {
-    #[serde(default = "default_theme")]
-    theme: String,
-    #[serde(default = "default_timer_theme")]
-    timer_theme: String,
-}
-
-impl Default for AppearanceSettings {
-    fn default() -> Self {
-        Self {
-            theme: default_theme(),
-            timer_theme: default_timer_theme(),
-        }
-    }
-}
-
-fn default_theme() -> String {
-    "auto".to_string()
-}
-
-fn default_timer_theme() -> String {
-    "espresso".to_string()
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-struct TimerSettings {
-    focus_duration: u32,
-    break_duration: u32,
-    long_break_duration: u32,
-    total_sessions: u32,
-    #[serde(default = "default_weekly_goal")]
-    weekly_goal_minutes: u32,
-    #[serde(default = "default_max_session_time")]
-    max_session_time: u32,
-}
-
-const fn default_weekly_goal() -> u32 {
-    125
-}
-
-const fn default_max_session_time() -> u32 {
-    120
-}
-
-const fn default_analytics_enabled() -> bool {
-    true
-}
+// Settings tree (`AppSettings`, `AppSettingsOnDisk` shim, nested
+// settings substructs) moved to `presto_ipc::settings` in Phase F.
+// The `From<AppSettingsOnDisk> for AppSettings` impl moved with the
+// types so the legacy `hide_status_bar → status_bar_display`
+// migration logic stays single-sourced.
+pub use presto_ipc::{
+    default_analytics_enabled, default_max_session_time, default_weekly_goal, AdvancedSettings,
+    AppearanceSettings, NotificationSettings, Settings as AppSettings,
+    SettingsOnDisk as AppSettingsOnDisk, ShortcutSettings, StatusBarDisplay, TimerSettings,
+};
 
 /// Loads settings synchronously from disk, falling back to defaults on any error.
 fn load_settings_sync(app: &AppHandle) -> AppSettings {
@@ -402,71 +94,6 @@ fn load_settings_sync(app: &AppHandle) -> AppSettings {
         };
     };
     helpers::read_settings_from(&app_data_dir).unwrap_or_default()
-}
-
-/// User-facing notification preferences; each bool maps to an independent
-/// UI toggle, restructuring would not match the settings UI.
-#[allow(clippy::struct_excessive_bools)]
-#[derive(Debug, Serialize, Deserialize, Clone)]
-struct NotificationSettings {
-    desktop_notifications: bool,
-    sound_notifications: bool,
-    auto_start_timer: bool,
-    #[serde(default)]
-    auto_start_focus: bool,
-    #[serde(default)]
-    allow_continuous_sessions: bool,
-    smart_pause: bool,
-    smart_pause_timeout: u32, // timeout in seconds
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone, Default)]
-struct AdvancedSettings {
-    #[serde(default)]
-    debug_mode: bool, // Debug mode with 3-second timers
-}
-
-impl Default for AppSettings {
-    fn default() -> Self {
-        Self {
-            shortcuts: ShortcutSettings {
-                start_stop: Some("CommandOrControl+Alt+Space".to_string()),
-                reset: Some("CommandOrControl+Alt+R".to_string()),
-                skip: Some("CommandOrControl+Alt+S".to_string()),
-            },
-            timer: TimerSettings {
-                focus_duration: 25,
-                break_duration: 5,
-                long_break_duration: 20,
-                total_sessions: 10,
-                weekly_goal_minutes: 125,
-                max_session_time: 120,
-            },
-            notifications: NotificationSettings {
-                desktop_notifications: true,
-                sound_notifications: true,
-                auto_start_timer: true,
-                auto_start_focus: false,
-                allow_continuous_sessions: false,
-                smart_pause: false,
-                smart_pause_timeout: 30,
-            },
-            advanced: AdvancedSettings::default(),
-            appearance: AppearanceSettings::default(),
-            autostart: false,
-            analytics_enabled: true,
-            hide_icon_on_close: false,
-            status_bar_display: StatusBarDisplay::Default,
-            // Phase 4e R-002: cold-start defaults — neither guest
-            // nor auth-seen, no skipped updates. `guest_mode = false`
-            // matches Principle II's "auth choice is opt-in"
-            // line: a fresh install lands at the welcome overlay,
-            // not pre-projected into Guest.
-            guest_mode: false,
-            auth_seen: false,
-            skipped_versions: Vec::new(),
-        }
-    }
 }
 
 fn should_debounce_shortcut(action: &str) -> bool {
@@ -584,6 +211,7 @@ impl ActivityMonitor {
 }
 
 #[tauri::command]
+#[specta::specta]
 async fn start_activity_monitoring(
     app: AppHandle,
     timeout_seconds: u64,
@@ -609,6 +237,7 @@ async fn start_activity_monitoring(
 }
 
 #[tauri::command]
+#[specta::specta]
 async fn stop_activity_monitoring() -> Result<(), BridgeError> {
     {
         let monitor = helpers::lock_or_recover(&ACTIVITY_MONITOR);
@@ -620,6 +249,7 @@ async fn stop_activity_monitoring() -> Result<(), BridgeError> {
 }
 
 #[tauri::command]
+#[specta::specta]
 async fn update_activity_timeout(timeout_seconds: u64) -> Result<(), BridgeError> {
     let monitor = helpers::lock_or_recover(&ACTIVITY_MONITOR);
     monitor.as_ref().map_or(Ok(()), |m| {
@@ -629,6 +259,7 @@ async fn update_activity_timeout(timeout_seconds: u64) -> Result<(), BridgeError
 }
 
 #[tauri::command]
+#[specta::specta]
 async fn save_session_data(session: PomodoroSession, app: AppHandle) -> Result<(), BridgeError> {
     let app_data_dir = get_app_data_dir(&app)?;
 
@@ -638,12 +269,14 @@ async fn save_session_data(session: PomodoroSession, app: AppHandle) -> Result<(
 }
 
 #[tauri::command]
+#[specta::specta]
 async fn load_session_data(app: AppHandle) -> Result<Option<PomodoroSession>, BridgeError> {
     let app_data_dir = get_app_data_dir(&app)?;
     helpers::read_session_from(&app_data_dir).map_err(BridgeError::from)
 }
 
 #[tauri::command]
+#[specta::specta]
 async fn save_tasks(tasks: Vec<Task>, app: AppHandle) -> Result<(), BridgeError> {
     let app_data_dir = get_app_data_dir(&app)?;
 
@@ -653,18 +286,21 @@ async fn save_tasks(tasks: Vec<Task>, app: AppHandle) -> Result<(), BridgeError>
 }
 
 #[tauri::command]
+#[specta::specta]
 async fn load_tasks(app: AppHandle) -> Result<Vec<Task>, BridgeError> {
     let app_data_dir = get_app_data_dir(&app)?;
     helpers::read_tasks_from(&app_data_dir).map_err(BridgeError::from)
 }
 
 #[tauri::command]
+#[specta::specta]
 async fn get_stats_history(app: AppHandle) -> Result<Vec<PomodoroSession>, BridgeError> {
     let app_data_dir = get_app_data_dir(&app)?;
     helpers::read_history_from(&app_data_dir).map_err(BridgeError::from)
 }
 
 #[tauri::command]
+#[specta::specta]
 async fn save_daily_stats(session: PomodoroSession, app: AppHandle) -> Result<(), BridgeError> {
     let app_data_dir = get_app_data_dir(&app)?;
     helpers::append_daily_stats_to(&app_data_dir, &session).map_err(BridgeError::from)
@@ -674,6 +310,7 @@ async fn save_daily_stats(session: PomodoroSession, app: AppHandle) -> Result<()
 // enum tightening. Wire format unchanged: camelCase ("focus"/"break"/
 // "longBreak") via `#[serde(rename_all = "camelCase")]` on `TimerMode`.
 #[tauri::command]
+#[specta::specta]
 async fn update_tray_icon(
     app: AppHandle,
     timer_text: String,
@@ -768,6 +405,7 @@ async fn show_app_window(app: AppHandle) {
 }
 
 #[tauri::command]
+#[specta::specta]
 async fn save_settings(settings: AppSettings, app: AppHandle) -> Result<(), BridgeError> {
     let app_data_dir = get_app_data_dir(&app)?;
 
@@ -779,6 +417,7 @@ async fn save_settings(settings: AppSettings, app: AppHandle) -> Result<(), Brid
 }
 
 #[tauri::command]
+#[specta::specta]
 async fn load_settings(app: AppHandle) -> Result<AppSettings, BridgeError> {
     let app_data_dir = get_app_data_dir(&app)?;
     helpers::read_settings_from(&app_data_dir).map_err(|e| BridgeError::Internal {
@@ -787,6 +426,7 @@ async fn load_settings(app: AppHandle) -> Result<AppSettings, BridgeError> {
 }
 
 #[tauri::command]
+#[specta::specta]
 async fn register_global_shortcuts(
     app: AppHandle,
     shortcuts: ShortcutSettings,
@@ -831,6 +471,7 @@ async fn register_global_shortcuts(
 }
 
 #[tauri::command]
+#[specta::specta]
 async fn reset_all_data(app: AppHandle) -> Result<(), BridgeError> {
     let app_data_dir = get_app_data_dir(&app)?;
 
@@ -842,6 +483,7 @@ async fn reset_all_data(app: AppHandle) -> Result<(), BridgeError> {
 }
 
 #[tauri::command]
+#[specta::specta]
 async fn enable_autostart(app: AppHandle) -> Result<(), BridgeError> {
     app.autolaunch()
         .enable()
@@ -851,6 +493,7 @@ async fn enable_autostart(app: AppHandle) -> Result<(), BridgeError> {
 }
 
 #[tauri::command]
+#[specta::specta]
 async fn disable_autostart(app: AppHandle) -> Result<(), BridgeError> {
     app.autolaunch()
         .disable()
@@ -860,6 +503,7 @@ async fn disable_autostart(app: AppHandle) -> Result<(), BridgeError> {
 }
 
 #[tauri::command]
+#[specta::specta]
 async fn is_autostart_enabled(app: AppHandle) -> Result<bool, BridgeError> {
     app.autolaunch()
         .is_enabled()
@@ -869,6 +513,7 @@ async fn is_autostart_enabled(app: AppHandle) -> Result<bool, BridgeError> {
 }
 
 #[tauri::command]
+#[specta::specta]
 async fn save_manual_sessions(
     sessions: Vec<ManualSession>,
     app: AppHandle,
@@ -881,6 +526,7 @@ async fn save_manual_sessions(
 }
 
 #[tauri::command]
+#[specta::specta]
 async fn load_manual_sessions(app: AppHandle) -> Result<Vec<ManualSession>, BridgeError> {
     let app_data_dir = get_app_data_dir(&app)?;
     helpers::read_manual_sessions_from(&app_data_dir).map_err(BridgeError::from)
@@ -893,6 +539,67 @@ async fn load_manual_sessions(app: AppHandle) -> Result<Vec<ManualSession>, Brid
 /// Panics if the Tauri runtime fails to initialize or if the GUI cannot be
 /// constructed. The native runtime fails fast in this case because there is
 /// nothing the rest of the app can do without it.
+/// Construct the `tauri-specta` Builder collecting every
+/// `#[tauri::command] #[specta::specta]` handler. Shared between the
+/// release runtime (`run()`) and the CI bindings-drift test at
+/// `tests/bindings_export.rs` so the test exports the same surface
+/// the binary registers — no opportunity for the two to drift.
+#[must_use]
+pub fn build_specta_builder() -> tauri_specta::Builder<tauri::Wry> {
+    tauri_specta::Builder::<tauri::Wry>::new().commands(tauri_specta::collect_commands![
+        save_session_data,
+        load_session_data,
+        save_tasks,
+        load_tasks,
+        get_stats_history,
+        save_daily_stats,
+        update_tray_icon,
+        update_tray_menu,
+        save_settings,
+        load_settings,
+        register_global_shortcuts,
+        reset_all_data,
+        start_activity_monitoring,
+        stop_activity_monitoring,
+        update_activity_timeout,
+        enable_autostart,
+        disable_autostart,
+        is_autostart_enabled,
+        save_manual_sessions,
+        load_manual_sessions,
+        load_tags,
+        save_tag,
+        delete_tag,
+        add_session_tag,
+        start_oauth_server,
+        supabase_sign_in_with_password,
+        supabase_sign_out,
+        supabase_get_session,
+        supabase_refresh_session,
+        export_sessions_xlsx,
+        import_legacy_settings,
+        import_legacy_history,
+        import_legacy_tasks,
+        import_legacy_tags,
+        import_legacy_manual_sessions,
+        import_legacy_user_state,
+        import_legacy_supabase_session,
+        is_legacy_migration_complete,
+        mark_legacy_migration_complete,
+    ])
+}
+
+/// Tauri runtime entrypoint. Builds the typed command Builder via
+/// `tauri-specta`, exports the TS bindings in debug builds, then
+/// hands `invoke_handler` to the Tauri `Builder` for the live
+/// runtime.
+///
+/// # Panics
+/// Panics if the underlying Tauri `Builder::build` fails (e.g. a
+/// missing `tauri.conf.json` entry, an invalid bundle config, or a
+/// plugin init error). The native runtime cannot recover from this
+/// state — the binary fails fast at startup rather than hand a
+/// half-constructed app to the user.
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 #[allow(
     clippy::too_many_lines,
@@ -903,6 +610,22 @@ async fn load_manual_sessions(app: AppHandle) -> Result<Vec<ManualSession>, Brid
     reason = "tauri::generate_context!() expands to a large constant; refactoring is not under our control."
 )]
 pub fn run() {
+    let specta_builder = build_specta_builder();
+    // Re-emit `src/bindings/tauri.ts` on every dev launch so the
+    // generated bindings stay in step with the Rust source while the
+    // user is hacking. The release binary skips this hop (no source
+    // tree present at install time). The CI gate at
+    // `tests/bindings_export.rs` is the authoritative drift check.
+    #[cfg(debug_assertions)]
+    {
+        // BigInt-class types (`u64` for `expires_at` on
+        // `SupabaseSessionPayload`) must serialise as TS `string` —
+        // see the matching note in `tests/bindings_export.rs`.
+        let exporter = specta_typescript::Typescript::default()
+            .bigint(specta_typescript::BigIntExportBehavior::String);
+        let _ = specta_builder.export(exporter, "../src/bindings/tauri.ts");
+    }
+
     tauri::async_runtime::block_on(async {
         tauri::Builder::default()
             .plugin(
@@ -932,47 +655,7 @@ pub fn run() {
             .plugin(tauri_plugin_updater::Builder::new().build())
             .plugin(tauri_plugin_process::init())
             .plugin(tauri_plugin_oauth::init())
-            .invoke_handler(tauri::generate_handler![
-                save_session_data,
-                load_session_data,
-                save_tasks,
-                load_tasks,
-                get_stats_history,
-                save_daily_stats,
-                update_tray_icon,
-                update_tray_menu,
-                save_settings,
-                load_settings,
-                register_global_shortcuts,
-                reset_all_data,
-                start_activity_monitoring,
-                stop_activity_monitoring,
-                update_activity_timeout,
-                enable_autostart,
-                disable_autostart,
-                is_autostart_enabled,
-                save_manual_sessions,
-                load_manual_sessions,
-                load_tags,
-                save_tag,
-                delete_tag,
-                add_session_tag,
-                start_oauth_server,
-                supabase_sign_in_with_password,
-                supabase_sign_out,
-                supabase_get_session,
-                supabase_refresh_session,
-                export_sessions_xlsx,
-                import_legacy_settings,
-                import_legacy_history,
-                import_legacy_tasks,
-                import_legacy_tags,
-                import_legacy_manual_sessions,
-                import_legacy_user_state,
-                import_legacy_supabase_session,
-                is_legacy_migration_complete,
-                mark_legacy_migration_complete
-            ])
+            .invoke_handler(specta_builder.invoke_handler())
             .setup(|app| {
                 let initial_settings = load_settings_sync(app.handle());
                 app.manage(SettingsState(Mutex::new(initial_settings)));
@@ -1000,13 +683,17 @@ pub fn run() {
                 let app_handle = app.handle().clone();
                 let app_handle_for_click = app_handle.clone();
 
-                // macOS: TrayIconBuilder does NOT auto-load default_window_icon. Without
-                // an explicit icon AND with no title (the title is set later by
-                // update_tray_icon, only on mode/running changes), the NSStatusItem
-                // renders at zero width and is invisible. See tauri-apps/tauri#11931.
-                let mut tray_builder = TrayIconBuilder::with_id("main")
+                // macOS: TrayIconBuilder does NOT auto-load default_window_icon.
+                // Without an explicit icon AND with no title, the NSStatusItem
+                // renders at zero width and is invisible (tauri-apps/tauri#11931).
+                // We seed an initial title so the countdown text is present from
+                // boot — no icon is set so macOS doesn't render a duplicate
+                // template silhouette next to the emoji glyph in the title.
+                let initial_tray_title = "\u{1f9e0} 25:00 (0/10)";
+                let tray_builder = TrayIconBuilder::with_id("main")
                     .menu(&menu)
                     .show_menu_on_left_click(true)
+                    .title(initial_tray_title)
                     .on_menu_event(move |_tray, event| match event.id.as_ref() {
                         "show" => {
                             let app_clone = app_handle.clone();
@@ -1039,10 +726,6 @@ pub fn run() {
                             });
                         }
                     });
-
-                if let Some(icon) = app.default_window_icon() {
-                    tray_builder = tray_builder.icon(icon.clone());
-                }
 
                 let _tray = tray_builder.build(app)?;
 
@@ -1123,24 +806,28 @@ pub fn run() {
 }
 
 #[tauri::command]
+#[specta::specta]
 async fn load_tags(app: AppHandle) -> Result<Vec<Tag>, BridgeError> {
     let app_data_dir = get_app_data_dir(&app)?;
     helpers::read_tags_from(&app_data_dir).map_err(BridgeError::from)
 }
 
 #[tauri::command]
+#[specta::specta]
 async fn save_tag(tag: Tag, app: AppHandle) -> Result<(), BridgeError> {
     let app_data_dir = get_app_data_dir(&app)?;
     helpers::upsert_tag_in(&app_data_dir, tag).map_err(BridgeError::from)
 }
 
 #[tauri::command]
+#[specta::specta]
 async fn delete_tag(tag_id: String, app: AppHandle) -> Result<(), BridgeError> {
     let app_data_dir = get_app_data_dir(&app)?;
     helpers::delete_tag_in(&app_data_dir, &tag_id).map_err(BridgeError::from)
 }
 
 #[tauri::command]
+#[specta::specta]
 async fn add_session_tag(session_tag: SessionTag, app: AppHandle) -> Result<(), BridgeError> {
     let app_data_dir = get_app_data_dir(&app)?;
     helpers::append_session_tag_in(&app_data_dir, session_tag).map_err(BridgeError::from)
@@ -1149,6 +836,7 @@ async fn add_session_tag(session_tag: SessionTag, app: AppHandle) -> Result<(), 
 // `current_mode: TimerMode` (was `String`) per spec 001 T027 — closed-domain
 // enum tightening. Wire format unchanged: camelCase strings.
 #[tauri::command]
+#[specta::specta]
 async fn update_tray_menu(
     app: AppHandle,
     is_running: bool,
@@ -1236,6 +924,7 @@ async fn update_tray_menu(
 }
 
 #[tauri::command]
+#[specta::specta]
 async fn start_oauth_server(window: tauri::Window) -> Result<u16, BridgeError> {
     start(move |url| {
         let _ = window.emit("oauth-callback", url);
@@ -1260,6 +949,7 @@ async fn start_oauth_server(window: tauri::Window) -> Result<u16, BridgeError> {
 // unaffected because it's a separate localStorage flag, not a Supabase
 // concept.
 #[tauri::command]
+#[specta::specta]
 async fn supabase_sign_in_with_password(
     email: String,
     password: String,
@@ -1285,6 +975,7 @@ async fn supabase_sign_in_with_password(
 // or filesystem touch. Filesystem errors during the local clear (other
 // than NotFound, which is absorbed as the idempotent no-op) → `Internal`.
 #[tauri::command]
+#[specta::specta]
 async fn supabase_sign_out(refresh_token: String, app: AppHandle) -> Result<(), BridgeError> {
     auth::sign_out(&refresh_token).await?;
     let app_data_dir = get_app_data_dir(&app)?;
@@ -1300,6 +991,7 @@ async fn supabase_sign_out(refresh_token: String, app: AppHandle) -> Result<(), 
 // move the read Rust-side per research.md §6 Decision §6 (single
 // source of truth lives below the bridge).
 #[tauri::command]
+#[specta::specta]
 async fn supabase_get_session(app: AppHandle) -> Result<Option<auth::AuthSession>, BridgeError> {
     let app_data_dir = get_app_data_dir(&app)?;
     auth::read_session(&app_data_dir)
@@ -1314,6 +1006,7 @@ async fn supabase_get_session(app: AppHandle) -> Result<Option<auth::AuthSession
 // HTTP roundtrip; HTTP 400/401 → `InvalidArgument` (token expired or
 // revoked); 5xx / network → `Internal`.
 #[tauri::command]
+#[specta::specta]
 async fn supabase_refresh_session(
     refresh_token: String,
     app: AppHandle,
@@ -1333,6 +1026,7 @@ async fn supabase_refresh_session(
 // than umya-spreadsheet. The legacy `write_excel_file` cutover-parity
 // command was removed in Phase 6 (T235).
 #[tauri::command]
+#[specta::specta]
 async fn export_sessions_xlsx(
     path: String,
     sessions: Vec<ManualSession>,
@@ -1347,6 +1041,7 @@ async fn export_sessions_xlsx(
 // Sunset: removed one minor version after cutover (Principle VII).
 
 #[tauri::command]
+#[specta::specta]
 async fn import_legacy_settings(
     payload: migration::LegacySettingsPayload,
     app: AppHandle,
@@ -1356,6 +1051,7 @@ async fn import_legacy_settings(
 }
 
 #[tauri::command]
+#[specta::specta]
 async fn import_legacy_history(
     payload: migration::LegacyHistoryPayload,
     app: AppHandle,
@@ -1365,6 +1061,7 @@ async fn import_legacy_history(
 }
 
 #[tauri::command]
+#[specta::specta]
 async fn import_legacy_tasks(
     payload: migration::LegacyTasksPayload,
     app: AppHandle,
@@ -1374,6 +1071,7 @@ async fn import_legacy_tasks(
 }
 
 #[tauri::command]
+#[specta::specta]
 async fn import_legacy_tags(
     payload: migration::LegacyTagsPayload,
     app: AppHandle,
@@ -1383,6 +1081,7 @@ async fn import_legacy_tags(
 }
 
 #[tauri::command]
+#[specta::specta]
 async fn import_legacy_manual_sessions(
     payload: migration::LegacyManualSessionsPayload,
     app: AppHandle,
@@ -1392,6 +1091,7 @@ async fn import_legacy_manual_sessions(
 }
 
 #[tauri::command]
+#[specta::specta]
 async fn import_legacy_user_state(
     payload: migration::LegacyUserStatePayload,
     app: AppHandle,
@@ -1401,6 +1101,7 @@ async fn import_legacy_user_state(
 }
 
 #[tauri::command]
+#[specta::specta]
 async fn import_legacy_supabase_session(
     payload: migration::SupabaseSessionPayload,
     app: AppHandle,
@@ -1418,12 +1119,14 @@ async fn import_legacy_supabase_session(
 // per-domain `import_legacy_*` hop is attempted.
 
 #[tauri::command]
+#[specta::specta]
 async fn is_legacy_migration_complete(app: AppHandle) -> Result<bool, BridgeError> {
     let app_data_dir = get_app_data_dir(&app)?;
     Ok(app_data_dir.join("legacy-migration-done.marker").exists())
 }
 
 #[tauri::command]
+#[specta::specta]
 async fn mark_legacy_migration_complete(app: AppHandle) -> Result<(), BridgeError> {
     let app_data_dir = get_app_data_dir(&app)?;
     std::fs::create_dir_all(&app_data_dir).map_err(|e| BridgeError::Internal {

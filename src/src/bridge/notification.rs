@@ -12,7 +12,7 @@ use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::JsFuture;
 
 use super::availability::bridge_available;
-use super::error::BridgeError;
+use super::types::BridgeError;
 
 #[wasm_bindgen]
 extern "C" {
