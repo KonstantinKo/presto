@@ -15,6 +15,7 @@ pub mod availability;
 pub mod commands;
 pub mod error;
 pub mod events;
+pub mod notification;
 pub mod session_type;
 pub mod storage;
 pub mod timer_mode;

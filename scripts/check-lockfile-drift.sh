@@ -75,14 +75,25 @@ e2e_lock_changed=$(printf '%s\n' "${changed}" | grep -Fx 'tests/e2e/package-lock
 drift=0
 
 if [[ -n "${cargo_toml_changed}" && -z "${cargo_lock_changed}" ]]; then
-  echo "ERROR: Cargo.toml changed without Cargo.lock (Principle IX — lockfile discipline)." >&2
-  echo "Run: cargo update --workspace (or cargo build --workspace) and stage Cargo.lock." >&2
-  echo "Touched manifest(s):" >&2
-  while IFS= read -r path; do
-    [[ -z "${path}" ]] && continue
-    echo "  - ${path}" >&2
-  done <<< "${cargo_toml_changed}"
-  drift=1
+  # Feature-only additions to existing crates (e.g., enabling more web-sys
+  # features) do not change Cargo.lock because the lock records only the
+  # package version + checksum, not which features are activated. Verify
+  # consistency via `cargo fetch --locked`: if the current lockfile is still
+  # valid for the updated Cargo.toml, it's a feature-only change and we skip
+  # the error. A genuinely new or version-bumped dependency will make
+  # `cargo fetch --locked` fail, which correctly surfaces the gap.
+  if cargo fetch --locked 2>/dev/null; then
+    echo "check-lockfile-drift: OK (Cargo.toml changed but Cargo.lock is consistent — feature-only change)"
+  else
+    echo "ERROR: Cargo.toml changed without Cargo.lock (Principle IX — lockfile discipline)." >&2
+    echo "Run: cargo update --workspace (or cargo build --workspace) and stage Cargo.lock." >&2
+    echo "Touched manifest(s):" >&2
+    while IFS= read -r path; do
+      [[ -z "${path}" ]] && continue
+      echo "  - ${path}" >&2
+    done <<< "${cargo_toml_changed}"
+    drift=1
+  fi
 fi
 
 # Symmetric guard: lockfile-only changes are also drift (the manifest dictates

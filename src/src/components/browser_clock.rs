@@ -1,6 +1,6 @@
 use crate::engine::clock::Clock;
 
-pub(super) struct BrowserClock;
+pub struct BrowserClock;
 
 impl Clock for BrowserClock {
     #[cfg(target_arch = "wasm32")]

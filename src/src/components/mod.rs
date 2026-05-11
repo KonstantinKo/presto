@@ -26,7 +26,7 @@
 // pin the selector strings inline.
 
 pub mod auth_modal;
-pub(super) mod browser_clock;
+pub mod browser_clock;
 pub mod calendar;
 pub mod settings;
 pub mod tasks;

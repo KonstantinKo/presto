@@ -454,18 +454,18 @@
 }
 
 /* Overtime styles for continuous sessions */
-.container.overtime .timer-minutes,
-.container.overtime .timer-seconds {
+.timer-container.overtime .timer-minutes,
+.timer-container.overtime .timer-seconds {
   color: var(--warning-color);
   text-shadow: 0 0 10px rgba(230, 126, 34, 0.3);
   animation: overtime-pulse 2s infinite ease-in-out;
 }
 
-.container.overtime .timer-status {
+.timer-container.overtime .timer-status {
   color: var(--warning-color);
 }
 
-.container.overtime #status-icon {
+.timer-container.overtime #status-icon {
   color: var(--warning-color);
 }
 

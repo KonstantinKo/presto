@@ -61,6 +61,16 @@ features = [
     # `window.matchMedia(...).matches` read in the now-deleted
     # `src/managers/theme-manager.js` (removed in Phase 6 T238).
     "MediaQueryList",
+    # Audio features for the `play_chime` helper in `components::timer`.
+    # Port of the JS-era `playNotificationSound` oscillator (800 Hz sine,
+    # 0.5 s exponential decay) gated on `Settings.notifications.sound_notifications`.
+    "AudioContext",
+    "OscillatorType",
+    "GainNode",
+    "OscillatorNode",
+    "AudioNode",
+    "AudioParam",
+    "AudioDestinationNode",
 ]
 
 [dev-dependencies]
