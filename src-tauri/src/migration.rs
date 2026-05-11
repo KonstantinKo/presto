@@ -555,6 +555,17 @@ mod tests {
         assert_eq!(first_bytes, second_bytes);
     }
 
+    #[test]
+    fn import_tasks_with_empty_vec_is_a_noop() {
+        let dir = tempdir().unwrap();
+        let payload = LegacyTasksPayload { tasks: Vec::new() };
+        import_tasks(dir.path(), &payload).unwrap();
+        assert!(
+            !dir.path().join("tasks.json").exists(),
+            "empty tasks payload must not create tasks.json"
+        );
+    }
+
     // ── import_tags ─────────────────────────────────────────────────────────
 
     fn sample_tag() -> Tag {
@@ -686,6 +697,19 @@ mod tests {
         import_manual_sessions(dir.path(), &payload2).unwrap();
         let second_bytes = std::fs::read(dir.path().join("manual_sessions.json")).unwrap();
         assert_eq!(first_bytes, second_bytes);
+    }
+
+    #[test]
+    fn import_manual_sessions_with_empty_vec_is_a_noop() {
+        let dir = tempdir().unwrap();
+        let payload = LegacyManualSessionsPayload {
+            sessions: Vec::new(),
+        };
+        import_manual_sessions(dir.path(), &payload).unwrap();
+        assert!(
+            !dir.path().join("manual_sessions.json").exists(),
+            "empty sessions payload must not create manual_sessions.json"
+        );
     }
 
     // ── import_user_state ───────────────────────────────────────────────────
@@ -907,5 +931,42 @@ mod tests {
         let second = super::auth::read_session(dir.path()).unwrap().unwrap();
         assert_eq!(first.access_token, second.access_token);
         assert_eq!(first.refresh_token, second.refresh_token);
+    }
+
+    #[test]
+    fn import_supabase_session_preserves_tokens_and_user_drops_expires_at() {
+        let dir = tempdir().unwrap();
+        let payload = SupabaseSessionPayload {
+            access_token: "access-tok-123".to_string(),
+            refresh_token: "refresh-tok-456".to_string(),
+            expires_at: 9_999_999_999,
+            user: SupabaseUserMirror {
+                id: "user-id-789".to_string(),
+                email: "test@example.com".to_string(),
+                user_metadata: serde_json::json!({"key": "value"}),
+            },
+        };
+        import_supabase_session(dir.path(), &payload).unwrap();
+
+        let session_file = dir.path().join("supabase-session.json");
+        assert!(session_file.exists());
+        let raw = std::fs::read_to_string(&session_file).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&raw).unwrap();
+
+        assert_eq!(parsed["access_token"].as_str().unwrap(), "access-tok-123");
+        assert_eq!(parsed["refresh_token"].as_str().unwrap(), "refresh-tok-456");
+        assert_eq!(parsed["user"]["id"].as_str().unwrap(), "user-id-789");
+        assert_eq!(
+            parsed["user"]["email"].as_str().unwrap(),
+            "test@example.com"
+        );
+        assert_eq!(
+            parsed["user"]["user_metadata"]["key"].as_str().unwrap(),
+            "value"
+        );
+        assert!(
+            parsed.get("expires_at").is_none(),
+            "expires_at must be dropped from persisted session"
+        );
     }
 }

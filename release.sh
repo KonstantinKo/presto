@@ -91,19 +91,15 @@ get_current_version() {
 # Function to check if the directory is clean
 check_git_status() {
     if [[ -n $(git status --porcelain) ]]; then
-        print_warning "There are uncommitted changes. Do you want to continue? (y/N)"
-        read -r response
-        if [[ ! "$response" =~ ^[Yy]$ ]]; then
-            print_error "Operation cancelled"
-            exit 1
-        fi
+        print_error "Working tree is dirty. Commit or stash changes before releasing."
+        exit 1
     fi
 }
 
 # Function to commit and tag
 commit_and_tag() {
     local version=$1
-    local message="$2"
+    local message="${2:-}"
 
     print_step "Adding modified files to git..."
     git add src-tauri/Cargo.toml src-tauri/Cargo.lock src-tauri/tauri.conf.json src/Cargo.toml
@@ -129,6 +125,13 @@ commit_and_tag() {
 # Function to push changes
 push_changes() {
     local version=$1
+
+    local current_branch
+    current_branch=$(git rev-parse --abbrev-ref HEAD)
+    if [[ "$current_branch" != "main" ]]; then
+        print_error "Current branch is '$current_branch', not 'main'. Refusing to push."
+        exit 1
+    fi
 
     print_step "Pushing main commit..."
     git push origin main
@@ -200,7 +203,7 @@ main() {
     echo "=======================================${NC}"
 
     # Check if we are in a git repo
-    if [[ ! -d .git ]]; then
+    if ! git rev-parse --is-inside-work-tree &>/dev/null; then
         print_error "Not in a git repository"
         exit 1
     fi
@@ -276,11 +279,11 @@ main() {
     # Update version in files
     update_version_in_files $current_version $new_version
 
-    # Build
-    build_app
-
     # Commit and tag
     commit_and_tag $new_version "$release_message"
+
+    # Build
+    build_app
 
     # Push
     push_changes $new_version
@@ -336,9 +339,10 @@ if [[ $# -gt 0 ]]; then
         "--patch")
             current_version=$(get_current_version)
             new_version=$(increment_version $current_version patch)
+            check_git_status
             update_version_in_files $current_version $new_version
-            build_app
             commit_and_tag $new_version
+            build_app
             push_changes $new_version
             update_homebrew_tap $new_version
             print_success "Patch release v$new_version complete!"
@@ -346,9 +350,10 @@ if [[ $# -gt 0 ]]; then
         "--minor")
             current_version=$(get_current_version)
             new_version=$(increment_version $current_version minor)
+            check_git_status
             update_version_in_files $current_version $new_version
-            build_app
             commit_and_tag $new_version
+            build_app
             push_changes $new_version
             update_homebrew_tap $new_version
             print_success "Minor release v$new_version complete!"
@@ -356,9 +361,10 @@ if [[ $# -gt 0 ]]; then
         "--major")
             current_version=$(get_current_version)
             new_version=$(increment_version $current_version major)
+            check_git_status
             update_version_in_files $current_version $new_version
-            build_app
             commit_and_tag $new_version
+            build_app
             push_changes $new_version
             update_homebrew_tap $new_version
             print_success "Major release v$new_version complete!"
@@ -370,9 +376,10 @@ if [[ $# -gt 0 ]]; then
             fi
             current_version=$(get_current_version)
             new_version=$2
+            check_git_status
             update_version_in_files $current_version $new_version
-            build_app
             commit_and_tag $new_version
+            build_app
             push_changes $new_version
             update_homebrew_tap $new_version
             print_success "Release v$new_version complete!"
