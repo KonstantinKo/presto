@@ -31,10 +31,7 @@ const TRAY_TEXT_MAX_LEN: usize = 14;
 ///   emoji (matches legacy line 2712 zeroing `modeIcon` after copying
 ///   it into `displayText`).
 #[must_use]
-pub(super) fn build_tray_text(
-    state: &TimerState,
-    settings: &Settings,
-) -> (String, Option<String>) {
+pub(super) fn build_tray_text(state: &TimerState, settings: &Settings) -> (String, Option<String>) {
     let is_paused = state.is_paused() || state.is_auto_paused();
     let time_signed = state.time_remaining_secs_signed();
     let allow_continuous = settings.notifications.allow_continuous_sessions;

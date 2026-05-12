@@ -512,12 +512,32 @@ pub fn TimerView() -> impl IntoView {
     // its presence in `currentTags`. Seeds with the default focus
     // tag so the visual baseline shows the first row pre-highlighted.
     let selected_tag_ids = RwSignal::new(vec!["default-focus".to_string()]);
+    // Reconcile selected_tag_ids against the actual tag list once it
+    // loads from context. The seed "default-focus" may not exist in
+    // real persisted tags; drop stale ids and fall back to the first
+    // available tag so downstream add_session_tag calls always write
+    // a valid tag id.
+    Effect::new(move |_| {
+        let valid_ids: Vec<String> = tags.with(|all| all.iter().map(|t| t.id.clone()).collect());
+        if valid_ids.is_empty() {
+            return;
+        }
+        selected_tag_ids.update(|sel| {
+            sel.retain(|id| valid_ids.contains(id));
+            if sel.is_empty() {
+                if let Some(first) = valid_ids.first() {
+                    sel.push(first.clone());
+                }
+            }
+        });
+    });
     // Per-tag wall-clock anchors for the time-spent ledger. Mirrors
     // `tag-manager.js:activeSessionTags`: keys are tag ids, values
     // are `Date.now()` capture points. Flushed on pause / stop /
     // completion / skip through `add_session_tag`. `StoredValue`
     // (not `RwSignal`) — the map never drives reactive rendering.
-    let active_session_tags: StoredValue<HashMap<String, i64>> = StoredValue::new(HashMap::new());
+    let active_session_tags: StoredValue<HashMap<String, (String, i64)>> =
+        StoredValue::new(HashMap::new());
 
     let on_status_click = move |ev: leptos::ev::MouseEvent| {
         // Stop propagation so the document-level click-outside
@@ -775,8 +795,10 @@ pub fn TimerView() -> impl IntoView {
     });
     let status_icon = Signal::derive(move || {
         let mode = engine.with(TimerState::current_mode);
-        if mode != TimerMode::Focus {
-            return "ri-brain-line".to_string();
+        match mode {
+            TimerMode::Break => return "ri-cup-line".to_string(),
+            TimerMode::LongBreak => return "ri-moon-line".to_string(),
+            TimerMode::Focus => {}
         }
         let icons: Vec<String> = selected_tag_ids.with(|sel| {
             tags.with(|all| {
@@ -1186,6 +1208,7 @@ pub fn TimerView() -> impl IntoView {
                                                     tag_tracking_start(
                                                         active_session_tags,
                                                         &tid,
+                                                        &format!("session-{now}"),
                                                         now,
                                                     );
                                                 }

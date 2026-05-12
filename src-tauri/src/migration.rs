@@ -230,7 +230,10 @@ pub(super) fn import_supabase_session(
     app_data_dir: &Path,
     payload: &SupabaseSessionPayload,
 ) -> Result<(), BridgeError> {
-    // Validate non-empty tokens before any disk touch — the JS-era
+    if auth::read_session(app_data_dir)?.is_some() {
+        return Ok(());
+    }
+    // Validate non-empty tokens after the idempotency check — the JS-era
     // localStorage may carry a malformed blob.
     if payload.access_token.is_empty() {
         return Err(BridgeError::InvalidArgument {
@@ -243,9 +246,6 @@ pub(super) fn import_supabase_session(
             field: "refresh_token".to_string(),
             reason: "refresh_token is empty".to_string(),
         });
-    }
-    if auth::read_session(app_data_dir)?.is_some() {
-        return Ok(());
     }
     // Re-shape into the `auth::AuthSession` type the rest of the
     // auth module persists. `expires_at` is intentionally not

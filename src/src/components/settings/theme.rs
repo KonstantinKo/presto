@@ -215,11 +215,22 @@ pub fn ThemeSettings(settings: RwSignal<Settings>, toast: SettingsToast) -> impl
                                     class:disabled=move || is_disabled.get()
                                     data-timer-theme=id
                                     role="button"
+                                    tabindex=move || if is_disabled.get() { -1 } else { 0 }
+                                    aria-disabled=move || is_disabled.get().to_string()
                                     on:click=move |_| {
                                         if is_disabled.get_untracked() {
                                             return;
                                         }
                                         on_timer_theme(id);
+                                    }
+                                    on:keydown=move |ev: leptos::ev::KeyboardEvent| {
+                                        let key = ev.key();
+                                        if key == "Enter" || key == " " {
+                                            ev.prevent_default();
+                                            if !is_disabled.get_untracked() {
+                                                on_timer_theme(id);
+                                            }
+                                        }
                                     }
                                 >
                                     <div class="timer-theme-header">
@@ -294,6 +305,7 @@ fn normalise_theme_pref(pref: &str) -> &str {
 #[cfg(test)]
 mod tests {
     use super::normalise_theme_pref;
+    use crate::theme::metadata::THEME_METADATA;
     use crate::theme::themes::ALL_THEMES;
 
     /// T205 — selector contract pin. Sourced from
@@ -306,20 +318,24 @@ mod tests {
         }
     }
 
-    /// E2e asserts `tileCount >= 2` (`spec.js:29`); the
-    /// auto-generated catalogue must satisfy that lower bound. Pin
-    /// against `ALL_THEMES` directly so a future code-gen drift
-    /// (e.g. accidentally emitting an empty slice) surfaces here
-    /// rather than in the e2e suite.
+    /// E2e asserts `tileCount >= 2` (`spec.js:29`); the rendered tiles
+    /// come from `THEME_METADATA`, so pin against that. Also verify each
+    /// metadata id is present in the auto-generated `ALL_THEMES` slice so
+    /// a drift between the two sources surfaces here.
     #[test]
     fn timer_theme_catalogue_meets_e2e_minimum() {
         assert!(
-            ALL_THEMES.len() >= 2,
-            "settings-theme.spec.js:29 asserts tileCount >= 2; ALL_THEMES has {}",
-            ALL_THEMES.len(),
+            THEME_METADATA.len() >= 2,
+            "settings-theme.spec.js:29 asserts tileCount >= 2; THEME_METADATA has {}",
+            THEME_METADATA.len(),
         );
-        for stem in ALL_THEMES {
-            assert!(!stem.is_empty(), "theme stem must not be empty");
+        for meta in THEME_METADATA {
+            assert!(!meta.id.is_empty(), "theme id must not be empty");
+            assert!(
+                ALL_THEMES.contains(&meta.id),
+                "metadata id '{}' is missing from generated ALL_THEMES",
+                meta.id
+            );
         }
     }
 

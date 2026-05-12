@@ -63,13 +63,14 @@ pub(super) const fn tag_tracking_action_for_event(event: &TimerEvent) -> TagTrac
 /// Persist a single `SessionTag` join row through the Tauri bridge.
 /// Durations below 10 seconds are dropped to avoid spamming the
 /// on-disk log with micro-toggles during the tag-dropdown UI dance.
-pub(super) fn save_session_tag(tag_id: String, duration_secs: u32) {
+/// `session_id` is created at tracking-start time so all flushes for
+/// the same run segment share one stable identifier.
+pub(super) fn save_session_tag(session_id: String, tag_id: String, duration_secs: u32) {
     if duration_secs < 10 {
         return;
     }
-    let now = BrowserClock.now_ms();
     let session_tag = SessionTag {
-        session_id: format!("session-{now}"),
+        session_id,
         tag_id,
         duration: duration_secs,
         created_at: now_iso(),
@@ -80,22 +81,34 @@ pub(super) fn save_session_tag(tag_id: String, duration_secs: u32) {
 }
 
 /// Begin tracking wall-clock time spent on `tag_id` from `now` ms.
+/// `session_id` is captured once here and carried through to flush so
+/// multiple flush calls for the same run segment use the same id.
 /// No-op if the tag is already being tracked (legacy parity:
 /// `tag-manager.js:startTagTracking` short-circuits when the key
 /// already exists, so re-entering on resume doesn't reset the anchor).
-pub(super) fn tag_tracking_start(map: StoredValue<HashMap<String, i64>>, tag_id: &str, now: i64) {
+pub(super) fn tag_tracking_start(
+    map: StoredValue<HashMap<String, (String, i64)>>,
+    tag_id: &str,
+    session_id: &str,
+    now: i64,
+) {
     map.update_value(|m| {
-        m.entry(tag_id.to_string()).or_insert(now);
+        m.entry(tag_id.to_string())
+            .or_insert_with(|| (session_id.to_string(), now));
     });
 }
 
 /// Stop tracking `tag_id`, flushing the accumulated duration through
 /// `save_session_tag`. Mirrors `tag-manager.js:stopTagTracking`.
-pub(super) fn tag_tracking_flush_one(map: StoredValue<HashMap<String, i64>>, tag_id: &str, now: i64) {
-    let start = map.try_update_value(|m| m.remove(tag_id)).flatten();
-    if let Some(start_ms) = start {
+pub(super) fn tag_tracking_flush_one(
+    map: StoredValue<HashMap<String, (String, i64)>>,
+    tag_id: &str,
+    now: i64,
+) {
+    let entry = map.try_update_value(|m| m.remove(tag_id)).flatten();
+    if let Some((session_id, start_ms)) = entry {
         let duration = u32::try_from(((now - start_ms) / 1000).max(0)).unwrap_or(0);
-        save_session_tag(tag_id.to_string(), duration);
+        save_session_tag(session_id, tag_id.to_string(), duration);
     }
 }
 
@@ -103,20 +116,20 @@ pub(super) fn tag_tracking_flush_one(map: StoredValue<HashMap<String, i64>>, tag
 /// clearing the map. Mirrors `tag-manager.js:onTimerPause` /
 /// `onTimerStop` — both walk `activeSessionTags`, save the partial
 /// durations, and reset the map for the next start.
-pub(super) fn tag_tracking_flush_all(map: StoredValue<HashMap<String, i64>>, now: i64) {
-    let drained: Vec<(String, i64)> = map
+pub(super) fn tag_tracking_flush_all(map: StoredValue<HashMap<String, (String, i64)>>, now: i64) {
+    let drained: Vec<(String, (String, i64))> = map
         .try_update_value(|m| m.drain().collect())
         .unwrap_or_default();
-    for (tag_id, start_ms) in drained {
+    for (tag_id, (session_id, start_ms)) in drained {
         let duration = u32::try_from(((now - start_ms) / 1000).max(0)).unwrap_or(0);
-        save_session_tag(tag_id, duration);
+        save_session_tag(session_id, tag_id, duration);
     }
 }
 
 /// Dispatch the per-tag time-spent side-effects for each engine event.
 pub(super) fn apply_tag_tracking_events(
     events: &[TimerEvent],
-    map: StoredValue<HashMap<String, i64>>,
+    map: StoredValue<HashMap<String, (String, i64)>>,
     selected_tag_ids: RwSignal<Vec<String>>,
 ) {
     if events.is_empty() {
@@ -126,9 +139,10 @@ pub(super) fn apply_tag_tracking_events(
     for ev in events {
         match tag_tracking_action_for_event(ev) {
             TagTrackingAction::StartAllSelected => {
+                let session_id = format!("session-{now}");
                 let ids = selected_tag_ids.get_untracked();
                 for id in &ids {
-                    tag_tracking_start(map, id, now);
+                    tag_tracking_start(map, id, &session_id, now);
                 }
             }
             TagTrackingAction::FlushAll => {

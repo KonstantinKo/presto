@@ -12,12 +12,22 @@ use serde::{Deserialize, Serialize};
 /// Distinct from the pomodoro `Session` by design — both types may
 /// be imported at the same call site without conflict (the
 /// data-model.md collision note renames this to `AuthSession`).
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "specta", derive(specta::Type))]
 pub struct AuthSession {
     pub access_token: String,
     pub refresh_token: String,
     pub user: AuthUser,
+}
+
+impl std::fmt::Debug for AuthSession {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("AuthSession")
+            .field("access_token", &"[redacted]")
+            .field("refresh_token", &"[redacted]")
+            .field("user", &self.user)
+            .finish()
+    }
 }
 
 /// Supabase auth user record embedded in `AuthSession`.
@@ -28,10 +38,20 @@ pub struct AuthSession {
 /// claims, etc. The Leptos consumers (`managers/auth.rs`) read
 /// specific keys via `.get("full_name")` rather than imposing a
 /// closed shape.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "specta", derive(specta::Type))]
 pub struct AuthUser {
     pub id: String,
     pub email: String,
     pub user_metadata: serde_json::Value,
+}
+
+impl std::fmt::Debug for AuthUser {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("AuthUser")
+            .field("id", &self.id)
+            .field("email", &"[redacted]")
+            .field("user_metadata", &"[redacted]")
+            .finish()
+    }
 }

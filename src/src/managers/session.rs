@@ -215,8 +215,8 @@ impl SessionManager {
 #[cfg(test)]
 mod tests {
     use super::SessionManager;
-    use crate::bridge::types::SessionType;
     use crate::bridge::types::ManualSession;
+    use crate::bridge::types::SessionType;
     use crate::engine::durations::Durations;
     use crate::engine::timer::{TimerEvent, TimerState};
 
