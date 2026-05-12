@@ -38,7 +38,7 @@ A modern, cross-platform Pomodoro timer built with **Tauri + Leptos** (Rust + We
 ### 🔒 Local-Only
 
 - Single-user, fully local. No accounts, no sync, no telemetry.
-- The application does not send user data or telemetry; the only outbound network activity of that kind is the auto-updater's release check (no user data on the wire).
+- The application does not send user data or telemetry. The only outbound network activity is the auto-updater (check/download), and no user data is sent on the wire.
 
 ### ⌨️ Keyboard Shortcuts
 
@@ -183,7 +183,7 @@ presto/
 
 - Tauri 2.x framework with the auto-updater, dialog, global-shortcut, opener, and notification plugins
 - File-based JSON storage in the Tauri app-data directory
-- No network egress for user data; the auto-updater is the only outbound traffic
+- No network egress for user data; the auto-updater is the only outbound network activity (check/download)
 
 ### Quality gates
 
