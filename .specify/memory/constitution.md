@@ -1,7 +1,13 @@
 <!--
 Sync Impact Report
 ==================
-Version change: 2.0.0 → 3.0.0
+
+(Earlier change reports retained below for history.)
+Version change: 3.0.0 → 3.1.0
+Bump rationale: Added principle X while keeping existing principles, change
+is backwards-compatible.
+
+----- Prior 2.0.0 → 3.0.0 -----
 Bump rationale: MAJOR bump — Principle II reframed from "Local-First,
 Privacy-Default (optional Supabase)" to "Local-Only" (no accounts, no sync,
 no telemetry, no guest-vs-authed split). Auth/sync/team/analytics surfaces
@@ -17,8 +23,6 @@ Modified principles:
   dropped from boundary-validation rule.
 - V. Test-First For Stateful Engines — manager list reduced.
 - VIII. Spec-Driven Feature Flow — "auth/sync flow" trigger dropped.
-
-(Earlier 1.0.0 → 2.0.0 report retained below for history.)
 
 ----- Prior 1.0.0 → 2.0.0 -----
 Bump rationale: MAJOR bump — the Technology & Quality Constraints section is
@@ -132,6 +136,7 @@ Rules:
 - **Test-first does NOT apply to:** UI rendering, view wiring, theme loading, trivial CRUD plumbing — those are exercised by the e2e suite and visual regression.
 - **Tests express behaviour the user or domain expects, not internal structure.** "Function A calls function B" assertions don't count. "After 25 minutes the timer ends in `breakReady` mode and emits `pomodoroCompleted`" does.
 - **A new Tauri command extends the Tauri bridge mock first**; then the test that exercises it; then the real call site.
+- **All e2e tests must follow it's best practices**, explained in the CLAUDE.md in the e2e directory.
 
 Rationale: timer correctness is the product. Tests catch off-by-one seconds, drift on resume, and the "right number, wrong reason" class of bug. The mock-first rule keeps e2e infrastructure honest as the backend grows.
 
@@ -182,6 +187,17 @@ Rules:
 
 Rationale: lockfile drift is the single most-common CI failure mode on this repo. The hook + frozen CI installs + commit-time discipline together close it.
 
+### X. Pedantic Linting & Formatting
+
+We want strictest possible guidance by automated tools, valuing rulesets over ease of maintenance.
+
+Rules:
+- The Buck Stops Here. No "pre-existing" errors are tolerated or ignored. If it has slipped by before but you notice it now, it becomes your problem as part of the next implementation.
+- Exceptions are rare and need an explicitly stated reason. Reasons should be challenged regularly.
+- No laziness just to make the linter happy. Rules have reasons and we do our best to use their advantages. Example: Typing an object as allowing any object when we could also be more specific about which shapes we allow and disallow.
+
+Rationale: Stricter guidance keeps AI agents in check and causes less tech debt drift.
+
 ## Governance
 
 This constitution supersedes ad-hoc conventions. When a review comment, commit message, or PR description conflicts with a principle, the principle wins until amended.
@@ -197,4 +213,4 @@ This constitution supersedes ad-hoc conventions. When a review comment, commit m
 
 **Runtime guidance** lives in `CLAUDE.md` and the codebase. Both MUST be reviewed for staleness on any amendment.
 
-**Version**: 3.0.0 | **Ratified**: 2026-05-09 | **Last Amended**: 2026-05-12
+**Version**: 3.1.0 | **Ratified**: 2026-05-09 | **Last Amended**: 2026-05-12
