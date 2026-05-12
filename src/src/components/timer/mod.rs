@@ -210,7 +210,16 @@ const fn skip_icon_for_mode(mode: TimerMode, next_is_long_break: bool) -> &'stat
 /// rows. Today's behaviour is in-memory only; Phase 4c attaches the
 /// `bridge::commands::save_manual_sessions` hop alongside this so
 /// the rows survive a process restart.
-fn synth_completed_session(now_ms: i64, focus_duration_secs: u32) -> ManualSession {
+///
+/// `title` is the user-typed in-flight title (feature 002 Bundle A);
+/// `None` for the no-title case and for paths that do not surface a
+/// title input (manual-backfill flows construct their own
+/// `ManualSession` directly).
+fn synth_completed_session(
+    now_ms: i64,
+    focus_duration_secs: u32,
+    title: Option<String>,
+) -> ManualSession {
     let (hh_end, mm_end) = local_hh_mm(now_ms);
     let start_ms = now_ms - i64::from(focus_duration_secs) * 1000;
     let (hh_start, mm_start) = local_hh_mm(start_ms);
@@ -226,6 +235,7 @@ fn synth_completed_session(now_ms: i64, focus_duration_secs: u32) -> ManualSessi
             .to_rfc3339(),
         date: crate::engine::date_format::format_session_date(now_ms),
         tags: None,
+        title,
     }
 }
 
@@ -264,6 +274,37 @@ fn play_chime() {
 
 #[cfg(not(target_arch = "wasm32"))]
 const fn play_chime() {}
+
+/// Feature 002 Bundle C (T024): one-shot metronome tick. Mirrors
+/// `play_chime`'s AudioContext-per-call lifecycle (FR-020: no
+/// long-lived oscillator) but with a higher frequency and shorter
+/// envelope so the tick is audibly distinct from the chime and
+/// doesn't carry the chime's "DING" tail. 25 min × 180 BPM ≈ 4500
+/// ticks at this lifecycle stays an order of magnitude under
+/// browser-tab audio limits (A12).
+#[cfg(target_arch = "wasm32")]
+fn play_metronome_tick() {
+    use web_sys::{AudioContext, OscillatorType};
+    let Ok(ctx) = AudioContext::new() else { return };
+    let Ok(osc) = ctx.create_oscillator() else {
+        return;
+    };
+    let Ok(gain) = ctx.create_gain() else { return };
+    osc.set_type(OscillatorType::Sine);
+    osc.frequency().set_value(1000.0);
+    let now = ctx.current_time();
+    let _ = gain.gain().set_value_at_time(0.2, now);
+    let _ = gain
+        .gain()
+        .exponential_ramp_to_value_at_time(0.01, now + 0.1);
+    let _ = osc.connect_with_audio_node(&gain);
+    let _ = gain.connect_with_audio_node(&ctx.destination());
+    let _ = osc.start();
+    let _ = osc.stop_with_when(now + 0.1);
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+const fn play_metronome_tick() {}
 
 /// ISO-8601 timestamp string for the current wall clock. Mirrors the
 /// JS-era `new Date().toISOString()` used by `tag-manager.js` for
@@ -316,12 +357,18 @@ fn handle_events(
                 completed_pomodoros,
             } => {
                 if !has_overtime {
-                    toast.show(pomodoro_completed_toast(*completed_pomodoros));
+                    toast.show(pomodoro_completed_toast(
+                        *completed_pomodoros,
+                        settings.timer.sessions_per_long_break,
+                    ));
                     if settings.notifications.sound_notifications {
                         play_chime();
                     }
                     if settings.notifications.desktop_notifications {
-                        let desk_body = pomodoro_completed_desktop_body(*completed_pomodoros);
+                        let desk_body = pomodoro_completed_desktop_body(
+                            *completed_pomodoros,
+                            settings.timer.sessions_per_long_break,
+                        );
                         spawn_local(async move {
                             let _ =
                                 crate::bridge::notification::send_notification("Presto", desk_body)
@@ -473,6 +520,102 @@ pub fn TimerView() -> impl IntoView {
         engine.update(|state| state.set_allow_continuous_sessions(enabled));
     });
 
+    // Feature 002 Bundle B (T022): pipe
+    // `Settings::timer.sessions_per_long_break` into the engine so
+    // the natural zero-cross + skip-session branches consult the
+    // configured cadence (timer.rs:421, :861). Mirrors the
+    // `set_durations` / `set_allow_continuous_sessions` posture
+    // above: runs once on init so the engine picks up the persisted
+    // value on boot, and re-runs whenever the settings signal moves
+    // so a mid-session save propagates without a process restart.
+    // The engine's setter is a plain assignment (no clamp) — the
+    // 1–10 clamp lives at the Settings UI input layer (Principle
+    // III: type-system encoding over defensive guards).
+    Effect::new(move |_| {
+        let n = settings.with(|s| s.timer.sessions_per_long_break);
+        engine.update(|state| state.set_sessions_per_long_break(n));
+    });
+
+    // Feature 002 Bundle C (T025-T026): dedicated metronome
+    // scheduler. Lives entirely UI-side (Principle I: zero engine
+    // state, zero `web_sys` imports under `src/src/engine/`). The
+    // handle is held in a component-local `Rc<RefCell<…>>` so the
+    // single reconciling Effect can drop the prior interval and
+    // create a new one when the gate or BPM changes — non-reactive
+    // storage, no template observation needed.
+    //
+    // Gate (FR-018, FR-019, spec scenario 4 + 6):
+    //   metronome ∧ Focus ∧ is_running ∧ ¬is_paused ∧
+    //   ¬is_auto_paused ∧ time_remaining_secs > 0
+    //
+    // Lifecycle:
+    //   - rising-edge → create the interval at 60_000 / bpm ms;
+    //   - falling-edge → drop the prior handle via `.clear()`;
+    //   - BPM change → drop-then-recreate at the new period;
+    //   - component unmount → `on_cleanup` drops the handle (RAII).
+    //
+    // Cancel triggers (enumerated by spec scenarios 3, 4, 5, 6, 7):
+    // pause, resume (recreate), mode change (Focus → Break /
+    // LongBreak / skip-target), smart-pause auto-pause, smart-pause
+    // auto-resume on activity, overtime entry (time_remaining_secs
+    // reaches 0), continuous-sessions auto-start of the next focus
+    // (Effect re-runs and recreates), metronome toggled off, BPM
+    // changed, app close. All flow through the same reconciler
+    // because Effect::new tracks every signal read inside its body.
+    let metronome_handle: std::rc::Rc<std::cell::RefCell<Option<leptos::prelude::IntervalHandle>>> =
+        std::rc::Rc::new(std::cell::RefCell::new(None));
+    {
+        // Memo recomputes every tick but only notifies the Effect when the
+        // effective (gate, bpm) pair transitions — focus+running opens the
+        // gate, everything else closes it. Without the Memo the Effect would
+        // run every 1 Hz engine tick, clearing and recreating the SetInterval
+        // each second and preventing the metronome from firing at all.
+        let metronome_gate = Memo::new(move |_| {
+            let (enabled, bpm) =
+                settings.with(|s| (s.notifications.metronome, s.notifications.metronome_bpm));
+            let gate_open = enabled
+                && engine.with(|s| {
+                    matches!(s.current_mode(), TimerMode::Focus)
+                        && s.is_running()
+                        && !s.is_paused()
+                        && !s.is_auto_paused()
+                        && s.time_remaining_secs() > 0
+                });
+            if gate_open && bpm > 0 {
+                Some(bpm)
+            } else {
+                None
+            }
+        });
+        Effect::new(move |_| {
+            let bpm_if_open = metronome_gate.get();
+            // Drop the prior handle whenever the gate / BPM change.
+            if let Some(prev) = metronome_handle.borrow_mut().take() {
+                prev.clear();
+            }
+            if let Some(bpm) = bpm_if_open {
+                // Microsecond precision eliminates integer-truncation drift at
+                // non-divisor BPMs (e.g. 90 BPM: 666_666 µs vs. 666 ms truncated).
+                let period = std::time::Duration::from_micros(60_000_000_u64 / u64::from(bpm));
+                if let Ok(handle) =
+                    leptos::prelude::set_interval_with_handle(play_metronome_tick, period)
+                {
+                    *metronome_handle.borrow_mut() = Some(handle);
+                }
+            }
+        });
+    }
+    // Unmount cleanup: `on_cleanup` requires `Send + Sync`, which
+    // `Rc<RefCell<_>>` can't satisfy on the single-thread wasm
+    // target. The reconciling Effect above already drops the handle
+    // on every falling-edge of the gate — and since `TimerView` is
+    // the app's top-level view (mounted once for the process
+    // lifetime, mirrors the existing tick-loop handle leak at
+    // `:1108`), the scheduler is fully managed by the reconciler.
+    // If `TimerView` ever becomes unmountable, the cleanup path
+    // needs a re-think (e.g. switch to a closure that takes the
+    // `Rc` clone, or migrate to `Effect::new_sync`).
+
     // Tag-dropdown popover state. The JS-era surface anchored the
     // tag picker as a popover off `#timer-status` inside the timer
     // view (`src/index.html` history showed the dropdown nested
@@ -536,6 +679,14 @@ pub fn TimerView() -> impl IntoView {
     // (not `RwSignal`) — the map never drives reactive rendering.
     let active_session_tags: StoredValue<HashMap<String, (String, i64)>> =
         StoredValue::new(HashMap::new());
+
+    // Feature 002 Bundle A: in-flight session title. Local to the
+    // component, captured once at focus zero-cross into BOTH the
+    // `Session` persist call and the synthesised `ManualSession` row
+    // (see `synth_completed_session`). Empty string normalises to
+    // `None` at the boundary (Principle III). Cleared after the
+    // post-completion write.
+    let session_title = RwSignal::new(String::new());
 
     let on_status_click = move |ev: leptos::ev::MouseEvent| {
         // Stop propagation so the document-level click-outside
@@ -848,6 +999,12 @@ pub fn TimerView() -> impl IntoView {
         }
     });
 
+    let next_is_long_break = Signal::derive(move || {
+        let sessions = settings.with(|s| s.timer.sessions_per_long_break);
+        // next completion hits the long-break boundary when count + 1 is a multiple of the configured cadence
+        (engine.with(TimerState::completed_pomodoros) + 1).is_multiple_of(sessions)
+    });
+
     // Click handlers. Each dispatches to the engine via a borrowed
     // mutation; the engine's API returns `Vec<TimerEvent>` which
     // would feed the bridge layer in production (tray icon
@@ -905,6 +1062,9 @@ pub fn TimerView() -> impl IntoView {
             warning_signal,
         );
         apply_tag_tracking_events(&events, active_session_tags, selected_tag_ids);
+        // Clear the per-session title on skip — mirrors the zero-cross clear at
+        // the tick loop so focus → focus skip doesn't carry the previous title.
+        session_title.set(String::new());
         if settings.with_untracked(|s| s.notifications.auto_start_timer) {
             let start_events = engine
                 .try_update(|state| state.start(&BrowserClock).unwrap_or_default())
@@ -969,8 +1129,11 @@ pub fn TimerView() -> impl IntoView {
                         let was_focus = matches!(state.current_mode(), TimerMode::Focus);
                         let was_running = state.is_running();
                         let mode_before = state.current_mode();
-                        let focus_secs_at_tick =
-                            settings.with_untracked(durations_from_settings).focus;
+                        // Capture before tick: on PomodoroCompleted the engine adds
+                        // current_session_elapsed_secs to total_focus_secs and resets
+                        // it to 0, so the diff gives the actual wall-clock duration
+                        // of the session rather than the currently-configured setting.
+                        let total_focus_before = state.total_focus_secs();
                         let mut events = state.tick(&BrowserClock);
                         let completed_focus = was_focus
                             && events
@@ -978,7 +1141,28 @@ pub fn TimerView() -> impl IntoView {
                                 .any(|e| matches!(e, TimerEvent::PomodoroCompleted { .. }));
                         if completed_focus {
                             let now_ms = BrowserClock.now_ms();
-                            let session = synth_completed_session(now_ms, focus_secs_at_tick);
+                            let elapsed_secs =
+                                state.total_focus_secs().saturating_sub(total_focus_before);
+                            // Feature 002 Bundle A: harvest the
+                            // in-flight title ONCE at zero-cross,
+                            // normalise empty-string to None at the
+                            // boundary (Principle III), and clear the
+                            // signal so the next focus starts blank.
+                            let title_at_completion = {
+                                let raw = session_title.get_untracked();
+                                let trimmed = raw.trim();
+                                if trimmed.is_empty() {
+                                    None
+                                } else {
+                                    Some(trimmed.to_string())
+                                }
+                            };
+                            session_title.set(String::new());
+                            let session = synth_completed_session(
+                                now_ms,
+                                elapsed_secs,
+                                title_at_completion.clone(),
+                            );
                             sessions.update(|list| list.push(session));
                             let completed = state.completed_pomodoros();
                             let total_focus = state.total_focus_secs();
@@ -988,6 +1172,7 @@ pub fn TimerView() -> impl IntoView {
                                 total_focus_time: total_focus,
                                 current_session: completed.saturating_add(1),
                                 date: date_str,
+                                title: title_at_completion,
                             };
                             let sd_for_stats = session_data.clone();
                             spawn_local(async move {
@@ -1098,6 +1283,24 @@ pub fn TimerView() -> impl IntoView {
             // Status / mode label + tag-dropdown trigger.
             <div style="text-align: center; position: relative">
                 <div class="timer-status-container">
+                    // Feature 002 Bundle A: per-session title input,
+                    // left of the tag picker (`#timer-status` is the
+                    // tag-dropdown trigger). Value lives in the
+                    // local `session_title` signal and is harvested
+                    // once at focus zero-cross. `maxlength=120`
+                    // enforces the cap at the browser input boundary
+                    // (FR-004).
+                    <input
+                        type="text"
+                        id="session-title-input"
+                        class="session-title-input"
+                        maxlength="120"
+                        placeholder="What is this session for?"
+                        prop:value=move || session_title.get()
+                        on:input=move |ev| {
+                            session_title.set(event_target_value(&ev));
+                        }
+                    />
                     <div
                         class="timer-status clickable"
                         class:active=move || tag_dropdown_open.get()
@@ -1426,8 +1629,7 @@ pub fn TimerView() -> impl IntoView {
                         class="ri-cup-line"
                         style=move || {
                             let mode = engine.with(TimerState::current_mode);
-                            // (completed + 1) % 4 == 0 → next is long break
-                            let next_long = (engine.with(TimerState::completed_pomodoros) + 1) % 4 == 0;
+                            let next_long = next_is_long_break.get();
                             if skip_icon_for_mode(mode, next_long) == "coffee" {
                                 "font-size: 24px"
                             } else {
@@ -1440,7 +1642,7 @@ pub fn TimerView() -> impl IntoView {
                         class="ri-moon-line"
                         style=move || {
                             let mode = engine.with(TimerState::current_mode);
-                            let next_long = (engine.with(TimerState::completed_pomodoros) + 1) % 4 == 0;
+                            let next_long = next_is_long_break.get();
                             if skip_icon_for_mode(mode, next_long) == "moon" {
                                 "font-size: 24px"
                             } else {
@@ -1453,7 +1655,7 @@ pub fn TimerView() -> impl IntoView {
                         class="ri-brain-line"
                         style=move || {
                             let mode = engine.with(TimerState::current_mode);
-                            let next_long = (engine.with(TimerState::completed_pomodoros) + 1) % 4 == 0;
+                            let next_long = next_is_long_break.get();
                             if skip_icon_for_mode(mode, next_long) == "brain" {
                                 "font-size: 24px"
                             } else {

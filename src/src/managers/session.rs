@@ -231,6 +231,7 @@ mod tests {
             created_at: "2026-05-10T09:00:00Z".to_string(),
             date: date.to_string(),
             tags: None,
+            title: None,
         }
     }
 

@@ -90,6 +90,36 @@
   vertical-align: middle;
 }
 
+/* Session Title Input — sits left of the tag-status pill in the
+   .timer-status-container row. Mirrors the visual register of the
+   .timer-status pill: same font, same border-radius, same color
+   token; transparent background so it doesn't compete visually. */
+.session-title-input {
+  font-family: 'Roboto Flex', sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--focus-timer-color);
+  background: transparent;
+  border: 2px solid var(--focus-timer-color);
+  border-radius: 2rem;
+  padding: 0.2rem 1rem;
+  max-width: 320px;
+  outline: none;
+  transition: border-color 0.2s ease, opacity 0.2s ease, box-shadow 0.2s ease;
+}
+
+.session-title-input::placeholder {
+  opacity: 0.55;
+  font-weight: 500;
+}
+
+.session-title-input:focus {
+  border-color: var(--focus-timer-color);
+  opacity: 1;
+  outline: 2px solid var(--focus-timer-color);
+  outline-offset: 2px;
+}
+
 /* Tag Dropdown Styles */
 .timer-status.clickable {
   cursor: pointer;

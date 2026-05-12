@@ -503,6 +503,7 @@ mod tests {
             total_focus_time: 4500,
             current_session: 2,
             date: date.to_string(),
+            title: None,
         }
     }
 
@@ -593,6 +594,7 @@ mod tests {
                 total_focus_time: 0,
                 current_session: 1,
                 date: format!("2024-01-{:02}", i + 1),
+                title: None,
             };
             append_daily_stats_to(dir.path(), &session).expect("append");
         }
@@ -611,12 +613,14 @@ mod tests {
             total_focus_time: 0,
             current_session: 1,
             date: "2024-06-01".to_string(),
+            title: None,
         };
         let second = PomodoroSession {
             completed_pomodoros: 5,
             total_focus_time: 0,
             current_session: 1,
             date: "2024-06-01".to_string(),
+            title: None,
         };
         append_daily_stats_to(dir.path(), &first).expect("append first");
         append_daily_stats_to(dir.path(), &second).expect("append second");
@@ -633,12 +637,14 @@ mod tests {
             total_focus_time: 0,
             current_session: 1,
             date: "Sat Jun 01 2024".to_string(),
+            title: None,
         };
         let iso = PomodoroSession {
             completed_pomodoros: 5,
             total_focus_time: 0,
             current_session: 1,
             date: "2024-06-01".to_string(),
+            title: None,
         };
         append_daily_stats_to(dir.path(), &legacy).expect("append legacy");
         append_daily_stats_to(dir.path(), &iso).expect("append iso");

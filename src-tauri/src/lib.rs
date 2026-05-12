@@ -1153,6 +1153,7 @@ mod tests {
             total_focus_time: 4500,
             current_session: 2,
             date: "Mon Jan 01 2024".to_string(),
+            title: Some("Sprint planning".to_string()),
         };
         let json = serde_json::to_string(&session).unwrap();
         let parsed: PomodoroSession = serde_json::from_str(&json).unwrap();
@@ -1160,6 +1161,18 @@ mod tests {
         assert_eq!(parsed.total_focus_time, session.total_focus_time);
         assert_eq!(parsed.current_session, session.current_session);
         assert_eq!(parsed.date, session.date);
+        assert_eq!(parsed.title.as_deref(), Some("Sprint planning"));
+
+        let session_no_title = PomodoroSession {
+            completed_pomodoros: 1,
+            total_focus_time: 1500,
+            current_session: 1,
+            date: "Tue Jan 02 2024".to_string(),
+            title: None,
+        };
+        let json_no_title = serde_json::to_string(&session_no_title).unwrap();
+        let parsed_no_title: PomodoroSession = serde_json::from_str(&json_no_title).unwrap();
+        assert!(parsed_no_title.title.is_none());
     }
 
     #[test]
@@ -1219,6 +1232,7 @@ mod tests {
             created_at: "2024-01-01T09:00:00Z".to_string(),
             date: "2024-01-01".to_string(),
             tags: Some(vec![serde_json::json!({"id": "tag-1", "name": "Work"})]),
+            title: Some("Deep work".to_string()),
         };
         let json = serde_json::to_string(&session_with_tags).unwrap();
         let parsed: ManualSession = serde_json::from_str(&json).unwrap();
@@ -1227,6 +1241,7 @@ mod tests {
         assert_eq!(parsed.session_type, super::SessionType::Focus);
         assert!(parsed.notes.is_some());
         assert!(parsed.tags.is_some());
+        assert_eq!(parsed.title.as_deref(), Some("Deep work"));
 
         let session_no_extras = ManualSession {
             id: "session-2".to_string(),
@@ -1238,12 +1253,14 @@ mod tests {
             created_at: "2024-01-01T09:25:00Z".to_string(),
             date: "2024-01-01".to_string(),
             tags: None,
+            title: None,
         };
         let json = serde_json::to_string(&session_no_extras).unwrap();
         let parsed: ManualSession = serde_json::from_str(&json).unwrap();
         assert_eq!(parsed.session_type, super::SessionType::Break);
         assert!(parsed.notes.is_none());
         assert!(parsed.tags.is_none());
+        assert!(parsed.title.is_none());
     }
 
     #[test]
@@ -1269,6 +1286,7 @@ mod tests {
                 total_focus_time: i * 1500,
                 current_session: 1,
                 date: format!("2024-01-{i:02}"),
+                title: None,
             })
             .collect();
 

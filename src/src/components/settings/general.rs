@@ -63,6 +63,12 @@ pub fn GeneralSettings(settings: RwSignal<Settings>, toast: SettingsToast) -> im
         Signal::derive(move || settings.with(|s| s.timer.total_sessions.to_string()));
     let max_session_time =
         Signal::derive(move || settings.with(|s| s.timer.max_session_time.to_string()));
+    // Feature 002 Bundle B (T021): "Sessions per long break" — the
+    // 1–10 clamp lives at the input boundary (Principle III); the
+    // engine accepts the `u32` without a runtime guard. Mirrors the
+    // string-binding pattern used by the sibling fields above.
+    let sessions_per_long_break =
+        Signal::derive(move || settings.with(|s| s.timer.sessions_per_long_break.to_string()));
 
     // Change handlers — each fires on blur (`on:change`), updates the
     // settings signal in place, and shows the auto-save toast. The
@@ -92,6 +98,18 @@ pub fn GeneralSettings(settings: RwSignal<Settings>, toast: SettingsToast) -> im
     let on_max_session_change = move |ev| {
         let value = parse_minutes(&event_target_value(&ev), 120);
         settings.update(|s| s.timer.max_session_time = value);
+        toast.show("Settings saved");
+    };
+    // Feature 002 Bundle B (T021): explicit clamp to 1–10 at the
+    // input boundary. Browser `min`/`max` is a UX hint only — a
+    // hand-edited / pasted value still needs an explicit clamp
+    // before it reaches the persisted signal so the engine input
+    // (Principle III: type accepts any `u32` without a runtime
+    // guard) is always in range.
+    let on_sessions_per_long_break_change = move |ev| {
+        let raw = parse_minutes(&event_target_value(&ev), 4);
+        let value = raw.clamp(1, 10);
+        settings.update(|s| s.timer.sessions_per_long_break = value);
         toast.show("Settings saved");
     };
 
@@ -159,6 +177,20 @@ pub fn GeneralSettings(settings: RwSignal<Settings>, toast: SettingsToast) -> im
                 </p>
             </div>
             <div class="setting-item">
+                <label for="sessions-per-long-break">"Sessions per Long Break:"</label>
+                <input
+                    type="number"
+                    id="sessions-per-long-break"
+                    min="1"
+                    max="10"
+                    prop:value=move || sessions_per_long_break.get()
+                    on:change=on_sessions_per_long_break_change
+                />
+                <p class="setting-description">
+                    "How many focus sessions before a long break"
+                </p>
+            </div>
+            <div class="setting-item">
                 <label for="max-session-time">"Max Session Time (minutes):"</label>
                 <input
                     type="number"
@@ -205,6 +237,9 @@ mod tests {
             "long-break-duration",
             "total-sessions",
             "max-session-time",
+            // Feature 002 Bundle B (T021): the new long-break cadence
+            // numeric input shares the General-tab selector contract.
+            "sessions-per-long-break",
         ];
         let mut seen: Vec<&str> = Vec::with_capacity(REQUIRED_IDS.len());
         for id in REQUIRED_IDS {

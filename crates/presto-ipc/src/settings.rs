@@ -111,6 +111,14 @@ pub struct TimerSettings {
     /// Maximum continuous session time before auto-pause (minutes).
     #[serde(default = "default_max_session_time")]
     pub max_session_time: u32,
+    /// Number of focus completions per long-break cycle (1–10
+    /// enforced at the Settings UI input boundary, per Principle III).
+    /// The engine reads this as a configuration input alongside
+    /// `Durations`; pre-002 settings.json records lacking the field
+    /// default to `4` (the value previously hard-coded at
+    /// `src/src/engine/timer.rs:396` and `:831`).
+    #[serde(default = "default_sessions_per_long_break")]
+    pub sessions_per_long_break: u32,
 }
 
 impl Default for TimerSettings {
@@ -122,6 +130,7 @@ impl Default for TimerSettings {
             total_sessions: 10,
             weekly_goal_minutes: default_weekly_goal(),
             max_session_time: default_max_session_time(),
+            sessions_per_long_break: default_sessions_per_long_break(),
         }
     }
 }
@@ -136,6 +145,14 @@ pub const fn default_weekly_goal() -> u32 {
 #[must_use]
 pub const fn default_max_session_time() -> u32 {
     120
+}
+
+/// Default sessions-per-long-break cadence — every 4th focus
+/// completion enters long break (matches the pre-002 hard-coded
+/// literal in `src/src/engine/timer.rs:396` and `:831`).
+#[must_use]
+pub const fn default_sessions_per_long_break() -> u32 {
+    4
 }
 
 /// Notification preferences.
@@ -161,6 +178,17 @@ pub struct NotificationSettings {
     pub smart_pause: bool,
     /// Seconds.
     pub smart_pause_timeout: u32,
+    /// When true, fire a metronome tick during focus sessions at the
+    /// configured `metronome_bpm`. Default `false` (opt-in per
+    /// Principle II). UI-side side effect only — engine is unaware.
+    #[serde(default)]
+    pub metronome: bool,
+    /// Metronome tempo in beats per minute (30–180 enforced at the
+    /// Settings UI input boundary, per Principle III). Read by
+    /// `components/timer/mod.rs` only; the audio call site does not
+    /// re-validate the range.
+    #[serde(default = "default_metronome_bpm")]
+    pub metronome_bpm: u32,
 }
 
 impl Default for NotificationSettings {
@@ -173,8 +201,17 @@ impl Default for NotificationSettings {
             allow_continuous_sessions: false,
             smart_pause: false,
             smart_pause_timeout: 30,
+            metronome: false,
+            metronome_bpm: default_metronome_bpm(),
         }
     }
+}
+
+/// Default metronome BPM — 60 (one tick per second, a comfortable
+/// pacing default for focus work).
+#[must_use]
+pub const fn default_metronome_bpm() -> u32 {
+    60
 }
 
 /// Advanced / debug toggles.
@@ -298,7 +335,79 @@ impl From<SettingsOnDisk> for Settings {
 
 #[cfg(test)]
 mod tests {
-    use super::StatusBarDisplay;
+    use super::{NotificationSettings, StatusBarDisplay, TimerSettings};
+
+    /// T005 (RED → T006 GREEN): pre-002 settings.json without the
+    /// `sessions_per_long_break` field deserialises to the default `4`
+    /// (preserves bit-for-bit engine behaviour on the legacy load
+    /// path per data-model.md §Evolution 3 / SC-006).
+    #[test]
+    fn sessions_per_long_break_default_4() {
+        let legacy = r#"{
+            "focus_duration": 25,
+            "break_duration": 5,
+            "long_break_duration": 20,
+            "total_sessions": 10
+        }"#;
+        let s: TimerSettings = serde_json::from_str(legacy).expect("deserialise legacy");
+        assert_eq!(s.sessions_per_long_break, 4);
+        // Existing default left untouched by the new field's addition.
+        assert_eq!(s.weekly_goal_minutes, 125);
+    }
+
+    /// T005 (RED → T006 GREEN): a custom `sessions_per_long_break`
+    /// value (e.g. 3) round-trips byte-stable through serde.
+    #[test]
+    fn sessions_per_long_break_custom_round_trips() {
+        let s = TimerSettings {
+            sessions_per_long_break: 3,
+            ..TimerSettings::default()
+        };
+        let json = serde_json::to_string(&s).expect("serialise");
+        let back: TimerSettings = serde_json::from_str(&json).expect("deserialise");
+        assert_eq!(back.sessions_per_long_break, 3);
+    }
+
+    /// T007 (RED → T008 GREEN): pre-002 settings.json
+    /// `NotificationSettings` (lacking `metronome` and
+    /// `metronome_bpm`) deserialises to `false` / `60` per SC-011 /
+    /// data-model.md §Evolution 4. The legacy fixture omits the two
+    /// new fields (so the assertion exercises the default path); it
+    /// also omits the `#[serde(default)]` fields `auto_start_focus`
+    /// and `allow_continuous_sessions` so existing defaults stay
+    /// covered.
+    #[test]
+    fn metronome_default_off_60_bpm() {
+        let legacy = r#"{
+            "desktop_notifications": true,
+            "sound_notifications": true,
+            "auto_start_timer": true,
+            "smart_pause": false,
+            "smart_pause_timeout": 30
+        }"#;
+        let n: NotificationSettings = serde_json::from_str(legacy).expect("deserialise legacy");
+        assert!(!n.metronome);
+        assert_eq!(n.metronome_bpm, 60);
+        // Existing post-001 defaults still apply on the legacy load
+        // path — the new fields don't disturb them.
+        assert!(!n.auto_start_focus);
+        assert!(!n.allow_continuous_sessions);
+    }
+
+    /// T007 (RED → T008 GREEN): custom metronome enable + BPM
+    /// round-trip byte-stable through serde.
+    #[test]
+    fn metronome_custom_round_trips() {
+        let n = NotificationSettings {
+            metronome: true,
+            metronome_bpm: 90,
+            ..NotificationSettings::default()
+        };
+        let json = serde_json::to_string(&n).expect("serialise");
+        let back: NotificationSettings = serde_json::from_str(&json).expect("deserialise");
+        assert!(back.metronome);
+        assert_eq!(back.metronome_bpm, 90);
+    }
 
     #[test]
     fn status_bar_display_default_is_default() {

@@ -238,6 +238,67 @@ fn end_time_from_start_duration(start: &str, duration: u32) -> String {
     format!("{:02}:{:02}", end_min / 60, end_min % 60)
 }
 
+/// Display-cap for the title column in the per-day sessions table.
+/// 40 user-perceived chars matches the PM-brief "best-guess" pick
+/// (`A4` in spec.md) — display-only; persistence keeps the full
+/// ≤120-char string.
+const TITLE_DISPLAY_CAP: usize = 40;
+
+/// Truncate a display title to `TITLE_DISPLAY_CAP` user-perceived
+/// chars, appending an ellipsis on overflow. Iterating over chars
+/// (not bytes) keeps multi-byte UTF-8 sequences intact.
+fn truncated_title(full: &str) -> String {
+    let chars: Vec<char> = full.chars().collect();
+    if chars.len() <= TITLE_DISPLAY_CAP {
+        full.to_string()
+    } else {
+        let mut out: String = chars.into_iter().take(TITLE_DISPLAY_CAP).collect();
+        out.push('\u{2026}');
+        out
+    }
+}
+
+/// Build the Title cell view per feature 002 spec FR-006 + plan
+/// §Phase 3 three-tier fallback chain:
+/// 1. `Some(t)` → display the title truncated to
+///    [`TITLE_DISPLAY_CAP`] chars with an ellipsis on overflow; the
+///    full string lives in the cell's `title=` attribute as the
+///    native browser tooltip.
+/// 2. `None` AND `tags` non-empty → join the tag names extracted via
+///    `Value::as_str(v.get("name"))` on `", "`. Matches the existing
+///    tag-display convention.
+/// 3. `None` AND `tags` is `None` or empty → emit a non-breaking
+///    space so the row keeps its line height. No `(untitled)`
+///    sentinel — keeps the visual minimal per the flow.app-functional
+///    reference.
+fn title_cell_view(
+    title: Option<&str>,
+    tags: Option<&[serde_json::Value]>,
+) -> impl IntoView + use<> {
+    title.map_or_else(
+        || {
+            let joined = tags
+                .map(|ts| {
+                    ts.iter()
+                        .filter_map(|v| v.get("name").and_then(serde_json::Value::as_str))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                })
+                .unwrap_or_default();
+            if joined.is_empty() {
+                view! { <td>"\u{00a0}"</td> }.into_any()
+            } else {
+                view! { <td>{joined}</td> }.into_any()
+            }
+        },
+        |full| {
+            let display = truncated_title(full);
+            let full_owned = full.to_string();
+            view! { <td title=full_owned>{display}</td> }.into_any()
+        },
+    )
+}
+
 /// Calendar view — renders the week-range navigation bar + the
 /// month grid backed by a `RwSignal<DateTime<Utc>>` cursor. Click
 /// handlers shift the cursor by one week or one month; derived
@@ -270,11 +331,19 @@ pub fn CalendarView() -> impl IntoView {
     let modal_session_id = RwSignal::new(Option::<String>::None);
     let modal_start = RwSignal::new(String::new());
     let modal_end = RwSignal::new(String::new());
+    // Feature 002 Bundle A: editable title in the manual-session
+    // modal. The modal is the only mutation surface for
+    // `ManualSession` records today; surfacing the title here
+    // satisfies the "manual-backfill form captures the title"
+    // contract (FR-002 / spec User Story 1 scenario 3). Empty-string
+    // is normalised to None on save (Principle III).
+    let modal_title = RwSignal::new(String::new());
     let on_open_modal = move |session: ManualSession| {
         modal_session_id.set(Some(session.id.clone()));
         modal_start.set(session.start_time.clone());
         modal_end.set(session.end_time.clone());
         modal_duration.set(session.duration);
+        modal_title.set(session.title.unwrap_or_default());
         session_modal_open.set(true);
     };
     let on_close_modal = move |_| session_modal_open.set(false);
@@ -606,6 +675,15 @@ pub fn CalendarView() -> impl IntoView {
                         <thead>
                             <tr>
                                 <th>"Time"</th>
+                                // Feature 002 Bundle A: Title column.
+                                // Lands without a visual-regression
+                                // diff because this table is rendered
+                                // off-viewport (see the
+                                // `sessions-history-card` comment
+                                // above); coverage falls back on the
+                                // existing `sessions-history.spec.js`
+                                // scroll-into-view flow.
+                                <th>"Title"</th>
                                 <th>"Duration"</th>
                                 <th>"Actions"</th>
                             </tr>
@@ -618,9 +696,28 @@ pub fn CalendarView() -> impl IntoView {
                                     let session_for_modal = row.clone();
                                     let time_range = format!("{} – {}", row.start_time, row.end_time);
                                     let duration_text = format!("{} min", row.duration);
+                                    // T020: three-tier fallback chain for
+                                    // the Title column.
+                                    // 1. `Some(t)` → truncate to ~40 chars
+                                    //    with ellipsis; full text in the
+                                    //    `title=` attribute as the native
+                                    //    tooltip.
+                                    // 2. `None` AND tags non-empty → join
+                                    //    tag names from
+                                    //    `tags: Option<Vec<Value>>` via
+                                    //    `.get("name").and_then(Value::as_str)`.
+                                    // 3. `None` AND tags absent/empty →
+                                    //    non-breaking space so the row
+                                    //    keeps its line height. No
+                                    //    `(untitled)` sentinel.
+                                    let title_cell = title_cell_view(
+                                        row.title.as_deref(),
+                                        row.tags.as_deref(),
+                                    );
                                     view! {
                                         <tr class="session-row" role="row">
                                             <td>{time_range}</td>
+                                            {title_cell}
                                             <td>{duration_text}</td>
                                             <td>
                                                 <button
@@ -659,6 +756,20 @@ pub fn CalendarView() -> impl IntoView {
                         >"×"</button>
                     </div>
                     <div class="session-modal-body">
+                        // Feature 002 Bundle A: session title input,
+                        // first row of the modal. `maxlength=120`
+                        // enforces FR-004 at the browser boundary.
+                        <label for="session-title">"Title"</label>
+                        <input
+                            type="text"
+                            id="session-title"
+                            maxlength="120"
+                            placeholder="What is this session for?"
+                            prop:value=move || modal_title.get()
+                            on:input=move |ev| {
+                                modal_title.set(event_target_value(&ev));
+                            }
+                        />
                         <label for="session-start-time">"Start Time"</label>
                         <input
                             type="time"
@@ -737,11 +848,24 @@ pub fn CalendarView() -> impl IntoView {
                                     // Normalize end from start+duration so persisted records
                                     // are always consistent (clamps overflow to "23:59").
                                     let end = end_time_from_start_duration(&start, dur);
+                                    // Feature 002 Bundle A: empty-string title
+                                    // normalises to None at the save boundary
+                                    // (Principle III).
+                                    let title_raw = modal_title.get_untracked();
+                                    let title = {
+                                        let trimmed = title_raw.trim();
+                                        if trimmed.is_empty() {
+                                            None
+                                        } else {
+                                            Some(trimmed.to_string())
+                                        }
+                                    };
                                     sessions.update(|ss| {
                                         if let Some(s) = ss.iter_mut().find(|s| s.id == id) {
                                             s.duration = dur;
                                             s.start_time = start;
                                             s.end_time = end;
+                                            s.title = title;
                                         }
                                     });
                                 }
@@ -760,8 +884,8 @@ mod tests {
     use super::{
         build_month_grid, duration_from_start_end_minutes, end_time_from_start_duration,
         format_month_label, format_week_range, month_full, month_short, start_of_week_monday,
-        start_of_week_sunday, week_date_set, weekly_focus_minutes, weekly_sessions_count,
-        weekly_total_minutes,
+        start_of_week_sunday, truncated_title, week_date_set, weekly_focus_minutes,
+        weekly_sessions_count, weekly_total_minutes, TITLE_DISPLAY_CAP,
     };
     use crate::bridge::types::ManualSession;
     use crate::bridge::types::SessionType;
@@ -812,6 +936,7 @@ mod tests {
             "session-form",
             "session-modal-title",
             "close-session-modal",
+            "session-title",
             "session-start-time",
             "session-end-time",
             "session-duration",
@@ -936,6 +1061,7 @@ mod tests {
             created_at: "2026-05-04T09:00:00Z".to_string(),
             date: date.to_string(),
             tags: None,
+            title: None,
         }
     }
 
@@ -968,6 +1094,35 @@ mod tests {
         assert_eq!(weekly_focus_minutes(&sessions, &dates), 0);
         assert_eq!(weekly_sessions_count(&sessions, &dates), 0);
         assert_eq!(weekly_total_minutes(&sessions, &dates), 0);
+    }
+
+    // Feature 002 T020: Title-column truncation helper.
+
+    #[test]
+    fn truncated_title_passes_short_titles_through() {
+        let s = "Spec 002 review";
+        assert!(s.chars().count() <= TITLE_DISPLAY_CAP);
+        assert_eq!(truncated_title(s), s);
+    }
+
+    #[test]
+    fn truncated_title_appends_ellipsis_on_overflow() {
+        let long: String = "a".repeat(TITLE_DISPLAY_CAP + 1);
+        let out = truncated_title(&long);
+        // 40 base chars + one ellipsis char.
+        assert_eq!(out.chars().count(), TITLE_DISPLAY_CAP + 1);
+        assert!(out.ends_with('\u{2026}'));
+    }
+
+    #[test]
+    fn truncated_title_handles_multi_byte_chars() {
+        // 41 cherry-blossom emoji (4 UTF-8 bytes each). char-count
+        // (not byte-count) drives the cap so the emoji are kept
+        // intact and the ellipsis lands at position 40.
+        let s: String = "\u{1f338}".repeat(TITLE_DISPLAY_CAP + 1);
+        let out = truncated_title(&s);
+        assert_eq!(out.chars().count(), TITLE_DISPLAY_CAP + 1);
+        assert!(out.ends_with('\u{2026}'));
     }
 
     #[test]

@@ -313,7 +313,15 @@ date: string;
  * objects rather than ID-only references; we normalise at
  * consumption time without reshaping on disk.
  */
-tags: JsonValue[] | null }
+tags: JsonValue[] | null; 
+/**
+ * User-typed session title (≤120 user-perceived chars). Captured
+ * at manual-backfill submit time and at natural focus completion
+ * (the synth path that mirrors today's auto-saved row into the
+ * calendar). Empty-string is forbidden — normalised to `None` at
+ * the capture boundary per Principle III.
+ */
+title?: string | null }
 /**
  * Notification preferences.
  * 
@@ -329,7 +337,20 @@ export type NotificationSettings = { desktop_notifications: boolean; sound_notif
 /**
  * Seconds.
  */
-smart_pause_timeout: number }
+smart_pause_timeout: number; 
+/**
+ * When true, fire a metronome tick during focus sessions at the
+ * configured `metronome_bpm`. Default `false` (opt-in per
+ * Principle II). UI-side side effect only — engine is unaware.
+ */
+metronome?: boolean; 
+/**
+ * Metronome tempo in beats per minute (30–180 enforced at the
+ * Settings UI input boundary, per Principle III). Read by
+ * `components/timer/mod.rs` only; the audio call site does not
+ * re-validate the range.
+ */
+metronome_bpm?: number }
 /**
  * Pomodoro session record persisted in the user's app-data
  * directory. Backend type alias: `PomodoroSession`.
@@ -342,7 +363,16 @@ total_focus_time: number; current_session: number;
 /**
  * `%a %b %d %Y` (e.g., "Sat May 10 2026").
  */
-date: string }
+date: string; 
+/**
+ * User-typed session title (≤120 user-perceived chars).
+ * `None` for sessions created before this field existed
+ * (feature 002), and for in-flight sessions that completed
+ * without a typed title. Empty-string is forbidden —
+ * normalised to `None` at the capture boundary per Principle
+ * III.
+ */
+title?: string | null }
 /**
  * Per-session per-tag time-spent join row.
  * 
@@ -465,7 +495,16 @@ long_break_duration: number; total_sessions: number; weekly_goal_minutes?: numbe
 /**
  * Maximum continuous session time before auto-pause (minutes).
  */
-max_session_time?: number }
+max_session_time?: number; 
+/**
+ * Number of focus completions per long-break cycle (1–10
+ * enforced at the Settings UI input boundary, per Principle III).
+ * The engine reads this as a configuration input alongside
+ * `Durations`; pre-002 settings.json records lacking the field
+ * default to `4` (the value previously hard-coded at
+ * `src/src/engine/timer.rs:396` and `:831`).
+ */
+sessions_per_long_break?: number }
 
 /** tauri-specta globals **/
 
