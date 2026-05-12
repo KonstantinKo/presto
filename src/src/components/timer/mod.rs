@@ -275,32 +275,42 @@ fn play_chime() {
 #[cfg(not(target_arch = "wasm32"))]
 const fn play_chime() {}
 
-/// Feature 002 Bundle C (T024): one-shot metronome tick. Mirrors
-/// `play_chime`'s AudioContext-per-call lifecycle (FR-020: no
-/// long-lived oscillator) but with a higher frequency and shorter
-/// envelope so the tick is audibly distinct from the chime and
-/// doesn't carry the chime's "DING" tail. 25 min × 180 BPM ≈ 4500
-/// ticks at this lifecycle stays an order of magnitude under
-/// browser-tab audio limits (A12).
+/// One-shot ticking sound, fired once per second from the 1 Hz tick
+/// Effect during focus sessions. Soft kitchen-timer "tick" — very
+/// short percussive transient, low harmonic content, no audible
+/// pitch sweep. Reuses a single long-lived `AudioContext` to avoid
+/// per-call cold-start latency (a fresh `AudioContext` has 100–400 ms
+/// of output buffer warm-up on macOS Core Audio that would push the
+/// tick out of sync with the visual second).
 #[cfg(target_arch = "wasm32")]
 fn play_metronome_tick() {
+    use std::cell::RefCell;
     use web_sys::{AudioContext, OscillatorType};
-    let Ok(ctx) = AudioContext::new() else { return };
-    let Ok(osc) = ctx.create_oscillator() else {
-        return;
-    };
-    let Ok(gain) = ctx.create_gain() else { return };
-    osc.set_type(OscillatorType::Sine);
-    osc.frequency().set_value(1000.0);
-    let now = ctx.current_time();
-    let _ = gain.gain().set_value_at_time(0.2, now);
-    let _ = gain
-        .gain()
-        .exponential_ramp_to_value_at_time(0.01, now + 0.1);
-    let _ = osc.connect_with_audio_node(&gain);
-    let _ = gain.connect_with_audio_node(&ctx.destination());
-    let _ = osc.start();
-    let _ = osc.stop_with_when(now + 0.1);
+    thread_local! {
+        static CTX: RefCell<Option<AudioContext>> = const { RefCell::new(None) };
+    }
+    CTX.with(|cell| {
+        let mut slot = cell.borrow_mut();
+        if slot.is_none() {
+            *slot = AudioContext::new().ok();
+        }
+        let Some(ctx) = slot.as_ref() else { return };
+        let Ok(osc) = ctx.create_oscillator() else {
+            return;
+        };
+        let Ok(gain) = ctx.create_gain() else { return };
+        osc.set_type(OscillatorType::Sine);
+        osc.frequency().set_value(520.0);
+        let now = ctx.current_time();
+        let _ = gain.gain().set_value_at_time(0.04, now);
+        let _ = gain
+            .gain()
+            .exponential_ramp_to_value_at_time(0.0005, now + 0.012);
+        let _ = osc.connect_with_audio_node(&gain);
+        let _ = gain.connect_with_audio_node(&ctx.destination());
+        let _ = osc.start();
+        let _ = osc.stop_with_when(now + 0.018);
+    });
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -536,85 +546,13 @@ pub fn TimerView() -> impl IntoView {
         engine.update(|state| state.set_sessions_per_long_break(n));
     });
 
-    // Feature 002 Bundle C (T025-T026): dedicated metronome
-    // scheduler. Lives entirely UI-side (Principle I: zero engine
-    // state, zero `web_sys` imports under `src/src/engine/`). The
-    // handle is held in a component-local `Rc<RefCell<…>>` so the
-    // single reconciling Effect can drop the prior interval and
-    // create a new one when the gate or BPM changes — non-reactive
-    // storage, no template observation needed.
-    //
-    // Gate (FR-018, FR-019, spec scenario 4 + 6):
-    //   metronome ∧ Focus ∧ is_running ∧ ¬is_paused ∧
-    //   ¬is_auto_paused ∧ time_remaining_secs > 0
-    //
-    // Lifecycle:
-    //   - rising-edge → create the interval at 60_000 / bpm ms;
-    //   - falling-edge → drop the prior handle via `.clear()`;
-    //   - BPM change → drop-then-recreate at the new period;
-    //   - component unmount → `on_cleanup` drops the handle (RAII).
-    //
-    // Cancel triggers (enumerated by spec scenarios 3, 4, 5, 6, 7):
-    // pause, resume (recreate), mode change (Focus → Break /
-    // LongBreak / skip-target), smart-pause auto-pause, smart-pause
-    // auto-resume on activity, overtime entry (time_remaining_secs
-    // reaches 0), continuous-sessions auto-start of the next focus
-    // (Effect re-runs and recreates), metronome toggled off, BPM
-    // changed, app close. All flow through the same reconciler
-    // because Effect::new tracks every signal read inside its body.
-    let metronome_handle: std::rc::Rc<std::cell::RefCell<Option<leptos::prelude::IntervalHandle>>> =
-        std::rc::Rc::new(std::cell::RefCell::new(None));
-    {
-        // Memo recomputes every tick but only notifies the Effect when the
-        // effective (gate, bpm) pair transitions — focus+running opens the
-        // gate, everything else closes it. Without the Memo the Effect would
-        // run every 1 Hz engine tick, clearing and recreating the SetInterval
-        // each second and preventing the metronome from firing at all.
-        let metronome_gate = Memo::new(move |_| {
-            let (enabled, bpm) =
-                settings.with(|s| (s.notifications.metronome, s.notifications.metronome_bpm));
-            let gate_open = enabled
-                && engine.with(|s| {
-                    matches!(s.current_mode(), TimerMode::Focus)
-                        && s.is_running()
-                        && !s.is_paused()
-                        && !s.is_auto_paused()
-                        && s.time_remaining_secs() > 0
-                });
-            if gate_open && bpm > 0 {
-                Some(bpm)
-            } else {
-                None
-            }
-        });
-        Effect::new(move |_| {
-            let bpm_if_open = metronome_gate.get();
-            // Drop the prior handle whenever the gate / BPM change.
-            if let Some(prev) = metronome_handle.borrow_mut().take() {
-                prev.clear();
-            }
-            if let Some(bpm) = bpm_if_open {
-                // Microsecond precision eliminates integer-truncation drift at
-                // non-divisor BPMs (e.g. 90 BPM: 666_666 µs vs. 666 ms truncated).
-                let period = std::time::Duration::from_micros(60_000_000_u64 / u64::from(bpm));
-                if let Ok(handle) =
-                    leptos::prelude::set_interval_with_handle(play_metronome_tick, period)
-                {
-                    *metronome_handle.borrow_mut() = Some(handle);
-                }
-            }
-        });
-    }
-    // Unmount cleanup: `on_cleanup` requires `Send + Sync`, which
-    // `Rc<RefCell<_>>` can't satisfy on the single-thread wasm
-    // target. The reconciling Effect above already drops the handle
-    // on every falling-edge of the gate — and since `TimerView` is
-    // the app's top-level view (mounted once for the process
-    // lifetime, mirrors the existing tick-loop handle leak at
-    // `:1108`), the scheduler is fully managed by the reconciler.
-    // If `TimerView` ever becomes unmountable, the cleanup path
-    // needs a re-think (e.g. switch to a closure that takes the
-    // `Rc` clone, or migrate to `Effect::new_sync`).
+    // Feature 002 Bundle C (revised): ticking-sound scheduler lives
+    // inside the 1 Hz tick Effect below. Firing the tone from the
+    // same Effect that mutates `state` and dispatches
+    // `update_tray_icon` guarantees the audible tick, the visible
+    // timer digit change, and the macOS tray text update share one
+    // event-loop turn. A separate interval would drift against the
+    // engine clock at second boundaries.
 
     // Tag-dropdown popover state. The JS-era surface anchored the
     // tag picker as a popover off `#timer-status` inside the timer
@@ -1119,11 +1057,21 @@ pub fn TimerView() -> impl IntoView {
     // `settings-automation.spec.js:59` exercises (the spec waits
     // for `#pause-icon` to be visible after a focus → break →
     // focus auto-roll).
+    // Closure-captured remembrance of the engine's `time_remaining_secs()`
+    // at the *prior* interval fire. The ticking sound fires only when this
+    // value decreases — that's the same instant the visible digit changes
+    // and `update_tray_icon` is dispatched. `setInterval(1000ms)` doesn't
+    // align with wall-clock-second boundaries, so without the diff guard
+    // the tone could fire twice on the same second or skip a second.
+    let last_remaining_for_tick: std::rc::Rc<std::cell::Cell<u32>> =
+        std::rc::Rc::new(std::cell::Cell::new(u32::MAX));
     Effect::new(move |_| {
         // Read once on mount to register the dependency; the
         // closure re-runs only on cleanup, not on every tick.
+        let last_remaining = last_remaining_for_tick.clone();
         let handle = set_interval_with_handle(
             move || {
+                let remaining_before = engine.with_untracked(TimerState::time_remaining_secs);
                 let events = engine
                     .try_update(|state| {
                         let was_focus = matches!(state.current_mode(), TimerMode::Focus);
@@ -1244,6 +1192,29 @@ pub fn TimerView() -> impl IntoView {
                     warning_signal,
                 );
                 apply_tag_tracking_events(&events, active_session_tags, selected_tag_ids);
+
+                // Ticking sound fires only when the engine's
+                // `time_remaining_secs()` decreases — the same instant
+                // the visible digit changes and the tray text is
+                // refreshed. `setInterval(1000ms)` isn't aligned with
+                // wall-clock-second boundaries; without the diff guard
+                // the tone could double-fire or land on a frame where
+                // the display didn't change.
+                let remaining_after = engine.with_untracked(TimerState::time_remaining_secs);
+                let crossed_second = remaining_after < remaining_before;
+                last_remaining.set(remaining_after);
+                let should_tick = crossed_second
+                    && settings.with_untracked(|s| s.notifications.metronome)
+                    && engine.with_untracked(|s| {
+                        matches!(s.current_mode(), TimerMode::Focus)
+                            && s.is_running()
+                            && !s.is_paused()
+                            && !s.is_auto_paused()
+                            && s.time_remaining_secs() > 0
+                    });
+                if should_tick {
+                    play_metronome_tick();
+                }
             },
             std::time::Duration::from_secs(1),
         );
@@ -1281,26 +1252,8 @@ pub fn TimerView() -> impl IntoView {
             </div>
 
             // Status / mode label + tag-dropdown trigger.
-            <div style="text-align: center; position: relative">
+            <div style="text-align: center;">
                 <div class="timer-status-container">
-                    // Feature 002 Bundle A: per-session title input,
-                    // left of the tag picker (`#timer-status` is the
-                    // tag-dropdown trigger). Value lives in the
-                    // local `session_title` signal and is harvested
-                    // once at focus zero-cross. `maxlength=120`
-                    // enforces the cap at the browser input boundary
-                    // (FR-004).
-                    <input
-                        type="text"
-                        id="session-title-input"
-                        class="session-title-input"
-                        maxlength="120"
-                        placeholder="What is this session for?"
-                        prop:value=move || session_title.get()
-                        on:input=move |ev| {
-                            session_title.set(event_target_value(&ev));
-                        }
-                    />
                     <div
                         class="timer-status clickable"
                         class:active=move || tag_dropdown_open.get()
@@ -1545,6 +1498,27 @@ pub fn TimerView() -> impl IntoView {
                         </div>
                     </div>
                 </div>
+                // Feature 002 Bundle A: per-session title input,
+                // rendered below the tag pill so the dropdown popover
+                // doesn't have to negotiate around it. Only shown
+                // during Focus — breaks don't carry titles. Style
+                // mirrors `.timer-status` (font, padding, radius, bg
+                // tint) so the two pills read as a matched pair.
+                <Show when=move || engine.with(|s| matches!(s.current_mode(), TimerMode::Focus))>
+                    <div class="session-title-row">
+                        <input
+                            type="text"
+                            id="session-title-input"
+                            class="session-title-input"
+                            maxlength="120"
+                            placeholder="What is this session for?"
+                            prop:value=move || session_title.get()
+                            on:input=move |ev| {
+                                session_title.set(event_target_value(&ev));
+                            }
+                        />
+                    </div>
+                </Show>
             </div>
 
             // Countdown display. The `.timer-container` carries a

@@ -315,9 +315,18 @@
 }
 
 .nav-item-base.active {
-    color: var(--text-color);
-    box-shadow: 0 4px 12px var(--text-light);
+    color: var(--text-on-focus, white);
+    background: var(--focus-color);
     opacity: 1;
+}
+
+.nav-item-base.active:hover {
+    transform: none;
+    background: var(--focus-color);
+}
+
+.nav-item-base.active i {
+    color: inherit;
 }
 
 
@@ -391,27 +400,64 @@
 
 /* === SIDEBAR COMPONENTS === */
 
-/* Common sidebar layout */
+/* Common sidebar layout — flex column so a tall nav list can scroll
+   independently of the sticky header at very short viewport heights
+   (~360px and below). Without flex + min-height:0 on the nav, the
+   sidebar's own `overflow-y: auto` only kicks in once total content
+   exceeds `100vh`, leaving the last nav item clipped on small windows. */
 .sidebar-base {
     width: 280px;
     background: white;
     border-right: 1px solid #e9ecef;
-    padding: 2rem 0;
+    padding: 1rem 0;
     box-shadow: 2px 0 10px rgba(0, 0, 0, 0.05);
     position: fixed;
     height: 100vh;
-    overflow-y: auto;
+    overflow: hidden;
     z-index: 100;
     border-radius: 16px;
-    ;
+    display: flex;
+    flex-direction: column;
 }
 
-/* Sidebar navigation container */
+/* Sidebar navigation container — the scrollable region. `flex: 1`
+   plus `min-height: 0` lets it shrink below content size and surface
+   its own scrollbar; the trailing padding keeps "Updates" off the
+   sidebar's bottom edge when scrolled fully down. macOS hides
+   overlay scrollbars by default so the explicit `::-webkit-scrollbar`
+   rules below force a thin always-visible thumb — without it the
+   user has no affordance that the nav is scrollable. */
 .sidebar-nav {
     display: flex;
     flex-direction: column;
     gap: 0.5rem;
-    padding: 0 1rem;
+    padding: 0 1rem 1.5rem 1rem;
+    overflow-y: auto;
+    flex: 1 1 auto;
+    min-height: 0;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(0, 0, 0, 0.25) transparent;
+}
+
+.sidebar-nav::-webkit-scrollbar {
+    width: 6px;
+}
+
+.sidebar-nav::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.sidebar-nav::-webkit-scrollbar-thumb {
+    background: rgba(0, 0, 0, 0.25);
+    border-radius: 3px;
+}
+
+[data-theme="dark"] .sidebar-nav {
+    scrollbar-color: rgba(255, 255, 255, 0.25) transparent;
+}
+
+[data-theme="dark"] .sidebar-nav::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.25);
 }
 
 /* === CONTENT AREA === */

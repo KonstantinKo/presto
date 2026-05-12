@@ -339,18 +339,12 @@ export type NotificationSettings = { desktop_notifications: boolean; sound_notif
  */
 smart_pause_timeout: number; 
 /**
- * When true, fire a metronome tick during focus sessions at the
- * configured `metronome_bpm`. Default `false` (opt-in per
- * Principle II). UI-side side effect only — engine is unaware.
+ * When true, fire a soft tick once per second during focus
+ * sessions, in sync with the 1 Hz countdown. Default `false`
+ * (opt-in per Principle II). UI-side side effect only — engine
+ * is unaware. Locked to the second; not user-configurable.
  */
-metronome?: boolean; 
-/**
- * Metronome tempo in beats per minute (30–180 enforced at the
- * Settings UI input boundary, per Principle III). Read by
- * `components/timer/mod.rs` only; the audio call site does not
- * re-validate the range.
- */
-metronome_bpm?: number }
+metronome?: boolean }
 /**
  * Pomodoro session record persisted in the user's app-data
  * directory. Backend type alias: `PomodoroSession`.

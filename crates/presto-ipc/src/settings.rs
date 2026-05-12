@@ -178,17 +178,12 @@ pub struct NotificationSettings {
     pub smart_pause: bool,
     /// Seconds.
     pub smart_pause_timeout: u32,
-    /// When true, fire a metronome tick during focus sessions at the
-    /// configured `metronome_bpm`. Default `false` (opt-in per
-    /// Principle II). UI-side side effect only — engine is unaware.
+    /// When true, fire a soft tick once per second during focus
+    /// sessions, in sync with the 1 Hz countdown. Default `false`
+    /// (opt-in per Principle II). UI-side side effect only — engine
+    /// is unaware. Locked to the second; not user-configurable.
     #[serde(default)]
     pub metronome: bool,
-    /// Metronome tempo in beats per minute (30–180 enforced at the
-    /// Settings UI input boundary, per Principle III). Read by
-    /// `components/timer/mod.rs` only; the audio call site does not
-    /// re-validate the range.
-    #[serde(default = "default_metronome_bpm")]
-    pub metronome_bpm: u32,
 }
 
 impl Default for NotificationSettings {
@@ -202,16 +197,8 @@ impl Default for NotificationSettings {
             smart_pause: false,
             smart_pause_timeout: 30,
             metronome: false,
-            metronome_bpm: default_metronome_bpm(),
         }
     }
-}
-
-/// Default metronome BPM — 60 (one tick per second, a comfortable
-/// pacing default for focus work).
-#[must_use]
-pub const fn default_metronome_bpm() -> u32 {
-    60
 }
 
 /// Advanced / debug toggles.
@@ -368,16 +355,12 @@ mod tests {
         assert_eq!(back.sessions_per_long_break, 3);
     }
 
-    /// T007 (RED → T008 GREEN): pre-002 settings.json
-    /// `NotificationSettings` (lacking `metronome` and
-    /// `metronome_bpm`) deserialises to `false` / `60` per SC-011 /
-    /// data-model.md §Evolution 4. The legacy fixture omits the two
-    /// new fields (so the assertion exercises the default path); it
-    /// also omits the `#[serde(default)]` fields `auto_start_focus`
-    /// and `allow_continuous_sessions` so existing defaults stay
-    /// covered.
+    /// Pre-002 settings.json `NotificationSettings` lacking the
+    /// `metronome` field deserialises to `false`. The legacy fixture
+    /// also omits `auto_start_focus` / `allow_continuous_sessions` so
+    /// existing `#[serde(default)]` paths stay covered.
     #[test]
-    fn metronome_default_off_60_bpm() {
+    fn metronome_default_off() {
         let legacy = r#"{
             "desktop_notifications": true,
             "sound_notifications": true,
@@ -387,26 +370,40 @@ mod tests {
         }"#;
         let n: NotificationSettings = serde_json::from_str(legacy).expect("deserialise legacy");
         assert!(!n.metronome);
-        assert_eq!(n.metronome_bpm, 60);
-        // Existing post-001 defaults still apply on the legacy load
-        // path — the new fields don't disturb them.
         assert!(!n.auto_start_focus);
         assert!(!n.allow_continuous_sessions);
     }
 
-    /// T007 (RED → T008 GREEN): custom metronome enable + BPM
-    /// round-trip byte-stable through serde.
+    /// Pre-002 settings.json carrying the now-removed `metronome_bpm`
+    /// field still loads — serde drops unknown fields silently
+    /// (struct is not `#[serde(deny_unknown_fields)]`). This guards
+    /// the upgrade path for any user who already opted in under the
+    /// shipped 002 build.
+    #[test]
+    fn metronome_bpm_legacy_field_ignored() {
+        let legacy = r#"{
+            "desktop_notifications": true,
+            "sound_notifications": true,
+            "auto_start_timer": true,
+            "smart_pause": false,
+            "smart_pause_timeout": 30,
+            "metronome": true,
+            "metronome_bpm": 90
+        }"#;
+        let n: NotificationSettings = serde_json::from_str(legacy).expect("deserialise legacy");
+        assert!(n.metronome);
+    }
+
+    /// Custom metronome enable round-trips byte-stable through serde.
     #[test]
     fn metronome_custom_round_trips() {
         let n = NotificationSettings {
             metronome: true,
-            metronome_bpm: 90,
             ..NotificationSettings::default()
         };
         let json = serde_json::to_string(&n).expect("serialise");
         let back: NotificationSettings = serde_json::from_str(&json).expect("deserialise");
         assert!(back.metronome);
-        assert_eq!(back.metronome_bpm, 90);
     }
 
     #[test]
