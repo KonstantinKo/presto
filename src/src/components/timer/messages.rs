@@ -11,10 +11,13 @@ use crate::bridge::types::TimerMode;
 /// Toast text shown when a focus pomodoro completes. The legacy
 /// JS-era flow at `pomodoro-timer.js:1271-1281` distinguishes
 /// between "next is short break" and "next is long break" — every
-/// fourth completion lands in `LongBreak`.
+/// `sessions_per_long_break`-th completion lands in `LongBreak`.
 #[must_use]
-pub(super) const fn pomodoro_completed_toast(completed_pomodoros: u32) -> &'static str {
-    if completed_pomodoros.is_multiple_of(4) {
+pub(super) const fn pomodoro_completed_toast(
+    completed_pomodoros: u32,
+    sessions_per_long_break: u32,
+) -> &'static str {
+    if completed_pomodoros.is_multiple_of(sessions_per_long_break) {
         "Great work! Take a long break \u{1f389}"
     } else {
         "Pomodoro completed! Take a short break \u{1f60c}"
@@ -23,8 +26,11 @@ pub(super) const fn pomodoro_completed_toast(completed_pomodoros: u32) -> &'stat
 
 /// Desktop-notification body paired with [`pomodoro_completed_toast`].
 #[must_use]
-pub(super) const fn pomodoro_completed_desktop_body(completed_pomodoros: u32) -> &'static str {
-    if completed_pomodoros.is_multiple_of(4) {
+pub(super) const fn pomodoro_completed_desktop_body(
+    completed_pomodoros: u32,
+    sessions_per_long_break: u32,
+) -> &'static str {
+    if completed_pomodoros.is_multiple_of(sessions_per_long_break) {
         "Focus session complete \u{2014} take a long break"
     } else {
         "Focus session complete \u{2014} take a short break"
@@ -102,7 +108,7 @@ mod tests {
     fn pomodoro_completed_toast_first_three_use_short_break_message() {
         for n in [1u32, 2, 3] {
             assert_eq!(
-                pomodoro_completed_toast(n),
+                pomodoro_completed_toast(n, 4),
                 "Pomodoro completed! Take a short break \u{1f60c}",
                 "completed_pomodoros={n} (not multiple of 4) must show short-break toast",
             );
@@ -113,7 +119,7 @@ mod tests {
     fn pomodoro_completed_toast_every_fourth_uses_long_break_message() {
         for n in [4u32, 8, 12] {
             assert_eq!(
-                pomodoro_completed_toast(n),
+                pomodoro_completed_toast(n, 4),
                 "Great work! Take a long break \u{1f389}",
                 "completed_pomodoros={n} (multiple of 4) must show long-break toast",
             );
@@ -121,13 +127,26 @@ mod tests {
     }
 
     #[test]
+    fn pomodoro_completed_toast_respects_configured_sessions_per_long_break() {
+        // sessions_per_long_break=6: 5 is short, 6 is long.
+        assert_eq!(
+            pomodoro_completed_toast(5, 6),
+            "Pomodoro completed! Take a short break \u{1f60c}",
+        );
+        assert_eq!(
+            pomodoro_completed_toast(6, 6),
+            "Great work! Take a long break \u{1f389}",
+        );
+    }
+
+    #[test]
     fn pomodoro_completed_desktop_body_mirrors_toast_branch() {
         assert_eq!(
-            pomodoro_completed_desktop_body(3),
+            pomodoro_completed_desktop_body(3, 4),
             "Focus session complete \u{2014} take a short break",
         );
         assert_eq!(
-            pomodoro_completed_desktop_body(4),
+            pomodoro_completed_desktop_body(4, 4),
             "Focus session complete \u{2014} take a long break",
         );
     }

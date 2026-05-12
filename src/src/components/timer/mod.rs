@@ -356,12 +356,18 @@ fn handle_events(
                 completed_pomodoros,
             } => {
                 if !has_overtime {
-                    toast.show(pomodoro_completed_toast(*completed_pomodoros));
+                    toast.show(pomodoro_completed_toast(
+                        *completed_pomodoros,
+                        settings.timer.sessions_per_long_break,
+                    ));
                     if settings.notifications.sound_notifications {
                         play_chime();
                     }
                     if settings.notifications.desktop_notifications {
-                        let desk_body = pomodoro_completed_desktop_body(*completed_pomodoros);
+                        let desk_body = pomodoro_completed_desktop_body(
+                            *completed_pomodoros,
+                            settings.timer.sessions_per_long_break,
+                        );
                         spawn_local(async move {
                             let _ =
                                 crate::bridge::notification::send_notification("Presto", desk_body)
@@ -1049,6 +1055,9 @@ pub fn TimerView() -> impl IntoView {
             warning_signal,
         );
         apply_tag_tracking_events(&events, active_session_tags, selected_tag_ids);
+        // Clear the per-session title on skip — mirrors the zero-cross clear at
+        // the tick loop so focus → focus skip doesn't carry the previous title.
+        session_title.set(String::new());
         if settings.with_untracked(|s| s.notifications.auto_start_timer) {
             let start_events = engine
                 .try_update(|state| state.start(&BrowserClock).unwrap_or_default())
@@ -1608,8 +1617,10 @@ pub fn TimerView() -> impl IntoView {
                         class="ri-cup-line"
                         style=move || {
                             let mode = engine.with(TimerState::current_mode);
-                            // (completed + 1) % 4 == 0 → next is long break
-                            let next_long = (engine.with(TimerState::completed_pomodoros) + 1) % 4 == 0;
+                            let sessions = settings.with(|s| s.timer.sessions_per_long_break);
+                            // next completion is long break when count + 1 hits the configured boundary
+                            let next_long = (engine.with(TimerState::completed_pomodoros) + 1)
+                                .is_multiple_of(sessions);
                             if skip_icon_for_mode(mode, next_long) == "coffee" {
                                 "font-size: 24px"
                             } else {
@@ -1622,7 +1633,9 @@ pub fn TimerView() -> impl IntoView {
                         class="ri-moon-line"
                         style=move || {
                             let mode = engine.with(TimerState::current_mode);
-                            let next_long = (engine.with(TimerState::completed_pomodoros) + 1) % 4 == 0;
+                            let sessions = settings.with(|s| s.timer.sessions_per_long_break);
+                            let next_long = (engine.with(TimerState::completed_pomodoros) + 1)
+                                .is_multiple_of(sessions);
                             if skip_icon_for_mode(mode, next_long) == "moon" {
                                 "font-size: 24px"
                             } else {
@@ -1635,7 +1648,9 @@ pub fn TimerView() -> impl IntoView {
                         class="ri-brain-line"
                         style=move || {
                             let mode = engine.with(TimerState::current_mode);
-                            let next_long = (engine.with(TimerState::completed_pomodoros) + 1) % 4 == 0;
+                            let sessions = settings.with(|s| s.timer.sessions_per_long_break);
+                            let next_long = (engine.with(TimerState::completed_pomodoros) + 1)
+                                .is_multiple_of(sessions);
                             if skip_icon_for_mode(mode, next_long) == "brain" {
                                 "font-size: 24px"
                             } else {
