@@ -48,3 +48,41 @@ pub struct ManualSession {
     /// consumption time without reshaping on disk.
     pub tags: Option<Vec<serde_json::Value>>,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::Session;
+
+    /// T001 (RED → T002 GREEN): `Session::title` round-trips Some,
+    /// None, and the legacy no-key shape. The legacy fixture mirrors
+    /// pre-002 `history.json` records — feature 002 spec FR-001 +
+    /// data-model.md §Evolution 1.
+    #[test]
+    fn title_round_trip_some_none_missing_key() {
+        // Some — typed title round-trips byte-stable.
+        let s1 = Session {
+            completed_pomodoros: 3,
+            total_focus_time: 4500,
+            current_session: 4,
+            date: "Sat May 10 2026".to_string(),
+            title: Some("Spec 002 review".to_string()),
+        };
+        let json1 = serde_json::to_string(&s1).expect("serialise Some");
+        let s1_back: Session = serde_json::from_str(&json1).expect("deserialise Some");
+        assert_eq!(s1_back.title.as_deref(), Some("Spec 002 review"));
+
+        // None — round-trips as None.
+        let s2 = Session {
+            title: None,
+            ..s1.clone()
+        };
+        let json2 = serde_json::to_string(&s2).expect("serialise None");
+        let s2_back: Session = serde_json::from_str(&json2).expect("deserialise None");
+        assert!(s2_back.title.is_none());
+
+        // Legacy — pre-bundle JSON without the key deserialises as None.
+        let legacy = r#"{"completed_pomodoros":3,"total_focus_time":4500,"current_session":4,"date":"Sat May 10 2026"}"#;
+        let s3: Session = serde_json::from_str(legacy).expect("deserialise legacy");
+        assert!(s3.title.is_none());
+    }
+}
