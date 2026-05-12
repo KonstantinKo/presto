@@ -111,6 +111,14 @@ pub struct TimerSettings {
     /// Maximum continuous session time before auto-pause (minutes).
     #[serde(default = "default_max_session_time")]
     pub max_session_time: u32,
+    /// Number of focus completions per long-break cycle (1–10
+    /// enforced at the Settings UI input boundary, per Principle III).
+    /// The engine reads this as a configuration input alongside
+    /// `Durations`; pre-002 settings.json records lacking the field
+    /// default to `4` (the value previously hard-coded at
+    /// `src/src/engine/timer.rs:396` and `:831`).
+    #[serde(default = "default_sessions_per_long_break")]
+    pub sessions_per_long_break: u32,
 }
 
 impl Default for TimerSettings {
@@ -122,6 +130,7 @@ impl Default for TimerSettings {
             total_sessions: 10,
             weekly_goal_minutes: default_weekly_goal(),
             max_session_time: default_max_session_time(),
+            sessions_per_long_break: default_sessions_per_long_break(),
         }
     }
 }
@@ -136,6 +145,14 @@ pub const fn default_weekly_goal() -> u32 {
 #[must_use]
 pub const fn default_max_session_time() -> u32 {
     120
+}
+
+/// Default sessions-per-long-break cadence — every 4th focus
+/// completion enters long break (matches the pre-002 hard-coded
+/// literal in `src/src/engine/timer.rs:396` and `:831`).
+#[must_use]
+pub const fn default_sessions_per_long_break() -> u32 {
+    4
 }
 
 /// Default analytics-opt-in flag — opted in on a fresh install.

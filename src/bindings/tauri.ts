@@ -723,7 +723,16 @@ long_break_duration: number; total_sessions: number; weekly_goal_minutes?: numbe
 /**
  * Maximum continuous session time before auto-pause (minutes).
  */
-max_session_time?: number }
+max_session_time?: number; 
+/**
+ * Number of focus completions per long-break cycle (1–10
+ * enforced at the Settings UI input boundary, per Principle III).
+ * The engine reads this as a configuration input alongside
+ * `Durations`; pre-002 settings.json records lacking the field
+ * default to `4` (the value previously hard-coded at
+ * `src/src/engine/timer.rs:396` and `:831`).
+ */
+sessions_per_long_break?: number }
 
 /** tauri-specta globals **/
 
