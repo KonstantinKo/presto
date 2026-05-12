@@ -6,7 +6,7 @@
 // Test-first per the spec — RED commit lands stubs; GREEN replaces
 // the body with the real `NaiveDate::from_ymd_opt` path.
 
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Datelike, NaiveDate, TimeZone, Timelike, Utc};
 
 /// Roll `day_of_month` into `target_month`'s year+month, clamping to
 /// the last day of that month if `day_of_month` exceeds it.
@@ -19,20 +19,35 @@ use chrono::{DateTime, Utc};
 /// `target_month` (consumers downstream only inspect the calendar
 /// date — `format_session_date` discards the time fragment).
 #[must_use]
-#[allow(
-    clippy::missing_const_for_fn,
-    reason = "RED-state stub (T006); GREEN commit (T007) replaces the body with the real NaiveDate::from_ymd_opt path that is not const-eligible."
-)]
-#[allow(
-    unused_variables,
-    reason = "RED-state stub (T006); GREEN commit (T007) consumes both arguments."
-)]
 pub fn clamp_day_to_month(day_of_month: u32, target_month: DateTime<Utc>) -> DateTime<Utc> {
-    // RED-state stub: returns the target_month unchanged so the
-    // helper compiles but every test case fails (the days don't
-    // match). The GREEN commit (T007) replaces this with the real
-    // ymd_opt-fallback path.
-    target_month
+    let year = target_month.year();
+    let month = target_month.month();
+
+    // First try the requested day-of-month; fall back to walking
+    // down from 31 until we hit a valid date for the target month.
+    // 28 is always valid (February's minimum), so the fallback loop
+    // terminates in at most 4 iterations.
+    let day = if NaiveDate::from_ymd_opt(year, month, day_of_month).is_some() {
+        day_of_month
+    } else {
+        // Cap the search at 28 so we don't infinite-loop on a
+        // pathological input (e.g. day_of_month == 0 or > 31).
+        (1u32..=31u32.min(day_of_month))
+            .rev()
+            .find(|d| NaiveDate::from_ymd_opt(year, month, *d).is_some())
+            .unwrap_or(28)
+    };
+
+    Utc.with_ymd_and_hms(
+        year,
+        month,
+        day,
+        target_month.hour(),
+        target_month.minute(),
+        target_month.second(),
+    )
+    .single()
+    .unwrap_or(target_month)
 }
 
 #[cfg(test)]
