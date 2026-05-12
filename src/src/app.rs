@@ -200,16 +200,14 @@ pub fn App() -> impl IntoView {
     // log a noisy error.
     if matches!(bridge_state, BridgeAvailable::Available) {
         spawn_local(async move {
-            // Errors fall back to `Settings::default()`.
-            if let Ok(loaded) = commands::load_settings().await {
-                let resolved = loader::resolve_color_mode(
-                    &loaded.appearance.theme,
-                    loader::system_prefers_dark(),
-                );
-                loader::apply_theme(resolved);
-                loader::apply_timer_theme(&loaded.appearance.timer_theme);
-                settings.set(loaded);
-            }
+            // Errors fall back to `Settings::default()` but theme side-effects
+            // always run so the UI has a coherent initial appearance.
+            let loaded = commands::load_settings().await.unwrap_or_default();
+            let resolved =
+                loader::resolve_color_mode(&loaded.appearance.theme, loader::system_prefers_dark());
+            loader::apply_theme(resolved);
+            loader::apply_timer_theme(&loaded.appearance.timer_theme);
+            settings.set(loaded);
         });
 
         // Phase 4e R-004: debounced settings persistence sink.

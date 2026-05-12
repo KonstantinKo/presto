@@ -38,7 +38,7 @@ A modern, cross-platform Pomodoro timer built with **Tauri + Leptos** (Rust + We
 ### 🔒 Local-Only
 
 - Single-user, fully local. No accounts, no sync, no telemetry.
-- The only outbound traffic is the auto-updater's release check.
+- The application does not send user data or telemetry; the only outbound network activity of that kind is the auto-updater's release check (no user data on the wire).
 
 ### ⌨️ Keyboard Shortcuts
 
