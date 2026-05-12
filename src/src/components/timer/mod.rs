@@ -564,36 +564,35 @@ pub fn TimerView() -> impl IntoView {
     let metronome_handle: std::rc::Rc<std::cell::RefCell<Option<leptos::prelude::IntervalHandle>>> =
         std::rc::Rc::new(std::cell::RefCell::new(None));
     {
-        Effect::new(move |_| {
+        // Memo recomputes every tick but only notifies the Effect when the
+        // effective (gate, bpm) pair transitions — focus+running opens the
+        // gate, everything else closes it. Without the Memo the Effect would
+        // run every 1 Hz engine tick, clearing and recreating the SetInterval
+        // each second and preventing the metronome from firing at all.
+        let metronome_gate = Memo::new(move |_| {
             let (enabled, bpm) =
                 settings.with(|s| (s.notifications.metronome, s.notifications.metronome_bpm));
-            let (mode, is_running, is_paused, is_auto_paused, time_remaining_secs) =
-                engine.with(|s| {
-                    (
-                        s.current_mode(),
-                        s.is_running(),
-                        s.is_paused(),
-                        s.is_auto_paused(),
-                        s.time_remaining_secs(),
-                    )
-                });
             let gate_open = enabled
-                && matches!(mode, TimerMode::Focus)
-                && is_running
-                && !is_paused
-                && !is_auto_paused
-                && time_remaining_secs > 0;
-
+                && engine.with(|s| {
+                    matches!(s.current_mode(), TimerMode::Focus)
+                        && s.is_running()
+                        && !s.is_paused()
+                        && !s.is_auto_paused()
+                        && s.time_remaining_secs() > 0
+                });
+            if gate_open && bpm > 0 {
+                Some(bpm)
+            } else {
+                None
+            }
+        });
+        Effect::new(move |_| {
+            let bpm_if_open = metronome_gate.get();
             // Drop the prior handle whenever the gate / BPM change.
-            // The reactive runtime guarantees this branch fires
-            // before we look at `gate_open` again, so the falling-
-            // edge case (and the drop-then-recreate case on BPM
-            // change) collapses into one clear() call.
             if let Some(prev) = metronome_handle.borrow_mut().take() {
                 prev.clear();
             }
-
-            if gate_open && bpm > 0 {
+            if let Some(bpm) = bpm_if_open {
                 // Microsecond precision eliminates integer-truncation drift at
                 // non-divisor BPMs (e.g. 90 BPM: 666_666 µs vs. 666 ms truncated).
                 let period = std::time::Duration::from_micros(60_000_000_u64 / u64::from(bpm));
@@ -1123,8 +1122,11 @@ pub fn TimerView() -> impl IntoView {
                         let was_focus = matches!(state.current_mode(), TimerMode::Focus);
                         let was_running = state.is_running();
                         let mode_before = state.current_mode();
-                        let focus_secs_at_tick =
-                            settings.with_untracked(durations_from_settings).focus;
+                        // Capture before tick: on PomodoroCompleted the engine adds
+                        // current_session_elapsed_secs to total_focus_secs and resets
+                        // it to 0, so the diff gives the actual wall-clock duration
+                        // of the session rather than the currently-configured setting.
+                        let total_focus_before = state.total_focus_secs();
                         let mut events = state.tick(&BrowserClock);
                         let completed_focus = was_focus
                             && events
@@ -1132,6 +1134,8 @@ pub fn TimerView() -> impl IntoView {
                                 .any(|e| matches!(e, TimerEvent::PomodoroCompleted { .. }));
                         if completed_focus {
                             let now_ms = BrowserClock.now_ms();
+                            let elapsed_secs =
+                                state.total_focus_secs().saturating_sub(total_focus_before);
                             // Feature 002 Bundle A: harvest the
                             // in-flight title ONCE at zero-cross,
                             // normalise empty-string to None at the
@@ -1149,7 +1153,7 @@ pub fn TimerView() -> impl IntoView {
                             session_title.set(String::new());
                             let session = synth_completed_session(
                                 now_ms,
-                                focus_secs_at_tick,
+                                elapsed_secs,
                                 title_at_completion.clone(),
                             );
                             sessions.update(|list| list.push(session));

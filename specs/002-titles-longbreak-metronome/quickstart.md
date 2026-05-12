@@ -151,7 +151,7 @@ Then update only the three expected baselines:
 
 ```bash
 (cd tests/e2e && npx playwright test --update-snapshots visual-regression.spec.js)
-git status   # should show exactly 4 modified PNGs under tests/e2e/__screenshots__/visual-regression/
+git status   # should show exactly 3 modified PNGs under tests/e2e/__screenshots__/visual-regression/
 ```
 
 **Per-baseline justification** (copy into the eventual PR body verbatim — these are the three restatements required by Principle IV):

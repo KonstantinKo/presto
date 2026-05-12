@@ -936,6 +936,7 @@ mod tests {
             "session-form",
             "session-modal-title",
             "close-session-modal",
+            "session-title",
             "session-start-time",
             "session-end-time",
             "session-duration",

@@ -40,7 +40,7 @@ Bundles: **A** = per-session titles · **B** = configurable long-break · **C** 
 
 - [ ] **T006** [B] [Phase 0] GREEN: add `sessions_per_long_break: u32` to `TimerSettings` with `#[serde(default = "default_sessions_per_long_break")]` + `#[must_use] pub const fn default_sessions_per_long_break() -> u32 { 4 }`
   - **Files**: `crates/presto-ipc/src/settings.rs`
-  - **Done-signal**: `cargo test --workspace --frozen -p presto-ipc settings::tests::sessions_per_long_break_default_4 settings::tests::sessions_per_long_break_custom_round_trips` passes. Update `Default for TimerSettings` to call the new const fn. Separate commit from T005.
+  - **Done-signal**: `cargo test --workspace --frozen -p presto-ipc settings::tests::sessions_per_long_break_default_4` and `cargo test --workspace --frozen -p presto-ipc settings::tests::sessions_per_long_break_custom_round_trips` both pass. Update `Default for TimerSettings` to call the new const fn. Separate commit from T005.
   - **BlockedBy**: T005.
 
 - [ ] **T007** [X] [Phase 0] RED: add failing `presto_ipc::settings::tests::metronome_default_off_60_bpm` AND `metronome_custom_round_trips`
@@ -68,7 +68,7 @@ Bundles: **A** = per-session titles · **B** = configurable long-break · **C** 
 - [ ] **T010** [X] [Phase 1] RED: add four failing boundary tests in `src/src/engine/timer.rs::tests`
   - Tests: `long_break_after_n_focus_sessions_with_n_eq_1` (every focus → LongBreak), `long_break_after_n_focus_sessions_with_n_eq_10` (LongBreak only on the 10th), `skip_session_long_break_with_n_eq_1` (skip branch consults the field), `mid_session_sessions_per_long_break_change_preserves_anchor` (setter does not reset `time_remaining_secs` or `current_mode`).
   - **Files**: `src/src/engine/timer.rs` (test module).
-  - **Done-signal**: `cargo test --workspace --frozen -p presto-web engine::tests::long_break_after_n_focus_sessions_with_n_eq_1 engine::tests::long_break_after_n_focus_sessions_with_n_eq_10 engine::tests::skip_session_long_break_with_n_eq_1 engine::tests::mid_session_sessions_per_long_break_change_preserves_anchor` fails to compile (calls to missing `set_sessions_per_long_break`) or fails assertions. Separate commit.
+  - **Done-signal**: Each of the following fails to compile (calls to missing `set_sessions_per_long_break`) or fails assertions. Run them separately: `cargo test --workspace --frozen -p presto-web engine::tests::long_break_after_n_focus_sessions_with_n_eq_1`, `cargo test --workspace --frozen -p presto-web engine::tests::long_break_after_n_focus_sessions_with_n_eq_10`, `cargo test --workspace --frozen -p presto-web engine::tests::skip_session_long_break_with_n_eq_1`, `cargo test --workspace --frozen -p presto-web engine::tests::mid_session_sessions_per_long_break_change_preserves_anchor`. Separate commit.
   - **BlockedBy**: T008.
 
 - [ ] **T011** [B] [Phase 1] GREEN: add `sessions_per_long_break: u32` field to `TimerState`, defaulted to `4` at the existing `TimerState::new` struct-init (`engine/timer.rs:202`). Constructor signature is **unchanged** (per plan Fix 4).

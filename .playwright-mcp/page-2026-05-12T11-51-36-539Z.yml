@@ -1,0 +1,383 @@
+- generic [active] [ref=e1]:
+  - navigation [ref=e2]:
+    - generic [ref=e4]:
+      - generic [ref=e5]:
+        - link "AGENTEX AGENTEX v1.0" [ref=e6] [cursor=pointer]:
+          - /url: /
+          - generic [ref=e7]: AGENTEX AGENTEX
+          - generic [ref=e8]: v1.0
+        - generic [ref=e9]:
+          - link "Dashboard" [ref=e10] [cursor=pointer]:
+            - /url: /
+            - img [ref=e11]
+            - generic [ref=e16]: Dashboard
+          - link "Queue" [ref=e17] [cursor=pointer]:
+            - /url: /queue
+            - img [ref=e18]
+            - generic [ref=e19]: Queue
+          - link "Projects" [ref=e20] [cursor=pointer]:
+            - /url: /projects
+            - img [ref=e21]
+            - generic [ref=e23]: Projects
+      - generic [ref=e27]: SYSTEM ONLINE
+  - main [ref=e28]:
+    - generic [ref=e356]:
+      - generic [ref=e357]:
+        - generic [ref=e358]:
+          - heading "presto presto" [level=1] [ref=e359]
+          - link "KonstantinKo/presto" [ref=e360] [cursor=pointer]:
+            - /url: https://github.com/KonstantinKo/presto
+            - img [ref=e361]
+            - text: KonstantinKo/presto
+        - generic [ref=e363]:
+          - link "PREVIEW" [ref=e364] [cursor=pointer]:
+            - /url: /projects/12/preview
+            - img [ref=e365]
+            - text: PREVIEW
+          - button "ENABLE APK" [ref=e367] [cursor=pointer]:
+            - img [ref=e368]
+            - text: ENABLE APK
+          - button "MAINTENANCE" [ref=e371] [cursor=pointer]:
+            - img [ref=e372]
+            - text: MAINTENANCE
+          - button "AUDIT" [ref=e375] [cursor=pointer]:
+            - img [ref=e376]
+            - text: AUDIT
+            - img [ref=e378]
+          - button "PAUSE" [ref=e380] [cursor=pointer]:
+            - img [ref=e381]
+            - text: PAUSE
+          - link "EDIT" [ref=e384] [cursor=pointer]:
+            - /url: /projects/12/edit
+            - img [ref=e385]
+            - text: EDIT
+      - generic [ref=e388]:
+        - generic [ref=e389]:
+          - heading "DETAILS" [level=2] [ref=e391]:
+            - img [ref=e392]
+            - text: DETAILS
+          - generic [ref=e395]:
+            - generic [ref=e396]:
+              - term [ref=e397]: STATUS
+              - definition [ref=e398]:
+                - generic [ref=e399]: ACTIVE
+            - generic [ref=e400]:
+              - term [ref=e401]: WORKFLOW
+              - definition [ref=e402]: plan_and_build
+            - generic [ref=e403]:
+              - term [ref=e404]: PRIORITY BOOST
+              - definition [ref=e405]: "+0"
+            - generic [ref=e406]:
+              - term [ref=e407]: LAST COMPLETED
+              - definition [ref=e408]: 2026-05-12 08:33
+            - generic [ref=e409]:
+              - term [ref=e410]: AUTO-MAINTENANCE
+              - definition [ref=e411]: 6/7
+        - generic [ref=e412]:
+          - heading "CONFIGURATION" [level=2] [ref=e414]:
+            - img [ref=e415]
+            - text: CONFIGURATION
+          - generic [ref=e419]: "{}"
+      - generic [ref=e420]:
+        - generic [ref=e421]:
+          - heading "JOB HISTORY" [level=2] [ref=e422]:
+            - img [ref=e423]
+            - text: JOB HISTORY
+          - generic [ref=e425]: 20 TOTAL
+        - table [ref=e427]:
+          - rowgroup [ref=e428]:
+            - row "ISSUE TYPE STATUS QUEUED COMPLETED" [ref=e429]:
+              - columnheader "ISSUE" [ref=e430]:
+                - generic [ref=e431]: ISSUE
+              - columnheader "TYPE" [ref=e432]:
+                - generic [ref=e433]: TYPE
+              - columnheader "STATUS" [ref=e434]:
+                - generic [ref=e435]: STATUS
+              - columnheader "QUEUED" [ref=e436]:
+                - generic [ref=e437]: QUEUED
+              - columnheader "COMPLETED" [ref=e438]:
+                - generic [ref=e439]: COMPLETED
+          - rowgroup [ref=e440]:
+            - 'row "[PR #50] Local-only pivot: strip auth/sync/team/analytics FEATURE COMPLETED 2026-05-12 07:59 2026-05-12 08:33" [ref=e441] [cursor=pointer]':
+              - 'cell "[PR #50] Local-only pivot: strip auth/sync/team/analytics" [ref=e442]':
+                - generic [ref=e444]: "[PR #50] Local-only pivot: strip auth/sync/team/analytics"
+              - cell "FEATURE" [ref=e445]:
+                - generic [ref=e446]:
+                  - img [ref=e447]
+                  - text: FEATURE
+              - cell "COMPLETED" [ref=e449]:
+                - generic [ref=e450]: COMPLETED
+              - cell "2026-05-12 07:59" [ref=e452]
+              - cell "2026-05-12 08:33" [ref=e453]
+            - 'row "[PR #49] Fix regression sweep + shared IPC types crate + tauri-specta wiring FEATURE COMPLETED 2026-05-11 20:37 2026-05-12 06:50" [ref=e454] [cursor=pointer]':
+              - 'cell "[PR #49] Fix regression sweep + shared IPC types crate + tauri-specta wiring" [ref=e455]':
+                - generic [ref=e457]: "[PR #49] Fix regression sweep + shared IPC types crate + tauri-specta wiring"
+              - cell "FEATURE" [ref=e458]:
+                - generic [ref=e459]:
+                  - img [ref=e460]
+                  - text: FEATURE
+              - cell "COMPLETED" [ref=e462]:
+                - generic [ref=e463]: COMPLETED
+              - cell "2026-05-11 20:37" [ref=e465]
+              - cell "2026-05-12 06:50" [ref=e466]
+            - 'row "#40 macOS: system tray icon does not appear at runtime BUG COMPLETED 2026-05-11 13:33 2026-05-11 14:25" [ref=e467] [cursor=pointer]':
+              - 'cell "#40 macOS: system tray icon does not appear at runtime" [ref=e468]':
+                - generic [ref=e469]:
+                  - generic [ref=e470]: "#40"
+                  - generic [ref=e471]: "macOS: system tray icon does not appear at runtime"
+              - cell "BUG" [ref=e472]:
+                - generic [ref=e473]:
+                  - img [ref=e474]
+                  - text: BUG
+              - cell "COMPLETED" [ref=e477]:
+                - generic [ref=e478]: COMPLETED
+              - cell "2026-05-11 13:33" [ref=e480]
+              - cell "2026-05-11 14:25" [ref=e481]
+            - row "#39 Restore secondary UI affordances, semantic HTML attributes, and the missing display font BUG COMPLETED 2026-05-11 13:28 2026-05-11 15:05" [ref=e482] [cursor=pointer]:
+              - cell "#39 Restore secondary UI affordances, semantic HTML attributes, and the missing display font" [ref=e483]:
+                - generic [ref=e484]:
+                  - generic [ref=e485]: "#39"
+                  - generic [ref=e486]: Restore secondary UI affordances, semantic HTML attributes, and the missing display font
+              - cell "BUG" [ref=e487]:
+                - generic [ref=e488]:
+                  - img [ref=e489]
+                  - text: BUG
+              - cell "COMPLETED" [ref=e492]:
+                - generic [ref=e493]: COMPLETED
+              - cell "2026-05-11 13:28" [ref=e495]
+              - cell "2026-05-11 15:05" [ref=e496]
+            - 'row "#38 Visual: mode-aware projections + active-state class bindings never wired BUG COMPLETED 2026-05-11 12:23 2026-05-11 13:03" [ref=e497] [cursor=pointer]':
+              - 'cell "#38 Visual: mode-aware projections + active-state class bindings never wired" [ref=e498]':
+                - generic [ref=e499]:
+                  - generic [ref=e500]: "#38"
+                  - generic [ref=e501]: "Visual: mode-aware projections + active-state class bindings never wired"
+              - cell "BUG" [ref=e502]:
+                - generic [ref=e503]:
+                  - img [ref=e504]
+                  - text: BUG
+              - cell "COMPLETED" [ref=e507]:
+                - generic [ref=e508]: COMPLETED
+              - cell "2026-05-11 12:23" [ref=e510]
+              - cell "2026-05-11 13:03" [ref=e511]
+            - 'row "#37 Timer engine: restore event-driven side effects + fix unit/clamp/timezone errors BUG COMPLETED 2026-05-11 06:08 2026-05-11 07:22" [ref=e512] [cursor=pointer]':
+              - 'cell "#37 Timer engine: restore event-driven side effects + fix unit/clamp/timezone errors" [ref=e513]':
+                - generic [ref=e514]:
+                  - generic [ref=e515]: "#37"
+                  - generic [ref=e516]: "Timer engine: restore event-driven side effects + fix unit/clamp/timezone errors"
+              - cell "BUG" [ref=e517]:
+                - generic [ref=e518]:
+                  - img [ref=e519]
+                  - text: BUG
+              - cell "COMPLETED" [ref=e522]:
+                - generic [ref=e523]: COMPLETED
+              - cell "2026-05-11 06:08" [ref=e525]
+              - cell "2026-05-11 07:22" [ref=e526]
+            - row "Vision Audit (full run) VISION AUDIT RUNNING 2026-05-11 01:20 -" [ref=e527] [cursor=pointer]:
+              - cell "Vision Audit (full run)" [ref=e528]:
+                - generic [ref=e530]: Vision Audit (full run)
+              - cell "VISION AUDIT" [ref=e531]:
+                - generic [ref=e532]:
+                  - img [ref=e533]
+                  - text: VISION AUDIT
+              - cell "RUNNING" [ref=e536]:
+                - generic [ref=e537]: RUNNING
+              - cell "2026-05-11 01:20" [ref=e539]
+              - cell "-" [ref=e540]
+            - row "Maintenance (full run) MAINTENANCE COMPLETED 2026-05-10 22:45 2026-05-11 01:20" [ref=e541] [cursor=pointer]:
+              - cell "Maintenance (full run)" [ref=e542]:
+                - generic [ref=e544]: Maintenance (full run)
+              - cell "MAINTENANCE" [ref=e545]:
+                - generic [ref=e546]:
+                  - img [ref=e547]
+                  - text: MAINTENANCE
+              - cell "COMPLETED" [ref=e549]:
+                - generic [ref=e550]: COMPLETED
+              - cell "2026-05-10 22:45" [ref=e552]
+              - cell "2026-05-11 01:20" [ref=e553]
+            - 'row "#36 Settings: complete the data-model and the read/write wires across the app BUG COMPLETED 2026-05-10 21:33 2026-05-10 22:45" [ref=e554] [cursor=pointer]':
+              - 'cell "#36 Settings: complete the data-model and the read/write wires across the app" [ref=e555]':
+                - generic [ref=e556]:
+                  - generic [ref=e557]: "#36"
+                  - generic [ref=e558]: "Settings: complete the data-model and the read/write wires across the app"
+              - cell "BUG" [ref=e559]:
+                - generic [ref=e560]:
+                  - img [ref=e561]
+                  - text: BUG
+              - cell "COMPLETED" [ref=e564]:
+                - generic [ref=e565]: COMPLETED
+              - cell "2026-05-10 21:33" [ref=e567]
+              - cell "2026-05-10 22:45" [ref=e568]
+            - 'row "[PR #34] 001: Leptos frontend migration — Phase 4f ripple cleanup + R-004 bridge wiring FEATURE COMPLETED 2026-05-10 16:14 2026-05-10 17:12" [ref=e569] [cursor=pointer]':
+              - 'cell "[PR #34] 001: Leptos frontend migration — Phase 4f ripple cleanup + R-004 bridge wiring" [ref=e570]':
+                - generic [ref=e572]: "[PR #34] 001: Leptos frontend migration — Phase 4f ripple cleanup + R-004 bridge wiring"
+              - cell "FEATURE" [ref=e573]:
+                - generic [ref=e574]:
+                  - img [ref=e575]
+                  - text: FEATURE
+              - cell "COMPLETED" [ref=e577]:
+                - generic [ref=e578]: COMPLETED
+              - cell "2026-05-10 16:14" [ref=e580]
+              - cell "2026-05-10 17:12" [ref=e581]
+            - 'row "[PR #25] Retrofit spec-kit: constitution v1.0.0, gates, AGENTS.md, VISION.md FEATURE COMPLETED 2026-05-09 20:45 2026-05-09 20:47" [ref=e582] [cursor=pointer]':
+              - 'cell "[PR #25] Retrofit spec-kit: constitution v1.0.0, gates, AGENTS.md, VISION.md" [ref=e583]':
+                - generic [ref=e585]: "[PR #25] Retrofit spec-kit: constitution v1.0.0, gates, AGENTS.md, VISION.md"
+              - cell "FEATURE" [ref=e586]:
+                - generic [ref=e587]:
+                  - img [ref=e588]
+                  - text: FEATURE
+              - cell "COMPLETED" [ref=e590]:
+                - generic [ref=e591]: COMPLETED
+              - cell "2026-05-09 20:45" [ref=e593]
+              - cell "2026-05-09 20:47" [ref=e594]
+            - row "#23 Add automated visual regression testing (Playwright visual comparison) FEATURE COMPLETED 2026-05-09 16:12 2026-05-09 16:57" [ref=e595] [cursor=pointer]:
+              - cell "#23 Add automated visual regression testing (Playwright visual comparison)" [ref=e596]:
+                - generic [ref=e597]:
+                  - generic [ref=e598]: "#23"
+                  - generic [ref=e599]: Add automated visual regression testing (Playwright visual comparison)
+              - cell "FEATURE" [ref=e600]:
+                - generic [ref=e601]:
+                  - img [ref=e602]
+                  - text: FEATURE
+              - cell "COMPLETED" [ref=e604]:
+                - generic [ref=e605]: COMPLETED
+              - cell "2026-05-09 16:12" [ref=e607]
+              - cell "2026-05-09 16:57" [ref=e608]
+            - row "#20 Full-coverage E2E test suite — all screens + major flows FEATURE COMPLETED 2026-05-09 13:52 2026-05-09 16:12" [ref=e609] [cursor=pointer]:
+              - cell "#20 Full-coverage E2E test suite — all screens + major flows" [ref=e610]:
+                - generic [ref=e611]:
+                  - generic [ref=e612]: "#20"
+                  - generic [ref=e613]: Full-coverage E2E test suite — all screens + major flows
+              - cell "FEATURE" [ref=e614]:
+                - generic [ref=e615]:
+                  - img [ref=e616]
+                  - text: FEATURE
+              - cell "COMPLETED" [ref=e618]:
+                - generic [ref=e619]: COMPLETED
+              - cell "2026-05-09 13:52" [ref=e621]
+              - cell "2026-05-09 16:12" [ref=e622]
+            - row "#9 Add integration tests (MockRuntime or Playwright/WebdriverIO E2E) (Phase 3) FEATURE COMPLETED 2026-05-09 12:21 2026-05-09 13:41" [ref=e623] [cursor=pointer]:
+              - cell "#9 Add integration tests (MockRuntime or Playwright/WebdriverIO E2E) (Phase 3)" [ref=e624]:
+                - generic [ref=e625]:
+                  - generic [ref=e626]: "#9"
+                  - generic [ref=e627]: Add integration tests (MockRuntime or Playwright/WebdriverIO E2E) (Phase 3)
+              - cell "FEATURE" [ref=e628]:
+                - generic [ref=e629]:
+                  - img [ref=e630]
+                  - text: FEATURE
+              - cell "COMPLETED" [ref=e632]:
+                - generic [ref=e633]: COMPLETED
+              - cell "2026-05-09 12:21" [ref=e635]
+              - cell "2026-05-09 13:41" [ref=e636]
+            - row "#8 Add manager unit tests with mocked Tauri (Phase 2) CHORE COMPLETED 2026-05-09 11:22 2026-05-09 12:14" [ref=e637] [cursor=pointer]:
+              - cell "#8 Add manager unit tests with mocked Tauri (Phase 2)" [ref=e638]:
+                - generic [ref=e639]:
+                  - generic [ref=e640]: "#8"
+                  - generic [ref=e641]: Add manager unit tests with mocked Tauri (Phase 2)
+              - cell "CHORE" [ref=e642]:
+                - generic [ref=e643]:
+                  - img [ref=e644]
+                  - text: CHORE
+              - cell "COMPLETED" [ref=e647]:
+                - generic [ref=e648]: COMPLETED
+              - cell "2026-05-09 11:22" [ref=e650]
+              - cell "2026-05-09 12:14" [ref=e651]
+            - row "Code Quality Audit (full run) CODE QUALITY AUDIT COMPLETED 2026-05-09 08:25 2026-05-09 11:21" [ref=e652] [cursor=pointer]:
+              - cell "Code Quality Audit (full run)" [ref=e653]:
+                - generic [ref=e655]: Code Quality Audit (full run)
+              - cell "CODE QUALITY AUDIT" [ref=e656]:
+                - generic [ref=e657]:
+                  - img [ref=e658]
+                  - text: CODE QUALITY AUDIT
+              - cell "COMPLETED" [ref=e660]:
+                - generic [ref=e661]: COMPLETED
+              - cell "2026-05-09 08:25" [ref=e663]
+              - cell "2026-05-09 11:21" [ref=e664]
+            - row "Performance Audit (full run) PERFORMANCE AUDIT COMPLETED 2026-05-09 06:41 2026-05-09 08:25" [ref=e665] [cursor=pointer]:
+              - cell "Performance Audit (full run)" [ref=e666]:
+                - generic [ref=e668]: Performance Audit (full run)
+              - cell "PERFORMANCE AUDIT" [ref=e669]:
+                - generic [ref=e670]:
+                  - img [ref=e671]
+                  - text: PERFORMANCE AUDIT
+              - cell "COMPLETED" [ref=e673]:
+                - generic [ref=e674]: COMPLETED
+              - cell "2026-05-09 06:41" [ref=e676]
+              - cell "2026-05-09 08:25" [ref=e677]
+            - row "Security Audit (full run) SECURITY AUDIT COMPLETED 2026-05-09 05:34 2026-05-09 06:41" [ref=e678] [cursor=pointer]:
+              - cell "Security Audit (full run)" [ref=e679]:
+                - generic [ref=e681]: Security Audit (full run)
+              - cell "SECURITY AUDIT" [ref=e682]:
+                - generic [ref=e683]:
+                  - img [ref=e684]
+                  - text: SECURITY AUDIT
+              - cell "COMPLETED" [ref=e686]:
+                - generic [ref=e687]: COMPLETED
+              - cell "2026-05-09 05:34" [ref=e689]
+              - cell "2026-05-09 06:41" [ref=e690]
+            - row "Vision Audit (full run) VISION AUDIT COMPLETED 2026-05-09 04:40 2026-05-09 05:34" [ref=e691] [cursor=pointer]:
+              - cell "Vision Audit (full run)" [ref=e692]:
+                - generic [ref=e694]: Vision Audit (full run)
+              - cell "VISION AUDIT" [ref=e695]:
+                - generic [ref=e696]:
+                  - img [ref=e697]
+                  - text: VISION AUDIT
+              - cell "COMPLETED" [ref=e700]:
+                - generic [ref=e701]: COMPLETED
+              - cell "2026-05-09 04:40" [ref=e703]
+              - cell "2026-05-09 05:34" [ref=e704]
+            - row "Maintenance (full run) MAINTENANCE COMPLETED 2026-05-09 02:15 2026-05-09 04:40" [ref=e705] [cursor=pointer]:
+              - cell "Maintenance (full run)" [ref=e706]:
+                - generic [ref=e708]: Maintenance (full run)
+              - cell "MAINTENANCE" [ref=e709]:
+                - generic [ref=e710]:
+                  - img [ref=e711]
+                  - text: MAINTENANCE
+              - cell "COMPLETED" [ref=e713]:
+                - generic [ref=e714]: COMPLETED
+              - cell "2026-05-09 02:15" [ref=e716]
+              - cell "2026-05-09 04:40" [ref=e717]
+      - generic [ref=e718]:
+        - generic [ref=e719]:
+          - heading "UNMANAGED PULL REQUESTS" [level=2] [ref=e720]:
+            - img [ref=e721]
+            - text: UNMANAGED PULL REQUESTS
+          - button [ref=e725] [cursor=pointer]:
+            - img [ref=e726]
+        - table [ref=e730]:
+          - rowgroup [ref=e731]:
+            - row "PR BRANCH AUTHOR ACTION" [ref=e732]:
+              - columnheader "PR" [ref=e733]:
+                - generic [ref=e734]: PR
+              - columnheader "BRANCH" [ref=e735]:
+                - generic [ref=e736]: BRANCH
+              - columnheader "AUTHOR" [ref=e737]:
+                - generic [ref=e738]: AUTHOR
+              - columnheader "ACTION" [ref=e739]:
+                - generic [ref=e740]: ACTION
+          - rowgroup [ref=e741]:
+            - 'row "#51 Feature 002: per-session titles + configurable long-break + opt-in metronome 002-titles-longbreak-metronome KonstantinKo ADOPT" [ref=e742]':
+              - 'cell "#51 Feature 002: per-session titles + configurable long-break + opt-in metronome" [ref=e743]':
+                - generic [ref=e744]:
+                  - link "#51" [ref=e745] [cursor=pointer]:
+                    - /url: https://github.com/KonstantinKo/presto/pull/51
+                  - generic [ref=e746]: "Feature 002: per-session titles + configurable long-break + opt-in metronome"
+              - cell "002-titles-longbreak-metronome" [ref=e747]
+              - cell "KonstantinKo" [ref=e748]
+              - cell "ADOPT" [ref=e749]:
+                - button "ADOPT" [ref=e750] [cursor=pointer]:
+                  - img [ref=e751]
+                  - text: ADOPT
+      - generic [ref=e754]:
+        - heading "DANGER ZONE" [level=2] [ref=e756]:
+          - img [ref=e757]
+          - text: DANGER ZONE
+        - generic [ref=e759]:
+          - paragraph [ref=e760]: Deleting this project will permanently remove all associated jobs and data.
+          - button "DELETE PROJECT" [ref=e761] [cursor=pointer]:
+            - img [ref=e762]
+            - text: DELETE PROJECT
+  - contentinfo [ref=e349]:
+    - generic [ref=e350]:
+      - generic [ref=e351]: AGENTIC DEVELOPER WORKFLOW SERVER
+      - generic [ref=e352]: │
+      - generic [ref=e353]: OPERATIONAL
