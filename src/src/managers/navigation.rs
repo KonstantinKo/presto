@@ -215,6 +215,7 @@ mod tests {
             NavView::Tasks,
             NavView::History,
             NavView::Calendar,
+            NavView::Daily,
             NavView::Tags,
             NavView::Settings(SettingsTab::General),
         ];

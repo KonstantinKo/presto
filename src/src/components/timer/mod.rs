@@ -1909,7 +1909,7 @@ mod tests {
     use super::{
         dot_count, indicator_icon_class, mode_label, mode_label_with_status, pad_two,
         skip_icon_for_mode, stop_icon_for_mode, PlayPauseButtonState, SkipButtonState,
-        StopButtonState,
+        StopButtonState, ICON_OPTIONS,
     };
     use crate::bridge::types::TimerMode;
 
@@ -2156,6 +2156,17 @@ mod tests {
         assert_eq!(skip_icon_for_mode(TimerMode::Break, true), "brain");
         assert_eq!(skip_icon_for_mode(TimerMode::LongBreak, false), "brain");
         assert_eq!(skip_icon_for_mode(TimerMode::LongBreak, true), "brain");
+    }
+
+    #[test]
+    fn icon_options_has_12_with_3_remix_9_phosphor_0_emoji() {
+        assert_eq!(ICON_OPTIONS.len(), 12, "ICON_OPTIONS must have exactly 12 entries (3 remix + 9 Phosphor; 5 emoji removed per FR-020/FR-021)");
+        let remix_count = ICON_OPTIONS.iter().filter(|s| s.starts_with("ri-")).count();
+        let phosphor_count = ICON_OPTIONS.iter().filter(|s| s.starts_with("ph-")).count();
+        let other_count = ICON_OPTIONS.len() - remix_count - phosphor_count;
+        assert_eq!(remix_count, 3, "expected 3 remixicon entries");
+        assert_eq!(phosphor_count, 9, "expected 9 Phosphor entries");
+        assert_eq!(other_count, 0, "expected 0 emoji or other entries");
     }
 
     #[test]
