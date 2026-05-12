@@ -81,8 +81,8 @@ pub fn PeriodSelector(
                         class="period-tab"
                         class:active=move || is_active.get()
                         role="tab"
-                        attr:data-period=period.data_attr()
-                        attr:aria-selected=move || if is_active.get() { "true" } else { "false" }
+                        data-period=period.data_attr()
+                        aria-selected=move || if is_active.get() { "true" } else { "false" }
                         on:click=move |_| on_select.run(period)
                     >
                         {period.label()}
