@@ -1,9 +1,3 @@
-// Sessions-timeline panel for the Daily view — mirrors the
-// pre-rework `#sessions-timeline` block in `components::calendar`
-// (lines 604–635). Shows the selected day's sessions as positioned
-// blocks against a 00:00–24:00 horizontal axis; the empty-state
-// label "No sessions completed" matches the existing baseline.
-//
 // Selector contract preserved per A14 / FR-019:
 // - `#sessions-timeline`
 // - `#timeline-hours`
@@ -22,9 +16,6 @@ use leptos::prelude::*;
 use crate::bridge::types::{ManualSession, SessionType};
 use crate::engine::date_format::format_session_date;
 
-/// Parse an `"HH:MM"` time string to minutes-since-midnight. Returns
-/// 0 on malformed input — requires exactly one ':', both sides fully
-/// numeric, h < 24, m < 60.
 fn parse_hhmm_to_minutes(s: &str) -> u32 {
     let Some((h_str, m_str)) = s.split_once(':') else {
         return 0;
@@ -79,11 +70,7 @@ fn month_full(month: u32) -> &'static str {
     MONTH_FULL_NAMES.get(idx).copied().unwrap_or("Unknown")
 }
 
-/// Render the title for the selected-day timeline header. When the
-/// selected day is today, show "Today's Sessions" to match the
-/// pre-rework baseline; otherwise show
-/// `"<Weekday>, <Month> <Day> <Year>"` (e.g.
-/// `"Tuesday, May 5 2026"`).
+// "Today's Sessions" matches pre-rework visual baseline.
 fn selected_day_title(selected: DateTime<Utc>, today: DateTime<Utc>) -> String {
     if format_session_date(selected.timestamp_millis())
         == format_session_date(today.timestamp_millis())
@@ -100,8 +87,6 @@ fn selected_day_title(selected: DateTime<Utc>, today: DateTime<Utc>) -> String {
     }
 }
 
-/// Sessions-timeline component. Reads the global `sessions` context
-/// signal and projects to the selected day's session set.
 #[component]
 pub fn SessionsTimeline(
     selected_day: RwSignal<DateTime<Utc>>,
@@ -110,8 +95,6 @@ pub fn SessionsTimeline(
     let sessions =
         use_context::<RwSignal<Vec<ManualSession>>>().unwrap_or_else(|| RwSignal::new(Vec::new()));
 
-    // Filter the session log to entries whose `date` matches the
-    // selected day (per `format_session_date`).
     let selected_sessions = Signal::derive(move || {
         let selected_label =
             format_session_date(selected_day.with(chrono::DateTime::timestamp_millis));
@@ -151,9 +134,6 @@ pub fn SessionsTimeline(
                                 <div class="timeline-empty">"No sessions completed"</div>
                             }.into_any()
                         } else {
-                            // FR-014: each session as a positioned block on
-                            // a 00:00–24:00 horizontal timeline. `left` and
-                            // `width` are percentages of the 1440-minute day.
                             selected_sessions.with(|ss| {
                                 ss.iter().map(|session| {
                                     let start_minutes = parse_hhmm_to_minutes(&session.start_time);
