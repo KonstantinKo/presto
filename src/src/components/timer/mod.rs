@@ -1711,7 +1711,7 @@ pub fn TimerView() -> impl IntoView {
                 <button id="stop-btn" class="control-btn"
                     aria-label=move || verbose_label_stop.get()
                     title=move || verbose_label_stop.get()
-                    attr:data-tooltip=move || terse_tooltip_stop.get()
+                    data-tooltip=move || terse_tooltip_stop.get()
                     on:click=on_stop>
                     // X icon — visible in Focus mode (full reset).
                     <svg
@@ -1739,7 +1739,7 @@ pub fn TimerView() -> impl IntoView {
                 <button id="play-pause-btn" class="control-btn primary"
                     aria-label=move || verbose_label_play.get()
                     title=move || verbose_label_play.get()
-                    attr:data-tooltip=move || terse_tooltip_play.get()
+                    data-tooltip=move || terse_tooltip_play.get()
                     on:click=on_play_pause>
                     <svg id="play-icon" viewBox="0 0 24 24" fill="currentColor" style=move || play_icon_style.get()>
                         <path fill-rule="evenodd" clip-rule="evenodd"
@@ -1760,7 +1760,7 @@ pub fn TimerView() -> impl IntoView {
                 <button id="skip-btn" class="control-btn"
                     aria-label=move || verbose_label_skip.get()
                     title=move || verbose_label_skip.get()
-                    attr:data-tooltip=move || terse_tooltip_skip.get()
+                    data-tooltip=move || terse_tooltip_skip.get()
                     on:click=on_skip>
                     <i
                         id="skip-coffee-icon"
