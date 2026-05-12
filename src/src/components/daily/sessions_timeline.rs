@@ -157,9 +157,12 @@ pub fn SessionsTimeline(
                             selected_sessions.with(|ss| {
                                 ss.iter().map(|session| {
                                     let start_minutes = parse_hhmm_to_minutes(&session.start_time);
-                                    let duration_minutes = session.duration;
-                                    let left_pct = (f64::from(start_minutes) / 1440.0) * 100.0;
-                                    let width_pct = (f64::from(duration_minutes) / 1440.0) * 100.0;
+                                    let end_minutes = start_minutes + session.duration;
+                                    let clamped_start = start_minutes.min(1440);
+                                    let clamped_end = end_minutes.min(1440);
+                                    let clamped_duration = clamped_end.saturating_sub(clamped_start);
+                                    let left_pct = (f64::from(clamped_start) / 1440.0) * 100.0;
+                                    let width_pct = (f64::from(clamped_duration) / 1440.0) * 100.0;
                                     let style = format!(
                                         "left: {left_pct:.2}%; width: {width_pct:.2}%"
                                     );

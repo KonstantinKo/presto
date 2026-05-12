@@ -249,12 +249,17 @@ pub fn SessionsHistoryTable() -> impl IntoView {
                             prop:value=move || modal_end.get()
                             on:input=move |ev| {
                                 let new_end = event_target_value(&ev);
-                                let new_dur = duration_from_start_end_minutes(
+                                let raw_dur = duration_from_start_end_minutes(
                                     &modal_start.get_untracked(),
                                     &new_end,
                                 );
-                                modal_end.set(new_end);
-                                modal_duration.set(new_dur);
+                                let clamped = raw_dur.clamp(1, 180);
+                                let (end_clamped, final_dur) = end_time_from_start_duration(
+                                    &modal_start.get_untracked(),
+                                    clamped,
+                                );
+                                modal_end.set(end_clamped);
+                                modal_duration.set(final_dur);
                             }
                         />
                         <label for="session-duration">"Duration (minutes)"</label>
