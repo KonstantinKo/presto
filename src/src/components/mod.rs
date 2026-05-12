@@ -21,6 +21,7 @@
 
 pub mod browser_clock;
 pub mod calendar;
+pub mod icon;
 pub mod settings;
 pub mod tasks;
 pub mod timer;
