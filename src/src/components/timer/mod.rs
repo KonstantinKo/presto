@@ -594,11 +594,12 @@ pub fn TimerView() -> impl IntoView {
             }
 
             if gate_open && bpm > 0 {
-                let period_ms = u64::from(60_000_u32 / bpm);
-                if let Ok(handle) = leptos::prelude::set_interval_with_handle(
-                    play_metronome_tick,
-                    std::time::Duration::from_millis(period_ms),
-                ) {
+                // Microsecond precision eliminates integer-truncation drift at
+                // non-divisor BPMs (e.g. 90 BPM: 666_666 µs vs. 666 ms truncated).
+                let period = std::time::Duration::from_micros(60_000_000_u64 / u64::from(bpm));
+                if let Ok(handle) =
+                    leptos::prelude::set_interval_with_handle(play_metronome_tick, period)
+                {
                     *metronome_handle.borrow_mut() = Some(handle);
                 }
             }
