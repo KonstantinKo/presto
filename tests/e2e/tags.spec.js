@@ -11,10 +11,14 @@ test("create tag with custom icon, verify persistence, delete tag", async ({ pag
   await page.locator("#timer-status").click();
   await expect(page.locator("#tag-dropdown-menu")).toBeVisible();
 
-  // Open the icon selector and pick an emoji
+  // Open the icon selector and pick a Phosphor glyph.
+  // Feature 003 (FR-020): the 5 legacy emoji entries were removed
+  // from the picker; the previous selector `.emoji-option[data-icon="🎯"]`
+  // is no longer present. `ph-cloud` is one of the 9 new Phosphor
+  // entries — `.icon-option[data-icon="ph-cloud"]` is its host.
   await page.locator("#selected-icon-btn").click();
   await expect(page.locator("#icon-selector-dropdown")).toBeVisible();
-  await page.locator('.emoji-option[data-icon="🎯"]').click();
+  await page.locator('.icon-option[data-icon="ph-cloud"]').click();
 
   // Type a new tag name and create it
   await page.locator("#new-tag-name").fill("Deep Work");

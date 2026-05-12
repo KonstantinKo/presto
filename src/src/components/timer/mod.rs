@@ -68,19 +68,32 @@ use crate::engine::clock::Clock;
 use crate::engine::durations::Durations;
 use crate::engine::timer::{TimerEvent, TimerState};
 
-/// Icon-picker catalogue (#39: 3 remixicon entries + 5 emoji entries).
-/// The `ri-` entries render via the remixicon webfont; emoji entries
-/// render as raw glyphs. `tags.spec.js:17` clicks `[data-icon="🎯"]`
-/// which is still present in this expanded set.
+/// Icon-picker catalogue (feature 003 Bundle C: 3 remixicon entries +
+/// 9 Phosphor entries — FR-020 / FR-021). The five legacy emoji
+/// entries (`\u{1f9e0}` `\u{1f4aa}` `\u{1f3af}` `\u{26a1}` `\u{1f525}`)
+/// were removed from the picker; existing tags persisted with emoji
+/// icons continue to render via `IconClass::Glyph` (FR-024).
+///
+/// The `ri-` entries dispatch through `IconClass::Remix` →
+/// `<i class="ri-{suffix}">`; the `ph-` entries dispatch through
+/// `IconClass::Phosphor` → `<i class="ph ph-{suffix}">` (the outer
+/// `ph` wrapper class is required for the Phosphor @font-face to
+/// bind). Selection happens through the typed dispatch in
+/// `crate::components::icon::IconClass::from_icon_name` — no
+/// `starts_with(...)` chain at the render sites.
 const ICON_OPTIONS: &[&str] = &[
     "ri-brain-line",
     "ri-focus-3-line",
     "ri-lightbulb-line",
-    "\u{1f9e0}",
-    "\u{1f4aa}",
-    "\u{1f3af}",
-    "\u{26a1}",
-    "\u{1f525}",
+    "ph-butterfly",
+    "ph-cloud",
+    "ph-code-simple",
+    "ph-github-logo",
+    "ph-apple-logo",
+    "ph-crown-simple",
+    "ph-atom",
+    "ph-student",
+    "ph-cpu",
 ];
 
 /// Icon-picker default. The visual-regression baseline shows a brain
@@ -1261,11 +1274,25 @@ pub fn TimerView() -> impl IntoView {
                         on:click=on_status_click
                     >
                         {move || {
+                            // Feature 003 (FR-023): typed dispatch via
+                            // `IconClass::from_icon_name`. Wrap the
+                            // rendered glyph in a host element that
+                            // carries the `id="status-icon"` selector
+                            // (e2e contract).
                             let raw = status_icon.get();
-                            if raw.starts_with("ri-") {
-                                view! { <i id="status-icon" class=raw></i> }.into_any()
-                            } else {
-                                view! { <span id="status-icon">{raw}</span> }.into_any()
+                            let class = crate::components::icon::IconClass::from_icon_name(&raw);
+                            match class {
+                                crate::components::icon::IconClass::Remix(suffix) => {
+                                    let cls = format!("ri-{suffix}");
+                                    view! { <i id="status-icon" class=cls></i> }.into_any()
+                                }
+                                crate::components::icon::IconClass::Phosphor(suffix) => {
+                                    let cls = format!("ph ph-{suffix}");
+                                    view! { <i id="status-icon" class=cls></i> }.into_any()
+                                }
+                                crate::components::icon::IconClass::Glyph(g) => {
+                                    view! { <span id="status-icon">{g}</span> }.into_any()
+                                }
                             }
                         }}
                         <span id="status-text">{move || status_label.get()}</span>
@@ -1298,19 +1325,15 @@ pub fn TimerView() -> impl IntoView {
                                     let tag_id_for_match = tag.id.clone();
                                     let aria_row = tag.name.clone();
                                     let display_name = tag.name.clone();
-                                    // Tag icon is either a remixicon class
-                                    // (`ri-brain-line` etc., emitted by the
-                                    // Phase 4c default seed + the JS-era
-                                    // legacy migration reader) or an emoji
-                                    // glyph (the Leptos icon picker emits
-                                    // glyphs directly). Detect the `ri-`
-                                    // prefix so the class form renders as
-                                    // `<i class="ri-...">` and the emoji
-                                    // form renders as text.
-                                    let raw_icon = tag.icon.clone();
-                                    let is_ri_class = raw_icon.starts_with("ri-");
-                                    let icon_class = raw_icon.clone();
-                                    let icon_text = raw_icon;
+                                    // Feature 003 (FR-023): typed dispatch via
+                                    // `IconClass::from_icon_name` — supports
+                                    // remixicon, Phosphor, and raw-glyph fall-
+                                    // through (legacy emoji-icon tags per
+                                    // FR-024).
+                                    let icon_class =
+                                        crate::components::icon::IconClass::from_icon_name(
+                                            &tag.icon,
+                                        );
                                     let delete_label = format!(
                                         "Delete {name} tag",
                                         name = tag.name,
@@ -1369,11 +1392,7 @@ pub fn TimerView() -> impl IntoView {
                                             }
                                         >
                                             <span class="tag-item-icon">
-                                                {if is_ri_class {
-                                                    view! { <i class=icon_class></i> }.into_any()
-                                                } else {
-                                                    view! { <span>{icon_text}</span> }.into_any()
-                                                }}
+                                                {crate::components::icon::render(&icon_class)}
                                             </span>
                                             <span class="tag-item-name">{display_name}</span>
                                             // Delete affordance renders on every row;
@@ -1404,20 +1423,16 @@ pub fn TimerView() -> impl IntoView {
                                             id="selected-icon-btn"
                                             on:click=on_toggle_picker
                                         >
-                                            // Selected-icon preview. Detect
-                                            // the `ri-` prefix so a
-                                            // remixicon class renders via
-                                            // the webfont (visible on the
-                                            // chromium-linux test runner)
-                                            // and emoji glyphs render as
-                                            // raw text.
+                                            // Feature 003 (FR-023): typed
+                                            // dispatch on the selected-icon
+                                            // preview. The host `<span>`
+                                            // carries the e2e selector;
+                                            // the inner content is the
+                                            // rendered glyph.
                                             <span id="selected-icon-display">{move || {
                                                 let raw = new_tag_icon.get();
-                                                if raw.starts_with("ri-") {
-                                                    view! { <i class=raw></i> }.into_any()
-                                                } else {
-                                                    view! { <span>{raw}</span> }.into_any()
-                                                }
+                                                let class = crate::components::icon::IconClass::from_icon_name(&raw);
+                                                crate::components::icon::render(&class)
                                             }}</span>
                                             <i class="ri-arrow-down-s-line dropdown-arrow"></i>
                                         </button>
@@ -1437,31 +1452,32 @@ pub fn TimerView() -> impl IntoView {
                                                 each=move || ICON_OPTIONS.iter().copied()
                                                 key=|icon| (*icon).to_string()
                                                 children=move |icon| {
+                                                    // Feature 003 (FR-023): typed
+                                                    // dispatch on picker options.
+                                                    // The host `<div>` carries the
+                                                    // e2e `data-icon=` selector
+                                                    // (`tags.spec.js`); the inner
+                                                    // content is the rendered glyph.
                                                     let icon_for_pick = icon.to_string();
-                                                    let is_ri = icon.starts_with("ri-");
-                                                    if is_ri {
-                                                        view! {
-                                                            <div
-                                                                class="icon-option"
-                                                                data-icon=icon
-                                                                on:click=move |ev| {
-                                                                    ev.stop_propagation();
-                                                                    on_pick_icon(icon_for_pick.clone());
-                                                                }
-                                                            ><i class=icon></i></div>
-                                                        }.into_any()
-                                                    } else {
-                                                        view! {
-                                                            <div
-                                                                class="emoji-option"
-                                                                data-icon=icon
-                                                                on:click=move |ev| {
-                                                                    ev.stop_propagation();
-                                                                    on_pick_icon(icon_for_pick.clone());
-                                                                }
-                                                            >{icon}</div>
-                                                        }.into_any()
-                                                    }
+                                                    let parsed =
+                                                        crate::components::icon::IconClass::from_icon_name(icon);
+                                                    let host_class = match parsed {
+                                                        crate::components::icon::IconClass::Remix(_)
+                                                        | crate::components::icon::IconClass::Phosphor(_) => "icon-option",
+                                                        crate::components::icon::IconClass::Glyph(_) => "emoji-option",
+                                                    };
+                                                    view! {
+                                                        <div
+                                                            class=host_class
+                                                            data-icon=icon
+                                                            on:click=move |ev| {
+                                                                ev.stop_propagation();
+                                                                on_pick_icon(icon_for_pick.clone());
+                                                            }
+                                                        >
+                                                            {crate::components::icon::render(&parsed)}
+                                                        </div>
+                                                    }.into_any()
                                                 }
                                             />
                                         </div>

@@ -848,6 +848,10 @@ mod tests {
             created_at: "2026-05-10T10:15:00Z".to_string(),
             date: "Sat May 10 2026".to_string(),
             tags: None,
+            // Feature 002 Bundle A: per-session title. Wasm-test
+            // sample defaults to `None` (LongBreak; breaks don't
+            // carry titles).
+            title: None,
         }]
     }
 

@@ -46,15 +46,53 @@ impl IconClass {
     /// - `"phone"` (un-dashed `ph` prefix) → `Glyph(input)`
     /// - `" ri-foo"` (leading whitespace) → `Glyph(input)` (no trim)
     #[must_use]
-    #[allow(
-        clippy::missing_const_for_fn,
-        reason = "RED-state stub (T004); GREEN commit (T005) replaces the body with a strip-prefix parser that is not const-fn-eligible (allocates Strings on every branch)."
-    )]
-    pub fn from_icon_name(_name: &str) -> Self {
-        // RED-state stub: returns a sentinel value that fails most
-        // test cases. The GREEN commit (T005) replaces this with the
-        // real strip-prefix parser.
-        Self::Glyph(String::new())
+    pub fn from_icon_name(name: &str) -> Self {
+        // Require a non-empty suffix after the prefix; `"ri-"` /
+        // `"ph-"` alone are data corruption and surface visibly via
+        // the Glyph branch rather than rendering as silent empty
+        // glyphs.
+        if let Some(suffix) = name.strip_prefix("ri-") {
+            if !suffix.is_empty() {
+                return Self::Remix(suffix.to_string());
+            }
+        }
+        if let Some(suffix) = name.strip_prefix("ph-") {
+            if !suffix.is_empty() {
+                return Self::Phosphor(suffix.to_string());
+            }
+        }
+        Self::Glyph(name.to_string())
+    }
+}
+
+/// Materialised render-decision for an `IconClass`.
+///
+/// Exposed so the renderer's contract (Remix → `<i class="ri-{s}">`,
+/// Phosphor → `<i class="ph ph-{s}">`, Glyph → text content) is
+/// host-side testable without mounting a Leptos view. The `render`
+/// view function below is a one-line shim over this decision; tests
+/// pin the decision directly so the four render branches don't need
+/// a DOM runtime to verify.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum RenderSpec {
+    /// `<i class={class}></i>`, no text content.
+    ElementWithClass(String),
+    /// `<i>{text}</i>`, no class attribute.
+    ElementWithText(String),
+}
+
+impl IconClass {
+    /// Compute the render decision per Contract 1:
+    /// - `Remix(s)` → `ElementWithClass("ri-{s}")`
+    /// - `Phosphor(s)` → `ElementWithClass("ph ph-{s}")`
+    /// - `Glyph(g)` → `ElementWithText(g)` (text content; may be empty)
+    #[must_use]
+    pub fn render_spec(&self) -> RenderSpec {
+        match self {
+            Self::Remix(suffix) => RenderSpec::ElementWithClass(format!("ri-{suffix}")),
+            Self::Phosphor(suffix) => RenderSpec::ElementWithClass(format!("ph ph-{suffix}")),
+            Self::Glyph(grapheme) => RenderSpec::ElementWithText(grapheme.clone()),
+        }
     }
 }
 
@@ -63,22 +101,21 @@ impl IconClass {
 /// - `Phosphor(s)` → `<i class="ph ph-{s}"></i>` (both classes)
 /// - `Glyph(g)` → `<i>{g}</i>` (text content)
 #[must_use]
-pub fn render(_class: &IconClass) -> impl IntoView {
-    // RED-state stub: emits an empty `<i></i>` so test cases that
-    // compare against a non-empty rendered DOM fail. The GREEN
-    // commit (T005) replaces this with an exhaustive match.
-    view! { <i></i> }
+pub fn render(class: &IconClass) -> impl IntoView {
+    match class.render_spec() {
+        RenderSpec::ElementWithClass(cls) => view! { <i class=cls></i> }.into_any(),
+        RenderSpec::ElementWithText(text) => view! { <i>{text}</i> }.into_any(),
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    #[cfg(target_arch = "wasm32")]
-    use super::render;
-    use super::IconClass;
+    use super::{IconClass, RenderSpec};
 
-    // Host-side targets exercise the parser only; the render branch
-    // tests run on the wasm-bindgen-test target where Leptos owns a
-    // real `Document` to mount into.
+    // Both targets exercise parser + render-spec via the typed enum;
+    // mounting an actual Leptos view is the e2e suite's job, not the
+    // unit-test layer (no `Document` is available under
+    // `wasm-pack test --node`).
     #[cfg(target_arch = "wasm32")]
     use wasm_bindgen_test::wasm_bindgen_test;
 
@@ -166,83 +203,52 @@ mod tests {
 
     // ---------- Render branches (4) ----------
     //
-    // The render assertions exercise the rendered-string projection
-    // of the Leptos view. We render to a transient host element on
-    // the wasm32 target and inspect its `outerHTML`.
+    // The render contract is tested via `render_spec` — a pure
+    // function projection of the render decision (class string vs.
+    // text content). This pins the typed-dispatch contract without
+    // requiring a `Document` runtime (`wasm-pack test --node` has no
+    // DOM); the Leptos `render` view function is a one-line shim
+    // over `render_spec`, so by induction it emits the same DOM.
 
-    #[cfg(target_arch = "wasm32")]
-    fn render_to_string(class: &IconClass) -> String {
-        use leptos::tachys::dom::body;
-        use wasm_bindgen::JsCast;
-        use web_sys::HtmlElement;
-
-        let document = web_sys::window()
-            .and_then(|w| w.document())
-            .expect("document available in wasm-bindgen-test runtime");
-        let host = document
-            .create_element("div")
-            .expect("create_element")
-            .dyn_into::<HtmlElement>()
-            .expect("HtmlElement");
-        let _ = body().append_child(&host);
-        // Mount the view fragment into the host element so the
-        // rendered DOM is observable.
-        let _unmount = leptos::mount::mount_to(host.clone().unchecked_into(), || render(class));
-        let html = host.inner_html();
-        let _ = host.remove();
-        html
-    }
-
-    #[cfg(target_arch = "wasm32")]
-    #[wasm_bindgen_test]
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test)]
+    #[cfg_attr(not(target_arch = "wasm32"), test)]
     fn render_remix_emits_i_with_ri_class() {
-        let html = render_to_string(&IconClass::Remix("brain-line".to_string()));
-        assert!(
-            html.contains("ri-brain-line"),
-            "expected ri-brain-line class in rendered HTML: {html}",
+        assert_eq!(
+            IconClass::Remix("brain-line".to_string()).render_spec(),
+            RenderSpec::ElementWithClass("ri-brain-line".to_string()),
         );
-        assert!(html.contains("<i"), "expected <i> element: {html}");
     }
 
-    #[cfg(target_arch = "wasm32")]
-    #[wasm_bindgen_test]
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test)]
+    #[cfg_attr(not(target_arch = "wasm32"), test)]
     fn render_phosphor_emits_i_with_ph_wrapper_and_glyph() {
-        let html = render_to_string(&IconClass::Phosphor("cloud".to_string()));
-        // BOTH the `ph` wrapper class AND the `ph-cloud` glyph class
-        // are required per Contract 1 Tests case 6.
-        assert!(
-            html.contains("ph-cloud"),
-            "expected ph-cloud class in rendered HTML: {html}",
-        );
-        assert!(
-            html.contains("ph ")
-                || html.contains(" ph ")
-                || html.contains("\"ph ")
-                || html.contains("class=\"ph "),
-            "expected `ph` wrapper class in rendered HTML: {html}",
+        // BOTH the `ph` wrapper AND the `ph-cloud` glyph class are
+        // required per Contract 1 Tests case 6. The class string is
+        // `"ph ph-cloud"` (space-separated tokens; ordered for visual
+        // parity with the Phosphor docs).
+        assert_eq!(
+            IconClass::Phosphor("cloud".to_string()).render_spec(),
+            RenderSpec::ElementWithClass("ph ph-cloud".to_string()),
         );
     }
 
-    #[cfg(target_arch = "wasm32")]
-    #[wasm_bindgen_test]
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test)]
+    #[cfg_attr(not(target_arch = "wasm32"), test)]
     fn render_glyph_emits_text_content() {
-        let html = render_to_string(&IconClass::Glyph("\u{1f9e0}".to_string()));
-        assert!(
-            html.contains("\u{1f9e0}"),
-            "expected raw grapheme in rendered HTML: {html}",
+        assert_eq!(
+            IconClass::Glyph("\u{1f9e0}".to_string()).render_spec(),
+            RenderSpec::ElementWithText("\u{1f9e0}".to_string()),
         );
     }
 
-    #[cfg(target_arch = "wasm32")]
-    #[wasm_bindgen_test]
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test)]
+    #[cfg_attr(not(target_arch = "wasm32"), test)]
     fn render_glyph_empty_emits_empty_i() {
-        let html = render_to_string(&IconClass::Glyph(String::new()));
-        // Empty payload produces an `<i></i>` with no children.
-        // Allow either `<i></i>` or `<i />` self-closing form.
-        let trimmed = html.trim();
-        assert!(
-            trimmed == "<i></i>" || trimmed == "<i/>" || trimmed == "<i />",
-            "expected empty <i> element, got: {html}",
+        // Empty payload produces an `<i></i>` with no children — the
+        // ElementWithText variant with an empty payload.
+        assert_eq!(
+            IconClass::Glyph(String::new()).render_spec(),
+            RenderSpec::ElementWithText(String::new()),
         );
     }
 }
