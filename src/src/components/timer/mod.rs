@@ -210,7 +210,16 @@ const fn skip_icon_for_mode(mode: TimerMode, next_is_long_break: bool) -> &'stat
 /// rows. Today's behaviour is in-memory only; Phase 4c attaches the
 /// `bridge::commands::save_manual_sessions` hop alongside this so
 /// the rows survive a process restart.
-fn synth_completed_session(now_ms: i64, focus_duration_secs: u32) -> ManualSession {
+///
+/// `title` is the user-typed in-flight title (feature 002 Bundle A);
+/// `None` for the no-title case and for paths that do not surface a
+/// title input (manual-backfill flows construct their own
+/// `ManualSession` directly).
+fn synth_completed_session(
+    now_ms: i64,
+    focus_duration_secs: u32,
+    title: Option<String>,
+) -> ManualSession {
     let (hh_end, mm_end) = local_hh_mm(now_ms);
     let start_ms = now_ms - i64::from(focus_duration_secs) * 1000;
     let (hh_start, mm_start) = local_hh_mm(start_ms);
@@ -226,7 +235,7 @@ fn synth_completed_session(now_ms: i64, focus_duration_secs: u32) -> ManualSessi
             .to_rfc3339(),
         date: crate::engine::date_format::format_session_date(now_ms),
         tags: None,
-        title: None,
+        title,
     }
 }
 
@@ -536,6 +545,14 @@ pub fn TimerView() -> impl IntoView {
     // (not `RwSignal`) — the map never drives reactive rendering.
     let active_session_tags: StoredValue<HashMap<String, (String, i64)>> =
         StoredValue::new(HashMap::new());
+
+    // Feature 002 Bundle A: in-flight session title. Local to the
+    // component, captured once at focus zero-cross into BOTH the
+    // `Session` persist call and the synthesised `ManualSession` row
+    // (see `synth_completed_session`). Empty string normalises to
+    // `None` at the boundary (Principle III). Cleared after the
+    // post-completion write.
+    let session_title = RwSignal::new(String::new());
 
     let on_status_click = move |ev: leptos::ev::MouseEvent| {
         // Stop propagation so the document-level click-outside
@@ -978,7 +995,26 @@ pub fn TimerView() -> impl IntoView {
                                 .any(|e| matches!(e, TimerEvent::PomodoroCompleted { .. }));
                         if completed_focus {
                             let now_ms = BrowserClock.now_ms();
-                            let session = synth_completed_session(now_ms, focus_secs_at_tick);
+                            // Feature 002 Bundle A: harvest the
+                            // in-flight title ONCE at zero-cross,
+                            // normalise empty-string to None at the
+                            // boundary (Principle III), and clear the
+                            // signal so the next focus starts blank.
+                            let title_at_completion = {
+                                let raw = session_title.get_untracked();
+                                let trimmed = raw.trim();
+                                if trimmed.is_empty() {
+                                    None
+                                } else {
+                                    Some(trimmed.to_string())
+                                }
+                            };
+                            session_title.set(String::new());
+                            let session = synth_completed_session(
+                                now_ms,
+                                focus_secs_at_tick,
+                                title_at_completion.clone(),
+                            );
                             sessions.update(|list| list.push(session));
                             let completed = state.completed_pomodoros();
                             let total_focus = state.total_focus_secs();
@@ -988,7 +1024,7 @@ pub fn TimerView() -> impl IntoView {
                                 total_focus_time: total_focus,
                                 current_session: completed.saturating_add(1),
                                 date: date_str,
-                                title: None,
+                                title: title_at_completion,
                             };
                             let sd_for_stats = session_data.clone();
                             spawn_local(async move {
@@ -1099,6 +1135,24 @@ pub fn TimerView() -> impl IntoView {
             // Status / mode label + tag-dropdown trigger.
             <div style="text-align: center; position: relative">
                 <div class="timer-status-container">
+                    // Feature 002 Bundle A: per-session title input,
+                    // left of the tag picker (`#timer-status` is the
+                    // tag-dropdown trigger). Value lives in the
+                    // local `session_title` signal and is harvested
+                    // once at focus zero-cross. `maxlength=120`
+                    // enforces the cap at the browser input boundary
+                    // (FR-004).
+                    <input
+                        type="text"
+                        id="session-title-input"
+                        class="session-title-input"
+                        maxlength="120"
+                        placeholder="What is this session for?"
+                        prop:value=move || session_title.get()
+                        on:input=move |ev| {
+                            session_title.set(event_target_value(&ev));
+                        }
+                    />
                     <div
                         class="timer-status clickable"
                         class:active=move || tag_dropdown_open.get()

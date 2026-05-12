@@ -270,11 +270,19 @@ pub fn CalendarView() -> impl IntoView {
     let modal_session_id = RwSignal::new(Option::<String>::None);
     let modal_start = RwSignal::new(String::new());
     let modal_end = RwSignal::new(String::new());
+    // Feature 002 Bundle A: editable title in the manual-session
+    // modal. The modal is the only mutation surface for
+    // `ManualSession` records today; surfacing the title here
+    // satisfies the "manual-backfill form captures the title"
+    // contract (FR-002 / spec User Story 1 scenario 3). Empty-string
+    // is normalised to None on save (Principle III).
+    let modal_title = RwSignal::new(String::new());
     let on_open_modal = move |session: ManualSession| {
         modal_session_id.set(Some(session.id.clone()));
         modal_start.set(session.start_time.clone());
         modal_end.set(session.end_time.clone());
         modal_duration.set(session.duration);
+        modal_title.set(session.title.unwrap_or_default());
         session_modal_open.set(true);
     };
     let on_close_modal = move |_| session_modal_open.set(false);
@@ -659,6 +667,20 @@ pub fn CalendarView() -> impl IntoView {
                         >"×"</button>
                     </div>
                     <div class="session-modal-body">
+                        // Feature 002 Bundle A: session title input,
+                        // first row of the modal. `maxlength=120`
+                        // enforces FR-004 at the browser boundary.
+                        <label for="session-title">"Title"</label>
+                        <input
+                            type="text"
+                            id="session-title"
+                            maxlength="120"
+                            placeholder="What is this session for?"
+                            prop:value=move || modal_title.get()
+                            on:input=move |ev| {
+                                modal_title.set(event_target_value(&ev));
+                            }
+                        />
                         <label for="session-start-time">"Start Time"</label>
                         <input
                             type="time"
@@ -737,11 +759,24 @@ pub fn CalendarView() -> impl IntoView {
                                     // Normalize end from start+duration so persisted records
                                     // are always consistent (clamps overflow to "23:59").
                                     let end = end_time_from_start_duration(&start, dur);
+                                    // Feature 002 Bundle A: empty-string title
+                                    // normalises to None at the save boundary
+                                    // (Principle III).
+                                    let title_raw = modal_title.get_untracked();
+                                    let title = {
+                                        let trimmed = title_raw.trim();
+                                        if trimmed.is_empty() {
+                                            None
+                                        } else {
+                                            Some(trimmed.to_string())
+                                        }
+                                    };
                                     sessions.update(|ss| {
                                         if let Some(s) = ss.iter_mut().find(|s| s.id == id) {
                                             s.duration = dur;
                                             s.start_time = start;
                                             s.end_time = end;
+                                            s.title = title;
                                         }
                                     });
                                 }
