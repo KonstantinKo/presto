@@ -563,7 +563,16 @@ total_focus_time: number; current_session: number;
 /**
  * `%a %b %d %Y` (e.g., "Sat May 10 2026").
  */
-date: string }
+date: string; 
+/**
+ * User-typed session title (≤120 user-perceived chars).
+ * `None` for sessions created before this field existed
+ * (feature 002), and for in-flight sessions that completed
+ * without a typed title. Empty-string is forbidden —
+ * normalised to `None` at the capture boundary per Principle
+ * III.
+ */
+title?: string | null }
 /**
  * Per-session per-tag time-spent join row.
  * 

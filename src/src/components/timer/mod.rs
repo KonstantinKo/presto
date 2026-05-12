@@ -987,6 +987,7 @@ pub fn TimerView() -> impl IntoView {
                                 total_focus_time: total_focus,
                                 current_session: completed.saturating_add(1),
                                 date: date_str,
+                                title: None,
                             };
                             let sd_for_stats = session_data.clone();
                             spawn_local(async move {

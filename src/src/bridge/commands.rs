@@ -1141,6 +1141,7 @@ mod tests {
             total_focus_time: 4_500,
             current_session: 4,
             date: "Sat May 10 2026".to_string(),
+            title: None,
         }
     }
 

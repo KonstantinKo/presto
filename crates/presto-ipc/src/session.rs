@@ -20,6 +20,14 @@ pub struct Session {
     pub current_session: u32,
     /// `%a %b %d %Y` (e.g., "Sat May 10 2026").
     pub date: String,
+    /// User-typed session title (≤120 user-perceived chars).
+    /// `None` for sessions created before this field existed
+    /// (feature 002), and for in-flight sessions that completed
+    /// without a typed title. Empty-string is forbidden —
+    /// normalised to `None` at the capture boundary per Principle
+    /// III.
+    #[serde(default)]
+    pub title: Option<String>,
 }
 
 /// User-entered manual session record.
@@ -72,10 +80,7 @@ mod tests {
         assert_eq!(s1_back.title.as_deref(), Some("Spec 002 review"));
 
         // None — round-trips as None.
-        let s2 = Session {
-            title: None,
-            ..s1.clone()
-        };
+        let s2 = Session { title: None, ..s1 };
         let json2 = serde_json::to_string(&s2).expect("serialise None");
         let s2_back: Session = serde_json::from_str(&json2).expect("deserialise None");
         assert!(s2_back.title.is_none());

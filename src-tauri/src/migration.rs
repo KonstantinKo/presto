@@ -370,6 +370,7 @@ mod tests {
             total_focus_time: 6_000,
             current_session: 5,
             date: "Sat May 10 2026".to_string(),
+            title: None,
         }
     }
 
@@ -425,6 +426,7 @@ mod tests {
                 total_focus_time: 99,
                 current_session: 99,
                 date: "different".to_string(),
+                title: None,
             }],
         };
         import_history(dir.path(), &payload2).unwrap();
@@ -788,6 +790,7 @@ mod tests {
                 total_focus_time: 99,
                 current_session: 99,
                 date: "should-not-write".to_string(),
+                title: None,
             }),
         };
         import_user_state(dir.path(), &payload2).unwrap();

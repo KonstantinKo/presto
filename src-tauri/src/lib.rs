@@ -1392,6 +1392,7 @@ mod tests {
             total_focus_time: 4500,
             current_session: 2,
             date: "Mon Jan 01 2024".to_string(),
+            title: None,
         };
         let json = serde_json::to_string(&session).unwrap();
         let parsed: PomodoroSession = serde_json::from_str(&json).unwrap();
@@ -1508,6 +1509,7 @@ mod tests {
                 total_focus_time: i * 1500,
                 current_session: 1,
                 date: format!("2024-01-{i:02}"),
+                title: None,
             })
             .collect();
 
