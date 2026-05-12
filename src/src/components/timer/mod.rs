@@ -274,6 +274,37 @@ fn play_chime() {
 #[cfg(not(target_arch = "wasm32"))]
 const fn play_chime() {}
 
+/// Feature 002 Bundle C (T024): one-shot metronome tick. Mirrors
+/// `play_chime`'s AudioContext-per-call lifecycle (FR-020: no
+/// long-lived oscillator) but with a higher frequency and shorter
+/// envelope so the tick is audibly distinct from the chime and
+/// doesn't carry the chime's "DING" tail. 25 min × 180 BPM ≈ 4500
+/// ticks at this lifecycle stays an order of magnitude under
+/// browser-tab audio limits (A12).
+#[cfg(target_arch = "wasm32")]
+fn play_metronome_tick() {
+    use web_sys::{AudioContext, OscillatorType};
+    let Ok(ctx) = AudioContext::new() else { return };
+    let Ok(osc) = ctx.create_oscillator() else {
+        return;
+    };
+    let Ok(gain) = ctx.create_gain() else { return };
+    osc.set_type(OscillatorType::Sine);
+    osc.frequency().set_value(1000.0);
+    let now = ctx.current_time();
+    let _ = gain.gain().set_value_at_time(0.2, now);
+    let _ = gain
+        .gain()
+        .exponential_ramp_to_value_at_time(0.01, now + 0.1);
+    let _ = osc.connect_with_audio_node(&gain);
+    let _ = gain.connect_with_audio_node(&ctx.destination());
+    let _ = osc.start();
+    let _ = osc.stop_with_when(now + 0.1);
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+const fn play_metronome_tick() {}
+
 /// ISO-8601 timestamp string for the current wall clock. Mirrors the
 /// JS-era `new Date().toISOString()` used by `tag-manager.js` for
 /// `created_at` fields on new tags + session-tag records.
@@ -497,6 +528,86 @@ pub fn TimerView() -> impl IntoView {
         let n = settings.with(|s| s.timer.sessions_per_long_break);
         engine.update(|state| state.set_sessions_per_long_break(n));
     });
+
+    // Feature 002 Bundle C (T025-T026): dedicated metronome
+    // scheduler. Lives entirely UI-side (Principle I: zero engine
+    // state, zero `web_sys` imports under `src/src/engine/`). The
+    // handle is held in a component-local `Rc<RefCell<…>>` so the
+    // single reconciling Effect can drop the prior interval and
+    // create a new one when the gate or BPM changes — non-reactive
+    // storage, no template observation needed.
+    //
+    // Gate (FR-018, FR-019, spec scenario 4 + 6):
+    //   metronome ∧ Focus ∧ is_running ∧ ¬is_paused ∧
+    //   ¬is_auto_paused ∧ time_remaining_secs > 0
+    //
+    // Lifecycle:
+    //   - rising-edge → create the interval at 60_000 / bpm ms;
+    //   - falling-edge → drop the prior handle via `.clear()`;
+    //   - BPM change → drop-then-recreate at the new period;
+    //   - component unmount → `on_cleanup` drops the handle (RAII).
+    //
+    // Cancel triggers (enumerated by spec scenarios 3, 4, 5, 6, 7):
+    // pause, resume (recreate), mode change (Focus → Break /
+    // LongBreak / skip-target), smart-pause auto-pause, smart-pause
+    // auto-resume on activity, overtime entry (time_remaining_secs
+    // reaches 0), continuous-sessions auto-start of the next focus
+    // (Effect re-runs and recreates), metronome toggled off, BPM
+    // changed, app close. All flow through the same reconciler
+    // because Effect::new tracks every signal read inside its body.
+    let metronome_handle: std::rc::Rc<std::cell::RefCell<Option<leptos::prelude::IntervalHandle>>> =
+        std::rc::Rc::new(std::cell::RefCell::new(None));
+    {
+        Effect::new(move |_| {
+            let (enabled, bpm) =
+                settings.with(|s| (s.notifications.metronome, s.notifications.metronome_bpm));
+            let (mode, is_running, is_paused, is_auto_paused, time_remaining_secs) =
+                engine.with(|s| {
+                    (
+                        s.current_mode(),
+                        s.is_running(),
+                        s.is_paused(),
+                        s.is_auto_paused(),
+                        s.time_remaining_secs(),
+                    )
+                });
+            let gate_open = enabled
+                && matches!(mode, TimerMode::Focus)
+                && is_running
+                && !is_paused
+                && !is_auto_paused
+                && time_remaining_secs > 0;
+
+            // Drop the prior handle whenever the gate / BPM change.
+            // The reactive runtime guarantees this branch fires
+            // before we look at `gate_open` again, so the falling-
+            // edge case (and the drop-then-recreate case on BPM
+            // change) collapses into one clear() call.
+            if let Some(prev) = metronome_handle.borrow_mut().take() {
+                prev.clear();
+            }
+
+            if gate_open && bpm > 0 {
+                let period_ms = u64::from(60_000_u32 / bpm);
+                if let Ok(handle) = leptos::prelude::set_interval_with_handle(
+                    play_metronome_tick,
+                    std::time::Duration::from_millis(period_ms),
+                ) {
+                    *metronome_handle.borrow_mut() = Some(handle);
+                }
+            }
+        });
+    }
+    // Unmount cleanup: `on_cleanup` requires `Send + Sync`, which
+    // `Rc<RefCell<_>>` can't satisfy on the single-thread wasm
+    // target. The reconciling Effect above already drops the handle
+    // on every falling-edge of the gate — and since `TimerView` is
+    // the app's top-level view (mounted once for the process
+    // lifetime, mirrors the existing tick-loop handle leak at
+    // `:1108`), the scheduler is fully managed by the reconciler.
+    // If `TimerView` ever becomes unmountable, the cleanup path
+    // needs a re-think (e.g. switch to a closure that takes the
+    // `Rc` clone, or migrate to `Effect::new_sync`).
 
     // Tag-dropdown popover state. The JS-era surface anchored the
     // tag picker as a popover off `#timer-status` inside the timer

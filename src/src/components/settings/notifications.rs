@@ -39,6 +39,13 @@ pub fn NotificationsSettings(settings: RwSignal<Settings>, toast: SettingsToast)
         Signal::derive(move || settings.with(|s| s.notifications.desktop_notifications));
     let sound_enabled =
         Signal::derive(move || settings.with(|s| s.notifications.sound_notifications));
+    // Feature 002 Bundle C (T023): metronome opt-in checkbox + BPM
+    // input. 30-180 clamp lives at the input boundary (Principle
+    // III); the audio call site reads the stored u32 and divides
+    // into 60_000 without re-clamping.
+    let metronome_enabled = Signal::derive(move || settings.with(|s| s.notifications.metronome));
+    let metronome_bpm =
+        Signal::derive(move || settings.with(|s| s.notifications.metronome_bpm.to_string()));
     // Status text mirrors the JS-era `notifications.js` pattern
     // (`Enabled` / `Disabled` based on the toggle). The e2e spec at
     // `settings-notifications.spec.js:26` asserts `toContainText("Disabled")`
@@ -61,6 +68,24 @@ pub fn NotificationsSettings(settings: RwSignal<Settings>, toast: SettingsToast)
         settings.update(|s| {
             s.notifications.sound_notifications = !s.notifications.sound_notifications;
         });
+        toast.show("Settings saved");
+    };
+    let on_metronome_toggle = move |_| {
+        settings.update(|s| {
+            s.notifications.metronome = !s.notifications.metronome;
+        });
+        toast.show("Settings saved");
+    };
+    // Feature 002 Bundle C (T023): explicit clamp to 30-180 before
+    // the value reaches the persisted signal. Browser min/max is a
+    // UX hint only; a hand-edit or paste needs the explicit clamp
+    // so the persisted `metronome_bpm` is always in range
+    // (Principle III).
+    let on_metronome_bpm_change = move |ev| {
+        let raw = event_target_value(&ev);
+        let parsed = raw.trim().parse::<u32>().unwrap_or(60);
+        let value = parsed.clamp(30, 180);
+        settings.update(|s| s.notifications.metronome_bpm = value);
         toast.show("Settings saved");
     };
     let on_test = move |_| {
@@ -126,6 +151,35 @@ pub fn NotificationsSettings(settings: RwSignal<Settings>, toast: SettingsToast)
                     "Play a sound when timer phases complete"
                 </p>
             </div>
+            <div class="setting-item">
+                <label class="checkbox-label">
+                    <input
+                        type="checkbox"
+                        id="metronome-enabled"
+                        prop:checked=move || metronome_enabled.get()
+                        on:change=on_metronome_toggle
+                    />
+                    <span class="checkmark"></span>
+                    "Enable metronome during focus"
+                </label>
+                <p class="setting-description">
+                    "Play a soft tick at the configured BPM while a focus session is running"
+                </p>
+            </div>
+            <div class="setting-item">
+                <label for="metronome-bpm">"Metronome BPM:"</label>
+                <input
+                    type="number"
+                    id="metronome-bpm"
+                    min="30"
+                    max="180"
+                    prop:value=move || metronome_bpm.get()
+                    on:change=on_metronome_bpm_change
+                />
+                <p class="setting-description">
+                    "Beats per minute (30-180)"
+                </p>
+            </div>
         </div>
     }
 }
@@ -142,6 +196,10 @@ mod tests {
             "notification-status",
             "notification-status-text",
             "test-notifications-btn",
+            // Feature 002 Bundle C (T023): metronome toggle + BPM
+            // input share the Notifications-tab selector contract.
+            "metronome-enabled",
+            "metronome-bpm",
         ];
         let mut seen: Vec<&str> = Vec::with_capacity(REQUIRED_IDS.len());
         for id in REQUIRED_IDS {
