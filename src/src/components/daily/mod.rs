@@ -69,10 +69,16 @@ pub fn DailyView() -> impl IntoView {
         selected_day.set(clamp_day_to_month(dom, new_cursor));
     });
     let on_select_day = Callback::new(move |day: DateTime<Utc>| {
-        // Set both signals so the grid follows the click into a new
-        // month if the clicked cell is in an adjacent month.
+        // Set the selected-day signal unconditionally so the
+        // `.selected` highlight follows the click. Only roll
+        // `month_cursor` if the click lands in a *different* month —
+        // mutating it on every in-month click drifts hours/minutes
+        // forward each time the today-cell is re-clicked.
         selected_day.set(day);
-        month_cursor.set(day);
+        let current = month_cursor.get_untracked();
+        if day.month() != current.month() || day.year() != current.year() {
+            month_cursor.set(day);
+        }
     });
 
     view! {

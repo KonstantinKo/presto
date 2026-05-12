@@ -19,8 +19,27 @@
 use chrono::{DateTime, Datelike, Utc};
 use leptos::prelude::*;
 
-use crate::bridge::types::ManualSession;
+use crate::bridge::types::{ManualSession, SessionType};
 use crate::engine::date_format::format_session_date;
+
+/// Parse an `"HH:MM"` time string to minutes-since-midnight. Returns
+/// 0 on malformed input (mirrors the existing `aggregate_hourly_focus`
+/// fallback in `components::stats`).
+fn parse_hhmm_to_minutes(s: &str) -> u32 {
+    let mut parts = s.splitn(2, ':');
+    let h = parts
+        .next()
+        .and_then(|v| v.parse::<u32>().ok())
+        .unwrap_or(0);
+    let m = parts
+        .next()
+        .and_then(|v| v.parse::<u32>().ok())
+        .unwrap_or(0);
+    if h >= 24 || m >= 60 {
+        return 0;
+    }
+    h * 60 + m
+}
 
 const WEEKDAY_NAMES: [&str; 7] = [
     "Monday",
@@ -129,11 +148,67 @@ pub fn SessionsTimeline(
                                 <div class="timeline-empty">"No sessions completed"</div>
                             }.into_any()
                         } else {
-                            view! { <span></span> }.into_any()
+                            // FR-014: each session as a positioned block on
+                            // a 00:00–24:00 horizontal timeline. `left` and
+                            // `width` are percentages of the 1440-minute day.
+                            selected_sessions.with(|ss| {
+                                ss.iter().map(|session| {
+                                    let start_minutes = parse_hhmm_to_minutes(&session.start_time);
+                                    let duration_minutes = session.duration;
+                                    let left_pct = (f64::from(start_minutes) / 1440.0) * 100.0;
+                                    let width_pct = (f64::from(duration_minutes) / 1440.0) * 100.0;
+                                    let style = format!(
+                                        "left: {left_pct:.2}%; width: {width_pct:.2}%"
+                                    );
+                                    let class = match session.session_type {
+                                        SessionType::Focus | SessionType::Custom => {
+                                            "session-block session-block-focus"
+                                        }
+                                        SessionType::Break | SessionType::LongBreak => {
+                                            "session-block session-block-break"
+                                        }
+                                    };
+                                    let title = session.id.clone();
+                                    view! {
+                                        <div class=class style=style title=title></div>
+                                    }
+                                }).collect_view()
+                            }).into_any()
                         }
                     }}
                 </div>
             </div>
         </div>
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_hhmm_to_minutes;
+
+    #[test]
+    fn parses_midnight() {
+        assert_eq!(parse_hhmm_to_minutes("00:00"), 0);
+    }
+
+    #[test]
+    fn parses_noon() {
+        assert_eq!(parse_hhmm_to_minutes("12:00"), 720);
+    }
+
+    #[test]
+    fn parses_last_minute() {
+        assert_eq!(parse_hhmm_to_minutes("23:59"), 1439);
+    }
+
+    #[test]
+    fn malformed_falls_back_to_zero() {
+        assert_eq!(parse_hhmm_to_minutes("abc"), 0);
+    }
+
+    #[test]
+    fn out_of_range_falls_back_to_zero() {
+        assert_eq!(parse_hhmm_to_minutes("24:00"), 0);
+        assert_eq!(parse_hhmm_to_minutes("12:60"), 0);
     }
 }

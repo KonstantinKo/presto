@@ -124,8 +124,11 @@ pub fn MonthGrid(
                         let in_current_month = day.month() == cursor_month;
                         // `aria-current="date"` only on the today-cell so
                         // sessions-history.spec.js:34 can locate it without
-                        // a date-string coupling.
-                        let aria_current = if is_today { "date" } else { "" };
+                        // a date-string coupling. Per ARIA, an empty string
+                        // is invalid; emit the attribute only on the
+                        // today-cell via `Option<&str>` (None omits it).
+                        let aria_current: Option<&'static str> =
+                            if is_today { Some("date") } else { None };
                         let day_num = day.day();
                         let day_for_click = day;
                         let day_for_select = day;

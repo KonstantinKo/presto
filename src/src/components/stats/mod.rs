@@ -102,6 +102,100 @@ fn weekly_focus_minutes(sessions: &[ManualSession], week_dates: &[String; 7]) ->
         .sum()
 }
 
+/// Period-scoped tile aggregates. Returned in the order
+/// (focus minutes, period-average minutes, focus-session count,
+/// total minutes). The "average" denominator is period-aware
+/// (Daily → 24 hours, Weekly → 7 days, Monthly → days-in-month,
+/// Yearly → 12 months).
+fn period_tile_metrics(
+    period: Period,
+    cursor: DateTime<Utc>,
+    sessions: &[ManualSession],
+) -> (u32, u32, u32, u32) {
+    let (focus_minutes, session_count, total_minutes, denom) = match period {
+        Period::Daily => {
+            let day_label = format_session_date(cursor.timestamp_millis());
+            let focus: u32 = sessions
+                .iter()
+                .filter(|s| s.session_type == SessionType::Focus && s.date == day_label)
+                .map(|s| s.duration)
+                .sum();
+            let count: u32 = sessions
+                .iter()
+                .filter(|s| s.session_type == SessionType::Focus && s.date == day_label)
+                .fold(0_u32, |acc, _| acc.saturating_add(1));
+            let total: u32 = sessions
+                .iter()
+                .filter(|s| s.date == day_label)
+                .map(|s| s.duration)
+                .sum();
+            (focus, count, total, 24_u32)
+        }
+        Period::Weekly => {
+            let dates = week_date_set(cursor);
+            let focus = weekly_focus_minutes(sessions, &dates);
+            let count = weekly_sessions_count(sessions, &dates);
+            let total = weekly_total_minutes(sessions, &dates);
+            (focus, count, total, 7_u32)
+        }
+        Period::Monthly => {
+            let year = cursor.year();
+            let month = cursor.month();
+            let dim = days_in_month(year, month);
+            let mut day_labels: Vec<String> = Vec::with_capacity(dim as usize);
+            for d in 1..=dim {
+                if let Some(dt) = Utc.with_ymd_and_hms(year, month, d, 0, 0, 0).single() {
+                    day_labels.push(format_session_date(dt.timestamp_millis()));
+                }
+            }
+            let focus: u32 = sessions
+                .iter()
+                .filter(|s| s.session_type == SessionType::Focus && day_labels.contains(&s.date))
+                .map(|s| s.duration)
+                .sum();
+            let count: u32 = sessions
+                .iter()
+                .filter(|s| s.session_type == SessionType::Focus && day_labels.contains(&s.date))
+                .fold(0_u32, |acc, _| acc.saturating_add(1));
+            let total: u32 = sessions
+                .iter()
+                .filter(|s| day_labels.contains(&s.date))
+                .map(|s| s.duration)
+                .sum();
+            (focus, count, total, dim)
+        }
+        Period::Yearly => {
+            let year = cursor.year();
+            let mut all_days: Vec<String> = Vec::with_capacity(366);
+            for month in 1..=12_u32 {
+                let dim = days_in_month(year, month);
+                for d in 1..=dim {
+                    if let Some(dt) = Utc.with_ymd_and_hms(year, month, d, 0, 0, 0).single() {
+                        all_days.push(format_session_date(dt.timestamp_millis()));
+                    }
+                }
+            }
+            let focus: u32 = sessions
+                .iter()
+                .filter(|s| s.session_type == SessionType::Focus && all_days.contains(&s.date))
+                .map(|s| s.duration)
+                .sum();
+            let count: u32 = sessions
+                .iter()
+                .filter(|s| s.session_type == SessionType::Focus && all_days.contains(&s.date))
+                .fold(0_u32, |acc, _| acc.saturating_add(1));
+            let total: u32 = sessions
+                .iter()
+                .filter(|s| all_days.contains(&s.date))
+                .map(|s| s.duration)
+                .sum();
+            (focus, count, total, 12_u32)
+        }
+    };
+    let avg = focus_minutes / denom.max(1);
+    (focus_minutes, avg, session_count, total_minutes)
+}
+
 /// Count Focus sessions whose `date` is in `week_dates`.
 fn weekly_sessions_count(sessions: &[ManualSession], week_dates: &[String; 7]) -> u32 {
     sessions
@@ -273,6 +367,53 @@ fn month_short(month: u32) -> &'static str {
     MONTH_SHORT_NAMES.get(idx).copied().unwrap_or("???")
 }
 
+/// Period-specific labels for the focus-summary card. Returns the
+/// card-title plus the four metric-tile sublabels, in the order
+/// (Weekly focus time, Weekly average, Sessions this week,
+/// Weekly total time). Centralises the visual contract from the
+/// post-rework /quickreview that surfaced static "Weekly" copy
+/// across all four period tabs.
+const fn period_label_summary(period: Period) -> (&'static str, [&'static str; 4]) {
+    match period {
+        Period::Daily => (
+            "Focus Daily Summary",
+            [
+                "Daily focus time",
+                "Hourly average",
+                "Sessions today",
+                "Daily total time",
+            ],
+        ),
+        Period::Weekly => (
+            "Focus Weekly Summary",
+            [
+                "Weekly focus time",
+                "Daily average",
+                "Sessions this week",
+                "Weekly total time",
+            ],
+        ),
+        Period::Monthly => (
+            "Focus Monthly Summary",
+            [
+                "Monthly focus time",
+                "Daily average",
+                "Sessions this month",
+                "Monthly total time",
+            ],
+        ),
+        Period::Yearly => (
+            "Focus Yearly Summary",
+            [
+                "Yearly focus time",
+                "Monthly average",
+                "Sessions this year",
+                "Yearly total time",
+            ],
+        ),
+    }
+}
+
 /// Anchor a cursor to the current period's "start" point per FR-008:
 /// Daily → today; Weekly → this week's Monday; Monthly → first-of-month;
 /// Yearly → first-of-year (Jan 1).
@@ -384,8 +525,13 @@ pub fn StatisticsView() -> impl IntoView {
 
     let on_select_period = Callback::new(move |new_period: Period| {
         // FR-008 / SC-005: reset cursor on period swap.
+        // Re-read `now` from the clock on each swap so a long-lived
+        // Statistics view doesn't anchor to a stale wall-clock seed
+        // (e.g. after midnight rolls over). Mirrors the `daily/mod.rs`
+        // pattern of seeding from `BrowserClock` at the call site.
+        let now_fresh = datetime_from_ms(BrowserClock.now_ms());
         period.set(new_period);
-        cursor.set(anchor_to_period(new_period, now));
+        cursor.set(anchor_to_period(new_period, now_fresh));
     });
 
     let period_signal: Signal<Period> = period.into();
@@ -405,27 +551,19 @@ pub fn StatisticsView() -> impl IntoView {
 
     let tags_signal: Signal<Vec<Tag>> = Signal::derive(move || tags.get());
 
-    // Focus-summary metric signals — the e2e selector contract per
-    // FR-009 / A13. These derive from `cursor` (week bounds) regardless
-    // of the active period; the focus-summary card is rendered only on
-    // the Weekly variant. The signals stay live so the period-swap
-    // re-anchor keeps the card values fresh once Weekly is re-selected.
-    let weekly_focus = Signal::derive(move || {
-        let dates = week_date_set(cursor.get());
-        sessions.with(|ss| weekly_focus_minutes(ss, &dates))
+    // Focus-summary metric signals — per-period now. The selector
+    // contract IDs (`#total-focus-week`, `#avg-focus-day`,
+    // `#weekly-sessions`, `#weekly-focus-time`) stay pinned to the
+    // DOM nodes regardless of period; only Weekly is asserted in e2e
+    // (FR-009). On other periods the same elements carry the same IDs
+    // but project period-correct aggregates so the visible numbers
+    // match the period tab.
+    let tile_metrics = Signal::derive(move || {
+        let p = period.get();
+        let c = cursor.get();
+        sessions.with(|ss| period_tile_metrics(p, c, ss))
     });
-    let avg_focus_day = Signal::derive(move || {
-        let dates = week_date_set(cursor.get());
-        sessions.with(|ss| weekly_focus_minutes(ss, &dates)) / 7
-    });
-    let weekly_sessions_sig = Signal::derive(move || {
-        let dates = week_date_set(cursor.get());
-        sessions.with(|ss| weekly_sessions_count(ss, &dates))
-    });
-    let weekly_total = Signal::derive(move || {
-        let dates = week_date_set(cursor.get());
-        sessions.with(|ss| weekly_total_minutes(ss, &dates))
-    });
+    let summary_labels = Signal::derive(move || period_label_summary(period.get()));
 
     view! {
         <div class="view-container view-section" id="calendar-view">
@@ -440,8 +578,12 @@ pub fn StatisticsView() -> impl IntoView {
             // signals stay anchored on the period cursor so Daily
             // (e.g.) shows the metrics for the week containing the
             // active day.
+            // Selector IDs (`#total-focus-week`, `#avg-focus-day`,
+            // `#weekly-sessions`, `#weekly-focus-time`) stay on the
+            // same elements across all periods — e2e only asserts
+            // them in Weekly state per FR-009.
             <div class="focus-summary-card" id="focus-summary-card">
-                <h3>"Focus Weekly Summary"</h3>
+                <h3>{move || summary_labels.get().0}</h3>
                 <div class="focus-summary-grid">
                     <div class="focus-metric">
                         <div class="metric-change neutral">
@@ -449,9 +591,9 @@ pub fn StatisticsView() -> impl IntoView {
                             <span>"0%"</span>
                         </div>
                         <div class="metric-value" id="total-focus-week">
-                            {move || format!("{}m", weekly_focus.get())}
+                            {move || format!("{}m", tile_metrics.get().0)}
                         </div>
-                        <div class="metric-label">"Weekly focus time"</div>
+                        <div class="metric-label">{move || summary_labels.get().1[0]}</div>
                     </div>
                     <div class="focus-metric">
                         <div class="metric-change neutral">
@@ -459,9 +601,9 @@ pub fn StatisticsView() -> impl IntoView {
                             <span>"0%"</span>
                         </div>
                         <div class="metric-value" id="avg-focus-day">
-                            {move || format!("{}m", avg_focus_day.get())}
+                            {move || format!("{}m", tile_metrics.get().1)}
                         </div>
-                        <div class="metric-label">"Average focus/day"</div>
+                        <div class="metric-label">{move || summary_labels.get().1[1]}</div>
                     </div>
                     <div class="focus-metric">
                         <div class="metric-change neutral">
@@ -469,9 +611,9 @@ pub fn StatisticsView() -> impl IntoView {
                             <span>"0%"</span>
                         </div>
                         <div class="metric-value" id="weekly-sessions">
-                            {move || weekly_sessions_sig.get().to_string()}
+                            {move || tile_metrics.get().2.to_string()}
                         </div>
-                        <div class="metric-label">"Sessions this week"</div>
+                        <div class="metric-label">{move || summary_labels.get().1[2]}</div>
                     </div>
                     <div class="focus-metric">
                         <div class="metric-change neutral">
@@ -479,9 +621,9 @@ pub fn StatisticsView() -> impl IntoView {
                             <span>"0%"</span>
                         </div>
                         <div class="metric-value" id="weekly-focus-time">
-                            {move || format!("{}m", weekly_total.get())}
+                            {move || format!("{}m", tile_metrics.get().3)}
                         </div>
-                        <div class="metric-label">"Weekly total time"</div>
+                        <div class="metric-label">{move || summary_labels.get().1[3]}</div>
                     </div>
                 </div>
             </div>
