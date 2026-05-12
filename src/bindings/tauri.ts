@@ -534,7 +534,15 @@ date: string;
  * objects rather than ID-only references; we normalise at
  * consumption time without reshaping on disk.
  */
-tags: JsonValue[] | null }
+tags: JsonValue[] | null; 
+/**
+ * User-typed session title (≤120 user-perceived chars). Captured
+ * at manual-backfill submit time and at natural focus completion
+ * (the synth path that mirrors today's auto-saved row into the
+ * calendar). Empty-string is forbidden — normalised to `None` at
+ * the capture boundary per Principle III.
+ */
+title?: string | null }
 /**
  * Notification preferences.
  * 

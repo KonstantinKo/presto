@@ -1459,6 +1459,7 @@ mod tests {
             created_at: "2024-01-01T09:00:00Z".to_string(),
             date: "2024-01-01".to_string(),
             tags: Some(vec![serde_json::json!({"id": "tag-1", "name": "Work"})]),
+            title: None,
         };
         let json = serde_json::to_string(&session_with_tags).unwrap();
         let parsed: ManualSession = serde_json::from_str(&json).unwrap();
@@ -1478,6 +1479,7 @@ mod tests {
             created_at: "2024-01-01T09:25:00Z".to_string(),
             date: "2024-01-01".to_string(),
             tags: None,
+            title: None,
         };
         let json = serde_json::to_string(&session_no_extras).unwrap();
         let parsed: ManualSession = serde_json::from_str(&json).unwrap();

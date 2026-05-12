@@ -55,6 +55,13 @@ pub struct ManualSession {
     /// objects rather than ID-only references; we normalise at
     /// consumption time without reshaping on disk.
     pub tags: Option<Vec<serde_json::Value>>,
+    /// User-typed session title (≤120 user-perceived chars). Captured
+    /// at manual-backfill submit time and at natural focus completion
+    /// (the synth path that mirrors today's auto-saved row into the
+    /// calendar). Empty-string is forbidden — normalised to `None` at
+    /// the capture boundary per Principle III.
+    #[serde(default)]
+    pub title: Option<String>,
 }
 
 #[cfg(test)]

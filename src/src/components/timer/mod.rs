@@ -226,6 +226,7 @@ fn synth_completed_session(now_ms: i64, focus_duration_secs: u32) -> ManualSessi
             .to_rfc3339(),
         date: crate::engine::date_format::format_session_date(now_ms),
         tags: None,
+        title: None,
     }
 }
 
