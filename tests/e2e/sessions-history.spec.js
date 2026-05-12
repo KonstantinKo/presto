@@ -27,8 +27,12 @@ test("run debug-mode focus session to completion and verify it appears in calend
   // when the mode transitions from focus to break
   await expect(page.locator("#status-text")).toHaveText("Break", { timeout: 12000 });
 
-  // Navigate to the Calendar view
-  await tapTab(page, "Calendar");
+  // Navigate to the Daily view — Feature 003 moves the mini-calendar
+  // grid + sessions-history table from the Calendar (Statistics) view
+  // to the new Daily drill-down (FR-019 / A14 / CHK043). The selector
+  // strings below (`#calendar-grid`, `#sessions-table-body`, etc.) are
+  // preserved across the move.
+  await tapTab(page, "Daily");
 
   // Today's date should be highlighted in the calendar grid (aria-current="date" marks today)
   await expect(page.locator('#calendar-grid [aria-current="date"]')).toBeVisible({ timeout: 5000 });

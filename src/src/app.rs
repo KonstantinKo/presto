@@ -39,6 +39,7 @@ use crate::bridge::types::TimerMode;
 use crate::bridge::types::{Session, Settings, UpdateAvailablePayload};
 use crate::components::browser_clock::BrowserClock;
 use crate::components::calendar::CalendarView;
+use crate::components::daily::DailyView;
 use crate::components::settings::SettingsView;
 use crate::components::tasks::TasksView;
 use crate::components::timer::TimerView;
@@ -158,6 +159,7 @@ pub fn App() -> impl IntoView {
     let is_timer = Signal::derive(move || nav.with(|n| matches!(n.current(), NavView::Timer)));
     let is_calendar =
         Signal::derive(move || nav.with(|n| matches!(n.current(), NavView::Calendar)));
+    let is_daily = Signal::derive(move || nav.with(|n| matches!(n.current(), NavView::Daily)));
     let is_settings =
         Signal::derive(move || nav.with(|n| matches!(n.current(), NavView::Settings(_))));
     let is_tasks = Signal::derive(move || nav.with(|n| matches!(n.current(), NavView::Tasks)));
@@ -178,6 +180,7 @@ pub fn App() -> impl IntoView {
 
     let on_timer_nav = move |_| nav.update(|n| n.transition_to(NavView::Timer));
     let on_calendar_nav = move |_| nav.update(|n| n.transition_to(NavView::Calendar));
+    let on_daily_nav = move |_| nav.update(|n| n.transition_to(NavView::Daily));
     let on_settings_nav = move |_| nav.update(NavigationManager::enter_settings);
 
     let on_select_settings_tab = Callback::new(move |tab: SettingsTab| {
@@ -598,7 +601,26 @@ pub fn App() -> impl IntoView {
                     attr:aria-current=move || if is_calendar.get() { "page" } else { "" }
                     on:click=on_calendar_nav
                 >
-                    <i class="ri-calendar-line"></i>
+                    // Feature 003 (A6): swap from `ri-calendar-line`
+                    // to the Phosphor `ph-chart-line-up` to reflect
+                    // the Statistics-intent rename. `#calendar-nav`
+                    // and `data-view="calendar"` are preserved (e2e
+                    // contract).
+                    <i class="ph ph-chart-line-up"></i>
+                </button>
+                <button
+                    class="sidebar-icon"
+                    class:active=move || is_daily.get()
+                    id="daily-nav"
+                    data-view="daily"
+                    title="Daily"
+                    attr:aria-current=move || if is_daily.get() { "page" } else { "" }
+                    on:click=on_daily_nav
+                >
+                    // Feature 003 Bundle B: new Daily drill-down nav
+                    // entry (FR-012). Sits between Calendar (renamed
+                    // Statistics in intent) and Settings.
+                    <i class="ph ph-calendar-check"></i>
                 </button>
             </div>
             <div class="sidebar-bottom">
@@ -637,6 +659,9 @@ pub fn App() -> impl IntoView {
             </div>
             <div class="view-host" class:hidden=move || !is_calendar.get()>
                 <CalendarView/>
+            </div>
+            <div class="view-host" class:hidden=move || !is_daily.get()>
+                <DailyView/>
             </div>
             <div class="view-host" class:hidden=move || !is_settings.get()>
                 <SettingsView
