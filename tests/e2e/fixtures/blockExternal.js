@@ -1,5 +1,5 @@
 /**
- * Blocks all non-loopback HTTP requests so external CDNs (Supabase, Google Fonts,
+ * Blocks all non-loopback HTTP requests so external CDNs (Google Fonts,
  * jsDelivr, GitHub API) are never reached during tests.
  * @param {import('@playwright/test').Page} page
  */

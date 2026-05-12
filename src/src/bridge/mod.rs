@@ -13,5 +13,4 @@ pub mod availability;
 pub mod commands;
 pub mod events;
 pub mod notification;
-pub mod storage;
 pub mod types;

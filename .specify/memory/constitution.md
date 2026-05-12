@@ -1,7 +1,26 @@
 <!--
 Sync Impact Report
 ==================
-Version change: 1.0.0 → 2.0.0
+Version change: 2.0.0 → 3.0.0
+Bump rationale: MAJOR bump — Principle II reframed from "Local-First,
+Privacy-Default (optional Supabase)" to "Local-Only" (no accounts, no sync,
+no telemetry, no guest-vs-authed split). Auth/sync/team/analytics surfaces
+removed from the codebase in lockstep. Manager state-machine list in
+Principle V updated to drop `auth` and `team`. Principle VIII spec-trigger
+scope updated to drop "auth/sync flow".
+
+Modified principles:
+- II. Local-First, Privacy-Default → renamed "Local-Only"; auth/sync
+  optional-surface clause removed; "no network egress for user data"
+  promoted from implication to explicit rule.
+- III. Type Safety Over Defensive Code — "Supabase responses" example
+  dropped from boundary-validation rule.
+- V. Test-First For Stateful Engines — manager list reduced.
+- VIII. Spec-Driven Feature Flow — "auth/sync flow" trigger dropped.
+
+(Earlier 1.0.0 → 2.0.0 report retained below for history.)
+
+----- Prior 1.0.0 → 2.0.0 -----
 Bump rationale: MAJOR bump — the Technology & Quality Constraints section is
 removed (section removal = MAJOR per Governance versioning policy); several
 principle bodies are materially restated to strip implementation-specifics
@@ -66,18 +85,19 @@ Rules:
 
 Rationale: this is a tool people use to spend their time deliberately. A wrong-by-one-second timer or a swallowed pause silently undoes the user's effort. The state machine is small enough to be obviously correct; "obviously correct" is the bar.
 
-### II. Local-First, Privacy-Default
+### II. Local-Only
 
-presto is a single-user desktop app. Tauri's app-data directory is the authoritative store. Network egress is opt-in.
+presto is a single-user desktop app. Tauri's app-data directory is the authoritative store. All user data lives there.
 
 Rules:
-- All session, task, tag, and settings state MUST persist locally via Tauri commands first; localStorage is the bounded fallback for pure-web contexts (e2e dev server, mocked Tauri bridge).
-- **Auth (Supabase) is optional.** Guest mode is first-class — every feature reachable in guest mode is reachable, full-stop. Sign-in unlocks sync; never gates core timer functionality.
+- All session, task, tag, and settings state MUST persist locally via Tauri commands.
+- **No accounts, no sign-in, no sync.** No notion of "guest vs. authed" exists; every install is one user, one machine.
 - **No telemetry.** No analytics events go on the wire.
-- **PII never appears in plain logs.** Identifiers (session_id, tag_id) are fine; user-typed task names, email, IP are not. Scrub at emit time, not at display time.
+- **No network egress for user data.** The auto-updater's release check is the only outbound traffic; it transmits no user state.
+- **PII never appears in plain logs.** Identifiers (session_id, tag_id) are fine; user-typed task names are not. Scrub at emit time, not at display time.
 - **System plugins** (updater, opener, notification, dialog) run on the user's machine; they MUST NOT exfiltrate beyond what the plugin's documented behaviour requires.
 
-Rationale: the user installed a local pomodoro timer, not a SaaS. Every network call needs a defensible reason and a user-visible toggle. PII discipline keeps GDPR posture without process.
+Rationale: the user installed a local pomodoro timer, not a SaaS. Removing the optional-cloud surface entirely means no provider lock-in, no privacy footnotes, no settings-page caveats.
 
 ### III. Type Safety Over Defensive Code
 
@@ -86,7 +106,7 @@ Use the type system; reject runtime guards the type system already excludes.
 Rules:
 - **Strict static analysis is non-negotiable; warnings are errors.** Tool specifics (linter invocations, flag sets) live in `.agentex.yml` and `AGENTS.md`. No blanket `#[allow]`-silencing of pedantic warnings.
 - **Closed domains** (timer modes, session types, sound notification variants) are sum types — never strings or open enums.
-- **Defensive validation** (null checks, "this can't happen" branches) is forbidden where the type system already excludes the case. Validate at system boundaries (Tauri command inputs, Supabase responses, file imports) only.
+- **Defensive validation** (null checks, "this can't happen" branches) is forbidden where the type system already excludes the case. Validate at system boundaries (Tauri command inputs, file imports) only.
 - **`--no-verify` is for genuine emergencies.** The next commit fixes the bypass and re-runs hooks.
 
 Rationale: LLM-assisted coding produces working-looking code easily; strong types reject wrong-looking code at compile time, where review wouldn't catch it. The Leptos/Rust stack was chosen specifically for this leverage — we don't get the leverage if we soften the lints.
@@ -108,7 +128,7 @@ Rationale: a pomodoro timer's UI is small enough that "looks identical" is meani
 Failing tests precede code for: the timer engine, session/tag/task persistence, activity-monitoring state, and any new core engine.
 
 Rules:
-- **Test-first applies to:** the timer engine, manager state machines (auth, session, settings, navigation, tag, team), Tauri-backed persistence helpers, time-keeping math.
+- **Test-first applies to:** the timer engine, manager state machines (session, settings, navigation, tag, update), Tauri-backed persistence helpers, time-keeping math.
 - **Test-first does NOT apply to:** UI rendering, view wiring, theme loading, trivial CRUD plumbing — those are exercised by the e2e suite and visual regression.
 - **Tests express behaviour the user or domain expects, not internal structure.** "Function A calls function B" assertions don't count. "After 25 minutes the timer ends in `breakReady` mode and emits `pomodoroCompleted`" does.
 - **A new Tauri command extends the Tauri bridge mock first**; then the test that exercises it; then the real call site.
@@ -144,7 +164,7 @@ Rationale: the original author abandoned the project. We don't owe them a migrat
 Non-trivial features go through: spec (*what + why*) → plan (*how*) → tasks → implementation. Spec-kit is the current vehicle.
 
 Rules:
-- **Multi-file work** and any change to the timer engine, persistence layer, Tauri bridge, or auth/sync flow requires a spec under `specs/<NNN-feature>/` before implementation.
+- **Multi-file work** and any change to the timer engine, persistence layer, or Tauri bridge requires a spec under `specs/<NNN-feature>/` before implementation.
 - **Trivial work** (typos, single-call refactors, dependency bumps, config tweaks, build-themes additions) does not.
 - **Plans MUST reference relevant principles** by name (e.g., "I. The Timer Is Sacred — engine signature change") and pass the Constitution Check in `plan-template.md` before tasks are generated.
 - **Spec-kit itself is best-so-far, not a permanent gate.** If a step is consistently unhelpful for a class of work, raise an amendment — don't silently route around it.
@@ -177,4 +197,4 @@ This constitution supersedes ad-hoc conventions. When a review comment, commit m
 
 **Runtime guidance** lives in `CLAUDE.md` and the codebase. Both MUST be reviewed for staleness on any amendment.
 
-**Version**: 2.0.0 | **Ratified**: 2026-05-09 | **Last Amended**: 2026-05-10
+**Version**: 3.0.0 | **Ratified**: 2026-05-09 | **Last Amended**: 2026-05-12

@@ -60,14 +60,6 @@ pub const GLOBAL_SHORTCUT: &str = "global-shortcut";
 /// Consumer: `managers/settings.rs`.
 pub const SHORTCUTS_UPDATED: &str = "shortcuts-updated";
 
-/// E5 — OAuth redirect received by the local callback server.
-///
-/// Emitted by `start_oauth_server` when the local OAuth callback HTTP
-/// server receives the redirect (`src-tauri/src/lib.rs:1242`).
-/// Payload: `String` carrying the full callback URL.
-/// Consumer: `managers/auth.rs`.
-pub const OAUTH_CALLBACK: &str = "oauth-callback";
-
 /// E6 — Tray "Start session" menu item emits this (`src-tauri/src/lib.rs:941`).
 /// Payload: `()`.
 /// Consumer: `engine/timer.rs`.
@@ -301,9 +293,8 @@ where
 #[cfg(all(test, target_arch = "wasm32"))]
 mod tests {
     use super::{
-        listen, Listener, GLOBAL_SHORTCUT, OAUTH_CALLBACK, SHORTCUTS_UPDATED, TRAY_CANCEL,
-        TRAY_PAUSE, TRAY_SKIP, TRAY_START_SESSION, UPDATE_AVAILABLE, USER_ACTIVITY,
-        USER_INACTIVITY,
+        listen, Listener, GLOBAL_SHORTCUT, SHORTCUTS_UPDATED, TRAY_CANCEL, TRAY_PAUSE, TRAY_SKIP,
+        TRAY_START_SESSION, UPDATE_AVAILABLE, USER_ACTIVITY, USER_INACTIVITY,
     };
     use crate::bridge::types::BridgeError;
     use crate::bridge::types::{ShortcutSettings, UpdateAvailablePayload};
@@ -322,7 +313,6 @@ mod tests {
         assert_eq!(USER_INACTIVITY, "user-inactivity");
         assert_eq!(GLOBAL_SHORTCUT, "global-shortcut");
         assert_eq!(SHORTCUTS_UPDATED, "shortcuts-updated");
-        assert_eq!(OAUTH_CALLBACK, "oauth-callback");
         assert_eq!(TRAY_START_SESSION, "tray-start-session");
         assert_eq!(TRAY_PAUSE, "tray-pause");
         assert_eq!(TRAY_SKIP, "tray-skip");

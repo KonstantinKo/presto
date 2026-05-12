@@ -39,8 +39,9 @@ pub fn format_session_date(timestamp_ms: i64) -> String {
         // Mirrors JS-era `new Date(ms).toDateString()` — local-time
         // projection. Both session-save producers MUST agree, so we
         // route both through this helper.
+        #[allow(clippy::cast_precision_loss)]
         let d = js_sys::Date::new(&wasm_bindgen::JsValue::from_f64(timestamp_ms as f64));
-        return d.to_date_string().as_string().unwrap_or_default();
+        d.to_date_string().as_string().unwrap_or_default()
     }
     #[cfg(not(target_arch = "wasm32"))]
     {

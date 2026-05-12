@@ -11,13 +11,11 @@
 // error. Five real bugs shipped this way before the project moved
 // to this shared-crate model.
 //
-// **Feature flags**:
+// **Feature flag**:
 // - `specta`  enables `specta::Type` derives for `tauri-specta`
 //             bindings codegen. Host crate enables; WASM crate
 //             disables (keeps specta transitives out of the wasm
 //             dep graph).
-// - `migration` exposes the JS-era legacy payload types. Both
-//             endpoints enable until the post-cutover sunset.
 
 #![allow(clippy::module_name_repetitions)]
 // Module-level glob re-exports below intentionally surface everything
@@ -28,7 +26,6 @@
 #![allow(unreachable_pub)]
 
 pub mod args;
-pub mod auth;
 pub mod error;
 pub mod events;
 pub mod session;
@@ -37,14 +34,10 @@ pub mod tags;
 pub mod tasks;
 pub mod timer;
 
-#[cfg(feature = "migration")]
-pub mod migration;
-
 // Convenience re-exports — `use presto_ipc::*;` brings every wire
 // type into scope at the call site. Keep the surface flat so call
 // sites read like the original `bridge::types::*` imports.
 pub use args::*;
-pub use auth::*;
 pub use error::*;
 pub use events::*;
 pub use session::*;
@@ -52,6 +45,3 @@ pub use settings::*;
 pub use tags::*;
 pub use tasks::*;
 pub use timer::*;
-
-#[cfg(feature = "migration")]
-pub use migration::*;

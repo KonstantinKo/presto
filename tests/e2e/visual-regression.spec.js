@@ -6,14 +6,13 @@ import {
   dismissWelcomePing,
 } from "./fixtures/screens.js";
 
-test("visual baseline: timer, tags, calendar, team, all settings tabs, update banner, auth modal", async ({
+test("visual baseline: timer, tags, calendar, all settings tabs, update banner", async ({
   page,
   tauriMock,
 }) => {
-  // Pre-navigation setup: freeze time, enable update banner, enable team tab
+  // Pre-navigation setup: freeze time, enable update banner.
   await tauriMock.freezeTime("2026-05-09T12:00:00Z");
   await tauriMock.setUpdateAvailable();
-  await tauriMock.enableTeamButton();
 
   // Single navigation (Rule 1.1)
   await gotoTimer(page);
@@ -51,16 +50,7 @@ test("visual baseline: timer, tags, calendar, team, all settings tabs, update ba
   await expect(page.locator("#current-month")).not.toBeEmpty();
   await expect(page).toHaveScreenshot(["visual-regression", "calendar.png"]);
 
-  // --- 5e. Team ---
-  await tapTab(page, "Team");
-  await expect(page.locator("#team-view")).toBeVisible();
-  await expect(page.locator("#team-members-grid")).toBeVisible();
-  await expect(page.locator("#team-members-grid").getByRole("group").first()).toBeVisible({
-    timeout: 5000,
-  });
-  await expect(page).toHaveScreenshot(["visual-regression", "team.png"]);
-
-  // --- 5f. Settings — eight sub-tabs ---
+  // --- 5e. Settings — eight sub-tabs ---
   await tapTab(page, "Settings");
 
   await selectSettingsCategory(page, "General");
@@ -87,12 +77,4 @@ test("visual baseline: timer, tags, calendar, team, all settings tabs, update ba
   await selectSettingsCategory(page, "Updates");
   await expect(page.locator("#current-version")).toContainText("0.4.4");
   await expect(page).toHaveScreenshot(["visual-regression", "settings-updates.png"]);
-
-  // --- 5g. Auth modal (last — it dims the rest of the UI) ---
-  await tapTab(page, "Timer");
-  await page.locator("#user-avatar-btn").click();
-  await expect(page.locator("#user-dropdown")).toBeVisible({ timeout: 3000 });
-  await page.locator("#user-sign-in").click();
-  await expect(page.locator("#auth-overlay")).toBeVisible({ timeout: 3000 });
-  await expect(page).toHaveScreenshot(["visual-regression", "auth-modal.png"]);
 });

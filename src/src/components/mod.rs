@@ -14,22 +14,14 @@
 // ordering": "UI plumbing and trivial CRUD are out of Principle V
 // scope and don't need this ordering").
 //
-// Phase 4a (T189-T203): the five core screens — Timer, Tasks,
-// History, Calendar, Tags. Phase 4b layers on Settings tabs, the
-// Auth modal, the update-notification banner, and Team. Phase 4c
-// wires the top-level `App` router that dispatches `NavView` over
-// these.
-//
 // Selector contract: every `id="..."` and class used as an e2e test
-// selector in `tests/e2e/*.spec.js` is preserved post-cutover. Drift
-// here breaks the e2e suite (Phase 6 gate); the tests in this module
-// pin the selector strings inline.
+// selector in `tests/e2e/*.spec.js` is preserved. Drift here breaks
+// the e2e suite; the tests in this module pin the selector strings
+// inline.
 
-pub mod auth_modal;
 pub mod browser_clock;
 pub mod calendar;
 pub mod settings;
 pub mod tasks;
-pub mod team;
 pub mod timer;
 pub mod update_notification;

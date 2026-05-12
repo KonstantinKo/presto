@@ -33,12 +33,9 @@ use super::availability::bridge_available;
 use super::types::BridgeError;
 use super::types::TimerMode;
 use super::types::{
-    AddSessionTagArgs, AuthSession, DeleteTagArgs, LegacyHistoryPayload,
-    LegacyManualSessionsPayload, LegacySettingsPayload, LegacyTagsPayload, LegacyTasksPayload,
-    LegacyUserStatePayload, ManualSession, Session, SessionTag, Settings, ShortcutSettings,
-    StartActivityMonitoringArgs, SupabaseRefreshSessionArgs, SupabaseSessionPayload,
-    SupabaseSignOutArgs, Tag, Task, UpdateActivityTimeoutArgs, UpdateTrayIconArgs,
-    UpdateTrayMenuArgs,
+    AddSessionTagArgs, DeleteTagArgs, ManualSession, Session, SessionTag, Settings,
+    ShortcutSettings, StartActivityMonitoringArgs, Tag, Task, UpdateActivityTimeoutArgs,
+    UpdateTrayIconArgs, UpdateTrayMenuArgs,
 };
 
 #[wasm_bindgen]
@@ -585,9 +582,7 @@ pub async fn disable_autostart() -> Result<(), BridgeError> {
 /// `is_autostart_enabled`, "bridge absent" and "definitely not
 /// enabled" are operationally identical — there's no way to enable
 /// autostart without a Tauri bridge, so reporting `false` is honest.
-/// Broader sentinel adoption across other read-only commands (e.g.,
-/// `supabase_get_session` collapsing to `Ok(None)`) is a follow-up;
-/// see contracts/tauri-bridge.md §"Error handling".
+/// See contracts/tauri-bridge.md §"Error handling".
 ///
 /// # Errors
 /// Bridge-absent does NOT produce an error — see the short-circuit
@@ -682,149 +677,6 @@ pub async fn update_tray_menu(
     .await
 }
 
-// ---------------------------------------------------------------------------
-// OAuth
-// ---------------------------------------------------------------------------
-
-/// Start the OAuth callback HTTP server and return the loopback port
-/// it bound to. Tauri-side handler:
-/// `start_oauth_server() -> Result<u16, BridgeError>`
-/// at `src-tauri/src/lib.rs:1224`.
-///
-/// Final wrapper in the surviving table (contract row 26). The
-/// Tauri-side handler delegates to `tauri_plugin_oauth::start(callback)`,
-/// which spawns a single-shot HTTP listener on `127.0.0.1:<random
-/// available port>` and emits `oauth-callback` to the calling window
-/// once the redirect comes in. The wrapper returns the port number;
-/// the JS-era flow builds the `redirect_uri` against
-/// `http://localhost:{port}/`. The `oauth-callback` event side-channel
-/// is owned by the consumer (`managers::auth` in Phase 4); the wrapper
-/// only surfaces the port.
-///
-/// `u16` matches the `tauri_plugin_oauth::start` callback's port type
-/// exactly — a `u32` or `i32` drift on either side would not compile.
-///
-/// # Errors
-/// Returns `BridgeError::BridgeUnavailable` when the Tauri JS bridge is
-/// not present. Returns `BridgeError::Internal` if the OAuth plugin
-/// fails to bind a listener (rare; e.g., the loopback interface is
-/// down) or if the HTTP server thread fails to spawn.
-pub async fn start_oauth_server() -> Result<u16, BridgeError> {
-    invoke_serde("start_oauth_server", &serde_json::Value::Null).await
-}
-
-/// Sign in with email + password against Supabase auth.
-///
-/// Tauri-side handler: `supabase_sign_in_with_password(email: String,
-/// password: String) -> Result<AuthSession, BridgeError>` at
-/// `src-tauri/src/lib.rs`. The handler hits Supabase REST
-/// `/auth/v1/token?grant_type=password`, persists the returned session
-/// to the app-data directory, and surfaces the same record back to the
-/// caller.
-///
-/// Replaces the JS `supabase-js` `signInWithPassword` call. The session
-/// shape (`AuthSession` per data-model.md §`Session (Supabase auth
-/// session)`) is byte-stable across the bridge: the Tauri-side
-/// `auth::AuthSession` and the Leptos-side `types::AuthSession` are
-/// `snake_case` JSON twins, so a wire-shape drift fails both crates'
-/// tests at once.
-///
-/// # Errors
-/// Returns `BridgeError::BridgeUnavailable` when the Tauri JS bridge is
-/// not present. Returns `BridgeError::InvalidArgument` for empty creds
-/// or for Supabase REST 400/401 responses (bad password, unknown
-/// account). Returns `BridgeError::Internal` for network failures or
-/// 5xx responses. Returns `BridgeError::SerdeRoundtrip` if Supabase
-/// returns a non-`AuthSession`-shaped body (would be a Supabase API
-/// regression — not expected in normal operation).
-pub async fn supabase_sign_in_with_password(
-    email: String,
-    password: String,
-) -> Result<AuthSession, BridgeError> {
-    #[derive(Serialize)]
-    struct Args {
-        email: String,
-        password: String,
-    }
-    invoke_serde("supabase_sign_in_with_password", &Args { email, password }).await
-}
-
-/// Sign out: revoke the refresh token at Supabase REST and clear the
-/// Rust-side persisted session.
-///
-/// Tauri-side handler: `supabase_sign_out(refresh_token: String)
-/// -> Result<(), BridgeError>` at `src-tauri/src/lib.rs`. Replaces
-/// the JS `supabase-js` `signOut` call. The handler hits `/auth/v1/logout`
-/// best-effort (network failure is absorbed) and always clears the
-/// app-data dir's `supabase-session.json`, so the user is signed out
-/// client-side regardless of network status. Idempotent: signing out
-/// when no session is persisted is a successful no-op.
-///
-/// # Errors
-/// Returns `BridgeError::BridgeUnavailable` when the Tauri JS bridge is
-/// not present. Returns `BridgeError::InvalidArgument` for an empty
-/// `refresh_token` (the wrapper does not pre-validate — the handler
-/// does). Returns `BridgeError::Internal` for filesystem errors
-/// during the local clear (other than `NotFound`, which is absorbed).
-pub async fn supabase_sign_out(refresh_token: String) -> Result<(), BridgeError> {
-    invoke_serde("supabase_sign_out", &SupabaseSignOutArgs { refresh_token }).await
-}
-
-/// Read the currently persisted Supabase session from the app-data dir.
-///
-/// Tauri-side handler: `supabase_get_session() -> Result<Option<AuthSession>,
-/// BridgeError>` at `src-tauri/src/lib.rs`. Replaces the JS
-/// `supabase.auth.getSession()` localStorage read.
-///
-/// Returns `Ok(None)` for the cold-start "no signed-in user" case
-/// (matches the `null` default in tauriMock.js) — the consumer
-/// (`managers/auth.rs`) branches on the `Option` rather than
-/// surfacing the empty-state through `BridgeError::NotFound`. The
-/// closed-domain shape lets the consumer pattern-match cleanly:
-/// `match supabase_get_session().await { Ok(Some(s)) => ..., Ok(None)
-/// => ..., Err(e) => ... }`.
-///
-/// # Errors
-/// Returns `BridgeError::BridgeUnavailable` when the Tauri JS bridge is
-/// not present. Returns `BridgeError::Internal` for filesystem errors
-/// reading the persisted file. Returns `BridgeError::SerdeRoundtrip`
-/// if the file exists but cannot be deserialised into `AuthSession`
-/// (admin-side fix: remove the file; the wrapper does not silently
-/// drop a corrupted record).
-pub async fn supabase_get_session() -> Result<Option<AuthSession>, BridgeError> {
-    invoke_serde("supabase_get_session", &serde_json::Value::Null).await
-}
-
-/// Swap the current refresh token for a fresh access + refresh pair.
-///
-/// Tauri-side handler: `supabase_refresh_session(refresh_token: String)
-/// -> Result<AuthSession, BridgeError>` at `src-tauri/src/lib.rs`. The
-/// handler hits Supabase REST
-/// `/auth/v1/token?grant_type=refresh_token`, persists the freshly-issued
-/// session to the app-data dir (overwriting the old record), and
-/// returns the new session.
-///
-/// Replaces the JS `supabase-js` `refreshSession` call. The bare
-/// `AuthSession` return (not `Option<…>`) reflects that a successful
-/// refresh always yields a fresh record; consumers only invoke this
-/// when they already hold a non-`None` session, so the no-session
-/// path is not reachable here.
-///
-/// # Errors
-/// Returns `BridgeError::BridgeUnavailable` when the Tauri JS bridge is
-/// not present. Returns `BridgeError::InvalidArgument` for an empty
-/// token or for Supabase REST 400/401 responses (token expired or
-/// revoked — the consumer should fall back to the sign-in flow).
-/// Returns `BridgeError::Internal` for network failures or 5xx
-/// responses.
-pub async fn supabase_refresh_session(refresh_token: String) -> Result<AuthSession, BridgeError> {
-    invoke_serde(
-        "supabase_refresh_session",
-        &SupabaseRefreshSessionArgs { refresh_token },
-    )
-    .await
-}
-
 /// Build an XLSX workbook from `sessions` and write it to `path`.
 ///
 /// Tauri-side handler: `export_sessions_xlsx(path: String, sessions:
@@ -858,152 +710,6 @@ pub async fn export_sessions_xlsx(
         sessions: Vec<ManualSession>,
     }
     invoke_serde("export_sessions_xlsx", &Args { path, sessions }).await
-}
-
-// ---------------------------------------------------------------------------
-// Transition-only commands — legacy localStorage migration (Phase 1E).
-//
-// Spec 001-leptos-migration §Phase 1E T099-T115; data-model.md
-// §"Legacy localStorage migration"; contracts/tauri-bridge.md
-// §"Transition-only commands". Each `import_legacy_*` wrapper hands a
-// JS-era payload to the matching Tauri-side handler, which is
-// idempotent (skips when the Rust-side authoritative store already
-// has data). Sunset: removed one minor version after cutover.
-//
-// Per Principle II (Local-First, Privacy-Default), the wrappers MUST
-// NOT log payload contents — only the call shape. Logging happens
-// (if at all) at the reader layer in `bridge::storage`, where it
-// emits key counts only.
-// ---------------------------------------------------------------------------
-
-/// Hand the JS-era `pomodoro-settings` + `theme-preference` +
-/// `timer-theme-preference` + `presto_auto_check_updates`
-/// localStorage payload to the Tauri-side authoritative store.
-///
-/// Tauri-side handler: `import_legacy_settings(payload:
-/// LegacySettingsPayload) -> Result<(), BridgeError>` at
-/// `src-tauri/src/migration.rs`. Idempotent: short-circuits with
-/// `Ok(())` if `settings.json` already exists in the app-data dir.
-///
-/// # Errors
-/// Returns `BridgeError::BridgeUnavailable` when the Tauri JS bridge
-/// is not present. Returns `BridgeError::Internal` for filesystem
-/// errors writing the imported settings file.
-pub async fn import_legacy_settings(payload: LegacySettingsPayload) -> Result<(), BridgeError> {
-    invoke_named_arg("import_legacy_settings", "payload", payload).await
-}
-
-/// Hand the JS-era `pomodoro-history` localStorage payload to the
-/// Tauri-side authoritative store.
-///
-/// Tauri-side handler: `import_legacy_history(payload:
-/// LegacyHistoryPayload) -> Result<(), BridgeError>` at
-/// `src-tauri/src/migration.rs`. Idempotent: short-circuits with
-/// `Ok(())` if `history.json` already exists in the app-data dir.
-///
-/// # Errors
-/// Returns `BridgeError::BridgeUnavailable` when the Tauri JS bridge
-/// is not present. Returns `BridgeError::Internal` for filesystem
-/// errors writing the imported history file.
-pub async fn import_legacy_history(payload: LegacyHistoryPayload) -> Result<(), BridgeError> {
-    invoke_named_arg("import_legacy_history", "payload", payload).await
-}
-
-/// Hand the JS-era `pomodoro-tasks` localStorage payload to the
-/// Tauri-side authoritative store.
-///
-/// Tauri-side handler: `import_legacy_tasks(payload:
-/// LegacyTasksPayload) -> Result<(), BridgeError>` at
-/// `src-tauri/src/migration.rs`. Idempotent: short-circuits with
-/// `Ok(())` if `tasks.json` already exists in the app-data dir.
-///
-/// # Errors
-/// Returns `BridgeError::BridgeUnavailable` when the Tauri JS bridge
-/// is not present. Returns `BridgeError::Internal` for filesystem
-/// errors writing the imported tasks file.
-pub async fn import_legacy_tasks(payload: LegacyTasksPayload) -> Result<(), BridgeError> {
-    invoke_named_arg("import_legacy_tasks", "payload", payload).await
-}
-
-/// Hand the JS-era `presto-tags` localStorage payload to the
-/// Tauri-side authoritative store.
-///
-/// Tauri-side handler: `import_legacy_tags(payload:
-/// LegacyTagsPayload) -> Result<(), BridgeError>` at
-/// `src-tauri/src/migration.rs`. Idempotent: short-circuits with
-/// `Ok(())` if `tags.json` already exists in the app-data dir.
-/// Note: the Rust-side `read_tags_from` helper bootstraps a default
-/// "Focus" tag on cold start, so this idempotency check uses the
-/// presence of the file on disk (not the bootstrap-populated vec)
-/// to distinguish "user has imported" from "first launch".
-///
-/// # Errors
-/// Returns `BridgeError::BridgeUnavailable` when the Tauri JS bridge
-/// is not present. Returns `BridgeError::Internal` for filesystem
-/// errors writing the imported tags file.
-pub async fn import_legacy_tags(payload: LegacyTagsPayload) -> Result<(), BridgeError> {
-    invoke_named_arg("import_legacy_tags", "payload", payload).await
-}
-
-/// Hand the JS-era `presto_manual_sessions` localStorage payload to
-/// the Tauri-side authoritative store.
-///
-/// Tauri-side handler: `import_legacy_manual_sessions(payload:
-/// LegacyManualSessionsPayload) -> Result<(), BridgeError>` at
-/// `src-tauri/src/migration.rs`. Idempotent: short-circuits with
-/// `Ok(())` if `manual_sessions.json` already exists in the app-data
-/// dir.
-///
-/// # Errors
-/// Returns `BridgeError::BridgeUnavailable` when the Tauri JS bridge
-/// is not present. Returns `BridgeError::Internal` for filesystem
-/// errors writing the imported manual sessions file.
-pub async fn import_legacy_manual_sessions(
-    payload: LegacyManualSessionsPayload,
-) -> Result<(), BridgeError> {
-    invoke_named_arg("import_legacy_manual_sessions", "payload", payload).await
-}
-
-/// Hand the JS-era user-state flags (`presto-guest-mode`,
-/// `presto-auth-seen`, `presto-skipped-versions`, `pomodoro-session`)
-/// to the Tauri-side authoritative store.
-///
-/// Tauri-side handler: `import_legacy_user_state(payload:
-/// LegacyUserStatePayload) -> Result<(), BridgeError>` at
-/// `src-tauri/src/migration.rs`. Idempotent: skips folding flags into
-/// `AppSettings` when the user-state slice has already been
-/// imported (tracked via a sentinel marker file in the app-data
-/// dir; see migration.rs for the per-flag disposition).
-///
-/// # Errors
-/// Returns `BridgeError::BridgeUnavailable` when the Tauri JS bridge
-/// is not present. Returns `BridgeError::Internal` for filesystem
-/// errors writing the sentinel marker file or the active-session
-/// file.
-pub async fn import_legacy_user_state(payload: LegacyUserStatePayload) -> Result<(), BridgeError> {
-    invoke_named_arg("import_legacy_user_state", "payload", payload).await
-}
-
-/// Hand the JS-era Supabase auth token (`sb-<project-ref>-auth-token`
-/// localStorage payload) to the Tauri-side persistent session store.
-///
-/// Tauri-side handler: `import_legacy_supabase_session(payload:
-/// SupabaseSessionPayload) -> Result<(), BridgeError>` at
-/// `src-tauri/src/migration.rs`. Idempotent: short-circuits with
-/// `Ok(())` if a Rust-side session file already exists.
-///
-/// Per research.md §6 step 4 the handler ignores the legacy
-/// `expires_at` field (the Rust-side post-cutover session re-derives
-/// expiry from the JWT on next refresh).
-///
-/// # Errors
-/// Returns `BridgeError::BridgeUnavailable` when the Tauri JS bridge
-/// is not present. Returns `BridgeError::Internal` for filesystem
-/// errors writing the imported session file.
-pub async fn import_legacy_supabase_session(
-    payload: SupabaseSessionPayload,
-) -> Result<(), BridgeError> {
-    invoke_named_arg("import_legacy_supabase_session", "payload", payload).await
 }
 
 // ---------------------------------------------------------------------------
@@ -1077,36 +783,6 @@ pub async fn dialog_save(
     .await
 }
 
-/// Check whether the legacy localStorage migration has already run to
-/// completion. Returns `Ok(true)` when the sentinel file
-/// `<app-data>/legacy-migration-done.marker` exists.
-///
-/// The App startup path calls this first; when `true` it short-circuits the
-/// 7-call per-domain migration block, capping steady-state cold-start cost
-/// to one IPC trip instead of seven.
-///
-/// # Errors
-/// Returns `BridgeError::BridgeUnavailable` when the Tauri JS bridge is
-/// not present. Otherwise returns `BridgeError::Internal` on filesystem
-/// failures reading the app-data directory.
-pub async fn is_legacy_migration_complete() -> Result<bool, BridgeError> {
-    invoke_serde("is_legacy_migration_complete", &()).await
-}
-
-/// Write the legacy-migration sentinel file to cap future cold-start cost.
-///
-/// Called once by the App startup path on a successful first-time migration
-/// run. Subsequent cold starts probe the sentinel via
-/// `is_legacy_migration_complete` and skip the 7-call migration block.
-///
-/// # Errors
-/// Returns `BridgeError::BridgeUnavailable` when the Tauri JS bridge is
-/// not present. Otherwise returns `BridgeError::Internal` if the sentinel
-/// file cannot be written (filesystem error, quota, etc.).
-pub async fn mark_legacy_migration_complete() -> Result<(), BridgeError> {
-    invoke_serde("mark_legacy_migration_complete", &()).await
-}
-
 // Tests gated on `wasm32` because every wrapper-test is a
 // `#[wasm_bindgen_test]` — running them via `cargo test` on the host
 // target would produce dead-code lint failures (the host-side
@@ -1117,20 +793,17 @@ pub async fn mark_legacy_migration_complete() -> Result<(), BridgeError> {
 mod tests {
     use super::{
         add_session_tag, delete_tag, dialog_save, disable_autostart, enable_autostart,
-        export_sessions_xlsx, get_stats_history, is_autostart_enabled,
-        is_legacy_migration_complete, load_manual_sessions, load_session_data, load_settings,
-        load_tags, load_tasks, mark_legacy_migration_complete, register_global_shortcuts,
+        export_sessions_xlsx, get_stats_history, is_autostart_enabled, load_manual_sessions,
+        load_session_data, load_settings, load_tags, load_tasks, register_global_shortcuts,
         reset_all_data, save_daily_stats, save_manual_sessions, save_session_data, save_settings,
-        save_tag, save_tasks, start_activity_monitoring, start_oauth_server,
-        stop_activity_monitoring, supabase_get_session, supabase_refresh_session,
-        supabase_sign_in_with_password, supabase_sign_out, update_activity_timeout,
-        update_tray_icon, update_tray_menu,
+        save_tag, save_tasks, start_activity_monitoring, stop_activity_monitoring,
+        update_activity_timeout, update_tray_icon, update_tray_menu,
     };
     use crate::bridge::types::BridgeError;
     use crate::bridge::types::SessionType;
     use crate::bridge::types::TimerMode;
     use crate::bridge::types::{
-        AuthSession, ManualSession, Session, SessionTag, Settings, ShortcutSettings, Tag, Task,
+        ManualSession, Session, SessionTag, Settings, ShortcutSettings, Tag, Task,
         UpdateTrayIconArgs,
     };
     use wasm_bindgen_test::wasm_bindgen_test;
@@ -1788,160 +1461,9 @@ mod tests {
         let _ = assert_signature(true, false, TimerMode::LongBreak).await;
     }
 
-    #[wasm_bindgen_test]
-    async fn start_oauth_server_round_trip_short_circuits_when_bridge_absent() {
-        let result = start_oauth_server().await;
-        match result {
-            Err(BridgeError::BridgeUnavailable) => {}
-            other => panic!("expected BridgeUnavailable, got {other:?}"),
-        }
-    }
-
-    /// Compile-time signature pin per contracts/tauri-bridge.md row 26:
-    /// `start_oauth_server() -> Result<u16, BridgeError>`.
-    /// Final wrapper in the surviving table. Returns the loopback port
-    /// the OAuth callback HTTP server is bound to (the JS-era flow
-    /// builds the `redirect_uri` against `http://localhost:{port}`);
-    /// `u16` matches the `tauri_plugin_oauth::start` callback's port
-    /// type exactly. The Tauri-side handler also clones the `Window`
-    /// into the callback closure to emit `oauth-callback` events;
-    /// that side-channel is owned by the consumer (`managers::auth`),
-    /// not by the wrapper return.
-    #[wasm_bindgen_test]
-    async fn start_oauth_server_round_trip_signature_pinned() {
-        async fn assert_signature() -> Result<u16, BridgeError> {
-            start_oauth_server().await
-        }
-        let _ = assert_signature().await;
-    }
-
     // -----------------------------------------------------------------------
-    // Phase 1D — supabase_* family (T087-T095). Each wrapper hits a Rust
-    // REST adapter that replaces a supabase-js call site. Per
-    // contracts/tauri-bridge.md §"Supabase auth adapter family", the four
-    // commands cover sign-in, sign-out, session read, and session refresh.
-    // -----------------------------------------------------------------------
-
-    #[wasm_bindgen_test]
-    async fn supabase_sign_in_with_password_round_trip_short_circuits_when_bridge_absent() {
-        let result =
-            supabase_sign_in_with_password("user@example.com".to_string(), "hunter2".to_string())
-                .await;
-        match result {
-            Err(BridgeError::BridgeUnavailable) => {}
-            other => panic!("expected BridgeUnavailable, got {other:?}"),
-        }
-    }
-
-    /// Compile-time signature pin per contracts/tauri-bridge.md §"Supabase
-    /// auth adapter family":
-    /// `supabase_sign_in_with_password(email: String, password: String)
-    ///     -> Result<AuthSession, BridgeError>`.
-    /// Both args are `String` (owned) because the JS-era call site already
-    /// holds owned creds (form input). Returns the typed `AuthSession`
-    /// from `bridge::types` rather than a `serde_json::Value` blob — the
-    /// closed-domain shape lets consumers (`managers/auth.rs`) bind to
-    /// `session.access_token` and `session.user.email` directly. Drift on
-    /// either side fails compilation per FR-008.
-    #[wasm_bindgen_test]
-    async fn supabase_sign_in_with_password_round_trip_signature_pinned() {
-        async fn assert_signature(
-            email: String,
-            password: String,
-        ) -> Result<AuthSession, BridgeError> {
-            supabase_sign_in_with_password(email, password).await
-        }
-        let _ = assert_signature("user@example.com".to_string(), "hunter2".to_string()).await;
-    }
-
-    #[wasm_bindgen_test]
-    async fn supabase_sign_out_round_trip_short_circuits_when_bridge_absent() {
-        let result = supabase_sign_out("rt-token".to_string()).await;
-        match result {
-            Err(BridgeError::BridgeUnavailable) => {}
-            other => panic!("expected BridgeUnavailable, got {other:?}"),
-        }
-    }
-
-    /// Compile-time signature pin per contracts/tauri-bridge.md §"Supabase
-    /// auth adapter family":
-    /// `supabase_sign_out(refresh_token: String) -> Result<(), BridgeError>`.
-    /// `refresh_token` is required (the Supabase REST `/auth/v1/logout`
-    /// endpoint demands it as the Authorization Bearer); the wrapper
-    /// surfaces the request rather than reading the token Rust-side
-    /// because the call site (`managers/auth.rs`) already holds the
-    /// session record and passes the token explicitly. Tauri-side
-    /// handler also clears the persisted session file on success — that
-    /// side-effect is not observable from the wrapper return.
-    #[wasm_bindgen_test]
-    async fn supabase_sign_out_round_trip_signature_pinned() {
-        async fn assert_signature(refresh_token: String) -> Result<(), BridgeError> {
-            supabase_sign_out(refresh_token).await
-        }
-        let _ = assert_signature("rt-token".to_string()).await;
-    }
-
-    #[wasm_bindgen_test]
-    async fn supabase_get_session_round_trip_short_circuits_when_bridge_absent() {
-        let result = supabase_get_session().await;
-        match result {
-            Err(BridgeError::BridgeUnavailable) => {}
-            other => panic!("expected BridgeUnavailable, got {other:?}"),
-        }
-    }
-
-    /// Compile-time signature pin per contracts/tauri-bridge.md §"Supabase
-    /// auth adapter family":
-    /// `supabase_get_session() -> Result<Option<AuthSession>, BridgeError>`.
-    /// Distinct from `supabase_sign_in_with_password` in two ways: no
-    /// arguments (the persisted session is read from the app-data dir,
-    /// not requested by ID), and the return is `Option<AuthSession>` —
-    /// `None` is the cold-start "no signed-in user" case (matches the
-    /// `supabase_get_session` mock entry in tauriMock.js, which returns
-    /// `null` by default). A drift to a bare `AuthSession` would force
-    /// the consumer to invent a sentinel for the not-signed-in case and
-    /// is rejected at the type level.
-    #[wasm_bindgen_test]
-    async fn supabase_get_session_round_trip_signature_pinned() {
-        async fn assert_signature() -> Result<Option<AuthSession>, BridgeError> {
-            supabase_get_session().await
-        }
-        let _ = assert_signature().await;
-    }
-
-    #[wasm_bindgen_test]
-    async fn supabase_refresh_session_round_trip_short_circuits_when_bridge_absent() {
-        let result = supabase_refresh_session("rt-old".to_string()).await;
-        match result {
-            Err(BridgeError::BridgeUnavailable) => {}
-            other => panic!("expected BridgeUnavailable, got {other:?}"),
-        }
-    }
-
-    /// Compile-time signature pin per contracts/tauri-bridge.md §"Supabase
-    /// auth adapter family":
-    /// `supabase_refresh_session(refresh_token: String)
-    ///     -> Result<AuthSession, BridgeError>`.
-    /// Distinct from `supabase_sign_in_with_password` in the input
-    /// shape (single token, not email + password) and from
-    /// `supabase_get_session` in that the return is a bare
-    /// `AuthSession` (not `Option<AuthSession>`) — a successful
-    /// refresh always yields a fresh session record. The consumer
-    /// (`managers/auth.rs`) calls this only when it already holds a
-    /// non-`None` session, so the no-session path is not reachable.
-    #[wasm_bindgen_test]
-    async fn supabase_refresh_session_round_trip_signature_pinned() {
-        async fn assert_signature(refresh_token: String) -> Result<AuthSession, BridgeError> {
-            supabase_refresh_session(refresh_token).await
-        }
-        let _ = assert_signature("rt-old".to_string()).await;
-    }
-
-    // -----------------------------------------------------------------------
-    // Phase 1D — export_sessions_xlsx (T096-T098). Replaces the JS `xlsx`
-    // library's `writeFile()` with a Tauri-side `rust_xlsxwriter` call that
-    // builds the workbook server-side from a typed `Vec<ManualSession>`
-    // — less data crossing the bridge, no JS xlsx dep in the bundle.
+    // export_sessions_xlsx — Tauri-side workbook write from
+    // `Vec<ManualSession>` (no JS xlsx dep in the bundle).
     // -----------------------------------------------------------------------
 
     #[wasm_bindgen_test]
@@ -1976,49 +1498,7 @@ mod tests {
     }
 
     // -----------------------------------------------------------------------
-    // R-006 — legacy migration sentinel (Phase 4f).
-    // -----------------------------------------------------------------------
-
-    #[wasm_bindgen_test]
-    async fn is_legacy_migration_complete_short_circuits_when_bridge_absent() {
-        let result = is_legacy_migration_complete().await;
-        match result {
-            Err(BridgeError::BridgeUnavailable) => {}
-            other => panic!("expected BridgeUnavailable, got {other:?}"),
-        }
-    }
-
-    /// Compile-time signature pin:
-    /// `is_legacy_migration_complete() -> Result<bool, BridgeError>`.
-    #[wasm_bindgen_test]
-    async fn is_legacy_migration_complete_signature_pinned() {
-        async fn assert_signature() -> Result<bool, BridgeError> {
-            is_legacy_migration_complete().await
-        }
-        let _ = assert_signature().await;
-    }
-
-    #[wasm_bindgen_test]
-    async fn mark_legacy_migration_complete_short_circuits_when_bridge_absent() {
-        let result = mark_legacy_migration_complete().await;
-        match result {
-            Err(BridgeError::BridgeUnavailable) => {}
-            other => panic!("expected BridgeUnavailable, got {other:?}"),
-        }
-    }
-
-    /// Compile-time signature pin:
-    /// `mark_legacy_migration_complete() -> Result<(), BridgeError>`.
-    #[wasm_bindgen_test]
-    async fn mark_legacy_migration_complete_signature_pinned() {
-        async fn assert_signature() -> Result<(), BridgeError> {
-            mark_legacy_migration_complete().await
-        }
-        let _ = assert_signature().await;
-    }
-
-    // -----------------------------------------------------------------------
-    // Phase 4e — dialog_save (T???). Native file-save dialog for the
+    // dialog_save — native file-save dialog for the
     // CSV/XLSX export path; returns Ok(Some(path)) on selection, Ok(None)
     // on cancel.
     // -----------------------------------------------------------------------

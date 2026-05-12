@@ -138,12 +138,6 @@ pub const fn default_max_session_time() -> u32 {
     120
 }
 
-/// Default analytics-opt-in flag — opted in on a fresh install.
-#[must_use]
-pub const fn default_analytics_enabled() -> bool {
-    true
-}
-
 /// Notification preferences.
 ///
 /// `auto_start_focus` and `allow_continuous_sessions` carry
@@ -218,21 +212,12 @@ pub struct Settings {
     #[serde(default)]
     pub appearance: AppearanceSettings,
     pub autostart: bool,
-    #[serde(default = "default_analytics_enabled")]
-    pub analytics_enabled: bool,
     #[serde(default)]
     pub hide_icon_on_close: bool,
     pub status_bar_display: StatusBarDisplay,
-    /// Phase 4e R-002 user-state slice — folded into `Settings` so
-    /// the JS-era `presto-guest-mode` / `presto-auth-seen` /
-    /// `presto-skipped-versions` localStorage flags survive cutover.
-    /// Each field is `#[serde(default)]` so 0.4.x settings JSONs
-    /// predating this widening still deserialise into the cold-start
-    /// shape.
-    #[serde(default)]
-    pub guest_mode: bool,
-    #[serde(default)]
-    pub auth_seen: bool,
+    /// Update versions the user has dismissed from the update-banner.
+    /// `#[serde(default)]` so 0.4.x settings JSONs predating this field
+    /// still deserialise into the cold-start shape.
     #[serde(default)]
     pub skipped_versions: Vec<String>,
 }
@@ -246,11 +231,8 @@ impl Default for Settings {
             advanced: AdvancedSettings::default(),
             appearance: AppearanceSettings::default(),
             autostart: false,
-            analytics_enabled: true,
             hide_icon_on_close: false,
             status_bar_display: StatusBarDisplay::Default,
-            guest_mode: false,
-            auth_seen: false,
             skipped_versions: Vec::new(),
         }
     }
@@ -283,8 +265,6 @@ pub struct SettingsOnDisk {
     #[serde(default)]
     pub appearance: AppearanceSettings,
     pub autostart: bool,
-    #[serde(default = "default_analytics_enabled")]
-    pub analytics_enabled: bool,
     #[serde(default)]
     pub hide_icon_on_close: bool,
     #[serde(default)]
@@ -292,10 +272,6 @@ pub struct SettingsOnDisk {
     /// Legacy read-only fallback. Never re-emitted on save.
     #[serde(default)]
     pub hide_status_bar: Option<bool>,
-    #[serde(default)]
-    pub guest_mode: bool,
-    #[serde(default)]
-    pub auth_seen: bool,
     #[serde(default)]
     pub skipped_versions: Vec<String>,
 }
@@ -313,11 +289,8 @@ impl From<SettingsOnDisk> for Settings {
             advanced: raw.advanced,
             appearance: raw.appearance,
             autostart: raw.autostart,
-            analytics_enabled: raw.analytics_enabled,
             hide_icon_on_close: raw.hide_icon_on_close,
             status_bar_display,
-            guest_mode: raw.guest_mode,
-            auth_seen: raw.auth_seen,
             skipped_versions: raw.skipped_versions,
         }
     }

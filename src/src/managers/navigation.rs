@@ -26,7 +26,6 @@ pub enum NavView {
     History,
     Calendar,
     Tags,
-    Team,
     Settings(SettingsTab),
 }
 
@@ -211,7 +210,6 @@ mod tests {
             NavView::History,
             NavView::Calendar,
             NavView::Tags,
-            NavView::Team,
             NavView::Settings(SettingsTab::General),
         ];
         for from in views {
