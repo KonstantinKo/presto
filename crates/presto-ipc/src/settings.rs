@@ -184,6 +184,17 @@ pub struct NotificationSettings {
     pub smart_pause: bool,
     /// Seconds.
     pub smart_pause_timeout: u32,
+    /// When true, fire a metronome tick during focus sessions at the
+    /// configured `metronome_bpm`. Default `false` (opt-in per
+    /// Principle II). UI-side side effect only — engine is unaware.
+    #[serde(default)]
+    pub metronome: bool,
+    /// Metronome tempo in beats per minute (30–180 enforced at the
+    /// Settings UI input boundary, per Principle III). Read by
+    /// `components/timer/mod.rs` only; the audio call site does not
+    /// re-validate the range.
+    #[serde(default = "default_metronome_bpm")]
+    pub metronome_bpm: u32,
 }
 
 impl Default for NotificationSettings {
@@ -196,8 +207,17 @@ impl Default for NotificationSettings {
             allow_continuous_sessions: false,
             smart_pause: false,
             smart_pause_timeout: 30,
+            metronome: false,
+            metronome_bpm: default_metronome_bpm(),
         }
     }
+}
+
+/// Default metronome BPM — 60 (one tick per second, a comfortable
+/// pacing default for focus work).
+#[must_use]
+pub const fn default_metronome_bpm() -> u32 {
+    60
 }
 
 /// Advanced / debug toggles.
@@ -380,8 +400,9 @@ mod tests {
     /// `metronome_bpm`) deserialises to `false` / `60` per SC-011 /
     /// data-model.md §Evolution 4. The legacy fixture omits the two
     /// new fields (so the assertion exercises the default path); it
-    /// also omits the `#[serde(default)]` fields auto_start_focus and
-    /// allow_continuous_sessions so existing defaults stay covered.
+    /// also omits the `#[serde(default)]` fields `auto_start_focus`
+    /// and `allow_continuous_sessions` so existing defaults stay
+    /// covered.
     #[test]
     fn metronome_default_off_60_bpm() {
         let legacy = r#"{
