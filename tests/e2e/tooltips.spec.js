@@ -1,0 +1,62 @@
+import { test, expect } from "./fixtures/index.js";
+
+// Feature 003 Bundle D (SC-013): the control-button tooltip's CSS rule
+// triggers on both `:hover` AND `:focus-visible`, so keyboard users see
+// the tooltip too. The tooltip text source-of-truth is the
+// `data-tooltip` attribute on each control button.
+
+test("control-button tooltips expose data-tooltip + react to keyboard focus", async ({ page }) => {
+  await page.goto("/index.html");
+
+  // Wait for the timer view to settle on cold-load.
+  await page.waitForSelector("#timer-minutes", { state: "visible", timeout: 15000 });
+
+  // FR-027 — Focus mode: stop-btn shows "Reset" terse + "Reset timer"
+  // verbose; aria-label == title.
+  const stopBtn = page.locator("#stop-btn");
+  await expect(stopBtn).toHaveAttribute("data-tooltip", "Reset");
+  await expect(stopBtn).toHaveAttribute("aria-label", "Reset timer");
+  await expect(stopBtn).toHaveAttribute("title", "Reset timer");
+
+  // FR-028 — idle play/pause: terse "Start", verbose stable.
+  const playPauseBtn = page.locator("#play-pause-btn");
+  await expect(playPauseBtn).toHaveAttribute("data-tooltip", "Start");
+  await expect(playPauseBtn).toHaveAttribute("aria-label", "Start or pause timer");
+  await expect(playPauseBtn).toHaveAttribute("title", "Start or pause timer");
+
+  // FR-029 — skip: terse == verbose == "Skip session".
+  const skipBtn = page.locator("#skip-btn");
+  await expect(skipBtn).toHaveAttribute("data-tooltip", "Skip session");
+  await expect(skipBtn).toHaveAttribute("aria-label", "Skip session");
+  await expect(skipBtn).toHaveAttribute("title", "Skip session");
+
+  // SC-013 — keyboard focus shows the tooltip. The CSS rule is
+  // `[data-tooltip]:hover, [data-tooltip]:focus-visible { opacity: 1 }`
+  // applied to the `::after` pseudo-element. We can't directly read
+  // pseudo-element opacity, but we CAN assert focus-visible is the
+  // matched state and the tooltip text is bound to a visible
+  // attribute — both the keyboard path and the hover path read from
+  // the same `data-tooltip` value, so SC-013's contract is satisfied
+  // when focus lands on the button and the attribute is non-empty.
+  await stopBtn.focus();
+  await expect(stopBtn).toBeFocused();
+  // The opacity of the `::after` element matches the focus-visible
+  // selector; we can probe it via `getComputedStyle` with the second
+  // argument naming the pseudo-element.
+  const opacityWhenFocused = await stopBtn.evaluate((el) => {
+    return getComputedStyle(el, "::after").opacity;
+  });
+  expect(parseFloat(opacityWhenFocused)).toBeGreaterThan(0.9);
+
+  // FR-028 — pressing the play button updates the terse tooltip to
+  // "Pause" while the verbose label stays "Start or pause timer"
+  // (CHK041 invariant: aria-label decoupled from data-tooltip).
+  await playPauseBtn.click();
+  await expect(playPauseBtn).toHaveAttribute("data-tooltip", "Pause");
+  await expect(playPauseBtn).toHaveAttribute("aria-label", "Start or pause timer");
+
+  // Pause it again — terse becomes "Resume".
+  await playPauseBtn.click();
+  await expect(playPauseBtn).toHaveAttribute("data-tooltip", "Resume");
+  await expect(playPauseBtn).toHaveAttribute("aria-label", "Start or pause timer");
+});
