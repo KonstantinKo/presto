@@ -191,6 +191,14 @@ pub struct TimerState {
     /// `completed_pomodoros` increment if the user manually skips
     /// during overtime — the zero-cross already counted the session.
     session_completed_but_not_saved: bool,
+    /// Number of focus completions per long-break cycle. Replaces
+    /// the pre-002 hard-coded literal `4` at the natural zero-cross
+    /// and skip-session branches. Default `4` matches the legacy
+    /// cadence bit-for-bit (SC-006); updated mid-flight via
+    /// `set_sessions_per_long_break`. The 1–10 clamp lives at the
+    /// Settings UI input boundary (Principle III); the engine takes
+    /// any `u32` and uses it verbatim.
+    sessions_per_long_break: u32,
 }
 
 impl TimerState {
@@ -217,6 +225,7 @@ impl TimerState {
             total_focus_secs: 0,
             allow_continuous_sessions: false,
             session_completed_but_not_saved: false,
+            sessions_per_long_break: 4,
         }
     }
 
@@ -311,6 +320,20 @@ impl TimerState {
         self.allow_continuous_sessions = enabled;
     }
 
+    /// Replace the long-break cadence count (focus completions per
+    /// long-break cycle).
+    ///
+    /// Mirrors `set_durations`'s posture (`engine/timer.rs:435`):
+    /// assignment only, no clamp inside the engine — the 1–10 clamp
+    /// is enforced at the Settings UI input boundary per Principle
+    /// III. A mid-session change does NOT truncate the running
+    /// session's `time_remaining_secs` or change `current_mode`; the
+    /// new value applies on the next zero-cross / skip transition
+    /// (FR-012 + Bundle B User Story 4).
+    pub const fn set_sessions_per_long_break(&mut self, n: u32) {
+        self.sessions_per_long_break = n;
+    }
+
     /// Whether the engine is currently in the smart-pause
     /// suspended state. Distinct from a manual pause.
     #[must_use]
@@ -393,7 +416,10 @@ impl TimerState {
                         .saturating_add(self.current_session_elapsed_secs);
                 }
                 self.current_session_elapsed_secs = 0;
-                self.current_mode = if self.completed_pomodoros.is_multiple_of(4) {
+                self.current_mode = if self
+                    .completed_pomodoros
+                    .is_multiple_of(self.sessions_per_long_break)
+                {
                     TimerMode::LongBreak
                 } else {
                     TimerMode::Break
@@ -825,10 +851,15 @@ impl TimerState {
                     events.push(TimerEvent::PomodoroCompleted {
                         completed_pomodoros: self.completed_pomodoros,
                     });
-                    // Every fourth focus completion enters
-                    // `LongBreak`; otherwise short `Break`. Mirrors
+                    // Every Nth focus completion enters `LongBreak`;
+                    // otherwise short `Break`. `N` is
+                    // `self.sessions_per_long_break`, replacing the
+                    // pre-002 hard-coded literal `4`. Mirrors
                     // `pomodoro-timer.js:1195-1199`.
-                    self.current_mode = if self.completed_pomodoros.is_multiple_of(4) {
+                    self.current_mode = if self
+                        .completed_pomodoros
+                        .is_multiple_of(self.sessions_per_long_break)
+                    {
                         TimerMode::LongBreak
                     } else {
                         TimerMode::Break
@@ -1310,7 +1341,7 @@ mod tests {
         assert_eq!(state.time_remaining_secs(), 20 * 60);
     }
 
-    /// T010: with `sessions_per_long_break = 10`, the LongBreak fires
+    /// T010: with `sessions_per_long_break = 10`, the `LongBreak` fires
     /// only on the 10th focus completion — completions 1..=9 transition
     /// to short `Break`. SC-005 boundary `N=10`.
     #[test]
@@ -1345,7 +1376,7 @@ mod tests {
 
     /// T010: skip-session at focus also consults
     /// `sessions_per_long_break`. With `N=1`, the first skip from a
-    /// focus session jumps directly to LongBreak. FR-013 + spec
+    /// focus session jumps directly to `LongBreak`. FR-013 + spec
     /// Bundle B Story 3 scenario 6.
     #[test]
     fn skip_session_long_break_with_n_eq_1() {
