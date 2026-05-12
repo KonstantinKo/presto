@@ -325,7 +325,38 @@ impl From<SettingsOnDisk> for Settings {
 
 #[cfg(test)]
 mod tests {
-    use super::StatusBarDisplay;
+    use super::{StatusBarDisplay, TimerSettings};
+
+    /// T005 (RED → T006 GREEN): pre-002 settings.json without the
+    /// `sessions_per_long_break` field deserialises to the default `4`
+    /// (preserves bit-for-bit engine behaviour on the legacy load
+    /// path per data-model.md §Evolution 3 / SC-006).
+    #[test]
+    fn sessions_per_long_break_default_4() {
+        let legacy = r#"{
+            "focus_duration": 25,
+            "break_duration": 5,
+            "long_break_duration": 20,
+            "total_sessions": 10
+        }"#;
+        let s: TimerSettings = serde_json::from_str(legacy).expect("deserialise legacy");
+        assert_eq!(s.sessions_per_long_break, 4);
+        // Existing default left untouched by the new field's addition.
+        assert_eq!(s.weekly_goal_minutes, 125);
+    }
+
+    /// T005 (RED → T006 GREEN): a custom `sessions_per_long_break`
+    /// value (e.g. 3) round-trips byte-stable through serde.
+    #[test]
+    fn sessions_per_long_break_custom_round_trips() {
+        let s = TimerSettings {
+            sessions_per_long_break: 3,
+            ..TimerSettings::default()
+        };
+        let json = serde_json::to_string(&s).expect("serialise");
+        let back: TimerSettings = serde_json::from_str(&json).expect("deserialise");
+        assert_eq!(back.sessions_per_long_break, 3);
+    }
 
     #[test]
     fn status_bar_display_default_is_default() {
