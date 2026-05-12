@@ -255,7 +255,6 @@ mod tests {
                               "smart_pause_timeout": 30},
             "advanced": {"debug_mode": false},
             "autostart": false,
-            "analytics_enabled": true,
             "hide_icon_on_close": false,
             "status_bar_display": "default"
         }"#;
@@ -267,11 +266,6 @@ mod tests {
 
         // Case C: full canonical shape with every field present —
         // must NOT flag writeback.
-        //
-        // Phase 4e R-002: includes the user-state slice fields
-        // (`guest_mode`, `auth_seen`, `skipped_versions`) so the
-        // round-trip has nothing to writeback. Also includes
-        // `appearance` and `max_session_time` from issue-36 widening.
         let canonical = r#"{
             "shortcuts": {"start_stop": null, "reset": null, "skip": null},
             "timer": {"focus_duration": 25, "break_duration": 5,
@@ -287,12 +281,8 @@ mod tests {
             "advanced": {"debug_mode": false},
             "appearance": {"theme": "auto", "timer_theme": "espresso"},
             "autostart": false,
-            "analytics_enabled": true,
             "hide_icon_on_close": false,
-            "status_bar_display": "default",
-            "guest_mode": false,
-            "auth_seen": false,
-            "skipped_versions": []
+            "status_bar_display": "default"
         }"#;
         let mgr = SettingsManager::ingest_raw_json(canonical).expect("must deserialise");
         assert!(
@@ -451,7 +441,7 @@ mod tests {
 
     /// T149 [RED]: an older 0.4.x settings JSON that predates the
     /// `weekly_goal_minutes`, `auto_start_focus`,
-    /// `allow_continuous_sessions`, `advanced`, `analytics_enabled`,
+    /// `allow_continuous_sessions`, `advanced`,
     /// `hide_icon_on_close`, and the `status_bar_display` /
     /// `hide_status_bar` field cluster MUST deserialise — the
     /// `#[serde(default)]` markers on each field provide cold-start
@@ -500,7 +490,6 @@ mod tests {
             mgr.current().advanced.debug_mode,
             defaults.advanced.debug_mode
         );
-        assert_eq!(mgr.current().analytics_enabled, defaults.analytics_enabled);
         assert_eq!(
             mgr.current().hide_icon_on_close,
             defaults.hide_icon_on_close

@@ -18,7 +18,7 @@ export async function gotoTimer(page) {
 /**
  * Clicks a sidebar navigation button by its title attribute.
  * @param {import('@playwright/test').Page} page
- * @param {'Timer'|'Calendar'|'Team'|'Settings'} title
+ * @param {'Timer'|'Calendar'|'Settings'} title
  */
 export async function tapTab(page, title) {
   if (title === "Timer") {
@@ -27,9 +27,6 @@ export async function tapTab(page, title) {
   } else if (title === "Calendar") {
     await page.locator("#calendar-nav").click();
     await page.waitForSelector("#calendar-view:not(.hidden)", { timeout: 5000 });
-  } else if (title === "Team") {
-    await page.locator("#team-nav").click();
-    await page.waitForSelector("#team-view:not(.hidden)", { timeout: 5000 });
   } else if (title === "Settings") {
     await page.locator("#settings-nav").click();
     await page.waitForSelector("#settings-view:not(.hidden)", { timeout: 5000 });

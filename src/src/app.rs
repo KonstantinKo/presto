@@ -1,43 +1,25 @@
-// Top-level App router. Spec: 001-leptos-migration §Phase 4b.
-// Mounts the sidebar nav + the active view + the always-on update
-// banner + auth modal. Dispatches over
+// Top-level App router. Mounts the sidebar nav + the active view +
+// the always-on update banner. Dispatches over
 // `NavigationManager::current()` to pick which view to render.
 //
 // **Selector contract** (consumed by `tests/e2e/fixtures/screens.js::tapTab`):
-// - `#timer-nav`, `#calendar-nav`, `#team-nav`, `#settings-nav` —
-//   sidebar nav buttons (`screens.js:25,28,31,34`).
-// - `#timer-view`, `#calendar-view`, `#team-view`, `#settings-view`
-//   — active view containers; carry `.hidden` when inactive
-//   (`screens.js:26,29,32,35`).
+// - `#timer-nav`, `#calendar-nav`, `#settings-nav` — sidebar nav buttons.
+// - `#timer-view`, `#calendar-view`, `#settings-view` — active view
+//   containers; carry `.hidden` when inactive.
 //
-// The view switch uses the JS-era pattern of always-mounted view
-// containers with `.hidden` toggled on the inactive ones — rather
-// than mount-on-active. This matches `screens.js:26`
+// The view switch uses the pattern of always-mounted view containers
+// with `.hidden` toggled on the inactive ones — rather than
+// mount-on-active. This matches `screens.js:26`
 // (`waitForSelector("#timer-view:not(.hidden)")`) and lets CSS
 // transitions render correctly. Each view component (TimerView,
 // CalendarView, etc.) is responsible for its own root element with
 // the canonical `id="<view>-view"` so the App router only needs to
 // wrap them in a `class:hidden` switch.
 //
-// Tasks (Phase 4a) and History views aren't yet referenced by the
-// `tapTab` fixture — the JS-era surface routes them via
-// settings-style sub-navigation; the Rust port mounts them
-// reachable via `NavView` but the App router only routes the four
-// top-level surfaces the e2e suite touches plus the Tags dropdown
-// (which lives inside the timer view as a popover). Tasks /
-// History are mounted as siblings so they're reachable when the
-// nav is later extended.
-//
 // Per Principle I, this component is pure UI plumbing — it never
 // mutates engine state. The shared `RwSignal<TimerState>` /
-// `RwSignal<Settings>` / `RwSignal<AuthState>` etc. are owned at
-// this level and threaded into per-view components via props or
-// `provide_context`.
-//
-// T217 wires the bridge-bus subscriptions (global-shortcut events,
-// update-available emits, settings load) and the
-// `bridge::storage::migrate_legacy_localstorage()` startup hop.
-// T218 attaches the degraded-mode UI when `BridgeAvailable::Absent`.
+// `RwSignal<Settings>` etc. are owned at this level and threaded
+// into per-view components via props or `provide_context`.
 //
 // Lint allowance: `clippy::must_use_candidate` is silenced for the
 // usual Leptos `#[component]` reason. `clippy::too_many_lines` is
@@ -53,21 +35,17 @@ use crate::bridge::commands;
 use crate::bridge::events::{
     self, GLOBAL_SHORTCUT, UPDATE_AVAILABLE, USER_ACTIVITY, USER_INACTIVITY,
 };
-use crate::bridge::storage;
 use crate::bridge::types::TimerMode;
 use crate::bridge::types::{Session, Settings, UpdateAvailablePayload};
-use crate::components::auth_modal::AuthModal;
 use crate::components::browser_clock::BrowserClock;
 use crate::components::calendar::CalendarView;
 use crate::components::settings::SettingsView;
 use crate::components::tasks::TasksView;
-use crate::components::team::TeamView;
 use crate::components::timer::TimerView;
 use crate::components::update_notification::UpdateNotification;
 use crate::engine::activity_signal::ActivitySignal;
 use crate::engine::durations::Durations;
 use crate::engine::timer::TimerState;
-use crate::managers::auth::AuthState;
 use crate::managers::navigation::{NavView, NavigationManager, SettingsTab};
 use crate::managers::update::{UpdateInfo, UpdateManager};
 use crate::theme::loader;
@@ -112,16 +90,11 @@ impl AppToast {
 }
 
 /// Top-level App component. Mounts the sidebar nav, the active
-/// view, the global update banner, and the auth modal.
+/// view, and the global update banner.
 #[component]
 pub fn App() -> impl IntoView {
-    // Shared cross-view signals. The App router owns these and
-    // threads them into per-view components. T217 will swap the
-    // raw `RwSignal`s for context-provided structs once Phase 4c
-    // wires the persistence sinks.
     let nav = RwSignal::new(NavigationManager::new());
     let settings = RwSignal::new(Settings::default());
-    let auth_state = RwSignal::new(AuthState::default());
     let update_info = RwSignal::new(UpdateInfo::default());
 
     // Shared engine signal lifted to App so the USER_ACTIVITY /
@@ -185,7 +158,6 @@ pub fn App() -> impl IntoView {
     let is_timer = Signal::derive(move || nav.with(|n| matches!(n.current(), NavView::Timer)));
     let is_calendar =
         Signal::derive(move || nav.with(|n| matches!(n.current(), NavView::Calendar)));
-    let is_team = Signal::derive(move || nav.with(|n| matches!(n.current(), NavView::Team)));
     let is_settings =
         Signal::derive(move || nav.with(|n| matches!(n.current(), NavView::Settings(_))));
     let is_tasks = Signal::derive(move || nav.with(|n| matches!(n.current(), NavView::Tasks)));
@@ -206,7 +178,6 @@ pub fn App() -> impl IntoView {
 
     let on_timer_nav = move |_| nav.update(|n| n.transition_to(NavView::Timer));
     let on_calendar_nav = move |_| nav.update(|n| n.transition_to(NavView::Calendar));
-    let on_team_nav = move |_| nav.update(|n| n.transition_to(NavView::Team));
     let on_settings_nav = move |_| nav.update(NavigationManager::enter_settings);
 
     let on_select_settings_tab = Callback::new(move |tab: SettingsTab| {
@@ -223,57 +194,14 @@ pub fn App() -> impl IntoView {
     let bridge_state = bridge_available();
     let bridge_absent = matches!(bridge_state, BridgeAvailable::Absent);
 
-    // Startup hops: legacy migration + settings load. Skipped when
-    // the bridge is absent (Trunk dev server / e2e mock harness)
-    // because every wrapper short-circuits to BridgeUnavailable
-    // anyway and the spawn would log a noisy error.
+    // Startup hop: settings load. Skipped when the bridge is absent
+    // (Trunk dev server / e2e mock harness) because every wrapper
+    // short-circuits to BridgeUnavailable anyway and the spawn would
+    // log a noisy error.
     if matches!(bridge_state, BridgeAvailable::Available) {
         spawn_local(async move {
-            // R-006: sentinel gate — one IPC trip instead of 7 on
-            // post-migration cold starts. If the sentinel file exists,
-            // the migration has already run to completion on a prior
-            // launch; skip the 7-call per-domain block entirely.
-            // Errors (bridge absent, fs failure) fall through to the
-            // migration block — safe because per-domain handlers are
-            // idempotent (they skip when the target file already
-            // exists). On the first post-cutover launch `false` is
-            // returned (sentinel not yet written); after the migration
-            // succeeds we write the sentinel so the next cold start
-            // skips here.
-            let migration_done = commands::is_legacy_migration_complete()
-                .await
-                .unwrap_or(false);
-            if !migration_done {
-                let migrated = storage::migrate_legacy_localstorage().await;
-                if migrated.is_ok() {
-                    // Best-effort write; if it fails the next cold start
-                    // re-runs the migration (per-domain handlers are
-                    // idempotent so re-running is safe).
-                    let _ = commands::mark_legacy_migration_complete().await;
-                }
-            }
-            // Then load the canonical post-migration settings into
-            // the shared signal. Errors fall back to
-            // `Settings::default()` (matches the JS-era behaviour
-            // at `src/managers/settings-manager.js:125-128`).
+            // Errors fall back to `Settings::default()`.
             if let Ok(loaded) = commands::load_settings().await {
-                // Phase 4e R-002: project the user-state slice
-                // (`guest_mode`) into the auth signal AFTER the
-                // migration ran (so a 0.4.x guest user's
-                // `presto-guest-mode` localStorage flag has been
-                // folded into `Settings.guest_mode` already). The
-                // projection only fires when the in-memory
-                // `auth_state` is still the cold-start
-                // `Unauthenticated` shape — once the user signs in
-                // (or hits Continue as Guest manually), the
-                // post-load projection should not regress them.
-                if loaded.guest_mode {
-                    auth_state.update(|s| {
-                        if matches!(s, AuthState::Unauthenticated) {
-                            *s = AuthState::Guest;
-                        }
-                    });
-                }
                 let resolved = loader::resolve_color_mode(
                     &loaded.appearance.theme,
                     loader::system_prefers_dark(),
@@ -281,19 +209,6 @@ pub fn App() -> impl IntoView {
                 loader::apply_theme(resolved);
                 loader::apply_timer_theme(&loaded.appearance.timer_theme);
                 settings.set(loaded);
-            }
-            // Phase 4e R-003: cold-start session probe — read the
-            // persisted Supabase session from disk; if present, lift
-            // the auth signal into `SignedIn`. Mirrors the JS-era
-            // `auth-manager.js`'s `getSession()` cold-start hop.
-            // Only overrides the projection above when a real
-            // session exists; the bridge-unavailable path is silently
-            // absorbed (the dev server has no Tauri bridge, so
-            // `Ok(None)` and `Err(BridgeUnavailable)` both reduce to
-            // "no signed-in user" which leaves the auth signal at
-            // its current value).
-            if let Ok(Some(session)) = commands::supabase_get_session().await {
-                auth_state.set(AuthState::SignedIn { user: session.user });
             }
         });
 
@@ -687,19 +602,6 @@ pub fn App() -> impl IntoView {
                 >
                     <i class="ri-calendar-line"></i>
                 </button>
-                <button
-                    class="sidebar-icon"
-                    class:active=move || is_team.get()
-                    id="team-nav"
-                    data-view="team"
-                    title="Team (Coming Soon)"
-                    disabled
-                    style="opacity: 0.5; cursor: not-allowed"
-                    attr:aria-current=move || if is_team.get() { "page" } else { "" }
-                    on:click=on_team_nav
-                >
-                    <i class="ri-group-line"></i>
-                </button>
             </div>
             <div class="sidebar-bottom">
                 <button
@@ -716,17 +618,6 @@ pub fn App() -> impl IntoView {
                 <div class="sidebar-version-badge">"Leptos"</div>
             </div>
         </nav>
-
-        // AuthModal is mounted at the App root (outside `.sidebar`)
-        // because the sidebar carries `backdrop-filter`, which
-        // establishes a containing block for `position: fixed`
-        // descendants and would otherwise crop the auth overlay's
-        // `width: 100vw` to the 80px sidebar column. The component
-        // owns its own `position: fixed` wrapper for the avatar so
-        // it still visually sits inside the sidebar bottom-left.
-        // See `auth_modal.rs` rustdoc for the regression history
-        // (auth.spec.js:26 "element is outside of the viewport").
-        <AuthModal auth_state=auth_state/>
 
         <main class="main-content">
             // Each view container carries `.hidden` when inactive —
@@ -749,9 +640,6 @@ pub fn App() -> impl IntoView {
             </div>
             <div class="view-host" class:hidden=move || !is_calendar.get()>
                 <CalendarView/>
-            </div>
-            <div class="view-host" class:hidden=move || !is_team.get()>
-                <TeamView/>
             </div>
             <div class="view-host" class:hidden=move || !is_settings.get()>
                 <SettingsView

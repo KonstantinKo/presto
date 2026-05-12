@@ -67,15 +67,15 @@ fn every_tauri_command_handler_is_registered_in_collect_commands() {
     );
 }
 
-/// Sanity bound: the handler count should grow over time. A drop
-/// below 38 (the baseline at the Phase F refactor) would suggest
-/// an accidental deletion.
+/// Sanity bound: handler count should not drop unexpectedly. Baseline
+/// rebased to 25 after the local-only pivot removed auth/sync/team and
+/// the transition-only legacy-migration command family.
 #[test]
 fn handler_count_meets_baseline() {
     let count = count_command_annotations();
     assert!(
-        count >= 38,
-        "Expected at least 38 `#[tauri::command]` handlers (Phase F \
+        count >= 25,
+        "Expected at least 25 `#[tauri::command]` handlers (local-only \
          baseline); found {count}. A drop indicates an accidental \
          handler deletion — verify intentionally.",
     );

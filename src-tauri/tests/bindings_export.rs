@@ -17,11 +17,9 @@
 
 use std::path::{Path, PathBuf};
 
-/// `expires_at: u64` in `SupabaseSessionPayload` trips specta's
-/// default `BigIntForbidden` guard. The Tauri-side handler ignores
-/// the field (re-derives expiry from the JWT on next refresh), and
-/// JS-side consumers treat it as `string` for safety. Configure
-/// the TS exporter to emit `string` for every BigInt-class type.
+/// Configure the TS exporter to emit `string` for every BigInt-class
+/// type so any future `u64`/`i64` field crossing the bridge serialises
+/// safely.
 fn ts_exporter() -> specta_typescript::Typescript {
     specta_typescript::Typescript::default().bigint(specta_typescript::BigIntExportBehavior::String)
 }

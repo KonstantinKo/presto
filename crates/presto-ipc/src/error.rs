@@ -33,8 +33,8 @@ pub enum BridgeError {
     /// Per AGENTS.md §Bridge availability and FR-009.
     #[error("bridge unavailable")]
     BridgeUnavailable,
-    /// The caller is in a state where the command is invalid (e.g., a
-    /// Supabase command without an active session).
+    /// The caller is in a state where the command is invalid (reserved
+    /// for future auth-gated paths; no current producer).
     #[error("not authenticated")]
     NotAuthenticated,
     /// An argument failed validation at the boundary.

@@ -20,32 +20,21 @@ pub use presto_ipc::{
 // lives in `presto-ipc::settings`. Re-exported here for path
 // stability across the codebase.
 pub use presto_ipc::{
-    default_analytics_enabled, default_max_session_time, default_weekly_goal, AdvancedSettings,
-    AppearanceSettings, NotificationSettings, ShortcutSettings, StatusBarDisplay, TimerSettings,
+    default_max_session_time, default_weekly_goal, AdvancedSettings, AppearanceSettings,
+    NotificationSettings, ShortcutSettings, StatusBarDisplay, TimerSettings,
 };
 
 // `Settings` + `SettingsOnDisk` migration shim live in
 // `presto-ipc::settings`. Re-exported here for path stability.
 pub use presto_ipc::{Settings, SettingsOnDisk};
 
-// `AuthSession`, `AuthUser` live in `presto-ipc::auth`.
-pub use presto_ipc::{AuthSession, AuthUser};
-
-// Legacy localStorage migration payloads live in
-// `presto-ipc::migration` (feature-gated; both endpoints opt in
-// until the post-cutover sunset).
-pub use presto_ipc::{
-    LegacyHistoryPayload, LegacyManualSessionsPayload, LegacySettingsPayload, LegacyTagsPayload,
-    LegacyTasksPayload, LegacyUserStatePayload, SupabaseSessionPayload,
-};
-
 // Command Args bundles live in `presto-ipc::args`. Every top-level
 // Args struct that crosses the IPC boundary is single-sourced here
 // so the camelCase wire shape (Tauri-auto-renames the args bag)
 // cannot drift between client and handler.
 pub use presto_ipc::{
-    AddSessionTagArgs, DeleteTagArgs, StartActivityMonitoringArgs, SupabaseRefreshSessionArgs,
-    SupabaseSignOutArgs, UpdateActivityTimeoutArgs, UpdateTrayIconArgs, UpdateTrayMenuArgs,
+    AddSessionTagArgs, DeleteTagArgs, StartActivityMonitoringArgs, UpdateActivityTimeoutArgs,
+    UpdateTrayIconArgs, UpdateTrayMenuArgs,
 };
 
 // -----------------------------------------------------------------------
@@ -90,11 +79,7 @@ mod tests {
     use super::{Settings, StatusBarDisplay};
 
     /// Round-trips `Settings::default()` to confirm the re-export
-    /// surface is intact and the JSON shape's stable. Catches a
-    /// hypothetical drift where `presto-ipc` builds with different
-    /// serde features under `wasm32` than under host (the
-    /// `migration` feature is the only divergence today; this test
-    /// pins the shared default path).
+    /// surface is intact and the JSON shape's stable.
     #[test]
     fn settings_re_export_round_trips_via_serde_json() {
         let s = Settings::default();

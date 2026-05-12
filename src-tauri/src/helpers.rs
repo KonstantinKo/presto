@@ -462,7 +462,6 @@ mod tests {
         let dir = tempfile::tempdir().expect("tempdir");
         let result = read_settings_from(dir.path()).expect("read");
         let defaults = AppSettings::default();
-        assert_eq!(result.analytics_enabled, defaults.analytics_enabled);
         assert_eq!(result.timer.focus_duration, defaults.timer.focus_duration);
     }
 
