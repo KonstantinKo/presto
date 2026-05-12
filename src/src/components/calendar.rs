@@ -32,20 +32,12 @@ use leptos::prelude::*;
 use leptos::task::spawn_local;
 
 use super::browser_clock::BrowserClock;
+use super::utils::datetime::datetime_from_ms;
 use crate::bridge::commands;
 use crate::bridge::types::SessionType;
 use crate::bridge::types::{ManualSession, Settings};
 use crate::engine::clock::Clock;
 use crate::engine::date_format::format_session_date;
-
-/// Lift a unix-timestamp (milliseconds) to a `DateTime<Utc>`
-/// without panicking on overflow. Falls back to the unix epoch on
-/// the corner case where `from_timestamp_millis` rejects the
-/// input. Same defensive pattern as `engine::date_format`.
-fn datetime_from_ms(now_ms: i64) -> DateTime<Utc> {
-    DateTime::<Utc>::from_timestamp_millis(now_ms)
-        .unwrap_or_else(|| DateTime::<Utc>::from_timestamp(0, 0).expect("epoch is valid"))
-}
 
 /// Compute the start-of-week (Monday) date for a given anchor.
 /// Mirrors the JS-era `getWeekStart` at
