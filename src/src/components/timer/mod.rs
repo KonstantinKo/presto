@@ -999,6 +999,12 @@ pub fn TimerView() -> impl IntoView {
         }
     });
 
+    let next_is_long_break = Signal::derive(move || {
+        let sessions = settings.with(|s| s.timer.sessions_per_long_break);
+        // next completion hits the long-break boundary when count + 1 is a multiple of the configured cadence
+        (engine.with(TimerState::completed_pomodoros) + 1).is_multiple_of(sessions)
+    });
+
     // Click handlers. Each dispatches to the engine via a borrowed
     // mutation; the engine's API returns `Vec<TimerEvent>` which
     // would feed the bridge layer in production (tray icon
@@ -1623,10 +1629,7 @@ pub fn TimerView() -> impl IntoView {
                         class="ri-cup-line"
                         style=move || {
                             let mode = engine.with(TimerState::current_mode);
-                            let sessions = settings.with(|s| s.timer.sessions_per_long_break);
-                            // next completion is long break when count + 1 hits the configured boundary
-                            let next_long = (engine.with(TimerState::completed_pomodoros) + 1)
-                                .is_multiple_of(sessions);
+                            let next_long = next_is_long_break.get();
                             if skip_icon_for_mode(mode, next_long) == "coffee" {
                                 "font-size: 24px"
                             } else {
@@ -1639,9 +1642,7 @@ pub fn TimerView() -> impl IntoView {
                         class="ri-moon-line"
                         style=move || {
                             let mode = engine.with(TimerState::current_mode);
-                            let sessions = settings.with(|s| s.timer.sessions_per_long_break);
-                            let next_long = (engine.with(TimerState::completed_pomodoros) + 1)
-                                .is_multiple_of(sessions);
+                            let next_long = next_is_long_break.get();
                             if skip_icon_for_mode(mode, next_long) == "moon" {
                                 "font-size: 24px"
                             } else {
@@ -1654,9 +1655,7 @@ pub fn TimerView() -> impl IntoView {
                         class="ri-brain-line"
                         style=move || {
                             let mode = engine.with(TimerState::current_mode);
-                            let sessions = settings.with(|s| s.timer.sessions_per_long_break);
-                            let next_long = (engine.with(TimerState::completed_pomodoros) + 1)
-                                .is_multiple_of(sessions);
+                            let next_long = next_is_long_break.get();
                             if skip_icon_for_mode(mode, next_long) == "brain" {
                                 "font-size: 24px"
                             } else {
