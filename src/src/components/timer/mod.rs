@@ -482,6 +482,22 @@ pub fn TimerView() -> impl IntoView {
         engine.update(|state| state.set_allow_continuous_sessions(enabled));
     });
 
+    // Feature 002 Bundle B (T022): pipe
+    // `Settings::timer.sessions_per_long_break` into the engine so
+    // the natural zero-cross + skip-session branches consult the
+    // configured cadence (timer.rs:421, :861). Mirrors the
+    // `set_durations` / `set_allow_continuous_sessions` posture
+    // above: runs once on init so the engine picks up the persisted
+    // value on boot, and re-runs whenever the settings signal moves
+    // so a mid-session save propagates without a process restart.
+    // The engine's setter is a plain assignment (no clamp) — the
+    // 1–10 clamp lives at the Settings UI input layer (Principle
+    // III: type-system encoding over defensive guards).
+    Effect::new(move |_| {
+        let n = settings.with(|s| s.timer.sessions_per_long_break);
+        engine.update(|state| state.set_sessions_per_long_break(n));
+    });
+
     // Tag-dropdown popover state. The JS-era surface anchored the
     // tag picker as a popover off `#timer-status` inside the timer
     // view (`src/index.html` history showed the dropdown nested
