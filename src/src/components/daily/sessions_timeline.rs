@@ -190,6 +190,9 @@ mod tests {
     #[test]
     fn malformed_falls_back_to_zero() {
         assert_eq!(parse_hhmm_to_minutes("abc"), 0);
+        assert_eq!(parse_hhmm_to_minutes("12"), 0);
+        assert_eq!(parse_hhmm_to_minutes("08:xx"), 0);
+        assert_eq!(parse_hhmm_to_minutes("08:00:00"), 0);
     }
 
     #[test]
