@@ -108,7 +108,7 @@ A PR reviewer opens the visual regression diff. Exactly the baselines that **mus
 
 **Why this priority**: Integrity guarantee that the UI surface is honestly accounted for, not silenced. P3 because it's PR-time discipline, not runtime behaviour. Tied to **IV. Visual Regression Is The UI Contract** — explicit policy, not silent baseline updates.
 
-**Independent Test**: Run the visual regression suite. Confirm failing baselines map exactly to the touched surfaces. Confirm no baselines for untouched screens (timer body, settings tabs, tag manager, update notification) flag a diff.
+**Independent Test**: Run the visual regression suite. Confirm failing baselines map exactly to the touched surfaces. Confirm no baselines for untouched screens (timer body, settings tabs, update notification) flag a diff. Note: `tag-manager-chromium-linux.png` is **not** in the untouched set — it is explicitly expected to change for the icon-set update (12 options: 3 remixicon + 9 Phosphor; 5 emoji entries removed); see Story 5, Acceptance Scenario 3 and FR-044.
 
 **Acceptance Scenarios**:
 
@@ -219,6 +219,8 @@ A user on the Weekly statistics tab scrolls below the existing bar chart and tag
 - **FR-044**: Baselines outside the touched surfaces — `timer-chromium-linux.png` (closed-dropdown frame), `settings-*-chromium-linux.png` (all settings tabs), `update-notification-chromium-linux.png` — MUST NOT be regenerated. A diff on any of these is a regression to fix in code, not a baseline update. `tag-manager-chromium-linux.png` is **explicitly carved out** of the MUST-NOT set: the tag-picker dropdown now shows 12 icon options (3 remixicon + 9 Phosphor; the 5 emoji entries removed), so this baseline legitimately differs and is regenerated with per-baseline justification in the PR description (see plan.md §Constitution Check IV).
 
   **Drift-cleanup carve-out (Principle X)**: `timer-chromium-linux.png`, `update-notification-chromium-linux.png`, and `settings-{advanced,automation,general,goals,notifications,shortcuts,theme,updates}-chromium-linux.png` MAY be regenerated **only** for pre-existing baseline drift not introduced by this feature — specifically the cumulative drift from features 001 (Leptos migration), 002 (per-session title input), and #50 (local-only pivot, Teams-icon removal). Per Constitution Principle X ("Buck Stops Here. No 'pre-existing' errors are tolerated or ignored. If it has slipped by before but you notice it now, it becomes your problem"), feature 003's broader visual regen catches this drift. Each regenerated baseline carries a one-line PR-description note attributing the diff to its source feature (per `specs/003-stats-redesign/visual-baselines.md`, the transient drift-justification doc cleaned up at end-gate).
+
+  **Precedence rule**: The Drift-cleanup carve-out takes precedence over the MUST-NOT restriction in FR-044 when **all three** conditions hold: (a) the visual diff is confirmed as pre-existing drift originating from features 001, 002, or #50; (b) the affected file is one of the explicitly enumerated baselines (`timer-chromium-linux.png`, `update-notification-chromium-linux.png`, `settings-{advanced,automation,general,goals,notifications,shortcuts,theme,updates}-chromium-linux.png`); and (c) each regenerated baseline includes a one-line PR-description note referencing the originating feature and `specs/003-stats-redesign/visual-baselines.md`. Diffs on any other file not enumerated above remain regressions to fix in code.
 
 #### Out-of-scope guards
 

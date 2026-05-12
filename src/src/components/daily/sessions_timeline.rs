@@ -157,7 +157,7 @@ pub fn SessionsTimeline(
                             selected_sessions.with(|ss| {
                                 ss.iter().map(|session| {
                                     let start_minutes = parse_hhmm_to_minutes(&session.start_time);
-                                    let end_minutes = start_minutes + session.duration;
+                                    let end_minutes = start_minutes.saturating_add(session.duration);
                                     let clamped_start = start_minutes.min(1440);
                                     let clamped_end = end_minutes.min(1440);
                                     let clamped_duration = clamped_end.saturating_sub(clamped_start);
