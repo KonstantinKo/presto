@@ -74,6 +74,6 @@ layer, off by default in guest mode.
 ## Active plan
 
 <!-- SPECKIT START -->
-Active plan: [`specs/001-leptos-migration/plan.md`](specs/001-leptos-migration/plan.md)
-— Leptos frontend migration (CSR + WASM via Trunk; Tauri backend unchanged).
+Active plan: [`specs/002-titles-longbreak-metronome/plan.md`](specs/002-titles-longbreak-metronome/plan.md)
+— Three QoL bundles: per-session titles, configurable long-break cadence, opt-in metronome.
 <!-- SPECKIT END -->
