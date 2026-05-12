@@ -613,7 +613,6 @@ pub fn App() -> impl IntoView {
                 >
                     <i class="ri-settings-3-line"></i>
                 </button>
-                <div class="sidebar-version-badge">"Leptos"</div>
             </div>
         </nav>
 

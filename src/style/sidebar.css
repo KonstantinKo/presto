@@ -411,16 +411,3 @@
 .sidebar.longBreak .user-dropdown-action:hover {
   background: var(--long-break-secondary-btn);
 }
-.sidebar-version-badge {
-  position: absolute;
-  bottom: 4px;
-  left: 0;
-  right: 0;
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.05em;
-  text-align: center;
-  color: var(--text-secondary, rgba(255, 255, 255, 0.6));
-  opacity: 0.7;
-  pointer-events: none;
-}
