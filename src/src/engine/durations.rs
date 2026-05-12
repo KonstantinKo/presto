@@ -6,7 +6,7 @@
 // `src/core/pomodoro-timer.js:48-52` — focus 25 min, short break
 // 5 min, long break 20 min — expressed in seconds throughout.
 
-use crate::bridge::timer_mode::TimerMode;
+use crate::bridge::types::TimerMode;
 
 /// Per-mode duration set in seconds.
 ///
@@ -48,7 +48,7 @@ impl Durations {
 #[cfg(test)]
 mod tests {
     use super::Durations;
-    use crate::bridge::timer_mode::TimerMode;
+    use crate::bridge::types::TimerMode;
 
     /// Default values mirror `pomodoro-timer.js:48-52`: focus 25 min,
     /// short break 5 min, long break 20 min. Pinned in seconds so a

@@ -25,6 +25,19 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
+# Shared wire-type crate. `specta` feature enables `specta::Type`
+# derives so `tauri-specta` can codegen TS bindings; `migration`
+# exposes the JS-era legacy payload types.
+presto-ipc = { path = "../crates/presto-ipc", features = ["specta", "migration"] }
+# `specta` + `tauri-specta` codegen TypeScript bindings from every
+# `#[tauri::command]` + `specta::Type` derive. The exported file at
+# `src/bindings/tauri.ts` is checked in; a `cargo test` gate
+# (`tests/bindings_export.rs`) fails CI when it drifts. Defends the
+# IPC boundary against the snake_case-vs-camelCase silent-rejection
+# bug class.
+specta = { version = "=2.0.0-rc.22", features = ["derive", "chrono", "serde_json"] }
+tauri-specta = { version = "=2.0.0-rc.21", features = ["derive", "typescript"] }
+specta-typescript = "=0.0.9"
 log = "0.4"
 tauri = { version = "2", features = ["tray-icon"] }
 tauri-plugin-log = "2"

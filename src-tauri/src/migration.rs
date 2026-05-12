@@ -27,85 +27,21 @@
 
 use std::path::Path;
 
-use serde::{Deserialize, Serialize};
+use crate::{auth, helpers, BridgeError};
 
-use crate::{auth, helpers, AppSettings, BridgeError, ManualSession, PomodoroSession, Tag, Task};
-
-// ── Payload mirrors ──────────────────────────────────────────────────────────
-//
-// Each `Legacy*Payload` mirrors the Leptos-side
-// `presto-web::bridge::types::Legacy*Payload` byte-for-byte on the
-// wire. The Tauri-side mirror is necessary because `tauri::command`
-// macro deserialises the args into local types; we cannot import the
-// Leptos crate here (it's a wasm-only crate). The types share the
-// same JSON shape via `serde-default` field naming + identical field
-// types.
-
-/// Mirrors `presto-web::bridge::types::LegacySettingsPayload`.
-#[derive(Debug, Deserialize, Serialize)]
-pub(super) struct LegacySettingsPayload {
-    pub settings: Option<AppSettings>,
-    pub theme_preference: Option<String>,
-    pub timer_theme_preference: Option<String>,
-    pub auto_check_updates: Option<bool>,
-}
-
-/// Mirrors `presto-web::bridge::types::LegacyHistoryPayload`.
-#[derive(Debug, Deserialize, Serialize)]
-pub(super) struct LegacyHistoryPayload {
-    pub history: Vec<PomodoroSession>,
-}
-
-/// Mirrors `presto-web::bridge::types::LegacyTasksPayload`.
-#[derive(Debug, Deserialize, Serialize)]
-pub(super) struct LegacyTasksPayload {
-    pub tasks: Vec<Task>,
-}
-
-/// Mirrors `presto-web::bridge::types::LegacyTagsPayload`.
-#[derive(Debug, Deserialize, Serialize)]
-pub(super) struct LegacyTagsPayload {
-    pub tags: Vec<Tag>,
-}
-
-/// Mirrors `presto-web::bridge::types::LegacyManualSessionsPayload`.
-#[derive(Debug, Deserialize, Serialize)]
-pub(super) struct LegacyManualSessionsPayload {
-    pub sessions: Vec<ManualSession>,
-}
-
-/// Mirrors `presto-web::bridge::types::LegacyUserStatePayload`.
-#[derive(Debug, Deserialize, Serialize)]
-pub(super) struct LegacyUserStatePayload {
-    pub guest_mode: Option<bool>,
-    pub auth_seen: Option<bool>,
-    pub skipped_versions: Vec<String>,
-    pub active_session: Option<PomodoroSession>,
-}
-
-/// Mirrors `presto-web::bridge::types::SupabaseSessionPayload`. The
-/// Tauri-side handler validates and re-persists into the existing
-/// `auth::AuthSession` shape (dropping `expires_at` per
-/// research.md §6 step 4 — the Rust-side session re-derives expiry
-/// from the JWT on next refresh).
-#[derive(Debug, Deserialize, Serialize)]
-pub(super) struct SupabaseSessionPayload {
-    pub access_token: String,
-    pub refresh_token: String,
-    pub expires_at: u64,
-    pub user: SupabaseUserMirror,
-}
-
-/// Subset of `auth::AuthUser` as shipped on the wire. We declare a
-/// local mirror rather than re-exporting `auth::AuthUser` to avoid
-/// re-publicising the auth module's internals; the field shape is
-/// identical to `auth::AuthUser`.
-#[derive(Debug, Deserialize, Serialize)]
-pub(super) struct SupabaseUserMirror {
-    pub id: String,
-    pub email: String,
-    pub user_metadata: serde_json::Value,
-}
+// Migration payloads live in `presto-ipc::migration` (Phase F,
+// feature-gated under `migration`). Re-exported here so the local
+// handler bodies don't need to change. `SupabaseUserMirror` collapses
+// into `presto-ipc::auth::AuthUser` (it was a hand-rolled mirror).
+pub(super) use presto_ipc::{
+    LegacyHistoryPayload, LegacyManualSessionsPayload, LegacySettingsPayload, LegacyTagsPayload,
+    LegacyTasksPayload, LegacyUserStatePayload, SupabaseSessionPayload,
+};
+// `SupabaseUserMirror` was a hand-rolled mirror of
+// `presto_ipc::auth::AuthUser`. Tests reference it by the old name;
+// rather than rename them, alias here in the test cfg.
+#[cfg(test)]
+pub(super) use presto_ipc::AuthUser as SupabaseUserMirror;
 
 // ── User-state sentinel marker ───────────────────────────────────────────────
 
@@ -294,7 +230,10 @@ pub(super) fn import_supabase_session(
     app_data_dir: &Path,
     payload: &SupabaseSessionPayload,
 ) -> Result<(), BridgeError> {
-    // Validate non-empty tokens before any disk touch — the JS-era
+    if auth::read_session(app_data_dir)?.is_some() {
+        return Ok(());
+    }
+    // Validate non-empty tokens after the idempotency check — the JS-era
     // localStorage may carry a malformed blob.
     if payload.access_token.is_empty() {
         return Err(BridgeError::InvalidArgument {
@@ -307,9 +246,6 @@ pub(super) fn import_supabase_session(
             field: "refresh_token".to_string(),
             reason: "refresh_token is empty".to_string(),
         });
-    }
-    if auth::read_session(app_data_dir)?.is_some() {
-        return Ok(());
     }
     // Re-shape into the `auth::AuthSession` type the rest of the
     // auth module persists. `expires_at` is intentionally not

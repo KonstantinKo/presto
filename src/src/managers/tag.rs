@@ -19,7 +19,7 @@
 #![allow(clippy::future_not_send)]
 
 use crate::bridge::commands;
-use crate::bridge::error::BridgeError;
+use crate::bridge::types::BridgeError;
 use crate::bridge::types::Tag;
 
 /// Wrapper over the user's tag list. Phase 3b wires up the state

@@ -33,7 +33,7 @@ use leptos::task::spawn_local;
 
 use super::browser_clock::BrowserClock;
 use crate::bridge::commands;
-use crate::bridge::session_type::SessionType;
+use crate::bridge::types::SessionType;
 use crate::bridge::types::{ManualSession, Settings};
 use crate::engine::clock::Clock;
 use crate::engine::date_format::format_session_date;
@@ -763,8 +763,8 @@ mod tests {
         start_of_week_sunday, week_date_set, weekly_focus_minutes, weekly_sessions_count,
         weekly_total_minutes,
     };
-    use crate::bridge::session_type::SessionType;
     use crate::bridge::types::ManualSession;
+    use crate::bridge::types::SessionType;
     use crate::engine::date_format::format_session_date;
     use chrono::{DateTime, Datelike, TimeZone, Utc};
     #[cfg(target_arch = "wasm32")]

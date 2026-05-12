@@ -13,19 +13,18 @@
 // - `SerdeRoundtrip {c, e}`     — `serde-wasm-bindgen` deserialise failure
 // - `Internal {msg}`            — catch-all for unexpected Tauri-side failures
 //
-// The Tauri-side mirror lives in `src-tauri/src/lib.rs`; both definitions
-// are byte-identical on the wire so a serde-incompatible change breaks
-// both crates' tests at once (Principle VI — typed boundary).
+// Owned by the shared `presto-ipc` crate — both Tauri and Leptos
+// crates re-export this so a serde-incompatible change can't drift
+// between endpoints.
 
 use serde::{Deserialize, Serialize};
 
 /// Typed error variant returned by every bridge command wrapper.
 ///
 /// Wire form is externally-tagged JSON (the `kind` discriminator carries the
-/// variant name; data fields sit alongside it). The Tauri-side enum at
-/// `src-tauri/src/lib.rs` mirrors this exactly so a `Result<T, BridgeError>`
-/// round-trips through `invoke()` without a translation layer.
+/// variant name; data fields sit alongside it).
 #[derive(Debug, Clone, Serialize, Deserialize, thiserror::Error)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum BridgeError {
     /// `window.__TAURI_INTERNALS__` is absent (vite/trunk dev server, e2e
@@ -51,10 +50,10 @@ pub enum BridgeError {
     /// `command: &'static str` to dodge a per-call allocation, but that
     /// makes the enum's `Deserialize` impl require `'de: 'static`, which
     /// breaks deserialising any non-static input (e.g., from `from_str`
-    /// of a heap-allocated JSON buffer). The variant is owning in both
-    /// crates so a `BridgeError` round-trips through serde for every
-    /// possible discriminant. Allocations are minor (one short literal
-    /// per failure path; this is the error path, not the hot path).
+    /// of a heap-allocated JSON buffer). The variant is owning so a
+    /// `BridgeError` round-trips through serde for every possible
+    /// discriminant. Allocations are minor (one short literal per failure
+    /// path; this is the error path, not the hot path).
     #[error("serde roundtrip failed in {command}: {error}")]
     SerdeRoundtrip { command: String, error: String },
     /// Catch-all for unexpected Tauri-side failures (filesystem errors,
@@ -64,6 +63,16 @@ pub enum BridgeError {
     /// strategy).
     #[error("internal: {msg}")]
     Internal { msg: String },
+}
+
+/// `String → BridgeError` via `Internal`. Lets the backend `?`
+/// auto-convert legacy `Result<_, String>` returns from
+/// `src-tauri/src/helpers.rs` into `BridgeError` at the handler
+/// boundary. Spec 001-leptos-migration §Phase 1A T027.
+impl From<String> for BridgeError {
+    fn from(msg: String) -> Self {
+        Self::Internal { msg }
+    }
 }
 
 #[cfg(test)]
@@ -151,8 +160,6 @@ mod tests {
         ] {
             let json = serde_json::to_string(&variant).unwrap();
             let decoded: BridgeError = serde_json::from_str(&json).unwrap();
-            // Matching on Debug repr keeps this assertion compatible with any
-            // future PartialEq derivation without forcing it now.
             assert_eq!(format!("{variant:?}"), format!("{decoded:?}"));
         }
     }

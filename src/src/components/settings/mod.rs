@@ -273,25 +273,24 @@ pub fn SettingsView(
                     >
                         <updates::UpdatesSettings settings=settings toast=toast/>
                     </div>
-                </div>
-            </div>
 
-            // Footer: auto-save acknowledgement + Reset to Defaults.
-            // Rendered inside `#settings-view` below `.settings-layout`
-            // so it doesn't push the tab content. Reset fires
-            // `Settings::default()` and lets the debounced persistence
-            // sink at `app.rs` write it to disk.
-            <div class="settings-actions setting-item">
-                <div class="auto-save-info">
-                    <span class="auto-save-text">"✓ Settings are saved automatically"</span>
+                    // Footer: auto-save acknowledgement + Reset to
+                    // Defaults. Rendered inside `.settings-content` so
+                    // its width is bounded by the content column,
+                    // matching the JS-era DOM at `index.html:1208`.
+                    <div class="settings-actions setting-item">
+                        <div class="auto-save-info">
+                            <span class="auto-save-text">"✓ Settings are saved automatically"</span>
+                        </div>
+                        <button
+                            class="btn-secondary"
+                            on:click=move |_| {
+                                settings.set(Settings::default());
+                                toast.show("Settings reset to defaults");
+                            }
+                        >"Reset to Defaults"</button>
+                    </div>
                 </div>
-                <button
-                    class="btn-secondary"
-                    on:click=move |_| {
-                        settings.set(Settings::default());
-                        toast.show("Settings reset to defaults");
-                    }
-                >"Reset to Defaults"</button>
             </div>
 
             // Shell-level toast surface. `role="alert"` so the e2e

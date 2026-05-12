@@ -54,7 +54,7 @@ use crate::bridge::events::{
     self, GLOBAL_SHORTCUT, UPDATE_AVAILABLE, USER_ACTIVITY, USER_INACTIVITY,
 };
 use crate::bridge::storage;
-use crate::bridge::timer_mode::TimerMode;
+use crate::bridge::types::TimerMode;
 use crate::bridge::types::{Session, Settings, UpdateAvailablePayload};
 use crate::components::auth_modal::AuthModal;
 use crate::components::browser_clock::BrowserClock;
@@ -713,6 +713,7 @@ pub fn App() -> impl IntoView {
                 >
                     <i class="ri-settings-3-line"></i>
                 </button>
+                <div class="sidebar-version-badge">"Leptos"</div>
             </div>
         </nav>
 

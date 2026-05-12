@@ -3,6 +3,7 @@ resolver = "2"
 members = [
     "src",
     "src-tauri",
+    "crates/presto-ipc",
     "tools/build-themes",
     "tools/externalize-boot",
 ]

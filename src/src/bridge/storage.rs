@@ -31,7 +31,7 @@ use super::commands::{
     import_legacy_supabase_session, import_legacy_tags, import_legacy_tasks,
     import_legacy_user_state,
 };
-use super::error::BridgeError;
+use super::types::BridgeError;
 use super::types::{
     LegacyHistoryPayload, LegacyManualSessionsPayload, LegacySettingsPayload, LegacyTagsPayload,
     LegacyTasksPayload, LegacyUserStatePayload, ManualSession, Session, Settings,
@@ -447,7 +447,7 @@ mod tests {
     /// the contract against the post-cutover-shape body.
     #[wasm_bindgen_test]
     async fn imports_legacy_history() {
-        async fn assert_signature() -> Result<(), super::super::error::BridgeError> {
+        async fn assert_signature() -> Result<(), super::super::types::BridgeError> {
             super::import_legacy_history_from_storage().await
         }
         let result = assert_signature().await;
@@ -457,7 +457,7 @@ mod tests {
     /// T104 (RED). Pin `pomodoro-tasks` reader contract.
     #[wasm_bindgen_test]
     async fn imports_legacy_tasks() {
-        async fn assert_signature() -> Result<(), super::super::error::BridgeError> {
+        async fn assert_signature() -> Result<(), super::super::types::BridgeError> {
             super::import_legacy_tasks_from_storage().await
         }
         let result = assert_signature().await;
@@ -467,7 +467,7 @@ mod tests {
     /// T106 (RED). Pin `presto-tags` reader contract.
     #[wasm_bindgen_test]
     async fn imports_legacy_tags() {
-        async fn assert_signature() -> Result<(), super::super::error::BridgeError> {
+        async fn assert_signature() -> Result<(), super::super::types::BridgeError> {
             super::import_legacy_tags_from_storage().await
         }
         let result = assert_signature().await;
@@ -477,7 +477,7 @@ mod tests {
     /// T108 (RED). Pin `presto_manual_sessions` reader contract.
     #[wasm_bindgen_test]
     async fn imports_legacy_manual_sessions() {
-        async fn assert_signature() -> Result<(), super::super::error::BridgeError> {
+        async fn assert_signature() -> Result<(), super::super::types::BridgeError> {
             super::import_legacy_manual_sessions_from_storage().await
         }
         let result = assert_signature().await;
@@ -490,7 +490,7 @@ mod tests {
     /// to `import_legacy_user_state`.
     #[wasm_bindgen_test]
     async fn imports_legacy_user_state() {
-        async fn assert_signature() -> Result<(), super::super::error::BridgeError> {
+        async fn assert_signature() -> Result<(), super::super::types::BridgeError> {
             super::import_legacy_user_state_from_storage().await
         }
         let result = assert_signature().await;
@@ -508,7 +508,7 @@ mod tests {
     /// discovery shape.
     #[wasm_bindgen_test]
     async fn imports_legacy_supabase_session_from_localstorage() {
-        async fn assert_signature() -> Result<(), super::super::error::BridgeError> {
+        async fn assert_signature() -> Result<(), super::super::types::BridgeError> {
             super::import_legacy_supabase_session_from_storage().await
         }
         let result = assert_signature().await;

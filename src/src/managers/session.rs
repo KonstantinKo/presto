@@ -18,7 +18,7 @@
 #![allow(clippy::future_not_send)]
 
 use crate::bridge::commands;
-use crate::bridge::error::BridgeError;
+use crate::bridge::types::BridgeError;
 use crate::bridge::types::ManualSession;
 use crate::engine::timer::{TimerEvent, TimerState};
 
@@ -215,8 +215,8 @@ impl SessionManager {
 #[cfg(test)]
 mod tests {
     use super::SessionManager;
-    use crate::bridge::session_type::SessionType;
     use crate::bridge::types::ManualSession;
+    use crate::bridge::types::SessionType;
     use crate::engine::durations::Durations;
     use crate::engine::timer::{TimerEvent, TimerState};
 
@@ -524,7 +524,7 @@ mod tests {
 
     #[test]
     fn from_loaded_or_default_only_swallows_bridge_unavailable() {
-        use crate::bridge::error::BridgeError;
+        use crate::bridge::types::BridgeError;
 
         // BridgeUnavailable (dev context) → cold-start empty list
         let result = SessionManager::from_loaded_or_default(Err(BridgeError::BridgeUnavailable));

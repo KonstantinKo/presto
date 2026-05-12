@@ -30,7 +30,7 @@ use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::JsFuture;
 
 use super::availability::bridge_available;
-use super::error::BridgeError;
+use super::types::BridgeError;
 
 // ---------------------------------------------------------------------------
 // Event-name constants (E1-E10 per contracts/tauri-bridge.md §"Tauri events")
@@ -305,7 +305,7 @@ mod tests {
         TRAY_PAUSE, TRAY_SKIP, TRAY_START_SESSION, UPDATE_AVAILABLE, USER_ACTIVITY,
         USER_INACTIVITY,
     };
-    use crate::bridge::error::BridgeError;
+    use crate::bridge::types::BridgeError;
     use crate::bridge::types::{ShortcutSettings, UpdateAvailablePayload};
     use wasm_bindgen_test::wasm_bindgen_test;
 

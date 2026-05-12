@@ -5,9 +5,9 @@
   "identifier": "com.presto.app",
   "build": {
     "frontendDist": "../src/dist",
-    "beforeDevCommand": "cd \"$(git rev-parse --show-toplevel)/src\" && trunk serve --port 1420",
+    "beforeDevCommand": "cd \"$(git rev-parse --show-toplevel)/src\" && trunk serve --port 1421",
     "beforeBuildCommand": "cd \"$(git rev-parse --show-toplevel)/src\" && trunk build --release",
-    "devUrl": "http://127.0.0.1:1420"
+    "devUrl": "http://127.0.0.1:1421"
   },
   "app": {
     "withGlobalTauri": true,

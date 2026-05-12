@@ -38,7 +38,7 @@ use wasm_bindgen::JsCast as _;
 use crate::bridge::types::Settings;
 use crate::components::settings::SettingsToast;
 use crate::theme::loader::{apply_timer_theme, resolve_color_mode, system_prefers_dark};
-use crate::theme::themes::ALL_THEMES;
+use crate::theme::metadata::{is_compatible, ThemeMeta, THEME_METADATA};
 
 /// Apply `data-<attr>="<value>"` to the document's `<html>` element.
 /// Mirrors the JS-era `document.documentElement.setAttribute(...)`
@@ -60,17 +60,48 @@ fn set_html_attr(attr: &str, value: &str) {
     }
 }
 
-/// Capitalise the first character of `stem` for the tile label.
-///
-/// Mirrors the JS-era `capitalizeFirst` helper at
-/// `src/utils/theme-loader.js`. Returns `stem` unchanged if it's
-/// empty (the build-themes generator already filters empty stems
-/// — this is defence-in-depth).
-fn capitalise_first(stem: &str) -> String {
-    let mut chars = stem.chars();
-    chars.next().map_or_else(String::new, |first| {
-        first.to_uppercase().chain(chars).collect()
-    })
+/// Per-tile inline preview styles. Mirrors
+/// `applyThemePreviewStyles` at `settings-manager.js:1488-1520` —
+/// each theme paints its preview frame with the colors and (for
+/// pipboy) the mono font + glow that match the real timer skin.
+struct PreviewStyles {
+    display: String,
+    time: String,
+    status: String,
+}
+
+fn preview_styles_for(meta: &ThemeMeta) -> PreviewStyles {
+    let focus = meta.preview.focus;
+    let time_base = format!("color: {focus};");
+    let status_base = format!("color: {focus};");
+    match meta.id {
+        "pipboy" => PreviewStyles {
+            display: format!(
+                "background: #000011; border: 1px solid {focus}; font-family: \"Share Tech Mono\", monospace;"
+            ),
+            time: format!("{time_base} text-shadow: 0 0 5px {focus};"),
+            status: format!("{status_base} text-shadow: 0 0 3px {focus};"),
+        },
+        "espresso" => PreviewStyles {
+            display: format!(
+                "background: #3c2415; border: 1px solid {focus}; color: #f4f1de;"
+            ),
+            time: time_base,
+            status: status_base,
+        },
+        "pommodore64" => PreviewStyles {
+            display: format!(
+                "background: #40318d; border: 1px solid {focus}; color: #7b68ee;"
+            ),
+            time: time_base,
+            status: status_base,
+        },
+        _ => PreviewStyles {
+            display: format!("background: #f8f9fa; border: 1px solid {focus};"),
+            time: time_base,
+            status: status_base,
+        },
+    }
 }
 
 /// Theme settings tab — light/dark/auto picker + timer theme grid.
@@ -153,20 +184,102 @@ pub fn ThemeSettings(settings: RwSignal<Settings>, toast: SettingsToast) -> impl
             <div class="setting-item">
                 <label for="timer-theme-selector">"Timer Theme:"</label>
                 <div class="timer-theme-grid" id="timer-theme-grid">
-                    {ALL_THEMES
+                    {THEME_METADATA
                         .iter()
-                        .map(|stem| {
-                            let id: &'static str = stem;
-                            let label = capitalise_first(stem);
+                        .map(|meta| {
+                            let id: &'static str = meta.id;
+                            let name: &'static str = meta.name;
+                            let description: &'static str = meta.description;
+                            let supports_light = meta.supports.light;
+                            let supports_dark = meta.supports.dark;
+                            let preview_styles = preview_styles_for(meta);
+                            let focus_color = meta.preview.focus.to_string();
+                            let break_color = meta.preview.break_.to_string();
+                            let long_break_color = meta.preview.long_break.to_string();
+                            // Compatibility check resolves the user's
+                            // explicit/auto preference against the OS
+                            // hint, mirroring `getCurrentColorMode` at
+                            // `settings-manager.js:1373`.
+                            let is_disabled = Signal::derive(move || {
+                                let pref = current_theme.get();
+                                let resolved = resolve_color_mode(
+                                    normalise_theme_pref(&pref),
+                                    system_prefers_dark(),
+                                );
+                                !is_compatible(id, resolved)
+                            });
                             view! {
-                                <button
+                                <div
                                     class="timer-theme-option"
                                     class:active=move || current_timer_theme.get() == id
+                                    class:disabled=move || is_disabled.get()
                                     data-timer-theme=id
-                                    on:click=move |_| on_timer_theme(id)
+                                    role="button"
+                                    tabindex=move || if is_disabled.get() { -1 } else { 0 }
+                                    aria-disabled=move || is_disabled.get().to_string()
+                                    on:click=move |_| {
+                                        if is_disabled.get_untracked() {
+                                            return;
+                                        }
+                                        on_timer_theme(id);
+                                    }
+                                    on:keydown=move |ev: leptos::ev::KeyboardEvent| {
+                                        let key = ev.key();
+                                        if key == "Enter" || key == " " {
+                                            ev.prevent_default();
+                                            if !is_disabled.get_untracked() {
+                                                on_timer_theme(id);
+                                            }
+                                        }
+                                    }
                                 >
-                                    {label}
-                                </button>
+                                    <div class="timer-theme-header">
+                                        <h4 class="timer-theme-name">{name}</h4>
+                                        <div class="timer-theme-compatibility">
+                                            {(supports_light).then(|| view! {
+                                                <span class="compatibility-badge light">
+                                                    <i class="ri-sun-line"></i>
+                                                </span>
+                                            })}
+                                            {(supports_dark).then(|| view! {
+                                                <span class="compatibility-badge dark">
+                                                    <i class="ri-moon-line"></i>
+                                                </span>
+                                            })}
+                                        </div>
+                                    </div>
+                                    <p class="timer-theme-description">{description}</p>
+                                    <div class="timer-theme-preview">
+                                        <div
+                                            class="timer-preview-display"
+                                            data-preview-theme=id
+                                            style=preview_styles.display
+                                        >
+                                            <div
+                                                class="timer-preview-time"
+                                                style=preview_styles.time
+                                            >"25:00"</div>
+                                            <div
+                                                class="timer-preview-status"
+                                                style=preview_styles.status
+                                            >"Focus Session"</div>
+                                        </div>
+                                        <div class="color-preview-strip">
+                                            <div
+                                                class="preview-color"
+                                                style=format!("background-color: {focus_color};")
+                                            ></div>
+                                            <div
+                                                class="preview-color"
+                                                style=format!("background-color: {break_color};")
+                                            ></div>
+                                            <div
+                                                class="preview-color"
+                                                style=format!("background-color: {long_break_color};")
+                                            ></div>
+                                        </div>
+                                    </div>
+                                </div>
                             }
                         })
                         .collect::<Vec<_>>()}
@@ -191,7 +304,8 @@ fn normalise_theme_pref(pref: &str) -> &str {
 
 #[cfg(test)]
 mod tests {
-    use super::{capitalise_first, normalise_theme_pref};
+    use super::normalise_theme_pref;
+    use crate::theme::metadata::THEME_METADATA;
     use crate::theme::themes::ALL_THEMES;
 
     /// T205 — selector contract pin. Sourced from
@@ -204,28 +318,25 @@ mod tests {
         }
     }
 
-    /// E2e asserts `tileCount >= 2` (`spec.js:29`); the
-    /// auto-generated catalogue must satisfy that lower bound. Pin
-    /// against `ALL_THEMES` directly so a future code-gen drift
-    /// (e.g. accidentally emitting an empty slice) surfaces here
-    /// rather than in the e2e suite.
+    /// E2e asserts `tileCount >= 2` (`spec.js:29`); the rendered tiles
+    /// come from `THEME_METADATA`, so pin against that. Also verify each
+    /// metadata id is present in the auto-generated `ALL_THEMES` slice so
+    /// a drift between the two sources surfaces here.
     #[test]
     fn timer_theme_catalogue_meets_e2e_minimum() {
         assert!(
-            ALL_THEMES.len() >= 2,
-            "settings-theme.spec.js:29 asserts tileCount >= 2; ALL_THEMES has {}",
-            ALL_THEMES.len(),
+            THEME_METADATA.len() >= 2,
+            "settings-theme.spec.js:29 asserts tileCount >= 2; THEME_METADATA has {}",
+            THEME_METADATA.len(),
         );
-        for stem in ALL_THEMES {
-            assert!(!stem.is_empty(), "theme stem must not be empty");
+        for meta in THEME_METADATA {
+            assert!(!meta.id.is_empty(), "theme id must not be empty");
+            assert!(
+                ALL_THEMES.contains(&meta.id),
+                "metadata id '{}' is missing from generated ALL_THEMES",
+                meta.id
+            );
         }
-    }
-
-    #[test]
-    fn capitalise_first_handles_normal_stems() {
-        assert_eq!(capitalise_first("espresso"), "Espresso");
-        assert_eq!(capitalise_first("pipboy"), "Pipboy");
-        assert_eq!(capitalise_first(""), "");
     }
 
     #[test]

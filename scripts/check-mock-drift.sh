@@ -43,10 +43,10 @@ is_plugin_command() {
   [[ "${name}" == *:* ]]
 }
 
-# Extract handler names: every `async fn <name>(` (or `fn <name>(`) immediately
-# following `#[tauri::command]`. We use grep -A1 to capture the function line
-# after each attribute, then sed out the name.
-handler_names=$(grep -E -A1 '^\s*#\[tauri::command\]\s*$' "${LIB_RS}" \
+# Extract handler names: every `async fn <name>(` (or `fn <name>(`) within
+# 3 lines following `#[tauri::command]` (allows for intervening attributes
+# such as `#[specta::specta]`).
+handler_names=$(grep -E -A3 '^\s*#\[tauri::command\]\s*$' "${LIB_RS}" \
   | grep -E '^\s*(async\s+)?fn\s+[a-z_][a-z0-9_]*' \
   | sed -E 's/^[[:space:]]*(async[[:space:]]+)?fn[[:space:]]+([a-z_][a-z0-9_]*).*/\2/' \
   | sort -u)
