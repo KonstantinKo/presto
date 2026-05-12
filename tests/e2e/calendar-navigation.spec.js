@@ -4,11 +4,13 @@ import { gotoTimer, tapTab } from "./fixtures/screens.js";
 // Feature 003 (FR-019, A14): the pre-rework Calendar tab combined a
 // week-range navigator (Statistics-view selector contract) with a
 // month-grid navigator (Daily-view selector contract). The two
-// surfaces now live on separate views, so this file exercises each
-// under its host.
+// surfaces now live on separate views; this test walks both flows in
+// sequence from a single page load.
 
-test("week navigation under Statistics view", async ({ page }) => {
+test("week navigation under Statistics view and month navigation under Daily view", async ({ page }) => {
   await gotoTimer(page);
+
+  // --- Statistics view: week navigation ---
   await tapTab(page, "Calendar");
 
   // Statistics view preserves `#week-range` on the Weekly variant
@@ -32,10 +34,8 @@ test("week navigation under Statistics view", async ({ page }) => {
   // Return to the initial week.
   await page.locator("#prev-week").click();
   await expect(page.locator("#week-range")).toHaveText(initialWeekRange);
-});
 
-test("month navigation under Daily view", async ({ page }) => {
-  await gotoTimer(page);
+  // --- Daily view: month navigation ---
   await tapTab(page, "Daily");
 
   // Daily view inherits `#current-month`, `#prev-month`, `#next-month`

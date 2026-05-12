@@ -120,8 +120,6 @@ pub fn MonthGrid(
                     children=move |day| {
                         let cell_date = format_session_date(day.timestamp_millis());
                         let is_today = cell_date == today_label;
-                        let cursor_month = month_cursor.with(Datelike::month);
-                        let in_current_month = day.month() == cursor_month;
                         // `aria-current="date"` only on the today-cell so
                         // sessions-history.spec.js:34 can locate it without
                         // a date-string coupling. Per ARIA, an empty string
@@ -132,6 +130,7 @@ pub fn MonthGrid(
                         let day_num = day.day();
                         let day_for_click = day;
                         let day_for_select = day;
+                        let day_for_keydown = day;
                         let day_ts = day.timestamp_millis();
                         // `.selected` flips when the cell's date matches
                         // selected_day's date (per `format_session_date`).
@@ -146,16 +145,24 @@ pub fn MonthGrid(
                                 class="calendar-day"
                                 class:today=is_today
                                 class:selected=move || is_selected.get()
-                                class:other-month=move || !in_current_month
+                                class:other-month=move || day.month() != month_cursor.with(Datelike::month)
                                 role="button"
+                                tabindex="0"
                                 aria-current=aria_current
                                 aria-label=cell_date
                                 on:click=move |_| {
                                     let _ = day_for_click;
                                     on_select_day.run(day_for_select);
                                 }
+                                on:keydown=move |ev| {
+                                    let key = ev.key();
+                                    if key == "Enter" || key == " " {
+                                        ev.prevent_default();
+                                        on_select_day.run(day_for_keydown);
+                                    }
+                                }
                             >
-                                {if in_current_month {
+                                {move || if day.month() == month_cursor.with(Datelike::month) {
                                     view! { <span class="calendar-day-number">{day_num}</span> }.into_any()
                                 } else {
                                     view! { <span></span> }.into_any()

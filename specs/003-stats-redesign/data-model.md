@@ -127,12 +127,15 @@ pub enum IconClass {
 impl IconClass {
     pub fn from_icon_name(name: &str) -> Self {
         if let Some(suffix) = name.strip_prefix("ri-") {
-            IconClass::Remix(suffix.to_string())
+            if !suffix.is_empty() {
+                return IconClass::Remix(suffix.to_string());
+            }
         } else if let Some(suffix) = name.strip_prefix("ph-") {
-            IconClass::Phosphor(suffix.to_string())
-        } else {
-            IconClass::Glyph(name.to_string())
+            if !suffix.is_empty() {
+                return IconClass::Phosphor(suffix.to_string());
+            }
         }
+        IconClass::Glyph(name.to_string())
     }
 }
 ```

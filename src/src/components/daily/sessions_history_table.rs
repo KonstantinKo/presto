@@ -85,15 +85,22 @@ fn duration_from_start_end_minutes(start: &str, end: &str) -> u32 {
     }
 }
 
-fn end_time_from_start_duration(start: &str, duration: u32) -> String {
+/// Returns `(end_time_string, clamped_duration)` so callers persist a
+/// duration consistent with the clamped end (never past 23:59).
+fn end_time_from_start_duration(start: &str, duration: u32) -> (String, u32) {
     let parse = |s: &str| -> u32 {
         let mut p = s.splitn(2, ':');
         let h = p.next().and_then(|v| v.parse::<u32>().ok()).unwrap_or(0);
         let m = p.next().and_then(|v| v.parse::<u32>().ok()).unwrap_or(0);
         h * 60 + m
     };
-    let end_min = (parse(start) + duration).min(23 * 60 + 59);
-    format!("{:02}:{:02}", end_min / 60, end_min % 60)
+    let start_min = parse(start);
+    let end_min = (start_min + duration).min(23 * 60 + 59);
+    let clamped_dur = end_min - start_min;
+    (
+        format!("{:02}:{:02}", end_min / 60, end_min % 60),
+        clamped_dur,
+    )
 }
 
 #[component]
@@ -226,12 +233,13 @@ pub fn SessionsHistoryTable() -> impl IntoView {
                             prop:value=move || modal_start.get()
                             on:input=move |ev| {
                                 let new_start = event_target_value(&ev);
-                                let new_end = end_time_from_start_duration(
+                                let (new_end, new_dur) = end_time_from_start_duration(
                                     &new_start,
                                     modal_duration.get_untracked(),
                                 );
                                 modal_start.set(new_start);
                                 modal_end.set(new_end);
+                                modal_duration.set(new_dur);
                             }
                         />
                         <label for="session-end-time">"End Time"</label>
@@ -257,13 +265,14 @@ pub fn SessionsHistoryTable() -> impl IntoView {
                             max="180"
                             prop:value=move || modal_duration.get().to_string()
                             on:input=move |ev| {
-                                let new_dur: u32 =
-                                    event_target_value(&ev).parse().unwrap_or(0);
-                                let new_end = end_time_from_start_duration(
+                                let raw: u32 =
+                                    event_target_value(&ev).parse().unwrap_or(1);
+                                let clamped = raw.clamp(1, 180);
+                                let (new_end, clamped_dur) = end_time_from_start_duration(
                                     &modal_start.get_untracked(),
-                                    new_dur,
+                                    clamped,
                                 );
-                                modal_duration.set(new_dur);
+                                modal_duration.set(clamped_dur);
                                 modal_end.set(new_end);
                             }
                         />
@@ -294,7 +303,8 @@ pub fn SessionsHistoryTable() -> impl IntoView {
                                 if let Some(id) = modal_session_id.get_untracked() {
                                     let dur = modal_duration.get_untracked();
                                     let start = modal_start.get_untracked();
-                                    let end = end_time_from_start_duration(&start, dur);
+                                    let (end, clamped_dur) =
+                                        end_time_from_start_duration(&start, dur);
                                     let title_raw = modal_title.get_untracked();
                                     let title = {
                                         let trimmed = title_raw.trim();
@@ -306,7 +316,7 @@ pub fn SessionsHistoryTable() -> impl IntoView {
                                     };
                                     sessions.update(|ss| {
                                         if let Some(s) = ss.iter_mut().find(|s| s.id == id) {
-                                            s.duration = dur;
+                                            s.duration = clamped_dur;
                                             s.start_time = start;
                                             s.end_time = end;
                                             s.title = title;

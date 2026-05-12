@@ -1,7 +1,7 @@
 # Tasks: Statistics Period Tabs, Daily Drill-Down, Phosphor Tag Icons, Control-Button Tooltips
 
 **Input**: Design docs in `specs/003-stats-redesign/`
-**Prerequisites**: spec.md (49 FRs, 18 SCs, 20 Assumptions, CHK040–043), plan.md (6 implementation phases), data-model.md, contracts/components.md, quickstart.md
+**Prerequisites**: spec.md (49 FRs, 18 SCs, 20 Assumptions, CHK040–043), plan.md (Phase 0..8), data-model.md, contracts/components.md, quickstart.md
 
 ## Format
 

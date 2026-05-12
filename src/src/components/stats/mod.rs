@@ -279,12 +279,14 @@ pub fn aggregate_hourly_focus(sessions: &[ManualSession], anchor_day: DateTime<U
         if session.date != day_label || session.session_type != SessionType::Focus {
             continue;
         }
-        let hour = session
+        let Some(hour) = session
             .start_time
             .split(':')
             .next()
             .and_then(|h| h.parse::<u32>().ok())
-            .unwrap_or(0);
+        else {
+            continue;
+        };
         if let Some(bucket) = buckets.get_mut(hour as usize) {
             *bucket = bucket.saturating_add(session.duration);
         }

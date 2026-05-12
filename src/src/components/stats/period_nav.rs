@@ -62,21 +62,35 @@ pub fn format_day_range(anchor: DateTime<Utc>) -> String {
     )
 }
 
-/// Format the Weekly range label: `"<MonStart> <D> - <MonEnd> <D> <Y>"`.
+/// Format the Weekly range label.
+/// Same year: `"<MonStart> <D> - <MonEnd> <D> <Y>"`.
+/// Cross-year: `"<MonStart> <D> <Ystart> - <MonEnd> <D> <Yend>"`.
 /// Anchor is treated as the Mon-Sun span containing it.
 #[must_use]
 pub fn format_week_range(anchor: DateTime<Utc>) -> String {
     let weekday = anchor.weekday().num_days_from_monday();
     let start = anchor - Days::new(u64::from(weekday));
     let end = start + Days::new(6);
-    format!(
-        "{start_month} {start_day} - {end_month} {end_day} {year}",
-        start_day = start.day(),
-        start_month = month_short(start.month()),
-        end_day = end.day(),
-        end_month = month_short(end.month()),
-        year = end.year(),
-    )
+    let start_year = start.year();
+    let end_year = end.year();
+    if start_year == end_year {
+        format!(
+            "{start_month} {start_day} - {end_month} {end_day} {year}",
+            start_day = start.day(),
+            start_month = month_short(start.month()),
+            end_day = end.day(),
+            end_month = month_short(end.month()),
+            year = end_year,
+        )
+    } else {
+        format!(
+            "{start_month} {start_day} {start_year} - {end_month} {end_day} {end_year}",
+            start_day = start.day(),
+            start_month = month_short(start.month()),
+            end_day = end.day(),
+            end_month = month_short(end.month()),
+        )
+    }
 }
 
 /// Format the Monthly range label: `"<Month> <Year>"`.

@@ -23,18 +23,21 @@ use crate::bridge::types::{ManualSession, SessionType};
 use crate::engine::date_format::format_session_date;
 
 /// Parse an `"HH:MM"` time string to minutes-since-midnight. Returns
-/// 0 on malformed input (mirrors the existing `aggregate_hourly_focus`
-/// fallback in `components::stats`).
+/// 0 on malformed input — requires exactly one ':', both sides fully
+/// numeric, h < 24, m < 60.
 fn parse_hhmm_to_minutes(s: &str) -> u32 {
-    let mut parts = s.splitn(2, ':');
-    let h = parts
-        .next()
-        .and_then(|v| v.parse::<u32>().ok())
-        .unwrap_or(0);
-    let m = parts
-        .next()
-        .and_then(|v| v.parse::<u32>().ok())
-        .unwrap_or(0);
+    let Some((h_str, m_str)) = s.split_once(':') else {
+        return 0;
+    };
+    if m_str.contains(':') {
+        return 0;
+    }
+    let Ok(h) = h_str.parse::<u32>() else {
+        return 0;
+    };
+    let Ok(m) = m_str.parse::<u32>() else {
+        return 0;
+    };
     if h >= 24 || m >= 60 {
         return 0;
     }

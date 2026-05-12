@@ -245,7 +245,7 @@ Reference `.agentex.yml` stage definitions. All gates already exist; this featur
 
 ## Implementation phasing
 
-Eight phases. Bundles A–E are independently testable; the phase order matches tasks.md: Phase 0 pre-flights the Phosphor asset vendoring and the `datetime_from_ms` helper; Phase 1 (Bundle C) builds the icon typed-dispatch with RED-first tests; Phase 2 (Bundle B) builds the Daily view + `day_clamp` helper RED-first; Phase 3 (Bundle A) reworks the Statistics view; Phase 4 (Bundle D) adds control-button tooltips; Phase 5 is the `calendar.rs` cleanup verification + full e2e run; Phase 6 is the optional Bundle E; Phase 7 regenerates baselines; Phase 8 is the final gate sweep.
+Nine phases. Bundles A–E are independently testable; the phase order matches tasks.md: Phase 0 pre-flights the Phosphor asset vendoring and the `datetime_from_ms` helper; Phase 1 (Bundle C) builds the icon typed-dispatch with RED-first tests; Phase 2 (Bundle B) builds the Daily view + `day_clamp` helper RED-first; Phase 3 (Bundle A) reworks the Statistics view; Phase 4 (Bundle D) adds control-button tooltips; Phase 5 is the `calendar.rs` cleanup verification + full e2e run; Phase 6 is the optional Bundle E; Phase 7 regenerates baselines; Phase 8 is the final gate sweep.
 
 ### Phase 0 — Pre-flight (Phosphor webfont vendoring + `datetime_from_ms` helper extraction)
 
