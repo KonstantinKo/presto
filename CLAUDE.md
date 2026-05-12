@@ -33,7 +33,7 @@ The per-feature game loop (with installed gates) is in
 
 Trivial work (typos, single-call refactors, dependency bumps, config
 tweaks) doesn't need a spec. Multi-file work, anything touching the
-timer engine, persistence, the Tauri bridge, or auth/sync does.
+timer engine, persistence, or the Tauri bridge does.
 
 ## Stack
 
@@ -44,8 +44,9 @@ timer engine, persistence, the Tauri bridge, or auth/sync does.
 | Backend | Rust (Tauri 2.x) |
 | E2E | Playwright (chromium) |
 
-Single-user desktop. No server backend. Supabase is a thin optional sync
-layer, off by default in guest mode.
+Single-user, fully local Pomodoro timer. No accounts, no sync, no
+telemetry. The only outbound traffic is the auto-updater's poll for new
+releases (no user data on the wire).
 
 ## Conventions
 
@@ -55,8 +56,8 @@ layer, off by default in guest mode.
   Tauri-backed persistence. Not required for UI plumbing — that's the
   e2e suite's job.
 - **Visual regression is the UI contract.** Pixel-equivalent (within 2%
-  per `playwright.config.js`) against the 14 baselines is the green
-  light. A baseline update needs an explicit one-line PR note.
+  per `playwright.config.js`) against the baselines is the green light.
+  A baseline update needs an explicit one-line PR note.
 - **Lock files are first-class.** `package.json` ↔ `package-lock.json`
   drift fails CI; same for `Cargo.toml` ↔ `Cargo.lock`. CI uses
   `npm ci` and `cargo build --frozen` — never `npm install` or

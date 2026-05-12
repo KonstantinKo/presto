@@ -15,9 +15,6 @@ default = []
 # bindings. Host (Tauri) crate enables; WASM (Leptos) crate disables so
 # specta's transitives don't enter the wasm dep graph.
 specta = ["dep:specta"]
-# `migration` gates the JS-era legacy payload types. Both endpoints
-# enable until the post-cutover sunset commit.
-migration = []
 
 [dependencies]
 serde = { version = "1", features = ["derive", "std"], default-features = false }

@@ -21,10 +21,11 @@
 
 use crate::theme::themes;
 
-/// Apply `theme_name` to the live DOM by setting
-/// `<html data-theme="...">`. Best-effort: failures (no document —
-/// host build / SSR) reduce to a silent no-op, which is fine
-/// because the e2e suite always runs against a real DOM.
+/// Apply `theme_name` to the live DOM by setting `<html data-theme="...">`.
+///
+/// Best-effort: failures (no document — host build / SSR) reduce to a
+/// silent no-op, which is fine because the e2e suite always runs
+/// against a real DOM.
 ///
 /// Mirrors the JS-era `applyTheme` body at
 /// `src/managers/theme-manager.js`. Distinct from the
@@ -91,10 +92,11 @@ pub fn apply_resolved(theme_name: &str) {
     apply_theme(resolve_theme(theme_name));
 }
 
-/// Apply `timer_theme_id` as the `data-timer-theme` attribute on
-/// `<html>`. Cold-start companion to `apply_theme` — restores the
-/// persisted timer-theme palette without going through the
-/// `ThemeSettings` tile click handler.
+/// Apply `timer_theme_id` as the `data-timer-theme` attribute on `<html>`.
+///
+/// Cold-start companion to `apply_theme` — restores the persisted
+/// timer-theme palette without going through the `ThemeSettings` tile
+/// click handler.
 #[cfg(target_arch = "wasm32")]
 pub fn apply_timer_theme(timer_theme_id: &str) {
     use wasm_bindgen::JsCast as _;
@@ -309,8 +311,8 @@ mod tests {
             .collect();
         assert_eq!(
             pngs.len(),
-            14,
-            "expected 14 visual-regression baselines per spec 001 SC-001; \
+            12,
+            "expected 12 visual-regression baselines per spec 001 SC-001; \
              found {} (re-captures > 2 escalate per Principle IV)",
             pngs.len(),
         );

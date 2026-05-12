@@ -26,9 +26,8 @@ tauri-build = { version = "2", features = [] }
 
 [dependencies]
 # Shared wire-type crate. `specta` feature enables `specta::Type`
-# derives so `tauri-specta` can codegen TS bindings; `migration`
-# exposes the JS-era legacy payload types.
-presto-ipc = { path = "../crates/presto-ipc", features = ["specta", "migration"] }
+# derives so `tauri-specta` can codegen TS bindings.
+presto-ipc = { path = "../crates/presto-ipc", features = ["specta"] }
 # `specta` + `tauri-specta` codegen TypeScript bindings from every
 # `#[tauri::command]` + `specta::Type` derive. The exported file at
 # `src/bindings/tauri.ts` is checked in; a `cargo test` gate
@@ -48,24 +47,15 @@ tauri-plugin-notification = { version = "2", default-features = false }
 tauri-plugin-autostart = { version = "2", default-features = false }
 tauri-plugin-updater = { version = "2", default-features = false }
 tauri-plugin-process = { version = "2", default-features = false }
-tauri-plugin-oauth = { git = "https://github.com/FabianLars/tauri-plugin-oauth", rev = "f941c99c3ed528a55db7fe05c931480a8255041d" }
 serde = { version = "1", features = ["derive"], default-features = false }
 serde_json = { version = "1", default-features = false }
 chrono = { version = "0.4", features = ["serde", "clock"], default-features = false }
 base64 = "0.21"
-# `thiserror` powers the `BridgeError` mirror enum (spec
-# 001-leptos-migration T025; mirrors `presto-web` Cargo.toml).
+# `thiserror` powers the `BridgeError` mirror enum.
 thiserror = "1"
-# `reqwest` powers the Supabase REST adapter introduced in Phase 1D
-# T088-T095. Per research.md §6, we deliberately reject the supabase-rs
-# SDK in favour of direct REST + JWT against the four `/auth/v1/*`
-# endpoints. `rustls-tls` + `default-features = false` skip the
-# native-tls path so we don't drag OpenSSL onto Linux/macOS targets.
-reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
-# `rust_xlsxwriter` powers the export_sessions_xlsx command introduced
-# in Phase 1D T097-T098. Per research.md §8, write-only is sufficient
-# (we never read xlsx files); chosen over umya-spreadsheet for its
-# smaller binary size.
+# `rust_xlsxwriter` powers the export_sessions_xlsx command. Write-only
+# is sufficient (we never read xlsx files); chosen over
+# umya-spreadsheet for its smaller binary size.
 rust_xlsxwriter = "0.79"
 
 [dev-dependencies]

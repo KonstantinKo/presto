@@ -15,9 +15,8 @@ workspace = true
 
 [dependencies]
 # Shared wire-type crate. No specta feature — the WASM target must
-# never pull specta's transitives. `migration` feature stays enabled
-# until the legacy-import code path is sunset.
-presto-ipc = { path = "../crates/presto-ipc", features = ["migration"] }
+# never pull specta's transitives.
+presto-ipc = { path = "../crates/presto-ipc" }
 leptos = { version = "0.7", features = ["csr"] }
 wasm-bindgen = "0.2"
 wasm-bindgen-futures = "0.4"
@@ -52,13 +51,6 @@ features = [
     # `pomodoro-timer.js:setupKeyboardShortcuts` Space-key fallback
     # exercised by `settings-shortcuts.spec.js`.
     "KeyboardEvent",
-    # `Storage` powers the Phase 1E transition-only legacy localStorage
-    # migration (`bridge::storage::migrate_legacy_localstorage`); each
-    # per-domain reader probes `window().local_storage()` for one of
-    # the 12 preserved JS-era keys per data-model.md §"Legacy
-    # localStorage migration". Slated for removal alongside the
-    # migration code one minor version after cutover.
-    "Storage",
     # `MediaQueryList` powers `theme::loader::system_prefers_dark`
     # (Phase 5 T224 — follow-system-theme via the
     # `prefers-color-scheme: dark` media query). Mirrors the JS-era

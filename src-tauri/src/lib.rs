@@ -8,12 +8,9 @@ use tauri::tray::{TrayIconBuilder, TrayIconEvent};
 use tauri::{Emitter, Manager};
 use tauri_plugin_autostart::ManagerExt;
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut};
-use tauri_plugin_oauth::start;
 
-mod auth;
 mod exports;
 mod helpers;
-mod migration;
 
 // `BridgeError` — typed return variant for every Tauri command.
 //
@@ -80,18 +77,15 @@ pub use presto_ipc::{ManualSession, Session as PomodoroSession, SessionTag, Tag,
 // types so the legacy `hide_status_bar → status_bar_display`
 // migration logic stays single-sourced.
 pub use presto_ipc::{
-    default_analytics_enabled, default_max_session_time, default_weekly_goal, AdvancedSettings,
-    AppearanceSettings, NotificationSettings, Settings as AppSettings,
-    SettingsOnDisk as AppSettingsOnDisk, ShortcutSettings, StatusBarDisplay, TimerSettings,
+    default_max_session_time, default_weekly_goal, AdvancedSettings, AppearanceSettings,
+    NotificationSettings, Settings as AppSettings, SettingsOnDisk as AppSettingsOnDisk,
+    ShortcutSettings, StatusBarDisplay, TimerSettings,
 };
 
 /// Loads settings synchronously from disk, falling back to defaults on any error.
 fn load_settings_sync(app: &AppHandle) -> AppSettings {
     let Ok(app_data_dir) = app.path().app_data_dir() else {
-        return AppSettings {
-            analytics_enabled: false,
-            ..AppSettings::default()
-        };
+        return AppSettings::default();
     };
     helpers::read_settings_from(&app_data_dir).unwrap_or_default()
 }
@@ -571,21 +565,7 @@ pub fn build_specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         save_tag,
         delete_tag,
         add_session_tag,
-        start_oauth_server,
-        supabase_sign_in_with_password,
-        supabase_sign_out,
-        supabase_get_session,
-        supabase_refresh_session,
         export_sessions_xlsx,
-        import_legacy_settings,
-        import_legacy_history,
-        import_legacy_tasks,
-        import_legacy_tags,
-        import_legacy_manual_sessions,
-        import_legacy_user_state,
-        import_legacy_supabase_session,
-        is_legacy_migration_complete,
-        mark_legacy_migration_complete,
     ])
 }
 
@@ -618,9 +598,6 @@ pub fn run() {
     // `tests/bindings_export.rs` is the authoritative drift check.
     #[cfg(debug_assertions)]
     {
-        // BigInt-class types (`u64` for `expires_at` on
-        // `SupabaseSessionPayload`) must serialise as TS `string` —
-        // see the matching note in `tests/bindings_export.rs`.
         let exporter = specta_typescript::Typescript::default()
             .bigint(specta_typescript::BigIntExportBehavior::String);
         let _ = specta_builder.export(exporter, "../src/bindings/tauri.ts");
@@ -654,7 +631,6 @@ pub fn run() {
             ))
             .plugin(tauri_plugin_updater::Builder::new().build())
             .plugin(tauri_plugin_process::init())
-            .plugin(tauri_plugin_oauth::init())
             .invoke_handler(specta_builder.invoke_handler())
             .setup(|app| {
                 let initial_settings = load_settings_sync(app.handle());
@@ -923,108 +899,8 @@ async fn update_tray_menu(
     Ok(())
 }
 
-#[tauri::command]
-#[specta::specta]
-async fn start_oauth_server(window: tauri::Window) -> Result<u16, BridgeError> {
-    start(move |url| {
-        let _ = window.emit("oauth-callback", url);
-    })
-    .map_err(|err| BridgeError::Internal {
-        msg: err.to_string(),
-    })
-}
-
-// `supabase_sign_in_with_password` — Phase 1D T089.
-//
-// Replaces the JS `supabase-js` `signInWithPassword` call. Authenticates
-// against Supabase REST `/auth/v1/token?grant_type=password` and persists
-// the resulting session to the app-data directory. The returned
-// `auth::AuthSession` mirrors the Leptos-side `bridge::types::AuthSession`
-// byte-for-byte on the wire.
-//
-// Network/HTTP failure → `BridgeError::Internal`. Invalid credentials
-// (HTTP 400/401 from Supabase) → `BridgeError::InvalidArgument`.
-// Empty email/password → `BridgeError::InvalidArgument` before any HTTP
-// roundtrip. Spec FR-018 / Principle II: auth is opt-in; guest mode is
-// unaffected because it's a separate localStorage flag, not a Supabase
-// concept.
-#[tauri::command]
-#[specta::specta]
-async fn supabase_sign_in_with_password(
-    email: String,
-    password: String,
-    app: AppHandle,
-) -> Result<auth::AuthSession, BridgeError> {
-    let session = auth::sign_in_with_password(&email, &password).await?;
-    let app_data_dir = get_app_data_dir(&app)?;
-    auth::persist_session(&app_data_dir, &session)?;
-    Ok(session)
-}
-
-// `supabase_sign_out` — Phase 1D T091.
-//
-// Replaces the JS `supabase-js` `signOut` call. POSTs to Supabase REST
-// `/auth/v1/logout` to revoke the refresh token server-side, then
-// removes the persisted session file from the app-data dir. Network
-// failure on the REST call is tolerated (best-effort revocation —
-// matches supabase-js's same-named behaviour); the local clear is
-// always attempted so the user is signed out client-side regardless
-// of network status.
-//
-// Empty `refresh_token` → `InvalidArgument` before any HTTP roundtrip
-// or filesystem touch. Filesystem errors during the local clear (other
-// than NotFound, which is absorbed as the idempotent no-op) → `Internal`.
-#[tauri::command]
-#[specta::specta]
-async fn supabase_sign_out(refresh_token: String, app: AppHandle) -> Result<(), BridgeError> {
-    auth::sign_out(&refresh_token).await?;
-    let app_data_dir = get_app_data_dir(&app)?;
-    auth::clear_session(&app_data_dir)
-}
-
-// `supabase_get_session` — Phase 1D T093.
-//
-// Reads the persisted Supabase session from the app-data directory and
-// returns `Some(AuthSession)` when a session is present, `None` for the
-// cold-start (no-file) case. No-arg by design: the JS-era code path
-// invoked `supabase.auth.getSession()` which read from localStorage; we
-// move the read Rust-side per research.md §6 Decision §6 (single
-// source of truth lives below the bridge).
-#[tauri::command]
-#[specta::specta]
-async fn supabase_get_session(app: AppHandle) -> Result<Option<auth::AuthSession>, BridgeError> {
-    let app_data_dir = get_app_data_dir(&app)?;
-    auth::read_session(&app_data_dir)
-}
-
-// `supabase_refresh_session` — Phase 1D T095.
-//
-// Swaps the refresh token at Supabase REST
-// `/auth/v1/token?grant_type=refresh_token`, persists the freshly-issued
-// session to the app-data dir (overwriting the old record), and returns
-// the new session. Empty `refresh_token` → `InvalidArgument` before any
-// HTTP roundtrip; HTTP 400/401 → `InvalidArgument` (token expired or
-// revoked); 5xx / network → `Internal`.
-#[tauri::command]
-#[specta::specta]
-async fn supabase_refresh_session(
-    refresh_token: String,
-    app: AppHandle,
-) -> Result<auth::AuthSession, BridgeError> {
-    let session = auth::refresh_session(&refresh_token).await?;
-    let app_data_dir = get_app_data_dir(&app)?;
-    auth::persist_session(&app_data_dir, &session)?;
-    Ok(session)
-}
-
-// `export_sessions_xlsx` — Phase 1D T098.
-//
-// Replaces the JS `xlsx` library's writeFile() path with a Tauri-side
-// `rust_xlsxwriter` call that builds the workbook from typed
-// `ManualSession` records and writes it to `path`. Per research.md §8,
-// rust_xlsxwriter is write-only (we never read .xlsx files) and lighter
-// than umya-spreadsheet. The legacy `write_excel_file` cutover-parity
-// command was removed in Phase 6 (T235).
+// `export_sessions_xlsx` — write a workbook of manual sessions to
+// `path` using `rust_xlsxwriter` (write-only; we never read .xlsx).
 #[tauri::command]
 #[specta::specta]
 async fn export_sessions_xlsx(
@@ -1032,111 +908,6 @@ async fn export_sessions_xlsx(
     sessions: Vec<ManualSession>,
 ) -> Result<(), BridgeError> {
     exports::export(std::path::Path::new(&path), &sessions)
-}
-
-// ── Phase 1E (T101-T113) — transition-only legacy localStorage migration.
-//
-// Each handler delegates to `migration::*` for idempotency + persistence.
-// Per Principle II we do NOT log payload contents — only the call shape.
-// Sunset: removed one minor version after cutover (Principle VII).
-
-#[tauri::command]
-#[specta::specta]
-async fn import_legacy_settings(
-    payload: migration::LegacySettingsPayload,
-    app: AppHandle,
-) -> Result<(), BridgeError> {
-    let app_data_dir = get_app_data_dir(&app)?;
-    migration::import_settings(&app_data_dir, &payload)
-}
-
-#[tauri::command]
-#[specta::specta]
-async fn import_legacy_history(
-    payload: migration::LegacyHistoryPayload,
-    app: AppHandle,
-) -> Result<(), BridgeError> {
-    let app_data_dir = get_app_data_dir(&app)?;
-    migration::import_history(&app_data_dir, &payload)
-}
-
-#[tauri::command]
-#[specta::specta]
-async fn import_legacy_tasks(
-    payload: migration::LegacyTasksPayload,
-    app: AppHandle,
-) -> Result<(), BridgeError> {
-    let app_data_dir = get_app_data_dir(&app)?;
-    migration::import_tasks(&app_data_dir, &payload)
-}
-
-#[tauri::command]
-#[specta::specta]
-async fn import_legacy_tags(
-    payload: migration::LegacyTagsPayload,
-    app: AppHandle,
-) -> Result<(), BridgeError> {
-    let app_data_dir = get_app_data_dir(&app)?;
-    migration::import_tags(&app_data_dir, &payload)
-}
-
-#[tauri::command]
-#[specta::specta]
-async fn import_legacy_manual_sessions(
-    payload: migration::LegacyManualSessionsPayload,
-    app: AppHandle,
-) -> Result<(), BridgeError> {
-    let app_data_dir = get_app_data_dir(&app)?;
-    migration::import_manual_sessions(&app_data_dir, &payload)
-}
-
-#[tauri::command]
-#[specta::specta]
-async fn import_legacy_user_state(
-    payload: migration::LegacyUserStatePayload,
-    app: AppHandle,
-) -> Result<(), BridgeError> {
-    let app_data_dir = get_app_data_dir(&app)?;
-    migration::import_user_state(&app_data_dir, &payload)
-}
-
-#[tauri::command]
-#[specta::specta]
-async fn import_legacy_supabase_session(
-    payload: migration::SupabaseSessionPayload,
-    app: AppHandle,
-) -> Result<(), BridgeError> {
-    let app_data_dir = get_app_data_dir(&app)?;
-    migration::import_supabase_session(&app_data_dir, &payload)
-}
-
-// ── R-006: Legacy migration sentinel (Phase 4f) ──────────────────────────────
-//
-// Caps the steady-state cold-start cost of `migrate_legacy_localstorage` to a
-// single lightweight file-probe instead of 7 IPC round-trips per launch.
-// Once the migration runs to completion we write `legacy-migration-done.marker`
-// under the app-data dir; subsequent launches short-circuit before any
-// per-domain `import_legacy_*` hop is attempted.
-
-#[tauri::command]
-#[specta::specta]
-async fn is_legacy_migration_complete(app: AppHandle) -> Result<bool, BridgeError> {
-    let app_data_dir = get_app_data_dir(&app)?;
-    Ok(app_data_dir.join("legacy-migration-done.marker").exists())
-}
-
-#[tauri::command]
-#[specta::specta]
-async fn mark_legacy_migration_complete(app: AppHandle) -> Result<(), BridgeError> {
-    let app_data_dir = get_app_data_dir(&app)?;
-    std::fs::create_dir_all(&app_data_dir).map_err(|e| BridgeError::Internal {
-        msg: format!("Failed to create app data directory: {e}"),
-    })?;
-    std::fs::write(app_data_dir.join("legacy-migration-done.marker"), b"1").map_err(|e| {
-        BridgeError::Internal {
-            msg: format!("Failed to write migration sentinel: {e}"),
-        }
-    })
 }
 
 #[cfg(target_os = "macos")]
@@ -1166,8 +937,8 @@ fn set_dock_visibility_native(visible: bool) {
 #[cfg(test)]
 mod tests {
     use super::{
-        default_analytics_enabled, default_weekly_goal, AppSettings, ManualSession,
-        PomodoroSession, SessionTag, StatusBarDisplay, Tag, Task,
+        default_weekly_goal, AppSettings, ManualSession, PomodoroSession, SessionTag,
+        StatusBarDisplay, Tag, Task,
     };
 
     #[test]
@@ -1201,11 +972,6 @@ mod tests {
     }
 
     #[test]
-    fn analytics_enabled_default_is_true() {
-        assert!(default_analytics_enabled());
-    }
-
-    #[test]
     fn app_settings_missing_serde_default_fields_use_defaults() {
         // Simulate an older settings JSON that predates newer #[serde(default)] fields.
         let json = r#"{
@@ -1227,7 +993,6 @@ mod tests {
         }"#;
         let s: AppSettings = serde_json::from_str(json).expect("should deserialize");
         let defaults = AppSettings::default();
-        assert_eq!(s.analytics_enabled, defaults.analytics_enabled);
         assert_eq!(s.hide_icon_on_close, defaults.hide_icon_on_close);
         // Phase 3a T150: when neither legacy `hide_status_bar` nor new
         // `status_bar_display` is present, the field defaults to
@@ -1332,7 +1097,6 @@ mod tests {
         assert_eq!(s.timer.total_sessions, 10);
         assert_eq!(s.timer.weekly_goal_minutes, 125);
         assert_eq!(s.timer.max_session_time, 120);
-        assert!(s.analytics_enabled);
         assert!(!s.autostart);
         assert!(!s.hide_icon_on_close);
         assert_eq!(s.status_bar_display, StatusBarDisplay::Default);
@@ -1347,9 +1111,6 @@ mod tests {
         assert!(s.shortcuts.start_stop.is_some());
         assert!(s.shortcuts.reset.is_some());
         assert!(s.shortcuts.skip.is_some());
-        // Phase 4e R-002 user-state slice — cold-start defaults.
-        assert!(!s.guest_mode);
-        assert!(!s.auth_seen);
         assert!(s.skipped_versions.is_empty());
         // Appearance defaults: auto color-mode, espresso timer theme.
         assert_eq!(s.appearance.theme, "auto");

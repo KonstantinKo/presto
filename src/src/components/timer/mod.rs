@@ -241,6 +241,7 @@ fn synth_completed_session(
 
 #[cfg(target_arch = "wasm32")]
 fn local_hh_mm(ms: i64) -> (u32, u32) {
+    #[allow(clippy::cast_precision_loss)]
     let d = js_sys::Date::new(&wasm_bindgen::JsValue::from_f64(ms as f64));
     (d.get_hours(), d.get_minutes())
 }

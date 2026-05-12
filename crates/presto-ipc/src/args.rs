@@ -85,29 +85,11 @@ pub struct AddSessionTagArgs {
     pub session_tag: crate::tags::SessionTag,
 }
 
-/// Argument bundle for `supabase_sign_out` — Supabase REST
-/// `/auth/v1/logout` payload.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[cfg_attr(feature = "specta", derive(specta::Type))]
-#[serde(rename_all = "camelCase")]
-pub struct SupabaseSignOutArgs {
-    pub refresh_token: String,
-}
-
-/// Argument bundle for `supabase_refresh_session` — Supabase REST
-/// `/auth/v1/token?grant_type=refresh_token` payload.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[cfg_attr(feature = "specta", derive(specta::Type))]
-#[serde(rename_all = "camelCase")]
-pub struct SupabaseRefreshSessionArgs {
-    pub refresh_token: String,
-}
-
 #[cfg(test)]
 mod tests {
     use super::{
-        AddSessionTagArgs, DeleteTagArgs, StartActivityMonitoringArgs, SupabaseRefreshSessionArgs,
-        SupabaseSignOutArgs, UpdateActivityTimeoutArgs, UpdateTrayIconArgs, UpdateTrayMenuArgs,
+        AddSessionTagArgs, DeleteTagArgs, StartActivityMonitoringArgs, UpdateActivityTimeoutArgs,
+        UpdateTrayIconArgs, UpdateTrayMenuArgs,
     };
     use crate::tags::SessionTag;
     use crate::timer::TimerMode;
@@ -232,26 +214,6 @@ mod tests {
         assert!(json.contains(r#""tag_id":"t-1""#));
     }
 
-    #[test]
-    fn supabase_sign_out_args_serialises_camelcase_key() {
-        let args = SupabaseSignOutArgs {
-            refresh_token: "rt-1".to_string(),
-        };
-        let json = serde_json::to_string(&args).unwrap();
-        assert!(json.contains(r#""refreshToken":"rt-1""#));
-        assert!(!json.contains(r#""refresh_token""#));
-    }
-
-    #[test]
-    fn supabase_refresh_session_args_serialises_camelcase_key() {
-        let args = SupabaseRefreshSessionArgs {
-            refresh_token: "rt-2".to_string(),
-        };
-        let json = serde_json::to_string(&args).unwrap();
-        assert!(json.contains(r#""refreshToken":"rt-2""#));
-        assert!(!json.contains(r#""refresh_token""#));
-    }
-
     /// Defence-in-depth: every Args struct must have **top-level**
     /// keys without `snake_case` multi-word names. Inner-struct
     /// fields keep `snake_case` (matches on-disk shapes) and are
@@ -308,20 +270,6 @@ mod tests {
                         duration: 0,
                         created_at: String::new(),
                     },
-                })
-                .unwrap(),
-            ),
-            (
-                "SupabaseSignOutArgs",
-                serde_json::to_value(SupabaseSignOutArgs {
-                    refresh_token: String::new(),
-                })
-                .unwrap(),
-            ),
-            (
-                "SupabaseRefreshSessionArgs",
-                serde_json::to_value(SupabaseRefreshSessionArgs {
-                    refresh_token: String::new(),
                 })
                 .unwrap(),
             ),

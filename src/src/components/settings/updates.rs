@@ -21,11 +21,8 @@
 // app-side opt-in. The hook is preserved at the
 // `bridge::commands::check_for_updates` boundary.
 //
-// Per Principle I, this component never mutates engine state — the
-// auto-check toggle persists into `Settings` (today via the
-// `analytics_enabled` slot's neighbour; a dedicated
-// `auto_check_updates` field will land alongside the Phase 4c
-// persistence hop). The manual check button dispatches via
+// Per Principle I, this component never mutates engine state. The
+// manual check button dispatches via
 // `bridge::commands::check_for_updates`; on a desktop build that
 // resolves to the Tauri `plugin:updater|check` command.
 //

@@ -197,121 +197,9 @@ async addSessionTag(sessionTag: SessionTag) : Promise<Result<null, BridgeError>>
     else return { status: "error", error: e  as any };
 }
 },
-async startOauthServer() : Promise<Result<number, BridgeError>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("start_oauth_server") };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-async supabaseSignInWithPassword(email: string, password: string) : Promise<Result<AuthSession, BridgeError>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("supabase_sign_in_with_password", { email, password }) };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-async supabaseSignOut(refreshToken: string) : Promise<Result<null, BridgeError>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("supabase_sign_out", { refreshToken }) };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-async supabaseGetSession() : Promise<Result<AuthSession | null, BridgeError>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("supabase_get_session") };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-async supabaseRefreshSession(refreshToken: string) : Promise<Result<AuthSession, BridgeError>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("supabase_refresh_session", { refreshToken }) };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
 async exportSessionsXlsx(path: string, sessions: ManualSession[]) : Promise<Result<null, BridgeError>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("export_sessions_xlsx", { path, sessions }) };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-async importLegacySettings(payload: LegacySettingsPayload) : Promise<Result<null, BridgeError>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("import_legacy_settings", { payload }) };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-async importLegacyHistory(payload: LegacyHistoryPayload) : Promise<Result<null, BridgeError>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("import_legacy_history", { payload }) };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-async importLegacyTasks(payload: LegacyTasksPayload) : Promise<Result<null, BridgeError>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("import_legacy_tasks", { payload }) };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-async importLegacyTags(payload: LegacyTagsPayload) : Promise<Result<null, BridgeError>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("import_legacy_tags", { payload }) };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-async importLegacyManualSessions(payload: LegacyManualSessionsPayload) : Promise<Result<null, BridgeError>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("import_legacy_manual_sessions", { payload }) };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-async importLegacyUserState(payload: LegacyUserStatePayload) : Promise<Result<null, BridgeError>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("import_legacy_user_state", { payload }) };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-async importLegacySupabaseSession(payload: SupabaseSessionPayload) : Promise<Result<null, BridgeError>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("import_legacy_supabase_session", { payload }) };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-async isLegacyMigrationComplete() : Promise<Result<boolean, BridgeError>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("is_legacy_migration_complete") };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-async markLegacyMigrationComplete() : Promise<Result<null, BridgeError>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("mark_legacy_migration_complete") };
 } catch (e) {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
@@ -343,25 +231,6 @@ export type AdvancedSettings = { debug_mode?: boolean }
  */
 export type AppearanceSettings = { theme?: string; timer_theme?: string }
 /**
- * Supabase auth session record.
- * 
- * Distinct from the pomodoro `Session` by design — both types may
- * be imported at the same call site without conflict (the
- * data-model.md collision note renames this to `AuthSession`).
- */
-export type AuthSession = { access_token: string; refresh_token: string; user: AuthUser }
-/**
- * Supabase auth user record embedded in `AuthSession`.
- * 
- * `user_metadata` is intentionally `serde_json::Value` (not a typed
- * struct) because Supabase's metadata is open-ended — apps store
- * per-tenant fields like `full_name`, `avatar_url`, OAuth-provider
- * claims, etc. The Leptos consumers (`managers/auth.rs`) read
- * specific keys via `.get("full_name")` rather than imposing a
- * closed shape.
- */
-export type AuthUser = { id: string; email: string; user_metadata: JsonValue }
-/**
  * Typed error variant returned by every bridge command wrapper.
  * 
  * Wire form is externally-tagged JSON (the `kind` discriminator carries the
@@ -376,8 +245,8 @@ export type BridgeError =
  */
 { kind: "bridge_unavailable" } | 
 /**
- * The caller is in a state where the command is invalid (e.g., a
- * Supabase command without an active session).
+ * The caller is in a state where the command is invalid (reserved
+ * for future auth-gated paths; no current producer).
  */
 { kind: "not_authenticated" } | 
 /**
@@ -411,96 +280,6 @@ export type BridgeError =
  */
 { kind: "internal"; msg: string }
 export type JsonValue = null | boolean | number | string | JsonValue[] | Partial<{ [key in string]: JsonValue }>
-/**
- * JS-era `pomodoro-history` localStorage shape — a vec of `Session`
- * records, the same shape the post-cutover history.json on disk
- * uses (FR-005). Empty vec is the cold-start no-op shape.
- */
-export type LegacyHistoryPayload = { history: Session[] }
-/**
- * JS-era `presto_manual_sessions` localStorage shape — a vec of
- * `ManualSession` records, identical to the post-cutover
- * `manual_sessions.json` shape on disk.
- */
-export type LegacyManualSessionsPayload = { sessions: ManualSession[] }
-/**
- * JS-era `pomodoro-settings` localStorage shape, plus the four
- * preference flags split out into separate keys
- * (`theme-preference`, `timer-theme-preference`,
- * `presto_auto_check_updates`).
- * 
- * The core settings JSON shape is identical to the post-cutover
- * `Settings` record (FR-005 — no on-disk shape change), so we
- * reuse `Settings` as the embedded core. The four preference flags
- * are flattened on top because the JS era stored each in its own
- * localStorage key rather than inside the settings JSON; the
- * Tauri-side `import_legacy_settings` handler folds them into the
- * existing `Settings` shape (theme/timer-theme are not yet
- * represented in `Settings` and are dropped on import — they live
- * as user preferences in a later phase, per data-model.md §"Legacy
- * localStorage migration" disposition table).
- */
-export type LegacySettingsPayload = { 
-/**
- * `pomodoro-settings` localStorage key parsed as the post-cutover
- * `Settings` JSON (FR-005 — round-trip without migration).
- */
-settings: Settings | null; 
-/**
- * `theme-preference` localStorage key (e.g. `"auto"`, `"dark"`,
- * `"light"`).
- */
-theme_preference: string | null; 
-/**
- * `timer-theme-preference` localStorage key (e.g. `"espresso"`).
- */
-timer_theme_preference: string | null; 
-/**
- * `presto_auto_check_updates` localStorage key, parsed as bool.
- */
-auto_check_updates: boolean | null }
-/**
- * JS-era `presto-tags` localStorage shape — a vec of `Tag` records,
- * identical to the post-cutover `tags.json` shape on disk.
- */
-export type LegacyTagsPayload = { tags: Tag[] }
-/**
- * JS-era `pomodoro-tasks` localStorage shape — a vec of `Task`
- * records, identical to the post-cutover `tasks.json` shape on disk.
- */
-export type LegacyTasksPayload = { tasks: Task[] }
-/**
- * JS-era user-state flags.
- * 
- * The boolean / string preferences that live as bare localStorage
- * values rather than inside a JSON blob. Per data-model.md
- * §"Legacy localStorage migration", these fold into the `Settings`
- * user-state slice on the Rust side.
- * 
- * `pomodoro-session` is the active-session snapshot for cross-launch
- * resume (`Session` shape). Carried as `Option<Session>` so the
- * handler can persist it via the existing `save_session_data` path
- * when present.
- */
-export type LegacyUserStatePayload = { 
-/**
- * `presto-guest-mode` localStorage key, parsed as bool.
- */
-guest_mode: boolean | null; 
-/**
- * `presto-auth-seen` localStorage key, parsed as bool.
- */
-auth_seen: boolean | null; 
-/**
- * `presto-skipped-versions` localStorage key — the JS era stored
- * a JSON-encoded `Vec<String>` here. Empty vec when absent.
- */
-skipped_versions: string[]; 
-/**
- * `pomodoro-session` localStorage key parsed as the post-cutover
- * `Session` shape.
- */
-active_session: Session | null }
 /**
  * User-entered manual session record.
  * 
@@ -630,16 +409,13 @@ export type SessionType = "focus" | "break" | "longBreak" | "custom"
  * independent settings toggle exposed in the UI; restructuring
  * would not match the JSON shape on disk or the settings page.
  */
-export type Settings = { shortcuts: ShortcutSettings; timer: TimerSettings; notifications: NotificationSettings; advanced?: AdvancedSettings; appearance?: AppearanceSettings; autostart: boolean; analytics_enabled?: boolean; hide_icon_on_close?: boolean; status_bar_display: StatusBarDisplay; 
+export type Settings = { shortcuts: ShortcutSettings; timer: TimerSettings; notifications: NotificationSettings; advanced?: AdvancedSettings; appearance?: AppearanceSettings; autostart: boolean; hide_icon_on_close?: boolean; status_bar_display: StatusBarDisplay; 
 /**
- * Phase 4e R-002 user-state slice — folded into `Settings` so
- * the JS-era `presto-guest-mode` / `presto-auth-seen` /
- * `presto-skipped-versions` localStorage flags survive cutover.
- * Each field is `#[serde(default)]` so 0.4.x settings JSONs
- * predating this widening still deserialise into the cold-start
- * shape.
+ * Update versions the user has dismissed from the update-banner.
+ * `#[serde(default)]` so 0.4.x settings JSONs predating this field
+ * still deserialise into the cold-start shape.
  */
-guest_mode?: boolean; auth_seen?: boolean; skipped_versions?: string[] }
+skipped_versions?: string[] }
 /**
  * Keyboard-shortcut bindings bundle.
  * 
@@ -672,23 +448,6 @@ export type StatusBarDisplay =
  * `hide_status_bar: true` setting.
  */
 "icon-only"
-/**
- * JS-era Supabase auth token shape persisted at
- * `window.localStorage["sb-<project-ref>-auth-token"]`.
- * 
- * Distinct from `AuthSession` in two ways: (a) it carries
- * `expires_at` (Unix epoch seconds, supabase-js convention) which
- * the Rust-side persisted shape does not yet store, and (b) it is
- * transition-only and slated for removal one minor version after
- * cutover.
- */
-export type SupabaseSessionPayload = { access_token: string; refresh_token: string; 
-/**
- * Unix epoch seconds, supabase-js convention. Carried for wire
- * fidelity; the Tauri handler ignores it (the post-cutover
- * session re-derives expiry on next refresh).
- */
-expires_at: string; user: AuthUser }
 /**
  * User-defined tag attached to sessions and manual entries.
  * 

@@ -22,8 +22,8 @@ evolution and gets used every day.
 A native desktop pomodoro timer: focus / short-break / long-break cycles,
 task list bound to the active session, history and weekly statistics, audio
 + system notifications, global keyboard shortcuts. Cross-platform via Tauri
-(macOS / Windows / Linux). Single-user, local data. Optional Supabase sync
-for accessing the same history from a second machine, opt-in.
+(macOS / Windows / Linux). Single-user, fully local. No accounts, no sync,
+no telemetry — your data never leaves the machine.
 
 ### Core workflows
 
@@ -42,8 +42,8 @@ for accessing the same history from a second machine, opt-in.
 
 ### What's *not* in scope
 
-- Multi-tenant SaaS, billing, paid tiers — this is a personal tool with
-  optional cloud sync, not a product line.
+- Accounts, sign-in, cloud sync, telemetry — local-only is a feature.
+- Multi-tenant SaaS, billing, paid tiers — this is a personal tool.
 - Team / collaboration features — calendars and shared boards belong in
   other apps.
 - Mobile — Tauri Mobile is technically possible but the form factor
@@ -63,10 +63,9 @@ Benefits realized:
 ## Domain & constraints
 
 - **Single-user, local data.** Tauri's app-data directory holds sessions,
-  tasks, tags, settings. localStorage is a bounded fallback for non-Tauri
-  contexts (dev server, e2e mock).
-- **Optional Supabase sync.** Guest mode is first-class; sign-in unlocks
-  cross-device history but never gates the timer.
+  tasks, tags, settings. No network egress for user data.
+- **Zero-account.** No sign-in, no profile, no guest-vs-authed
+  distinction. Every install is one user, one machine.
 - **Update path matters.** Existing installed users surviving every
   release is a real constraint (Tauri auto-updater); upstream
   compatibility with `murdercode/presto` is not.
@@ -76,12 +75,11 @@ Benefits realized:
 | Layer | Stack |
 |---|---|
 | Frontend | Leptos (CSR + WASM) |
-| Build | Trunk / cargo-leptos |
+| Build | Trunk |
 | Frontend tests | wasm-bindgen-test |
 | E2E | Playwright (chromium) |
-| Visual regression | 14 PNG baselines |
+| Visual regression | PNG baselines |
 | Backend | Rust (Tauri 2.x) |
-| Auth (optional) | Supabase Rust SDK / direct REST |
 
 ## Roadmap (rough)
 
@@ -93,11 +91,9 @@ In order, each as its own focused build cycle:
 3. **Lockfile / supply-chain hardening** — pre-commit hook for
    manifest-vs-lock drift (issue #22 wontfix proposal); after-cutover this
    becomes Cargo-only.
-4. **Sync robustness** — auth-related flows, conflict resolution for
-   sessions edited on two devices while offline.
-5. **Theme system** — formalize the theme-loader code-gen path; document
+4. **Theme system** — formalize the theme-loader code-gen path; document
    the contract for adding a theme.
-6. **Mobile reconsideration** — only if Tauri Mobile reaches a point where
+5. **Mobile reconsideration** — only if Tauri Mobile reaches a point where
    the form factor + always-on requirement work; not a near-term goal.
 
 Each step keeps the existing app fully usable; no flag-day breakages, no
