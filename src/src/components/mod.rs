@@ -20,8 +20,11 @@
 // inline.
 
 pub mod browser_clock;
-pub mod calendar;
+pub mod daily;
+pub mod icon;
 pub mod settings;
+pub mod stats;
 pub mod tasks;
 pub mod timer;
 pub mod update_notification;
+pub mod utils;

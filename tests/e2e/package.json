@@ -11,6 +11,7 @@
     "install-browsers": "playwright install --with-deps chromium"
   },
   "devDependencies": {
+    "@phosphor-icons/web": "^2.1.2",
     "@playwright/test": "^1.49.0"
   }
 }

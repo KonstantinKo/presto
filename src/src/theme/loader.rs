@@ -309,10 +309,16 @@ mod tests {
                     .is_some_and(|ext| ext.eq_ignore_ascii_case("png"))
             })
             .collect();
+        // Spec 003 Phase 7: `calendar.png` is replaced by 4 per-period
+        // Statistics frames (`statistics-{daily,weekly,monthly,yearly}`)
+        // + 1 `daily.png` (the new Daily drill-down view) per FR-043 /
+        // CHK040. Net: 12 - 1 + 5 = 16. The `tag-manager.png` baseline
+        // is regenerated in place (12 icons; 3 remix + 9 Phosphor; 5
+        // emoji entries removed) per amended FR-044 — count unchanged.
         assert_eq!(
             pngs.len(),
-            12,
-            "expected 12 visual-regression baselines per spec 001 SC-001; \
+            16,
+            "expected 16 visual-regression baselines per spec 003 FR-043; \
              found {} (re-captures > 2 escalate per Principle IV)",
             pngs.len(),
         );

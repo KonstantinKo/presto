@@ -1,0 +1,83 @@
+/* Bar chart + sessions timeline blocks — feature 003. */
+
+.bar-chart-card {
+  background: var(--card-bg, rgba(255, 255, 255, 0.04));
+  border: 1px solid var(--card-border, rgba(255, 255, 255, 0.08));
+  border-radius: 8px;
+  padding: 16px;
+  margin-top: 16px;
+}
+
+.bar-chart-container {
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+  height: 200px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--axis-color, rgba(255, 255, 255, 0.12));
+}
+
+.bar-column {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  min-width: 0; /* allow flex shrink for monthly's 31 bars */
+}
+
+.bar {
+  width: 70%;
+  max-width: 32px;
+  background: var(--focus-color, #f56565);
+  border-radius: 2px 2px 0 0;
+  transition: background 150ms ease;
+  min-height: 1px; /* zero-value bars still render as a thin tick */
+}
+
+.bar:hover {
+  background: var(--focus-color-hover, #ed5556);
+}
+
+.bar-label {
+  font-size: 11px;
+  color: var(--text-light, rgba(255, 255, 255, 0.6));
+  text-align: center;
+  white-space: nowrap;
+}
+
+.bar-chart-footer {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 12px;
+  font-size: 13px;
+  color: var(--text-secondary, rgba(255, 255, 255, 0.7));
+}
+
+.bar-chart-total {
+  font-weight: 600;
+}
+
+/* Sessions-timeline session blocks (Daily view). The track itself is
+   styled by `timeline.css`; here we just position the blocks. */
+.session-block {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-radius: 2px;
+  transition: opacity 150ms ease;
+}
+
+.session-block-focus {
+  background: var(--focus-color, #f56565);
+  opacity: 0.85;
+}
+
+.session-block-break {
+  background: var(--break-color, #4ade80);
+  opacity: 0.6;
+}
+
+.session-block:hover {
+  opacity: 1;
+}

@@ -99,3 +99,45 @@
   transform: translateY(-2px);
   box-shadow: 0 6px 20px color-mix(in srgb, var(--long-break-color) 30%, transparent);
 }
+/* Feature 003 Bundle D: state-aware control-button tooltips.
+ *
+ * `#stop-btn`, `#play-pause-btn`, `#skip-btn` each carry a
+ * `data-tooltip` attribute bound to a derived `Signal<String>` off the
+ * engine's mode + run-state (see `components::timer` —
+ * `StopButtonState`, `PlayPauseButtonState`, `SkipButtonState`). The
+ * pseudo-element renders below the button on hover OR keyboard focus
+ * (FR-030 / SC-013) with a transition ≤150 ms (no native ~1 s delay).
+ *
+ * The CSS attribute-selector approach is intentional: the visible
+ * tooltip text reads from the same DOM attribute the e2e suite
+ * inspects, so wasm-bindgen-test (FR-031) and Playwright (SC-013)
+ * agree on the source of truth. The verbose `aria-label` and `title`
+ * pair stay decoupled per CHK041.
+ */
+.control-btn[data-tooltip] {
+  position: relative;
+}
+
+.control-btn[data-tooltip]::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  left: 50%;
+  top: calc(100% + 8px);
+  transform: translateX(-50%);
+  background: var(--text-color, #1a1a1a);
+  color: var(--bg-color, #ffffff);
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 150ms ease;
+  z-index: 50;
+}
+
+.control-btn[data-tooltip]:hover::after,
+.control-btn[data-tooltip]:focus-visible::after {
+  opacity: 1;
+}

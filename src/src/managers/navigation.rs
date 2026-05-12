@@ -25,6 +25,12 @@ pub enum NavView {
     Tasks,
     History,
     Calendar,
+    /// Daily drill-down view — Feature 003 Bundle B. Sits between
+    /// Calendar (Statistics) and Settings in the sidebar; routes to
+    /// `id="daily-view"`. Independent of the Statistics view's
+    /// `Cursor::Daily` (per data-model.md §"Independence from
+    /// Statistics's `Cursor::Daily`").
+    Daily,
     Tags,
     Settings(SettingsTab),
 }
@@ -209,6 +215,7 @@ mod tests {
             NavView::Tasks,
             NavView::History,
             NavView::Calendar,
+            NavView::Daily,
             NavView::Tags,
             NavView::Settings(SettingsTab::General),
         ];

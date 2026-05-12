@@ -18,7 +18,7 @@ export async function gotoTimer(page) {
 /**
  * Clicks a sidebar navigation button by its title attribute.
  * @param {import('@playwright/test').Page} page
- * @param {'Timer'|'Calendar'|'Settings'} title
+ * @param {'Timer'|'Calendar'|'Daily'|'Settings'} title
  */
 export async function tapTab(page, title) {
   if (title === "Timer") {
@@ -27,6 +27,12 @@ export async function tapTab(page, title) {
   } else if (title === "Calendar") {
     await page.locator("#calendar-nav").click();
     await page.waitForSelector("#calendar-view:not(.hidden)", { timeout: 5000 });
+  } else if (title === "Daily") {
+    // Feature 003 Bundle B: new Daily drill-down view. `#daily-nav`
+    // is the new fourth nav button (FR-012); `#daily-view` is its
+    // route container (FR-013).
+    await page.locator("#daily-nav").click();
+    await page.waitForSelector("#daily-view:not(.hidden)", { timeout: 5000 });
   } else if (title === "Settings") {
     await page.locator("#settings-nav").click();
     await page.waitForSelector("#settings-view:not(.hidden)", { timeout: 5000 });

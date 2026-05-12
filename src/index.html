@@ -25,6 +25,14 @@
          leaf name only (`dist/icons/`). -->
     <link data-trunk rel="copy-dir" href="assets/icons" data-target-path="assets/icons" />
     <link rel="stylesheet" href="/assets/icons/remixicon.css" />
+    <!-- Feature 003 (T002): vendor the Phosphor regular-weight webfont
+         same-origin. The `copy-dir` directive above already mirrors the
+         whole `assets/icons/` tree (including `assets/icons/phosphor/`)
+         into `dist/`; this second stylesheet link loads the Phosphor
+         CSS so `.ph` / `.ph-*` class lookups bind to the font face.
+         No CDN URL — _blockExternal fixture in the e2e suite must keep
+         passing (FR-022 / Principle II). -->
+    <link rel="stylesheet" href="/assets/icons/phosphor/phosphor.css" />
     <!-- Phase 6 (T241): wire the app stylesheet into the Trunk dist.
          `style/main.css` uses CSS `@import` to chain the per-component
          sheets — Trunk's `rel="css"` directive is a verbatim copy

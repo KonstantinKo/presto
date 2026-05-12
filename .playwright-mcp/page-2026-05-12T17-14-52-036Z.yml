@@ -1,0 +1,272 @@
+- generic [active] [ref=e1]:
+  - navigation [ref=e2]:
+    - generic [ref=e4]:
+      - generic [ref=e5]:
+        - link "AGENTEX AGENTEX v1.0" [ref=e6] [cursor=pointer]:
+          - /url: /
+          - generic [ref=e7]: AGENTEX AGENTEX
+          - generic [ref=e8]: v1.0
+        - generic [ref=e9]:
+          - link "Dashboard" [ref=e10] [cursor=pointer]:
+            - /url: /
+            - img [ref=e11]
+            - generic [ref=e16]: Dashboard
+          - link "Queue" [ref=e17] [cursor=pointer]:
+            - /url: /queue
+            - img [ref=e18]
+            - generic [ref=e19]: Queue
+          - link "Projects" [ref=e20] [cursor=pointer]:
+            - /url: /projects
+            - img [ref=e21]
+            - generic [ref=e23]: Projects
+      - generic [ref=e27]: SYSTEM ONLINE
+  - main [ref=e28]:
+    - generic [ref=e30]:
+      - generic [ref=e31]:
+        - generic [ref=e32]:
+          - heading "SYSTEM OVERVIEW SYSTEM OVERVIEW" [level=1] [ref=e33]
+          - paragraph [ref=e34]: Real-time monitoring and control interface
+        - generic [ref=e38]: 0/3 AGENTS ONLINE
+      - generic [ref=e39]:
+        - generic [ref=e40]:
+          - generic [ref=e41]:
+            - generic [ref=e42]: ACTIVE AGENTS
+            - img [ref=e44]
+          - generic [ref=e49]: 0/3
+        - generic [ref=e50]:
+          - generic [ref=e51]:
+            - generic [ref=e52]: QUEUE DEPTH
+            - img [ref=e54]
+          - generic [ref=e55]: "0"
+        - generic [ref=e56]:
+          - generic [ref=e57]:
+            - generic [ref=e58]: WAITING SLOTS
+            - img [ref=e60]
+          - generic [ref=e63]: "0"
+        - link "PROJECTS 9" [ref=e64] [cursor=pointer]:
+          - /url: /projects
+          - generic [ref=e65]:
+            - generic [ref=e66]: PROJECTS
+            - img [ref=e68]
+          - generic [ref=e70]: "9"
+      - generic [ref=e71]:
+        - heading "AGENT POOL" [level=2] [ref=e73]:
+          - img [ref=e74]
+          - text: AGENT POOL
+        - generic [ref=e77]:
+          - generic [ref=e78]:
+            - img [ref=e80]
+            - generic [ref=e84]: AGENT-01
+          - generic [ref=e86]:
+            - img [ref=e88]
+            - generic [ref=e92]: AGENT-02
+          - generic [ref=e94]:
+            - img [ref=e96]
+            - generic [ref=e100]: AGENT-03
+      - generic [ref=e102]:
+        - generic [ref=e103]:
+          - heading "ACTIVE JOBS" [level=2] [ref=e104]:
+            - img [ref=e105]
+            - text: ACTIVE JOBS
+          - generic [ref=e108]: 4 RUNNING
+        - generic [ref=e111]:
+          - link "presto Vision Audit (full run) STEP final_verification" [ref=e112] [cursor=pointer]:
+            - /url: /jobs/303
+            - img [ref=e116]
+            - generic [ref=e119]:
+              - generic [ref=e120]: presto
+              - generic [ref=e121]: Vision Audit (full run)
+            - generic [ref=e122]:
+              - generic [ref=e123]: STEP
+              - generic [ref=e124]: final_verification
+          - link "vermiet Maintenance (full run) STEP testing_gaps" [ref=e125] [cursor=pointer]:
+            - /url: /jobs/299
+            - img [ref=e129]
+            - generic [ref=e132]:
+              - generic [ref=e133]: vermiet
+              - generic [ref=e134]: Maintenance (full run)
+            - generic [ref=e135]:
+              - generic [ref=e136]: STEP
+              - generic [ref=e137]: testing_gaps
+          - link "agentex Maintenance (full run) STEP code_simplify" [ref=e138] [cursor=pointer]:
+            - /url: /jobs/254
+            - img [ref=e142]
+            - generic [ref=e145]:
+              - generic [ref=e146]: agentex
+              - generic [ref=e147]: Maintenance (full run)
+            - generic [ref=e148]:
+              - generic [ref=e149]: STEP
+              - generic [ref=e150]: code_simplify
+          - 'link "confessing-scripture #125 Practice tutorial overlay after onboarding STEP await_review" [ref=e151] [cursor=pointer]':
+            - /url: /jobs/219
+            - img [ref=e155]
+            - generic [ref=e158]:
+              - generic [ref=e159]: "confessing-scripture #125"
+              - generic [ref=e160]: Practice tutorial overlay after onboarding
+            - generic [ref=e161]:
+              - generic [ref=e162]: STEP
+              - generic [ref=e163]: await_review
+      - generic [ref=e164]:
+        - generic [ref=e165]:
+          - heading "QUEUE 0" [level=2] [ref=e166]:
+            - img [ref=e167]
+            - text: QUEUE
+            - generic [ref=e168]: "0"
+          - link "VIEW ALL" [ref=e169] [cursor=pointer]:
+            - /url: /queue
+            - text: VIEW ALL
+            - img [ref=e170]
+        - generic [ref=e173]:
+          - img [ref=e174]
+          - paragraph [ref=e176]: QUEUE EMPTY
+          - paragraph [ref=e177]: No pending jobs
+      - generic [ref=e178]:
+        - generic [ref=e179]:
+          - heading "PROJECTS" [level=2] [ref=e180]:
+            - img [ref=e181]
+            - text: PROJECTS
+          - link "MANAGE" [ref=e183] [cursor=pointer]:
+            - /url: /projects
+            - text: MANAGE
+            - img [ref=e184]
+        - generic [ref=e188]:
+          - link "good-fun https://github.com/KonstantinKo/good-fun ACTIVE" [ref=e189] [cursor=pointer]:
+            - /url: /projects/5
+            - generic [ref=e190]:
+              - generic [ref=e191]: good-fun
+              - generic "No recent activity" [ref=e192]:
+                - img [ref=e193]
+            - generic [ref=e195]: https://github.com/KonstantinKo/good-fun
+            - generic [ref=e197]: ACTIVE
+          - link "rosary https://github.com/KonstantinKo/rosary ACTIVE" [ref=e198] [cursor=pointer]:
+            - /url: /projects/3
+            - generic [ref=e199]:
+              - generic [ref=e200]: rosary
+              - generic "No recent activity" [ref=e201]:
+                - img [ref=e202]
+            - generic [ref=e204]: https://github.com/KonstantinKo/rosary
+            - generic [ref=e206]: ACTIVE
+          - link "vermiet git@github.com:KonstantinKo/vermiet.git ACTIVE" [ref=e207] [cursor=pointer]:
+            - /url: /projects/11
+            - generic [ref=e209]: vermiet
+            - generic [ref=e210]: git@github.com:KonstantinKo/vermiet.git
+            - generic [ref=e212]: ACTIVE
+          - link "agentex https://github.com/KonstantinKo/agentex.git ACTIVE" [ref=e213] [cursor=pointer]:
+            - /url: /projects/7
+            - generic [ref=e214]:
+              - generic [ref=e215]: agentex
+              - generic "No recent activity" [ref=e216]:
+                - img [ref=e217]
+            - generic [ref=e219]: https://github.com/KonstantinKo/agentex.git
+            - generic [ref=e221]: ACTIVE
+          - link "confessing-scripture git@github.com:KonstantinKo/confessing-scripture.git ACTIVE" [ref=e222] [cursor=pointer]:
+            - /url: /projects/9
+            - generic [ref=e223]:
+              - generic [ref=e224]: confessing-scripture
+              - generic "No recent activity" [ref=e225]:
+                - img [ref=e226]
+            - generic [ref=e228]: git@github.com:KonstantinKo/confessing-scripture.git
+            - generic [ref=e230]: ACTIVE
+          - link "ccoaching git@github.com:KonstantinKo/ccoaching.git ACTIVE" [ref=e231] [cursor=pointer]:
+            - /url: /projects/10
+            - generic [ref=e232]:
+              - generic [ref=e233]: ccoaching
+              - generic "No recent activity" [ref=e234]:
+                - img [ref=e235]
+            - generic [ref=e237]: git@github.com:KonstantinKo/ccoaching.git
+            - generic [ref=e239]: ACTIVE
+          - link "biblemem https://github.com/KonstantinKo/biblemem ACTIVE" [ref=e240] [cursor=pointer]:
+            - /url: /projects/6
+            - generic [ref=e241]:
+              - generic [ref=e242]: biblemem
+              - generic "No recent activity" [ref=e243]:
+                - img [ref=e244]
+            - generic [ref=e246]: https://github.com/KonstantinKo/biblemem
+            - generic [ref=e248]: ACTIVE
+          - link "vati-gpt https://github.com/KonstantinKo/vati-gpt ACTIVE" [ref=e249] [cursor=pointer]:
+            - /url: /projects/8
+            - generic [ref=e250]:
+              - generic [ref=e251]: vati-gpt
+              - generic "No recent activity" [ref=e252]:
+                - img [ref=e253]
+            - generic [ref=e255]: https://github.com/KonstantinKo/vati-gpt
+            - generic [ref=e257]: ACTIVE
+          - link "presto https://github.com/KonstantinKo/presto ACTIVE" [ref=e258] [cursor=pointer]:
+            - /url: /projects/12
+            - generic [ref=e260]: presto
+            - generic [ref=e261]: https://github.com/KonstantinKo/presto
+            - generic [ref=e263]: ACTIVE
+      - generic [ref=e264]:
+        - heading "RECENT ACTIVITY" [level=2] [ref=e266]:
+          - img [ref=e267]
+          - text: RECENT ACTIVITY
+        - generic [ref=e270]:
+          - 'link "presto [PR #51] Feature 002: per-session titles + configurable long-break + opt-in metronome 12:51" [ref=e271] [cursor=pointer]':
+            - /url: /jobs/310
+            - img [ref=e273]
+            - generic [ref=e276]:
+              - generic [ref=e277]: presto
+              - generic [ref=e278]: "[PR #51] Feature 002: per-session titles + configurable long-break + opt-in metronome"
+            - generic [ref=e279]:
+              - img [ref=e280]
+              - text: 12:51
+          - 'link "presto [PR #50] Local-only pivot: strip auth/sync/team/analytics 08:33" [ref=e283] [cursor=pointer]':
+            - /url: /jobs/309
+            - img [ref=e285]
+            - generic [ref=e288]:
+              - generic [ref=e289]: presto
+              - generic [ref=e290]: "[PR #50] Local-only pivot: strip auth/sync/team/analytics"
+            - generic [ref=e291]:
+              - img [ref=e292]
+              - text: 08:33
+          - 'link "presto [PR #49] Fix regression sweep + shared IPC types crate + tauri-specta wiring 06:50" [ref=e295] [cursor=pointer]':
+            - /url: /jobs/308
+            - img [ref=e297]
+            - generic [ref=e300]:
+              - generic [ref=e301]: presto
+              - generic [ref=e302]: "[PR #49] Fix regression sweep + shared IPC types crate + tauri-specta wiring"
+            - generic [ref=e303]:
+              - img [ref=e304]
+              - text: 06:50
+          - 'link "presto #39 Restore secondary UI affordances, semantic HTML attributes, and the missing display font 15:05" [ref=e307] [cursor=pointer]':
+            - /url: /jobs/306
+            - img [ref=e309]
+            - generic [ref=e312]:
+              - generic [ref=e313]: "presto #39"
+              - generic [ref=e314]: Restore secondary UI affordances, semantic HTML attributes, and the missing display font
+            - generic [ref=e315]:
+              - img [ref=e316]
+              - text: 15:05
+          - 'link "presto #40 macOS: system tray icon does not appear at runtime 14:25" [ref=e319] [cursor=pointer]':
+            - /url: /jobs/307
+            - img [ref=e321]
+            - generic [ref=e324]:
+              - generic [ref=e325]: "presto #40"
+              - generic [ref=e326]: "macOS: system tray icon does not appear at runtime"
+            - generic [ref=e327]:
+              - img [ref=e328]
+              - text: 14:25
+      - generic [ref=e331]:
+        - generic [ref=e332]:
+          - heading "AUTO-UPDATE" [level=2] [ref=e333]:
+            - img [ref=e334]
+            - text: AUTO-UPDATE
+          - button "CHECK NOW" [ref=e337] [cursor=pointer]
+        - generic [ref=e339]:
+          - generic [ref=e340]:
+            - text: STATUS
+            - generic [ref=e342]: IDLE
+          - generic [ref=e343]:
+            - text: VERSION
+            - generic [ref=e344]: 45e531f
+          - generic [ref=e345]:
+            - text: LAST CHECK
+            - generic [ref=e346]: 17:14
+          - generic [ref=e347]:
+            - text: UPDATES
+            - generic [ref=e348]: "0"
+  - contentinfo [ref=e349]:
+    - generic [ref=e350]:
+      - generic [ref=e351]: AGENTIC DEVELOPER WORKFLOW SERVER
+      - generic [ref=e352]: │
+      - generic [ref=e353]: OPERATIONAL

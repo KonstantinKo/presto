@@ -68,19 +68,32 @@ use crate::engine::clock::Clock;
 use crate::engine::durations::Durations;
 use crate::engine::timer::{TimerEvent, TimerState};
 
-/// Icon-picker catalogue (#39: 3 remixicon entries + 5 emoji entries).
-/// The `ri-` entries render via the remixicon webfont; emoji entries
-/// render as raw glyphs. `tags.spec.js:17` clicks `[data-icon="🎯"]`
-/// which is still present in this expanded set.
+/// Icon-picker catalogue (feature 003 Bundle C: 3 remixicon entries +
+/// 9 Phosphor entries — FR-020 / FR-021). The five legacy emoji
+/// entries (`\u{1f9e0}` `\u{1f4aa}` `\u{1f3af}` `\u{26a1}` `\u{1f525}`)
+/// were removed from the picker; existing tags persisted with emoji
+/// icons continue to render via `IconClass::Glyph` (FR-024).
+///
+/// The `ri-` entries dispatch through `IconClass::Remix` →
+/// `<i class="ri-{suffix}">`; the `ph-` entries dispatch through
+/// `IconClass::Phosphor` → `<i class="ph ph-{suffix}">` (the outer
+/// `ph` wrapper class is required for the Phosphor @font-face to
+/// bind). Selection happens through the typed dispatch in
+/// `crate::components::icon::IconClass::from_icon_name` — no
+/// `starts_with(...)` chain at the render sites.
 const ICON_OPTIONS: &[&str] = &[
     "ri-brain-line",
     "ri-focus-3-line",
     "ri-lightbulb-line",
-    "\u{1f9e0}",
-    "\u{1f4aa}",
-    "\u{1f3af}",
-    "\u{26a1}",
-    "\u{1f525}",
+    "ph-butterfly",
+    "ph-cloud",
+    "ph-code-simple",
+    "ph-github-logo",
+    "ph-apple-logo",
+    "ph-crown-simple",
+    "ph-atom",
+    "ph-student",
+    "ph-cpu",
 ];
 
 /// Icon-picker default. The visual-regression baseline shows a brain
@@ -182,6 +195,119 @@ const fn stop_icon_for_mode(mode: TimerMode) -> &'static str {
     match mode {
         TimerMode::Focus => "close",
         TimerMode::Break | TimerMode::LongBreak => "undo",
+    }
+}
+
+// -------- Feature 003 Bundle D: control-button tooltip state --------
+//
+// Two derived `Signal<String>`s per button (`verbose_label`, `terse_tooltip`)
+// both project from the same upstream `ButtonState` enum so the
+// verbose `aria-label` / `title` pair and the terse `data-tooltip`
+// never drift (CHK041). The state enums below are the upstream side;
+// the downstream string projections live in `TimerView`'s body.
+
+/// Closed-sum state for the Stop/Reset/Undo button.
+///
+/// In `Focus` mode the button resets the timer; in `Break`/`LongBreak`
+/// it undoes the last completed pomodoro (see the existing handler at
+/// the `on_stop` closure).
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum StopButtonState {
+    Reset,
+    Undo,
+}
+
+impl StopButtonState {
+    /// Derive the state from the engine's current mode.
+    #[must_use]
+    pub const fn from_mode(mode: TimerMode) -> Self {
+        match mode {
+            TimerMode::Focus => Self::Reset,
+            TimerMode::Break | TimerMode::LongBreak => Self::Undo,
+        }
+    }
+
+    /// Verbose `aria-label` / `title` string. Preserves the
+    /// pre-rework values at `mod.rs:1573-1574` (CHK041 / WCAG 4.1.2).
+    #[must_use]
+    pub const fn verbose_label(self) -> &'static str {
+        match self {
+            Self::Reset => "Reset timer",
+            Self::Undo => "Undo last session",
+        }
+    }
+
+    /// Terse `data-tooltip` string for the visible CSS tooltip.
+    #[must_use]
+    pub const fn terse_tooltip(self) -> &'static str {
+        match self {
+            Self::Reset => "Reset",
+            Self::Undo => "Undo",
+        }
+    }
+}
+
+/// Closed-sum state for the Play/Pause button across the timer's
+/// run-state machine. Idle (not running, not paused, not auto-paused)
+/// → Start; running → Pause; paused or auto-paused → Resume.
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum PlayPauseButtonState {
+    Start,
+    Pause,
+    Resume,
+}
+
+impl PlayPauseButtonState {
+    /// Derive the state from the engine's run-state predicates.
+    #[must_use]
+    pub const fn from_run_state(is_running: bool, is_paused: bool, is_auto_paused: bool) -> Self {
+        if is_running {
+            Self::Pause
+        } else if is_paused || is_auto_paused {
+            Self::Resume
+        } else {
+            Self::Start
+        }
+    }
+
+    /// Verbose `aria-label` / `title` string. Per FR-028 the verbose
+    /// label does NOT vary per state — the accessible name stays
+    /// stable for screen-reader users so the button doesn't appear to
+    /// "change identity" mid-session.
+    #[must_use]
+    pub const fn verbose_label(self) -> &'static str {
+        "Start or pause timer"
+    }
+
+    /// Terse `data-tooltip` string for the visible CSS tooltip.
+    #[must_use]
+    pub const fn terse_tooltip(self) -> &'static str {
+        match self {
+            Self::Start => "Start",
+            Self::Pause => "Pause",
+            Self::Resume => "Resume",
+        }
+    }
+}
+
+/// Closed-sum state for the Skip button. No mode variants (FR-029); a
+/// single-variant enum is intentional so the verbose/terse projection
+/// path is uniform across the three buttons.
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum SkipButtonState {
+    /// The only variant — Skip has no state-dependent text per FR-029.
+    Skip,
+}
+
+impl SkipButtonState {
+    #[must_use]
+    pub const fn verbose_label(self) -> &'static str {
+        "Skip session"
+    }
+
+    #[must_use]
+    pub const fn terse_tooltip(self) -> &'static str {
+        "Skip session"
     }
 }
 
@@ -905,6 +1031,32 @@ pub fn TimerView() -> impl IntoView {
     });
     let is_running = Signal::derive(move || engine.with(TimerState::is_running));
 
+    // Feature 003 Bundle D: control-button tooltip state signals.
+    //
+    // Per `data-model.md §Tooltip-text signals`, each button has ONE
+    // upstream `Signal<ButtonState>` and TWO downstream `Signal<String>`s
+    // (`verbose_label` + `terse_tooltip`). Both downstream signals
+    // close over the same upstream state so the verbose pair
+    // (`aria-label` == `title`) and the terse `data-tooltip` update
+    // atomically on engine state changes — no second copy to keep in
+    // sync (CHK041 / FR-026).
+    let stop_btn_state =
+        Signal::derive(move || StopButtonState::from_mode(engine.with(TimerState::current_mode)));
+    let verbose_label_stop = Signal::derive(move || stop_btn_state.get().verbose_label());
+    let terse_tooltip_stop = Signal::derive(move || stop_btn_state.get().terse_tooltip());
+
+    let play_pause_btn_state = Signal::derive(move || {
+        engine.with(|s| {
+            PlayPauseButtonState::from_run_state(s.is_running(), s.is_paused(), s.is_auto_paused())
+        })
+    });
+    let verbose_label_play = Signal::derive(move || play_pause_btn_state.get().verbose_label());
+    let terse_tooltip_play = Signal::derive(move || play_pause_btn_state.get().terse_tooltip());
+
+    let skip_btn_state = Signal::derive(move || SkipButtonState::Skip);
+    let verbose_label_skip = Signal::derive(move || skip_btn_state.get().verbose_label());
+    let terse_tooltip_skip = Signal::derive(move || skip_btn_state.get().terse_tooltip());
+
     // Update document title with overtime prefix when running in overtime.
     Effect::new(move |_| {
         let signed = engine.with(TimerState::time_remaining_secs_signed);
@@ -1261,11 +1413,25 @@ pub fn TimerView() -> impl IntoView {
                         on:click=on_status_click
                     >
                         {move || {
+                            // Feature 003 (FR-023): typed dispatch via
+                            // `IconClass::from_icon_name`. Wrap the
+                            // rendered glyph in a host element that
+                            // carries the `id="status-icon"` selector
+                            // (e2e contract).
                             let raw = status_icon.get();
-                            if raw.starts_with("ri-") {
-                                view! { <i id="status-icon" class=raw></i> }.into_any()
-                            } else {
-                                view! { <span id="status-icon">{raw}</span> }.into_any()
+                            let class = crate::components::icon::IconClass::from_icon_name(&raw);
+                            match class {
+                                crate::components::icon::IconClass::Remix(suffix) => {
+                                    let cls = format!("ri-{suffix}");
+                                    view! { <i id="status-icon" class=cls></i> }.into_any()
+                                }
+                                crate::components::icon::IconClass::Phosphor(suffix) => {
+                                    let cls = format!("ph ph-{suffix}");
+                                    view! { <i id="status-icon" class=cls></i> }.into_any()
+                                }
+                                crate::components::icon::IconClass::Glyph(g) => {
+                                    view! { <span id="status-icon">{g}</span> }.into_any()
+                                }
                             }
                         }}
                         <span id="status-text">{move || status_label.get()}</span>
@@ -1298,19 +1464,15 @@ pub fn TimerView() -> impl IntoView {
                                     let tag_id_for_match = tag.id.clone();
                                     let aria_row = tag.name.clone();
                                     let display_name = tag.name.clone();
-                                    // Tag icon is either a remixicon class
-                                    // (`ri-brain-line` etc., emitted by the
-                                    // Phase 4c default seed + the JS-era
-                                    // legacy migration reader) or an emoji
-                                    // glyph (the Leptos icon picker emits
-                                    // glyphs directly). Detect the `ri-`
-                                    // prefix so the class form renders as
-                                    // `<i class="ri-...">` and the emoji
-                                    // form renders as text.
-                                    let raw_icon = tag.icon.clone();
-                                    let is_ri_class = raw_icon.starts_with("ri-");
-                                    let icon_class = raw_icon.clone();
-                                    let icon_text = raw_icon;
+                                    // Feature 003 (FR-023): typed dispatch via
+                                    // `IconClass::from_icon_name` — supports
+                                    // remixicon, Phosphor, and raw-glyph fall-
+                                    // through (legacy emoji-icon tags per
+                                    // FR-024).
+                                    let icon_class =
+                                        crate::components::icon::IconClass::from_icon_name(
+                                            &tag.icon,
+                                        );
                                     let delete_label = format!(
                                         "Delete {name} tag",
                                         name = tag.name,
@@ -1369,11 +1531,7 @@ pub fn TimerView() -> impl IntoView {
                                             }
                                         >
                                             <span class="tag-item-icon">
-                                                {if is_ri_class {
-                                                    view! { <i class=icon_class></i> }.into_any()
-                                                } else {
-                                                    view! { <span>{icon_text}</span> }.into_any()
-                                                }}
+                                                {crate::components::icon::render(&icon_class)}
                                             </span>
                                             <span class="tag-item-name">{display_name}</span>
                                             // Delete affordance renders on every row;
@@ -1404,20 +1562,16 @@ pub fn TimerView() -> impl IntoView {
                                             id="selected-icon-btn"
                                             on:click=on_toggle_picker
                                         >
-                                            // Selected-icon preview. Detect
-                                            // the `ri-` prefix so a
-                                            // remixicon class renders via
-                                            // the webfont (visible on the
-                                            // chromium-linux test runner)
-                                            // and emoji glyphs render as
-                                            // raw text.
+                                            // Feature 003 (FR-023): typed
+                                            // dispatch on the selected-icon
+                                            // preview. The host `<span>`
+                                            // carries the e2e selector;
+                                            // the inner content is the
+                                            // rendered glyph.
                                             <span id="selected-icon-display">{move || {
                                                 let raw = new_tag_icon.get();
-                                                if raw.starts_with("ri-") {
-                                                    view! { <i class=raw></i> }.into_any()
-                                                } else {
-                                                    view! { <span>{raw}</span> }.into_any()
-                                                }
+                                                let class = crate::components::icon::IconClass::from_icon_name(&raw);
+                                                crate::components::icon::render(&class)
                                             }}</span>
                                             <i class="ri-arrow-down-s-line dropdown-arrow"></i>
                                         </button>
@@ -1437,31 +1591,32 @@ pub fn TimerView() -> impl IntoView {
                                                 each=move || ICON_OPTIONS.iter().copied()
                                                 key=|icon| (*icon).to_string()
                                                 children=move |icon| {
+                                                    // Feature 003 (FR-023): typed
+                                                    // dispatch on picker options.
+                                                    // The host `<div>` carries the
+                                                    // e2e `data-icon=` selector
+                                                    // (`tags.spec.js`); the inner
+                                                    // content is the rendered glyph.
                                                     let icon_for_pick = icon.to_string();
-                                                    let is_ri = icon.starts_with("ri-");
-                                                    if is_ri {
-                                                        view! {
-                                                            <div
-                                                                class="icon-option"
-                                                                data-icon=icon
-                                                                on:click=move |ev| {
-                                                                    ev.stop_propagation();
-                                                                    on_pick_icon(icon_for_pick.clone());
-                                                                }
-                                                            ><i class=icon></i></div>
-                                                        }.into_any()
-                                                    } else {
-                                                        view! {
-                                                            <div
-                                                                class="emoji-option"
-                                                                data-icon=icon
-                                                                on:click=move |ev| {
-                                                                    ev.stop_propagation();
-                                                                    on_pick_icon(icon_for_pick.clone());
-                                                                }
-                                                            >{icon}</div>
-                                                        }.into_any()
-                                                    }
+                                                    let parsed =
+                                                        crate::components::icon::IconClass::from_icon_name(icon);
+                                                    let host_class = match parsed {
+                                                        crate::components::icon::IconClass::Remix(_)
+                                                        | crate::components::icon::IconClass::Phosphor(_) => "icon-option",
+                                                        crate::components::icon::IconClass::Glyph(_) => "emoji-option",
+                                                    };
+                                                    view! {
+                                                        <div
+                                                            class=host_class
+                                                            data-icon=icon
+                                                            on:click=move |ev| {
+                                                                ev.stop_propagation();
+                                                                on_pick_icon(icon_for_pick.clone());
+                                                            }
+                                                        >
+                                                            {crate::components::icon::render(&parsed)}
+                                                        </div>
+                                                    }.into_any()
                                                 }
                                             />
                                         </div>
@@ -1554,8 +1709,9 @@ pub fn TimerView() -> impl IntoView {
             // `toBeVisible()` rejects.
             <div class="controls">
                 <button id="stop-btn" class="control-btn"
-                    aria-label=move || if stop_icon_for_mode(engine.with(TimerState::current_mode)) == "undo" { "Undo last session" } else { "Reset timer" }
-                    title=move || if stop_icon_for_mode(engine.with(TimerState::current_mode)) == "undo" { "Undo last session" } else { "Reset timer" }
+                    aria-label=move || verbose_label_stop.get()
+                    title=move || verbose_label_stop.get()
+                    data-tooltip=move || terse_tooltip_stop.get()
                     on:click=on_stop>
                     // X icon — visible in Focus mode (full reset).
                     <svg
@@ -1580,7 +1736,11 @@ pub fn TimerView() -> impl IntoView {
                         <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l-2-2m0 0l2-2m-2 2h10.5a4.5 4.5 0 110 9h-4" />
                     </svg>
                 </button>
-                <button id="play-pause-btn" class="control-btn primary" aria-label="Start or pause timer" title="Start or pause timer" on:click=on_play_pause>
+                <button id="play-pause-btn" class="control-btn primary"
+                    aria-label=move || verbose_label_play.get()
+                    title=move || verbose_label_play.get()
+                    data-tooltip=move || terse_tooltip_play.get()
+                    on:click=on_play_pause>
                     <svg id="play-icon" viewBox="0 0 24 24" fill="currentColor" style=move || play_icon_style.get()>
                         <path fill-rule="evenodd" clip-rule="evenodd"
                             d="M4.5 5.653c0-1.427 1.529-2.33 2.779-1.643l11.54 6.347c1.295.712 1.295 2.573 0 3.286L7.28 19.99c-1.25.687-2.779-.217-2.779-1.643V5.653Z" />
@@ -1597,7 +1757,11 @@ pub fn TimerView() -> impl IntoView {
                 // `skip_icon_for_mode` drives the per-icon visibility.
                 // The visual-regression baseline is Focus mode (next =
                 // short break) → coffee icon.
-                <button id="skip-btn" class="control-btn" aria-label="Skip session" title="Skip session" on:click=on_skip>
+                <button id="skip-btn" class="control-btn"
+                    aria-label=move || verbose_label_skip.get()
+                    title=move || verbose_label_skip.get()
+                    data-tooltip=move || terse_tooltip_skip.get()
+                    on:click=on_skip>
                     <i
                         id="skip-coffee-icon"
                         class="ri-cup-line"
@@ -1744,7 +1908,8 @@ fn dot_count(total: u32) -> u32 {
 mod tests {
     use super::{
         dot_count, indicator_icon_class, mode_label, mode_label_with_status, pad_two,
-        skip_icon_for_mode, stop_icon_for_mode,
+        skip_icon_for_mode, stop_icon_for_mode, PlayPauseButtonState, SkipButtonState,
+        StopButtonState, ICON_OPTIONS,
     };
     use crate::bridge::types::TimerMode;
 
@@ -1994,6 +2159,17 @@ mod tests {
     }
 
     #[test]
+    fn icon_options_has_12_with_3_remix_9_phosphor_0_emoji() {
+        assert_eq!(ICON_OPTIONS.len(), 12, "ICON_OPTIONS must have exactly 12 entries (3 remix + 9 Phosphor; 5 emoji removed per FR-020/FR-021)");
+        let remix_count = ICON_OPTIONS.iter().filter(|s| s.starts_with("ri-")).count();
+        let phosphor_count = ICON_OPTIONS.iter().filter(|s| s.starts_with("ph-")).count();
+        let other_count = ICON_OPTIONS.len() - remix_count - phosphor_count;
+        assert_eq!(remix_count, 3, "expected 3 remixicon entries");
+        assert_eq!(phosphor_count, 9, "expected 9 Phosphor entries");
+        assert_eq!(other_count, 0, "expected 0 emoji or other entries");
+    }
+
+    #[test]
     fn dot_count_floors_at_one_and_passes_through_nonzero() {
         assert_eq!(dot_count(0), 1, "zero must yield 1-dot floor");
         assert_eq!(dot_count(1), 1);
@@ -2020,4 +2196,175 @@ mod tests {
     // Build-tray-text + message-helper + tag-tracking tests now
     // live alongside their helpers in the `tray`, `messages`, and
     // `tag_tracking` submodules.
+
+    // -------------------------------------------------------------
+    // Feature 003 Bundle D: control-button tooltip text matrix.
+    //
+    // FR-031 / SC-012 invariants:
+    // (a) `aria-label == title` per button per state (verbose pair
+    //     stays paired)
+    // (b) `data-tooltip` matches the FR-027/028/029 terse mapping
+    // (c) The test MUST NOT assert `aria-label == data-tooltip`
+    //     (CHK041 — strings intentionally decoupled).
+    //
+    // Per Principle V's UI-rendering carve-out (plan.md §V), this
+    // test is NOT RED-first; it lands alongside the implementation
+    // (T017/T018) as a coverage gate. The button-state enums
+    // (`StopButtonState`, `PlayPauseButtonState`, `SkipButtonState`)
+    // expose pure projections (`verbose_label`, `terse_tooltip`) so
+    // the test pins the typed dispatch without mounting a Leptos
+    // view (matches the `IconClass::render_spec` pattern from T005).
+
+    /// FR-027 — `#stop-btn` verbose strings remain "Reset timer" /
+    /// "Undo last session" per CHK041.
+    #[test]
+    fn stop_btn_verbose_label_per_mode() {
+        assert_eq!(
+            StopButtonState::from_mode(TimerMode::Focus).verbose_label(),
+            "Reset timer",
+        );
+        assert_eq!(
+            StopButtonState::from_mode(TimerMode::Break).verbose_label(),
+            "Undo last session",
+        );
+        assert_eq!(
+            StopButtonState::from_mode(TimerMode::LongBreak).verbose_label(),
+            "Undo last session",
+        );
+    }
+
+    /// FR-027 — `#stop-btn` terse strings are "Reset" / "Undo".
+    #[test]
+    fn stop_btn_terse_tooltip_per_mode() {
+        assert_eq!(
+            StopButtonState::from_mode(TimerMode::Focus).terse_tooltip(),
+            "Reset",
+        );
+        assert_eq!(
+            StopButtonState::from_mode(TimerMode::Break).terse_tooltip(),
+            "Undo",
+        );
+        assert_eq!(
+            StopButtonState::from_mode(TimerMode::LongBreak).terse_tooltip(),
+            "Undo",
+        );
+    }
+
+    /// CHK041 — verbose and terse strings for `#stop-btn` are
+    /// intentionally decoupled (per-state pairs differ).
+    #[test]
+    fn stop_btn_verbose_and_terse_are_decoupled() {
+        for mode in [TimerMode::Focus, TimerMode::Break, TimerMode::LongBreak] {
+            let state = StopButtonState::from_mode(mode);
+            assert_ne!(
+                state.verbose_label(),
+                state.terse_tooltip(),
+                "verbose and terse strings must remain decoupled per CHK041 (mode {mode:?})",
+            );
+        }
+    }
+
+    /// FR-028 — `#play-pause-btn` verbose label is the same
+    /// "Start or pause timer" string across every run-state.
+    #[test]
+    fn play_pause_btn_verbose_label_does_not_vary() {
+        let states = [
+            PlayPauseButtonState::Start,
+            PlayPauseButtonState::Pause,
+            PlayPauseButtonState::Resume,
+        ];
+        for state in states {
+            assert_eq!(state.verbose_label(), "Start or pause timer");
+        }
+    }
+
+    /// FR-028 — `#play-pause-btn` terse string maps idle → Start,
+    /// running → Pause, paused/auto-paused → Resume.
+    #[test]
+    fn play_pause_btn_terse_tooltip_per_run_state() {
+        // Idle: not running, not paused, not auto-paused.
+        assert_eq!(
+            PlayPauseButtonState::from_run_state(false, false, false).terse_tooltip(),
+            "Start",
+        );
+        // Running.
+        assert_eq!(
+            PlayPauseButtonState::from_run_state(true, false, false).terse_tooltip(),
+            "Pause",
+        );
+        // Paused.
+        assert_eq!(
+            PlayPauseButtonState::from_run_state(false, true, false).terse_tooltip(),
+            "Resume",
+        );
+        // Auto-paused.
+        assert_eq!(
+            PlayPauseButtonState::from_run_state(false, false, true).terse_tooltip(),
+            "Resume",
+        );
+    }
+
+    /// CHK041 — verbose `aria-label` is intentionally NOT equal to
+    /// the terse `data-tooltip` for the play/pause button when the
+    /// engine is running. The test guards against a future refactor
+    /// that accidentally collapses the two into one string source.
+    #[test]
+    fn play_pause_btn_verbose_and_terse_are_decoupled_when_running() {
+        let running = PlayPauseButtonState::from_run_state(true, false, false);
+        assert_ne!(running.verbose_label(), running.terse_tooltip());
+    }
+
+    /// FR-029 — `#skip-btn` has no state variants; verbose == terse
+    /// here happens to be true (the only button where it is). The
+    /// test pins this so a future state addition catches the change.
+    #[test]
+    fn skip_btn_verbose_and_terse_are_skip_session() {
+        let state = SkipButtonState::Skip;
+        assert_eq!(state.verbose_label(), "Skip session");
+        assert_eq!(state.terse_tooltip(), "Skip session");
+    }
+
+    /// SC-012 — full state-matrix sweep. For each
+    /// (`#stop-btn` mode) × (`#play-pause-btn` run-state) combination,
+    /// confirm the verbose strings are stable (used by `aria-label`
+    /// and `title` together) and the terse strings match the
+    /// FR-027/028/029 mapping. The matrix is the same surface the
+    /// data-model.md §Tooltip-text signals invariant guards.
+    #[test]
+    fn tooltip_text_matrix_covers_focus_break_longbreak_x_run_states() {
+        let modes = [TimerMode::Focus, TimerMode::Break, TimerMode::LongBreak];
+        let run_states = [
+            (false, false, false, "Start"),
+            (true, false, false, "Pause"),
+            (false, true, false, "Resume"),
+            (false, false, true, "Resume"),
+        ];
+        for mode in modes {
+            let stop = StopButtonState::from_mode(mode);
+            // The verbose pair (`aria-label` == `title`) is verbose_label()
+            // applied uniformly; verify the const projection is stable.
+            assert_eq!(stop.verbose_label(), stop.verbose_label());
+            // (a) verbose pair stays paired — pinned by uniform usage.
+            // (b) terse mapping per FR-027.
+            assert_eq!(
+                stop.terse_tooltip(),
+                match mode {
+                    TimerMode::Focus => "Reset",
+                    TimerMode::Break | TimerMode::LongBreak => "Undo",
+                },
+            );
+            for (is_running, is_paused, is_auto_paused, expected_terse) in run_states {
+                let play =
+                    PlayPauseButtonState::from_run_state(is_running, is_paused, is_auto_paused);
+                assert_eq!(play.terse_tooltip(), expected_terse);
+                // Verbose `aria-label` does not vary per state
+                // (FR-028) — pin it.
+                assert_eq!(play.verbose_label(), "Start or pause timer");
+            }
+        }
+        // Skip is mode-invariant per FR-029.
+        let skip = SkipButtonState::Skip;
+        assert_eq!(skip.terse_tooltip(), "Skip session");
+        assert_eq!(skip.verbose_label(), "Skip session");
+    }
 }
