@@ -59,7 +59,8 @@ pub struct ManualSession {
 
 #[cfg(test)]
 mod tests {
-    use super::Session;
+    use super::{ManualSession, Session};
+    use crate::timer::SessionType;
 
     /// T001 (RED → T002 GREEN): `Session::title` round-trips Some,
     /// None, and the legacy no-key shape. The legacy fixture mirrors
@@ -89,5 +90,37 @@ mod tests {
         let legacy = r#"{"completed_pomodoros":3,"total_focus_time":4500,"current_session":4,"date":"Sat May 10 2026"}"#;
         let s3: Session = serde_json::from_str(legacy).expect("deserialise legacy");
         assert!(s3.title.is_none());
+    }
+
+    /// T003 (RED → T004 GREEN): `ManualSession::title` round-trips
+    /// Some, None, and the legacy no-key shape. Feature 002 spec
+    /// FR-002 + data-model.md §Evolution 2.
+    #[test]
+    fn manual_session_title_round_trip_some_none_missing_key() {
+        let m1 = ManualSession {
+            id: "ms-001".to_string(),
+            session_type: SessionType::Focus,
+            duration: 25,
+            start_time: "09:00".to_string(),
+            end_time: "09:25".to_string(),
+            notes: None,
+            created_at: "2026-05-10T09:00:00Z".to_string(),
+            date: "Sat May 10 2026".to_string(),
+            tags: None,
+            title: Some("Catch-up — Spec 002".to_string()),
+        };
+        let json1 = serde_json::to_string(&m1).expect("serialise Some");
+        let m1_back: ManualSession = serde_json::from_str(&json1).expect("deserialise Some");
+        assert_eq!(m1_back.title.as_deref(), Some("Catch-up — Spec 002"));
+
+        let m2 = ManualSession { title: None, ..m1 };
+        let json2 = serde_json::to_string(&m2).expect("serialise None");
+        let m2_back: ManualSession = serde_json::from_str(&json2).expect("deserialise None");
+        assert!(m2_back.title.is_none());
+
+        // Legacy — pre-bundle manual-sessions.json without the title key.
+        let legacy = r#"{"id":"ms-001","session_type":"focus","duration":25,"start_time":"09:00","end_time":"09:25","notes":null,"created_at":"2026-05-10T09:00:00Z","date":"Sat May 10 2026","tags":null}"#;
+        let m3: ManualSession = serde_json::from_str(legacy).expect("deserialise legacy");
+        assert!(m3.title.is_none());
     }
 }
