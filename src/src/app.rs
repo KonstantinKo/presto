@@ -38,9 +38,9 @@ use crate::bridge::events::{
 use crate::bridge::types::TimerMode;
 use crate::bridge::types::{Session, Settings, UpdateAvailablePayload};
 use crate::components::browser_clock::BrowserClock;
-use crate::components::calendar::CalendarView;
 use crate::components::daily::DailyView;
 use crate::components::settings::SettingsView;
+use crate::components::stats::StatisticsView;
 use crate::components::tasks::TasksView;
 use crate::components::timer::TimerView;
 use crate::components::update_notification::UpdateNotification;
@@ -597,7 +597,7 @@ pub fn App() -> impl IntoView {
                     class:active=move || is_calendar.get()
                     id="calendar-nav"
                     data-view="calendar"
-                    title="Calendar"
+                    title="Statistics"
                     attr:aria-current=move || if is_calendar.get() { "page" } else { "" }
                     on:click=on_calendar_nav
                 >
@@ -658,7 +658,7 @@ pub fn App() -> impl IntoView {
                 <TimerView/>
             </div>
             <div class="view-host" class:hidden=move || !is_calendar.get()>
-                <CalendarView/>
+                <StatisticsView/>
             </div>
             <div class="view-host" class:hidden=move || !is_daily.get()>
                 <DailyView/>
