@@ -282,7 +282,8 @@ mod tests {
             "appearance": {"theme": "auto", "timer_theme": "espresso"},
             "autostart": false,
             "hide_icon_on_close": false,
-            "status_bar_display": "default"
+            "status_bar_display": "default",
+            "skipped_versions": []
         }"#;
         let mgr = SettingsManager::ingest_raw_json(canonical).expect("must deserialise");
         assert!(

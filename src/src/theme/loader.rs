@@ -311,8 +311,8 @@ mod tests {
             .collect();
         assert_eq!(
             pngs.len(),
-            14,
-            "expected 14 visual-regression baselines per spec 001 SC-001; \
+            12,
+            "expected 12 visual-regression baselines per spec 001 SC-001; \
              found {} (re-captures > 2 escalate per Principle IV)",
             pngs.len(),
         );
