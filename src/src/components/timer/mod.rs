@@ -289,10 +289,7 @@ fn random_uuid() -> String {
     web_sys::window()
         .as_ref()
         .and_then(|w| w.crypto().ok())
-        .map_or_else(
-            || format!("tag-{}", BrowserClock.now_ms()),
-            |c| c.random_uuid(),
-        )
+        .map_or_else(|| BrowserClock.now_ms().to_string(), |c| c.random_uuid())
 }
 
 #[cfg(not(target_arch = "wasm32"))]
