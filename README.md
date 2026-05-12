@@ -217,7 +217,7 @@ A time-management method developed by Francesco Cirillo:
 | `(cd src && wasm-pack test --node)` | Run wasm-bindgen-tests (DOM-bound logic) |
 | `(cd src && trunk build)` | Build the WASM bundle without packaging |
 | `(cd tests/e2e && npx playwright test)` | Run the e2e suite (17 specs) |
-| `(cd tests/e2e && npx playwright test visual-regression.spec.js)` | Run the visual regression suite (14 baselines) |
+| `(cd tests/e2e && npx playwright test visual-regression.spec.js)` | Run the visual regression suite (12 baselines) |
 | `cargo clippy --workspace --all-targets -- -D warnings` | Strict-deny pedantic + nursery lint pass |
 | `cargo fmt --all --check` | Formatting drift check |
 | `bash scripts/check-mock-drift.sh` | Confirm `tauriMock.js` mirrors the Tauri handler set |
