@@ -342,7 +342,7 @@ impl From<SettingsOnDisk> for Settings {
 
 #[cfg(test)]
 mod tests {
-    use super::{StatusBarDisplay, TimerSettings};
+    use super::{NotificationSettings, StatusBarDisplay, TimerSettings};
 
     /// T005 (RED → T006 GREEN): pre-002 settings.json without the
     /// `sessions_per_long_break` field deserialises to the default `4`
@@ -373,6 +373,46 @@ mod tests {
         let json = serde_json::to_string(&s).expect("serialise");
         let back: TimerSettings = serde_json::from_str(&json).expect("deserialise");
         assert_eq!(back.sessions_per_long_break, 3);
+    }
+
+    /// T007 (RED → T008 GREEN): pre-002 settings.json
+    /// `NotificationSettings` (lacking `metronome` and
+    /// `metronome_bpm`) deserialises to `false` / `60` per SC-011 /
+    /// data-model.md §Evolution 4. The legacy fixture omits the two
+    /// new fields (so the assertion exercises the default path); it
+    /// also omits the `#[serde(default)]` fields auto_start_focus and
+    /// allow_continuous_sessions so existing defaults stay covered.
+    #[test]
+    fn metronome_default_off_60_bpm() {
+        let legacy = r#"{
+            "desktop_notifications": true,
+            "sound_notifications": true,
+            "auto_start_timer": true,
+            "smart_pause": false,
+            "smart_pause_timeout": 30
+        }"#;
+        let n: NotificationSettings = serde_json::from_str(legacy).expect("deserialise legacy");
+        assert!(!n.metronome);
+        assert_eq!(n.metronome_bpm, 60);
+        // Existing post-001 defaults still apply on the legacy load
+        // path — the new fields don't disturb them.
+        assert!(!n.auto_start_focus);
+        assert!(!n.allow_continuous_sessions);
+    }
+
+    /// T007 (RED → T008 GREEN): custom metronome enable + BPM
+    /// round-trip byte-stable through serde.
+    #[test]
+    fn metronome_custom_round_trips() {
+        let n = NotificationSettings {
+            metronome: true,
+            metronome_bpm: 90,
+            ..NotificationSettings::default()
+        };
+        let json = serde_json::to_string(&n).expect("serialise");
+        let back: NotificationSettings = serde_json::from_str(&json).expect("deserialise");
+        assert!(back.metronome);
+        assert_eq!(back.metronome_bpm, 90);
     }
 
     #[test]
