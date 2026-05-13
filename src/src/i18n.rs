@@ -58,4 +58,14 @@ mod tests {
     fn resolve_initial_locale_none_unsupported_falls_back_to_en() {
         assert_eq!(resolve_initial_locale(None, ["zh-CN"]), Locale::En);
     }
+
+    /// T013 [RED → T015 GREEN]: `None` + empty OS list (simulates
+    /// `navigator.languages` unavailable or returning empty) falls
+    /// back to `Locale::En`. No panic, no error. Spec FR-010 / Story
+    /// 4 AC 5.
+    #[test]
+    fn resolve_initial_locale_none_empty_os_falls_back_to_en() {
+        let empty: [&str; 0] = [];
+        assert_eq!(resolve_initial_locale(None, empty), Locale::En);
+    }
 }
