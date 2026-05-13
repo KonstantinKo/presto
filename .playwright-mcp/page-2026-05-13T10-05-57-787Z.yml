@@ -1,0 +1,364 @@
+- generic [active] [ref=e1]:
+  - navigation [ref=e2]:
+    - generic [ref=e4]:
+      - generic [ref=e5]:
+        - link "AGENTEX AGENTEX v1.0" [ref=e6] [cursor=pointer]:
+          - /url: /
+          - generic [ref=e7]: AGENTEX AGENTEX
+          - generic [ref=e8]: v1.0
+        - generic [ref=e9]:
+          - link "Dashboard" [ref=e10] [cursor=pointer]:
+            - /url: /
+            - img [ref=e11]
+            - generic [ref=e16]: Dashboard
+          - link "Queue" [ref=e17] [cursor=pointer]:
+            - /url: /queue
+            - img [ref=e18]
+            - generic [ref=e19]: Queue
+          - link "Projects" [ref=e20] [cursor=pointer]:
+            - /url: /projects
+            - img [ref=e21]
+            - generic [ref=e23]: Projects
+      - generic [ref=e27]: SYSTEM ONLINE
+  - main [ref=e28]:
+    - generic [ref=e30]:
+      - generic [ref=e31]:
+        - generic [ref=e32]:
+          - heading "presto presto" [level=1] [ref=e33]
+          - link "KonstantinKo/presto" [ref=e34] [cursor=pointer]:
+            - /url: https://github.com/KonstantinKo/presto
+            - img [ref=e35]
+            - text: KonstantinKo/presto
+        - generic [ref=e37]:
+          - link "PREVIEW" [ref=e38] [cursor=pointer]:
+            - /url: /projects/12/preview
+            - img [ref=e39]
+            - text: PREVIEW
+          - button "ENABLE APK" [ref=e41] [cursor=pointer]:
+            - img [ref=e42]
+            - text: ENABLE APK
+          - button "MAINTENANCE" [ref=e45] [cursor=pointer]:
+            - img [ref=e46]
+            - text: MAINTENANCE
+          - button "AUDIT" [ref=e49] [cursor=pointer]:
+            - img [ref=e50]
+            - text: AUDIT
+            - img [ref=e52]
+          - button "PAUSE" [ref=e54] [cursor=pointer]:
+            - img [ref=e55]
+            - text: PAUSE
+          - link "EDIT" [ref=e58] [cursor=pointer]:
+            - /url: /projects/12/edit
+            - img [ref=e59]
+            - text: EDIT
+      - generic [ref=e62]:
+        - generic [ref=e63]:
+          - heading "DETAILS" [level=2] [ref=e65]:
+            - img [ref=e66]
+            - text: DETAILS
+          - generic [ref=e69]:
+            - generic [ref=e70]:
+              - term [ref=e71]: STATUS
+              - definition [ref=e72]:
+                - generic [ref=e73]: ACTIVE
+            - generic [ref=e74]:
+              - term [ref=e75]: WORKFLOW
+              - definition [ref=e76]: plan_and_build
+            - generic [ref=e77]:
+              - term [ref=e78]: PRIORITY BOOST
+              - definition [ref=e79]: "+0"
+            - generic [ref=e80]:
+              - term [ref=e81]: LAST COMPLETED
+              - definition [ref=e82]: 2026-05-13 09:00
+            - generic [ref=e83]:
+              - term [ref=e84]: AUTO-MAINTENANCE
+              - definition [ref=e85]: 10/7
+        - generic [ref=e86]:
+          - heading "CONFIGURATION" [level=2] [ref=e88]:
+            - img [ref=e89]
+            - text: CONFIGURATION
+          - generic [ref=e93]: "{}"
+      - generic [ref=e94]:
+        - generic [ref=e95]:
+          - heading "JOB HISTORY" [level=2] [ref=e96]:
+            - img [ref=e97]
+            - text: JOB HISTORY
+          - generic [ref=e99]: 20 TOTAL
+        - table [ref=e101]:
+          - rowgroup [ref=e102]:
+            - row "ISSUE TYPE STATUS QUEUED COMPLETED" [ref=e103]:
+              - columnheader "ISSUE" [ref=e104]:
+                - generic [ref=e105]: ISSUE
+              - columnheader "TYPE" [ref=e106]:
+                - generic [ref=e107]: TYPE
+              - columnheader "STATUS" [ref=e108]:
+                - generic [ref=e109]: STATUS
+              - columnheader "QUEUED" [ref=e110]:
+                - generic [ref=e111]: QUEUED
+              - columnheader "COMPLETED" [ref=e112]:
+                - generic [ref=e113]: COMPLETED
+          - rowgroup [ref=e114]:
+            - row "#56 Notification chime unreliable on macOS (start + transition sounds intermittent) BUG COMPLETED 2026-05-13 08:30 2026-05-13 09:00" [ref=e115] [cursor=pointer]:
+              - cell "#56 Notification chime unreliable on macOS (start + transition sounds intermittent)" [ref=e116]:
+                - generic [ref=e117]:
+                  - generic [ref=e118]: "#56"
+                  - generic [ref=e119]: Notification chime unreliable on macOS (start + transition sounds intermittent)
+              - cell "BUG" [ref=e120]:
+                - generic [ref=e121]:
+                  - img [ref=e122]
+                  - text: BUG
+              - cell "COMPLETED" [ref=e125]:
+                - generic [ref=e126]: COMPLETED
+              - cell "2026-05-13 08:30" [ref=e128]
+              - cell "2026-05-13 09:00" [ref=e129]
+            - 'row "[PR #55] feat: UI parity port from ramazanberkozbek/presto FEATURE COMPLETED 2026-05-13 06:55 2026-05-13 07:47" [ref=e130] [cursor=pointer]':
+              - 'cell "[PR #55] feat: UI parity port from ramazanberkozbek/presto" [ref=e131]':
+                - generic [ref=e133]: "[PR #55] feat: UI parity port from ramazanberkozbek/presto"
+              - cell "FEATURE" [ref=e134]:
+                - generic [ref=e135]:
+                  - img [ref=e136]
+                  - text: FEATURE
+              - cell "COMPLETED" [ref=e138]:
+                - generic [ref=e139]: COMPLETED
+              - cell "2026-05-13 06:55" [ref=e141]
+              - cell "2026-05-13 07:47" [ref=e142]
+            - 'row "[PR #52] feat: Statistics period tabs + Daily view + Phosphor icons + control tooltips (#003) FEATURE COMPLETED 2026-05-12 17:15 2026-05-12 18:48" [ref=e143] [cursor=pointer]':
+              - 'cell "[PR #52] feat: Statistics period tabs + Daily view + Phosphor icons + control tooltips (#003)" [ref=e144]':
+                - generic [ref=e146]: "[PR #52] feat: Statistics period tabs + Daily view + Phosphor icons + control tooltips (#003)"
+              - cell "FEATURE" [ref=e147]:
+                - generic [ref=e148]:
+                  - img [ref=e149]
+                  - text: FEATURE
+              - cell "COMPLETED" [ref=e151]:
+                - generic [ref=e152]: COMPLETED
+              - cell "2026-05-12 17:15" [ref=e154]
+              - cell "2026-05-12 18:48" [ref=e155]
+            - 'row "[PR #51] Feature 002: per-session titles + configurable long-break + opt-in metronome FEATURE COMPLETED 2026-05-12 11:51 2026-05-12 12:51" [ref=e156] [cursor=pointer]':
+              - 'cell "[PR #51] Feature 002: per-session titles + configurable long-break + opt-in metronome" [ref=e157]':
+                - generic [ref=e159]: "[PR #51] Feature 002: per-session titles + configurable long-break + opt-in metronome"
+              - cell "FEATURE" [ref=e160]:
+                - generic [ref=e161]:
+                  - img [ref=e162]
+                  - text: FEATURE
+              - cell "COMPLETED" [ref=e164]:
+                - generic [ref=e165]: COMPLETED
+              - cell "2026-05-12 11:51" [ref=e167]
+              - cell "2026-05-12 12:51" [ref=e168]
+            - 'row "[PR #50] Local-only pivot: strip auth/sync/team/analytics FEATURE COMPLETED 2026-05-12 07:59 2026-05-12 08:33" [ref=e169] [cursor=pointer]':
+              - 'cell "[PR #50] Local-only pivot: strip auth/sync/team/analytics" [ref=e170]':
+                - generic [ref=e172]: "[PR #50] Local-only pivot: strip auth/sync/team/analytics"
+              - cell "FEATURE" [ref=e173]:
+                - generic [ref=e174]:
+                  - img [ref=e175]
+                  - text: FEATURE
+              - cell "COMPLETED" [ref=e177]:
+                - generic [ref=e178]: COMPLETED
+              - cell "2026-05-12 07:59" [ref=e180]
+              - cell "2026-05-12 08:33" [ref=e181]
+            - 'row "[PR #49] Fix regression sweep + shared IPC types crate + tauri-specta wiring FEATURE COMPLETED 2026-05-11 20:37 2026-05-12 06:50" [ref=e182] [cursor=pointer]':
+              - 'cell "[PR #49] Fix regression sweep + shared IPC types crate + tauri-specta wiring" [ref=e183]':
+                - generic [ref=e185]: "[PR #49] Fix regression sweep + shared IPC types crate + tauri-specta wiring"
+              - cell "FEATURE" [ref=e186]:
+                - generic [ref=e187]:
+                  - img [ref=e188]
+                  - text: FEATURE
+              - cell "COMPLETED" [ref=e190]:
+                - generic [ref=e191]: COMPLETED
+              - cell "2026-05-11 20:37" [ref=e193]
+              - cell "2026-05-12 06:50" [ref=e194]
+            - 'row "#40 macOS: system tray icon does not appear at runtime BUG COMPLETED 2026-05-11 13:33 2026-05-11 14:25" [ref=e195] [cursor=pointer]':
+              - 'cell "#40 macOS: system tray icon does not appear at runtime" [ref=e196]':
+                - generic [ref=e197]:
+                  - generic [ref=e198]: "#40"
+                  - generic [ref=e199]: "macOS: system tray icon does not appear at runtime"
+              - cell "BUG" [ref=e200]:
+                - generic [ref=e201]:
+                  - img [ref=e202]
+                  - text: BUG
+              - cell "COMPLETED" [ref=e205]:
+                - generic [ref=e206]: COMPLETED
+              - cell "2026-05-11 13:33" [ref=e208]
+              - cell "2026-05-11 14:25" [ref=e209]
+            - row "#39 Restore secondary UI affordances, semantic HTML attributes, and the missing display font BUG COMPLETED 2026-05-11 13:28 2026-05-11 15:05" [ref=e210] [cursor=pointer]:
+              - cell "#39 Restore secondary UI affordances, semantic HTML attributes, and the missing display font" [ref=e211]:
+                - generic [ref=e212]:
+                  - generic [ref=e213]: "#39"
+                  - generic [ref=e214]: Restore secondary UI affordances, semantic HTML attributes, and the missing display font
+              - cell "BUG" [ref=e215]:
+                - generic [ref=e216]:
+                  - img [ref=e217]
+                  - text: BUG
+              - cell "COMPLETED" [ref=e220]:
+                - generic [ref=e221]: COMPLETED
+              - cell "2026-05-11 13:28" [ref=e223]
+              - cell "2026-05-11 15:05" [ref=e224]
+            - 'row "#38 Visual: mode-aware projections + active-state class bindings never wired BUG COMPLETED 2026-05-11 12:23 2026-05-11 13:03" [ref=e225] [cursor=pointer]':
+              - 'cell "#38 Visual: mode-aware projections + active-state class bindings never wired" [ref=e226]':
+                - generic [ref=e227]:
+                  - generic [ref=e228]: "#38"
+                  - generic [ref=e229]: "Visual: mode-aware projections + active-state class bindings never wired"
+              - cell "BUG" [ref=e230]:
+                - generic [ref=e231]:
+                  - img [ref=e232]
+                  - text: BUG
+              - cell "COMPLETED" [ref=e235]:
+                - generic [ref=e236]: COMPLETED
+              - cell "2026-05-11 12:23" [ref=e238]
+              - cell "2026-05-11 13:03" [ref=e239]
+            - 'row "#37 Timer engine: restore event-driven side effects + fix unit/clamp/timezone errors BUG COMPLETED 2026-05-11 06:08 2026-05-11 07:22" [ref=e240] [cursor=pointer]':
+              - 'cell "#37 Timer engine: restore event-driven side effects + fix unit/clamp/timezone errors" [ref=e241]':
+                - generic [ref=e242]:
+                  - generic [ref=e243]: "#37"
+                  - generic [ref=e244]: "Timer engine: restore event-driven side effects + fix unit/clamp/timezone errors"
+              - cell "BUG" [ref=e245]:
+                - generic [ref=e246]:
+                  - img [ref=e247]
+                  - text: BUG
+              - cell "COMPLETED" [ref=e250]:
+                - generic [ref=e251]: COMPLETED
+              - cell "2026-05-11 06:08" [ref=e253]
+              - cell "2026-05-11 07:22" [ref=e254]
+            - row "Vision Audit (full run) VISION AUDIT RUNNING 2026-05-11 01:20 -" [ref=e255] [cursor=pointer]:
+              - cell "Vision Audit (full run)" [ref=e256]:
+                - generic [ref=e258]: Vision Audit (full run)
+              - cell "VISION AUDIT" [ref=e259]:
+                - generic [ref=e260]:
+                  - img [ref=e261]
+                  - text: VISION AUDIT
+              - cell "RUNNING" [ref=e264]:
+                - generic [ref=e265]: RUNNING
+              - cell "2026-05-11 01:20" [ref=e267]
+              - cell "-" [ref=e268]
+            - row "Maintenance (full run) MAINTENANCE COMPLETED 2026-05-10 22:45 2026-05-11 01:20" [ref=e269] [cursor=pointer]:
+              - cell "Maintenance (full run)" [ref=e270]:
+                - generic [ref=e272]: Maintenance (full run)
+              - cell "MAINTENANCE" [ref=e273]:
+                - generic [ref=e274]:
+                  - img [ref=e275]
+                  - text: MAINTENANCE
+              - cell "COMPLETED" [ref=e277]:
+                - generic [ref=e278]: COMPLETED
+              - cell "2026-05-10 22:45" [ref=e280]
+              - cell "2026-05-11 01:20" [ref=e281]
+            - 'row "#36 Settings: complete the data-model and the read/write wires across the app BUG COMPLETED 2026-05-10 21:33 2026-05-10 22:45" [ref=e282] [cursor=pointer]':
+              - 'cell "#36 Settings: complete the data-model and the read/write wires across the app" [ref=e283]':
+                - generic [ref=e284]:
+                  - generic [ref=e285]: "#36"
+                  - generic [ref=e286]: "Settings: complete the data-model and the read/write wires across the app"
+              - cell "BUG" [ref=e287]:
+                - generic [ref=e288]:
+                  - img [ref=e289]
+                  - text: BUG
+              - cell "COMPLETED" [ref=e292]:
+                - generic [ref=e293]: COMPLETED
+              - cell "2026-05-10 21:33" [ref=e295]
+              - cell "2026-05-10 22:45" [ref=e296]
+            - 'row "[PR #34] 001: Leptos frontend migration — Phase 4f ripple cleanup + R-004 bridge wiring FEATURE COMPLETED 2026-05-10 16:14 2026-05-10 17:12" [ref=e297] [cursor=pointer]':
+              - 'cell "[PR #34] 001: Leptos frontend migration — Phase 4f ripple cleanup + R-004 bridge wiring" [ref=e298]':
+                - generic [ref=e300]: "[PR #34] 001: Leptos frontend migration — Phase 4f ripple cleanup + R-004 bridge wiring"
+              - cell "FEATURE" [ref=e301]:
+                - generic [ref=e302]:
+                  - img [ref=e303]
+                  - text: FEATURE
+              - cell "COMPLETED" [ref=e305]:
+                - generic [ref=e306]: COMPLETED
+              - cell "2026-05-10 16:14" [ref=e308]
+              - cell "2026-05-10 17:12" [ref=e309]
+            - 'row "[PR #25] Retrofit spec-kit: constitution v1.0.0, gates, AGENTS.md, VISION.md FEATURE COMPLETED 2026-05-09 20:45 2026-05-09 20:47" [ref=e310] [cursor=pointer]':
+              - 'cell "[PR #25] Retrofit spec-kit: constitution v1.0.0, gates, AGENTS.md, VISION.md" [ref=e311]':
+                - generic [ref=e313]: "[PR #25] Retrofit spec-kit: constitution v1.0.0, gates, AGENTS.md, VISION.md"
+              - cell "FEATURE" [ref=e314]:
+                - generic [ref=e315]:
+                  - img [ref=e316]
+                  - text: FEATURE
+              - cell "COMPLETED" [ref=e318]:
+                - generic [ref=e319]: COMPLETED
+              - cell "2026-05-09 20:45" [ref=e321]
+              - cell "2026-05-09 20:47" [ref=e322]
+            - row "#23 Add automated visual regression testing (Playwright visual comparison) FEATURE COMPLETED 2026-05-09 16:12 2026-05-09 16:57" [ref=e323] [cursor=pointer]:
+              - cell "#23 Add automated visual regression testing (Playwright visual comparison)" [ref=e324]:
+                - generic [ref=e325]:
+                  - generic [ref=e326]: "#23"
+                  - generic [ref=e327]: Add automated visual regression testing (Playwright visual comparison)
+              - cell "FEATURE" [ref=e328]:
+                - generic [ref=e329]:
+                  - img [ref=e330]
+                  - text: FEATURE
+              - cell "COMPLETED" [ref=e332]:
+                - generic [ref=e333]: COMPLETED
+              - cell "2026-05-09 16:12" [ref=e335]
+              - cell "2026-05-09 16:57" [ref=e336]
+            - row "#20 Full-coverage E2E test suite — all screens + major flows FEATURE COMPLETED 2026-05-09 13:52 2026-05-09 16:12" [ref=e337] [cursor=pointer]:
+              - cell "#20 Full-coverage E2E test suite — all screens + major flows" [ref=e338]:
+                - generic [ref=e339]:
+                  - generic [ref=e340]: "#20"
+                  - generic [ref=e341]: Full-coverage E2E test suite — all screens + major flows
+              - cell "FEATURE" [ref=e342]:
+                - generic [ref=e343]:
+                  - img [ref=e344]
+                  - text: FEATURE
+              - cell "COMPLETED" [ref=e346]:
+                - generic [ref=e347]: COMPLETED
+              - cell "2026-05-09 13:52" [ref=e349]
+              - cell "2026-05-09 16:12" [ref=e350]
+            - row "#9 Add integration tests (MockRuntime or Playwright/WebdriverIO E2E) (Phase 3) FEATURE COMPLETED 2026-05-09 12:21 2026-05-09 13:41" [ref=e351] [cursor=pointer]:
+              - cell "#9 Add integration tests (MockRuntime or Playwright/WebdriverIO E2E) (Phase 3)" [ref=e352]:
+                - generic [ref=e353]:
+                  - generic [ref=e354]: "#9"
+                  - generic [ref=e355]: Add integration tests (MockRuntime or Playwright/WebdriverIO E2E) (Phase 3)
+              - cell "FEATURE" [ref=e356]:
+                - generic [ref=e357]:
+                  - img [ref=e358]
+                  - text: FEATURE
+              - cell "COMPLETED" [ref=e360]:
+                - generic [ref=e361]: COMPLETED
+              - cell "2026-05-09 12:21" [ref=e363]
+              - cell "2026-05-09 13:41" [ref=e364]
+            - row "#8 Add manager unit tests with mocked Tauri (Phase 2) CHORE COMPLETED 2026-05-09 11:22 2026-05-09 12:14" [ref=e365] [cursor=pointer]:
+              - cell "#8 Add manager unit tests with mocked Tauri (Phase 2)" [ref=e366]:
+                - generic [ref=e367]:
+                  - generic [ref=e368]: "#8"
+                  - generic [ref=e369]: Add manager unit tests with mocked Tauri (Phase 2)
+              - cell "CHORE" [ref=e370]:
+                - generic [ref=e371]:
+                  - img [ref=e372]
+                  - text: CHORE
+              - cell "COMPLETED" [ref=e375]:
+                - generic [ref=e376]: COMPLETED
+              - cell "2026-05-09 11:22" [ref=e378]
+              - cell "2026-05-09 12:14" [ref=e379]
+            - row "Code Quality Audit (full run) CODE QUALITY AUDIT COMPLETED 2026-05-09 08:25 2026-05-09 11:21" [ref=e380] [cursor=pointer]:
+              - cell "Code Quality Audit (full run)" [ref=e381]:
+                - generic [ref=e383]: Code Quality Audit (full run)
+              - cell "CODE QUALITY AUDIT" [ref=e384]:
+                - generic [ref=e385]:
+                  - img [ref=e386]
+                  - text: CODE QUALITY AUDIT
+              - cell "COMPLETED" [ref=e388]:
+                - generic [ref=e389]: COMPLETED
+              - cell "2026-05-09 08:25" [ref=e391]
+              - cell "2026-05-09 11:21" [ref=e392]
+      - generic [ref=e393]:
+        - generic [ref=e394]:
+          - heading "UNMANAGED PULL REQUESTS" [level=2] [ref=e395]:
+            - img [ref=e396]
+            - text: UNMANAGED PULL REQUESTS
+          - button [disabled] [ref=e400] [cursor=pointer]:
+            - img [ref=e401]
+        - generic [ref=e405]:
+          - img [ref=e406]
+          - paragraph [ref=e409]: SCANNING REPOSITORY...
+      - generic [ref=e410]:
+        - heading "DANGER ZONE" [level=2] [ref=e412]:
+          - img [ref=e413]
+          - text: DANGER ZONE
+        - generic [ref=e415]:
+          - paragraph [ref=e416]: Deleting this project will permanently remove all associated jobs and data.
+          - button "DELETE PROJECT" [ref=e417] [cursor=pointer]:
+            - img [ref=e418]
+            - text: DELETE PROJECT
+  - contentinfo [ref=e420]:
+    - generic [ref=e421]:
+      - generic [ref=e422]: AGENTIC DEVELOPER WORKFLOW SERVER
+      - generic [ref=e423]: │
+      - generic [ref=e424]: OPERATIONAL

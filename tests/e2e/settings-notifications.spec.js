@@ -57,6 +57,9 @@ test("notification settings: permission granted, status shown, toggle sound, tes
   await expect(ambientEnabled).not.toBeChecked();
   await expect(ambientType).toHaveValue("none");
   await expect(ambientVolume).toHaveValue("50");
+  // Dependent controls must be disabled when the checkbox is off (FR-014).
+  await expect(ambientType).toBeDisabled();
+  await expect(ambientVolume).toBeDisabled();
 
   // Toggle the feature on; pick Rain; drag the slider to 30.
   await ambientEnabled.click();

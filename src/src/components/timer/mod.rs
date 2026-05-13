@@ -1449,7 +1449,18 @@ pub fn TimerView() -> impl IntoView {
                 // this is Idle→Playing or Paused→Playing based on
                 // its current state.
                 let _ = ambient_audio::with_driver(|drv| {
-                    match drv.state() {
+                    match drv.state().clone() {
+                        ambient_audio::AmbientAudioState::Paused {
+                            track: paused_track,
+                        } if paused_track != track => {
+                            // Track changed while paused — element is already at
+                            // volume 0 (pause fade completed). fade_out transitions
+                            // to FadingOut; tick(200) drives the ramp to Idle
+                            // synchronously so start() can spawn a fresh element.
+                            drv.fade_out();
+                            drv.tick(200);
+                            drv.start(track, volume);
+                        }
                         ambient_audio::AmbientAudioState::Paused { .. } => drv.resume(volume),
                         ambient_audio::AmbientAudioState::Idle => drv.start(track, volume),
                         // Already mid-arc (Playing / CrossFading /
