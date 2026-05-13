@@ -49,7 +49,7 @@ pub fn GoalsSettings(settings: RwSignal<Settings>, toast: SettingsToast) -> impl
             </p>
         </div>
         <div class="settings-section">
-            <h3>"Focus Goals"</h3>
+            <h3 class="section-header">"Focus Goals"</h3>
             <div class="setting-item">
                 <label for="weekly-goal-minutes">"Weekly Goal (minutes):"</label>
                 <input

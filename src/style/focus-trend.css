@@ -1,0 +1,149 @@
+/* FocusTrend widget — vertical trend-day cards with gradient bars.
+   Mirrors ramazanberkozbek/presto `styles/calendar.css` `.focus-trend-card` /
+   `.trend-day*` blocks. */
+
+.focus-trend-card {
+  background: var(--card-bg);
+  border-radius: 15px;
+  padding: 1.5rem;
+  margin-bottom: 1rem;
+  box-shadow: 0 2px 8px var(--shared-border);
+  border: 1px solid var(--shared-border);
+}
+
+.focus-trend-card .section-header {
+  margin: 0 0 0.75rem 0;
+  border-bottom: none;
+  padding-bottom: 0;
+  color: var(--accent-color);
+  font-weight: 600;
+  font-size: 1.1rem;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.trend-days-container {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.trend-day {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.trend-day-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.35rem;
+}
+
+.trend-day-label {
+  font-size: 11px;
+  color: var(--text-light, #666666);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.trend-day-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.trend-day-time {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text-color, #222222);
+  font-variant-numeric: tabular-nums;
+}
+
+.trend-bar-wrapper {
+  position: relative;
+  width: 100%;
+}
+
+.trend-bar-bg {
+  position: relative;
+  width: 100%;
+  height: 22px;
+  background: var(--card-bg-subtle, #F0F0F0);
+  border-radius: 14px;
+  overflow: visible;
+}
+
+.trend-bar-fill {
+  height: 100%;
+  border-radius: 14px;
+  transition: width 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+  min-width: 0;
+  position: relative;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.trend-bar-fill.trend-current {
+  background: linear-gradient(90deg, #48C9A8 0%, #5DD9B8 100%);
+}
+
+.trend-bar-fill.trend-previous {
+  background: linear-gradient(90deg, #6FB98F 0%, #7FC99C 100%);
+}
+
+.trend-bar-fill.trend-older {
+  background: linear-gradient(90deg, #7FC99C 0%, #8FDAA8 100%);
+}
+
+.trend-comparison-dot {
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 22px;
+  height: 22px;
+  z-index: 4;
+  pointer-events: none;
+  background: transparent;
+}
+
+.trend-comparison-dot-inner {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 10px;
+  height: 10px;
+  background: #FFFFFF;
+  border-radius: 50%;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15), 0 0 0 2px rgba(72, 201, 168, 0.3);
+}
+
+[data-theme="dark"] .focus-trend-card,
+[data-theme="dark"] .trend-day-time {
+  color: #e2e8f0;
+}
+
+[data-theme="dark"] .trend-day-label,
+[data-theme="dark"] .trend-bar-bg {
+  background: var(--card-bg-subtle);
+}
+
+[data-theme="dark"] .trend-day-label {
+  background: transparent;
+  color: #94a3b8;
+}
+
+@media (prefers-color-scheme: dark) {
+  [data-theme="auto"] .focus-trend-card,
+  [data-theme="auto"] .trend-day-time {
+    color: #e2e8f0;
+  }
+  [data-theme="auto"] .trend-day-label {
+    color: #94a3b8;
+  }
+  [data-theme="auto"] .trend-bar-bg {
+    background: var(--card-bg-subtle);
+  }
+}

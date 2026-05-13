@@ -105,3 +105,153 @@
 .shortcuts-grid span {
   color: var(--text-light);
 }
+
+/* ===== Session edit modal ===== */
+.session-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+  padding: 1rem;
+  animation: fadeIn 0.18s ease;
+}
+
+.session-modal {
+  background: var(--card-bg);
+  color: var(--text-color);
+  border: 1px solid var(--shared-border);
+  border-radius: 15px;
+  width: 100%;
+  max-width: 440px;
+  max-height: 90vh;
+  overflow: hidden;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
+  display: flex;
+  flex-direction: column;
+}
+
+.session-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1.25rem 1.5rem;
+  border-bottom: 1px solid var(--shared-border);
+}
+
+.session-modal-header h3 {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--accent-color);
+}
+
+.session-modal-header .close-btn {
+  background: transparent;
+  border: none;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  color: var(--text-light);
+  font-size: 1.4rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.session-modal-header .close-btn:hover {
+  background: var(--card-bg-subtle);
+  color: var(--accent-color);
+}
+
+.session-modal-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 1.25rem 1.5rem;
+  overflow-y: auto;
+}
+
+.session-modal-body label {
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-light);
+  margin-top: 0.5rem;
+}
+
+.session-modal-body label:first-of-type {
+  margin-top: 0;
+}
+
+.session-modal-body input {
+  background: var(--card-bg-subtle);
+  border: 1px solid var(--input-border, var(--shared-border));
+  border-radius: 8px;
+  padding: 0.55rem 0.75rem;
+  font-size: 0.95rem;
+  color: var(--text-color);
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.session-modal-body input:focus {
+  border-color: var(--focus-color);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--focus-color) 20%, transparent);
+}
+
+.session-modal .modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  padding: 1rem 1.5rem 1.25rem;
+  border-top: 1px solid var(--shared-border);
+  background: var(--card-bg-subtle);
+}
+
+.session-modal .modal-actions button {
+  padding: 0.5rem 1rem;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.1s ease;
+  border: 1px solid transparent;
+}
+
+.session-modal .modal-actions .btn-secondary {
+  background: transparent;
+  border-color: var(--shared-border);
+  color: var(--text-color);
+}
+
+.session-modal .modal-actions .btn-secondary:hover {
+  background: var(--card-bg);
+}
+
+.session-modal .modal-actions .btn-danger {
+  background: transparent;
+  border-color: var(--focus-color);
+  color: var(--focus-color);
+}
+
+.session-modal .modal-actions .btn-danger:hover {
+  background: color-mix(in srgb, var(--focus-color) 12%, transparent);
+}
+
+.session-modal .modal-actions .btn-primary {
+  background: var(--focus-color);
+  color: #ffffff;
+}
+
+.session-modal .modal-actions .btn-primary:hover {
+  filter: brightness(1.05);
+  transform: translateY(-1px);
+}
+
+.session-modal .modal-actions button:active {
+  transform: translateY(0);
+}

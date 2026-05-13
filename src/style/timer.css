@@ -139,6 +139,32 @@
   box-shadow: 0 0 0 3px var(--focus-bg-alpha);
 }
 
+/* Break-mode tinted session-title input. */
+#timer-view.container.break .session-title-input {
+  color: var(--break-timer-color);
+  background-color: var(--break-secondary-btn);
+  border-color: var(--break-timer-color);
+}
+#timer-view.container.break .session-title-input::placeholder {
+  color: var(--break-timer-color);
+}
+#timer-view.container.break .session-title-input:focus {
+  border-color: var(--break-timer-color);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--break-color) 25%, transparent);
+}
+#timer-view.container.longBreak .session-title-input {
+  color: var(--long-break-timer-color);
+  background-color: var(--long-break-secondary-btn);
+  border-color: var(--long-break-timer-color);
+}
+#timer-view.container.longBreak .session-title-input::placeholder {
+  color: var(--long-break-timer-color);
+}
+#timer-view.container.longBreak .session-title-input:focus {
+  border-color: var(--long-break-timer-color);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--long-break-color) 25%, transparent);
+}
+
 /* Tag Dropdown Styles */
 .timer-status.clickable {
   cursor: pointer;
@@ -179,6 +205,28 @@
   display: block;
   animation: slideDown 0.2s ease;
   background-color: var(--focus-bg);
+}
+
+/* Mode-scoped tag-dropdown coloring — driven by the .container.{focus,break,longBreak} class on #timer-view. */
+.container.break .tag-dropdown-menu {
+  border-color: var(--break-timer-color);
+}
+.container.break .tag-dropdown-menu.active {
+  background-color: var(--break-bg);
+}
+.container.break .tag-item.selected {
+  background-color: var(--break-primary-btn);
+  color: var(--break-timer-color);
+}
+.container.longBreak .tag-dropdown-menu {
+  border-color: var(--long-break-timer-color);
+}
+.container.longBreak .tag-dropdown-menu.active {
+  background-color: var(--long-break-bg);
+}
+.container.longBreak .tag-item.selected {
+  background-color: var(--long-break-primary-btn);
+  color: var(--long-break-timer-color);
 }
 
 @keyframes slideDown {
@@ -266,18 +314,31 @@
   border-bottom-right-radius: 1rem;
 }
 
+/* Mode-scoped dropdown-footer separator. */
+.container.break .tag-dropdown-footer {
+  border-top-color: var(--break-timer-color);
+}
+.container.longBreak .tag-dropdown-footer {
+  border-top-color: var(--long-break-timer-color);
+}
+
 .new-tag-input {
   padding: 0;
+  width: 100%;
 }
 
 .tag-input-row {
   display: flex;
   align-items: center;
   gap: 0.5rem;
+  width: 100%;
+  box-sizing: border-box;
+  min-width: 0;
 }
 
 .new-tag-input input {
-  flex: 1;
+  flex: 1 1 0;
+  min-width: 0;
   padding: 0.5rem;
   border: 1px solid var(--sidebar-item-border);
   border-radius: 0.5rem;
@@ -300,19 +361,48 @@
   display: flex;
   align-items: center;
   gap: 4px;
-  padding: 0.5rem;
-  background: var(--sidebar-bg);
+  padding: 0.4rem 0.55rem;
+  background: transparent;
+  color: var(--text-color);
   border: 1px solid var(--sidebar-item-border);
   border-radius: 0.5rem;
   cursor: pointer;
   transition: all 0.2s ease;
-  min-width: 48px;
+  flex: 0 0 auto;
+  min-height: 36px;
   justify-content: center;
+}
+
+.selected-icon-btn i,
+.selected-icon-btn #selected-icon-display i,
+.selected-icon-btn #selected-icon-display i.ph {
+  font-size: 20px;
+  line-height: 1;
+}
+
+[data-theme="dark"] .selected-icon-btn {
+  color: #e2e8f0;
+  background: transparent;
+}
+@media (prefers-color-scheme: dark) {
+  [data-theme="auto"] .selected-icon-btn {
+    color: #e2e8f0;
+    background: transparent;
+  }
 }
 
 .selected-icon-btn:hover {
   border-color: var(--focus-timer-color);
   background-color: var(--focus-secondary-btn);
+}
+
+.container.break .selected-icon-btn:hover {
+  border-color: var(--break-timer-color);
+  background-color: var(--break-secondary-btn);
+}
+.container.longBreak .selected-icon-btn:hover {
+  border-color: var(--long-break-timer-color);
+  background-color: var(--long-break-secondary-btn);
 }
 
 .selected-icon-btn .dropdown-arrow {
@@ -343,6 +433,20 @@
   display: block;
   animation: fadeIn 0.2s ease;
   background-color: var(--focus-bg);
+}
+
+/* Mode-scoped icon-picker dropdown. */
+.container.break .icon-selector-dropdown {
+  border-color: var(--break-timer-color);
+}
+.container.break .icon-selector-dropdown.active {
+  background-color: var(--break-bg);
+}
+.container.longBreak .icon-selector-dropdown {
+  border-color: var(--long-break-timer-color);
+}
+.container.longBreak .icon-selector-dropdown.active {
+  background-color: var(--long-break-bg);
 }
 
 @keyframes fadeIn {
@@ -379,6 +483,18 @@
   cursor: pointer;
   transition: all 0.2s ease;
   font-size: 16px;
+  color: var(--text-color);
+  background-color: transparent;
+}
+
+.icon-option i,
+.icon-option i.ph,
+.tag-item-icon i.ph {
+  font-size: 20px;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .icon-option:hover,
@@ -394,8 +510,22 @@
   color: var(--focus-timer-color);
 }
 
+[data-theme="dark"] .icon-option,
+[data-theme="dark"] .emoji-option {
+  color: #e2e8f0;
+  background-color: transparent;
+}
+
+@media (prefers-color-scheme: dark) {
+  [data-theme="auto"] .icon-option,
+  [data-theme="auto"] .emoji-option {
+    color: #e2e8f0;
+    background-color: transparent;
+  }
+}
+
 .create-tag-btn {
-  padding: 0.5rem 1rem;
+  padding: 0.5rem 0.75rem;
   background: var(--focus-primary-btn);
   color: var(--focus-timer-color);
   border: none;
@@ -404,6 +534,7 @@
   font-size: 14px;
   font-weight: 600;
   transition: background-color 0.2s ease;
+  flex: 0 0 auto;
 }
 
 .create-tag-btn:hover {
@@ -414,6 +545,24 @@
 .create-tag-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+/* Mode-scoped create-tag button. */
+.container.break .create-tag-btn {
+  background: var(--break-primary-btn);
+  color: var(--break-timer-color);
+}
+.container.break .create-tag-btn:hover {
+  background: var(--break-timer-color);
+  color: var(--bg-color);
+}
+.container.longBreak .create-tag-btn {
+  background: var(--long-break-primary-btn);
+  color: var(--long-break-timer-color);
+}
+.container.longBreak .create-tag-btn:hover {
+  background: var(--long-break-timer-color);
+  color: var(--bg-color);
 }
 
 .timer-minutes {
@@ -434,55 +583,44 @@
   line-height: 1;
 }
 
-/* Timer State Styles - Base Class */
-.timer-container.focus .timer-status,
+/* Timer countdown digits (descendants of .timer-container — which carries
+   the active mode class). The mode-scoped .timer-status badge above the
+   countdown is handled by the `#timer-view.container.X .timer-status`
+   rules further down. */
 .timer-container.focus .timer-minutes,
 .timer-container.focus .timer-seconds {
   color: var(--focus-timer-color);
 }
 
-.timer-container.break .timer-status,
 .timer-container.break .timer-minutes,
 .timer-container.break .timer-seconds {
   color: var(--break-timer-color);
 }
 
-.timer-container.longBreak .timer-status,
 .timer-container.longBreak .timer-minutes,
 .timer-container.longBreak .timer-seconds {
   color: var(--long-break-timer-color);
 }
 
-/* Timer status background styles */
-.timer-container.focus .timer-status {
-  background-color: var(--focus-secondary-btn);
-  border: 2px solid var(--focus-timer-color);
-}
-
-.timer-container.break .timer-status {
-  background-color: var(--break-secondary-btn);
-  border: 2px solid var(--break-timer-color);
-}
-
-.timer-container.longBreak .timer-status {
-  background-color: var(--long-break-secondary-btn);
-  border: 2px solid var(--long-break-timer-color);
-}
-
-/* Timer status for container states (when timer-status is outside timer-container) */
-.container.focus #timer-view .timer-status {
+/* Mode badge + tag-selector trigger (.timer-status). #timer-view itself
+   carries the .container.{focus,break,longBreak} class. The base
+   `#timer-view .timer-status` rule above bakes in focus colors at
+   ID-class specificity (110), so the mode overrides have to match that
+   or higher — we lift them to `#timer-view.container.X` (ID + 3 classes
+   = 130) to win. */
+#timer-view.container.focus .timer-status {
   background-color: var(--focus-secondary-btn);
   border: 2px solid var(--focus-timer-color);
   color: var(--focus-timer-color);
 }
 
-.container.break #timer-view .timer-status {
+#timer-view.container.break .timer-status {
   background-color: var(--break-secondary-btn);
   border: 2px solid var(--break-timer-color);
   color: var(--break-timer-color);
 }
 
-.container.longBreak #timer-view .timer-status {
+#timer-view.container.longBreak .timer-status {
   background-color: var(--long-break-secondary-btn);
   border: 2px solid var(--long-break-timer-color);
   color: var(--long-break-timer-color);
@@ -510,11 +648,12 @@
   animation: overtime-pulse 2s infinite ease-in-out;
 }
 
-.timer-container.overtime .timer-status {
-  color: var(--warning-color);
-}
-
-.timer-container.overtime #status-icon {
+/* Overtime tinting for the mode badge + its inner status icon.
+   `.timer-status` and `#status-icon` are siblings of `.timer-container`
+   under `#timer-view`, so the overtime class has to come from
+   `#timer-view.container.overtime` (set on the wrapper). */
+.container.overtime .timer-status,
+.container.overtime #status-icon {
   color: var(--warning-color);
 }
 

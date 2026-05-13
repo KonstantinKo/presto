@@ -109,7 +109,7 @@ pub fn AdvancedSettings(settings: RwSignal<Settings>, toast: SettingsToast) -> i
             </p>
         </div>
         <div class="settings-section">
-            <h3>"System Integration"</h3>
+            <h3 class="section-header">"System Integration"</h3>
             <div class="setting-item">
                 <label class="checkbox-label">
                     <input
@@ -157,7 +157,7 @@ pub fn AdvancedSettings(settings: RwSignal<Settings>, toast: SettingsToast) -> i
             </div>
         </div>
         <div class="settings-section">
-            <h3>"Developer Tools"</h3>
+            <h3 class="section-header">"Developer Tools"</h3>
             <div class="setting-item">
                 <label class="checkbox-label">
                     <input
@@ -175,7 +175,7 @@ pub fn AdvancedSettings(settings: RwSignal<Settings>, toast: SettingsToast) -> i
             </div>
         </div>
         <div class="settings-section danger-zone">
-            <h3>"Danger Zone"</h3>
+            <h3 class="section-header">"Danger Zone"</h3>
             <p class="settings-description">
                 "These actions are irreversible and will permanently delete your data."
             </p>

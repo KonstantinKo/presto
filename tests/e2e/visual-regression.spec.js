@@ -66,20 +66,20 @@ test("visual baseline: timer, tags, statistics (4 periods), daily, all settings 
   await tapTab(page, "Calendar");
   await expect(page.locator("#calendar-view")).not.toHaveClass(/hidden/);
 
-  await page.locator('.period-tab[data-period="daily"]').click();
-  await expect(page.locator('.period-tab[data-period="daily"]')).toHaveClass(/active/);
+  await page.locator('.period-btn[data-period="daily"]').click();
+  await expect(page.locator('.period-btn[data-period="daily"]')).toHaveClass(/active/);
   await expect(page).toHaveScreenshot(["visual-regression", "statistics-daily.png"]);
 
-  await page.locator('.period-tab[data-period="weekly"]').click();
-  await expect(page.locator('.period-tab[data-period="weekly"]')).toHaveClass(/active/);
+  await page.locator('.period-btn[data-period="weekly"]').click();
+  await expect(page.locator('.period-btn[data-period="weekly"]')).toHaveClass(/active/);
   await expect(page).toHaveScreenshot(["visual-regression", "statistics-weekly.png"]);
 
-  await page.locator('.period-tab[data-period="monthly"]').click();
-  await expect(page.locator('.period-tab[data-period="monthly"]')).toHaveClass(/active/);
+  await page.locator('.period-btn[data-period="monthly"]').click();
+  await expect(page.locator('.period-btn[data-period="monthly"]')).toHaveClass(/active/);
   await expect(page).toHaveScreenshot(["visual-regression", "statistics-monthly.png"]);
 
-  await page.locator('.period-tab[data-period="yearly"]').click();
-  await expect(page.locator('.period-tab[data-period="yearly"]')).toHaveClass(/active/);
+  await page.locator('.period-btn[data-period="yearly"]').click();
+  await expect(page.locator('.period-btn[data-period="yearly"]')).toHaveClass(/active/);
   await expect(page).toHaveScreenshot(["visual-regression", "statistics-yearly.png"]);
 
   // --- 5e. Daily view (new drill-down — FR-012 / FR-013) ---

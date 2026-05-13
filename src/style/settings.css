@@ -27,18 +27,10 @@
   line-height: 1.5;
 }
 
-/* Section subheadings inside a settings category (e.g. "Notification Types") */
+/* Section subheadings inside a settings category (e.g. "Notification Types").
+   Visual style is owned by shared-components.css `.section-header`. */
 .settings-section {
   margin-bottom: 1.5rem;
-}
-
-.settings-section > h3 {
-  font-size: 0.85rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--text-light);
-  margin: 0 0 0.75rem 0;
 }
 
 /* Settings Categories */

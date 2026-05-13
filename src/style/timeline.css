@@ -2,12 +2,23 @@
 
 .sessions-timeline {
   margin-top: 1rem;
-  background: #f8f9fa;
-  border-radius: 6px;
-  padding: 0.5rem;
-  min-height: 80px;
+  background: transparent;
+  border-radius: 10px;
+  padding: 0;
+  min-height: 60px;
   height: auto;
   position: relative;
+}
+
+.timeline-empty {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  color: var(--text-light);
+  font-size: 0.85rem;
+  font-style: italic;
+  pointer-events: none;
 }
 
 .timeline-hours {
@@ -39,11 +50,78 @@
   position: relative;
   height: 40px;
   min-height: 40px;
-  background: white;
-  border-radius: 4px;
-  border: 1px solid #e0e0e0;
+  background: var(--card-bg-subtle);
+  border-radius: 8px;
+  border: 1px solid var(--shared-border);
   overflow: visible;
   transition: height 0.3s ease;
+}
+
+.session-block {
+  min-width: 4px;
+  height: 28px;
+  top: 6px;
+}
+
+/* Vertical session list under the 24h timeline. */
+.sessions-list {
+  list-style: none;
+  margin: 1rem 0 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.sessions-list-item {
+  display: grid;
+  grid-template-columns: 12px 140px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.55rem 0.75rem;
+  background: transparent;
+  border: 1px solid var(--shared-border);
+  border-radius: 10px;
+  font-size: 0.9rem;
+}
+
+.sessions-list-item:hover {
+  background: var(--card-bg-subtle);
+}
+
+.sessions-list-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+.sessions-list-dot.focus {
+  background: var(--focus-color);
+}
+
+.sessions-list-dot.break {
+  background: var(--break-color);
+}
+
+.sessions-list-time {
+  color: var(--text-light);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+
+.sessions-list-title {
+  color: var(--text-color);
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sessions-list-duration {
+  color: var(--accent-color);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
 }
 
 .timeline-grid-line {

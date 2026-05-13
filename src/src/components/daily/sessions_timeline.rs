@@ -112,11 +112,6 @@ pub fn SessionsTimeline(
         <div class="selected-day-details" id="selected-day-details">
             <div class="sessions-header">
                 <h4 id="selected-day-title">{move || title.get()}</h4>
-                <button class="add-session-btn" id="add-session-btn" aria-label="Add session">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v12m6-6H6" />
-                    </svg>
-                </button>
             </div>
             <div class="sessions-timeline" id="sessions-timeline">
                 <div class="timeline-hours" id="timeline-hours">
@@ -154,9 +149,14 @@ pub fn SessionsTimeline(
                                             "session-block session-block-break"
                                         }
                                     };
-                                    let title = session.id.clone();
+                                    let tt = format!(
+                                        "{}{}{}",
+                                        session.title.as_deref().unwrap_or(""),
+                                        if session.title.is_some() { " · " } else { "" },
+                                        session.start_time,
+                                    );
                                     view! {
-                                        <div class=class style=style title=title></div>
+                                        <div class=class style=style title=tt></div>
                                     }
                                 }).collect_view()
                             }).into_any()
@@ -164,6 +164,44 @@ pub fn SessionsTimeline(
                     }}
                 </div>
             </div>
+            {move || {
+                if selected_sessions.with(Vec::is_empty) {
+                    ().into_any()
+                } else {
+                    selected_sessions.with(|ss| {
+                        view! {
+                            <ul class="sessions-list">
+                                {ss.iter().map(|session| {
+                                    let kind_class = match session.session_type {
+                                        SessionType::Focus | SessionType::Custom => "sessions-list-dot focus",
+                                        SessionType::Break | SessionType::LongBreak => "sessions-list-dot break",
+                                    };
+                                    let time_text = format!("{} – {}", session.start_time, session.end_time);
+                                    let dur_text = format!("{} min", session.duration);
+                                    let title_text = session
+                                        .title
+                                        .clone()
+                                        .filter(|t| !t.is_empty())
+                                        .unwrap_or_else(|| match session.session_type {
+                                            SessionType::Focus => "Focus".to_string(),
+                                            SessionType::Break => "Break".to_string(),
+                                            SessionType::LongBreak => "Long Break".to_string(),
+                                            SessionType::Custom => "Custom".to_string(),
+                                        });
+                                    view! {
+                                        <li class="sessions-list-item">
+                                            <span class=kind_class></span>
+                                            <span class="sessions-list-time">{time_text}</span>
+                                            <span class="sessions-list-title">{title_text}</span>
+                                            <span class="sessions-list-duration">{dur_text}</span>
+                                        </li>
+                                    }
+                                }).collect_view()}
+                            </ul>
+                        }.into_any()
+                    })
+                }
+            }}
         </div>
     }
 }

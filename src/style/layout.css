@@ -105,6 +105,32 @@ body.longBreak {
   justify-content: center;
   min-height: 100vh;
   box-sizing: border-box;
+  /* #timer-view also carries the .container class so descendant
+     selectors like `.container.break .dot` fire on mode change.
+     The generic `.container { ... }` rules in layout.css /
+     responsive.css are JS-era sidebar-offset + mobile chrome that
+     already get re-applied at the outer `.main-content` wrapper;
+     cancel them here so the offsets do not compound and the timer
+     surface stays centered + flush. */
+  margin-left: 0;
+  padding: 0;
+}
+
+/* Mobile + print overrides: the generic `.container` responsive
+   rules (`padding-bottom: 90px` mobile / `75px` small-screen /
+   `background: white` print) would otherwise leak into the timer
+   surface — explicitly cancel them on #timer-view. */
+@media (max-width: 768px) {
+  #timer-view {
+    padding: 0;
+    padding-bottom: 0;
+  }
+}
+
+@media print {
+  #timer-view {
+    background: transparent !important;
+  }
 }
 
 /*
@@ -133,130 +159,9 @@ body.longBreak {
   }
 }
 
-/* Modal Overlay */
-.modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
-  display: none;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-  backdrop-filter: blur(2px);
-}
-
-.modal-overlay.show {
-  display: flex;
-}
-
-/* Session Modal */
-.session-modal {
-  background: white;
-  border-radius: 12px;
-  padding: 0;
-  width: 90%;
-  max-width: 400px;
-  max-height: 90vh;
-  overflow: hidden;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
-  animation: modalSlideIn 0.3s ease;
-}
-
-.modal-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 1.25rem 1.5rem;
-  border-bottom: 1px solid #e9ecef;
-  background: #f8f9fa;
-}
-
-.modal-header h3 {
-  margin: 0;
-  font-size: 1.1rem;
-  font-weight: 600;
-  color: var(--text-color);
-}
-
-.modal-close-btn {
-  background: none;
-  border: none;
-  cursor: pointer;
-  padding: 0.25rem;
-  border-radius: 4px;
-  transition: all 0.2s ease;
-  color: var(--text-light);
-}
-
-.modal-close-btn:hover {
-  background: #e9ecef;
-  color: var(--text-color);
-}
-
-.modal-close-btn svg {
-  width: 20px;
-  height: 20px;
-}
-
-/* Session Form */
-.session-form {
-  padding: 1.5rem;
-}
-
-.form-group {
-  margin-bottom: 1.25rem;
-}
-
-.form-group label {
-  display: block;
-  margin-bottom: 0.5rem;
-  font-weight: 500;
-  color: var(--text-color);
-  font-size: 0.9rem;
-}
-
-.form-group input,
-.form-group select {
-  width: 100%;
-  padding: 0.75rem;
-  border: 2px solid #e9ecef;
-  border-radius: 8px;
-  font-size: 0.9rem;
-  transition: all 0.2s ease;
-  background: white;
-  box-sizing: border-box;
-}
-
-.form-group input:focus,
-.form-group select:focus {
-  outline: none;
-  border-color: var(--focus-timer-color);
-  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
-}
-
-.form-group input[type="number"] {
-  appearance: textfield;
-  -moz-appearance: textfield;
-}
-
-.form-group input[type="number"]::-webkit-outer-spin-button,
-.form-group input[type="number"]::-webkit-inner-spin-button {
-  -webkit-appearance: none;
-  margin: 0;
-}
-
-/* Modal Actions */
-.modal-actions {
-  display: flex;
-  gap: 0.75rem;
-  justify-content: flex-end;
-  margin-top: 2rem;
-  padding-top: 1.5rem;
-  border-top: 1px solid #e9ecef;
-}
+/* Session-modal chrome (overlay, header, body, actions container) lives
+   in `style/modals.css`. Shared action-button variants used by other
+   components stay here. */
 
 .btn-primary {
   background: var(--shared-border);

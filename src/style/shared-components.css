@@ -150,7 +150,7 @@
     color: var(--accent-color);
     font-size: 1.3rem;
     font-weight: 600;
-    border-bottom: 2px solid #f8f9fa;
+    border-bottom: 2px solid var(--shared-border, #f8f9fa);
     padding-bottom: 0.75rem;
 }
 
@@ -409,7 +409,7 @@
     width: 280px;
     background: white;
     border-right: 1px solid #e9ecef;
-    padding: 1rem 0;
+    padding: 1rem 0 0 0;
     box-shadow: 2px 0 10px rgba(0, 0, 0, 0.05);
     position: fixed;
     height: 100vh;
@@ -422,21 +422,33 @@
 
 /* Sidebar navigation container — the scrollable region. `flex: 1`
    plus `min-height: 0` lets it shrink below content size and surface
-   its own scrollbar; the trailing padding keeps "Updates" off the
-   sidebar's bottom edge when scrolled fully down. macOS hides
-   overlay scrollbars by default so the explicit `::-webkit-scrollbar`
-   rules below force a thin always-visible thumb — without it the
-   user has no affordance that the nav is scrollable. */
+   its own scrollbar; the trailing `::after` spacer keeps "Updates"
+   off the sidebar's bottom edge when scrolled fully down. macOS
+   hides overlay scrollbars by default so the explicit `::-webkit-
+   scrollbar` rules below force a thin always-visible thumb —
+   without it the user has no affordance that the nav is scrollable.
+   The `::after` spacer (rather than `padding-bottom`) is a workaround
+   for Chromium issue crbug.com/1064767: padding-bottom on a flex
+   container with `overflow-y: auto` is excluded from `scrollHeight`,
+   so the last item gets clipped at the scroll endpoint. A real
+   flex-item spacer is always counted. */
 .sidebar-nav {
     display: flex;
     flex-direction: column;
     gap: 0.5rem;
-    padding: 0 1rem 1.5rem 1rem;
+    padding: 0 1rem;
     overflow-y: auto;
     flex: 1 1 auto;
     min-height: 0;
     scrollbar-width: thin;
     scrollbar-color: rgba(0, 0, 0, 0.25) transparent;
+}
+
+.sidebar-nav::after {
+    content: "";
+    display: block;
+    flex-shrink: 0;
+    height: 2rem;
 }
 
 .sidebar-nav::-webkit-scrollbar {

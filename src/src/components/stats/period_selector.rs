@@ -14,6 +14,8 @@
 
 use leptos::prelude::*;
 
+use crate::components::icon::{self, IconClass};
+
 /// Closed sum type for the four Statistics-view periods.
 ///
 /// Held in `RwSignal<Period>` by `StatisticsView`. Drives the bar
@@ -51,6 +53,18 @@ impl Period {
             Self::Yearly => "Yearly",
         }
     }
+
+    /// Leading-icon remix class name for the period pill. Matches the
+    /// ramazanberkozbek fork's icon set for visual parity.
+    #[must_use]
+    pub const fn icon_name(self) -> &'static str {
+        match self {
+            Self::Daily => "ri-calendar-todo-line",
+            Self::Weekly => "ri-calendar-line",
+            Self::Monthly => "ri-calendar-event-line",
+            Self::Yearly => "ri-calendar-check-line",
+        }
+    }
 }
 
 /// Period tab selector. The active period gets a `.active` modifier
@@ -72,20 +86,22 @@ pub fn PeriodSelector(
     ];
 
     view! {
-        <div class="period-selector" role="tablist" aria-label="Statistics period">
+        <div class="period-tabs" role="tablist" aria-label="Statistics period">
             {variants.into_iter().map(|period| {
                 let is_active =
                     Signal::derive(move || current.with(|c| *c == period));
+                let icon = IconClass::from_icon_name(period.icon_name());
                 view! {
                     <button
-                        class="period-tab"
+                        class="period-btn"
                         class:active=move || is_active.get()
                         role="tab"
                         data-period=period.data_attr()
                         aria-selected=move || if is_active.get() { "true" } else { "false" }
                         on:click=move |_| on_select.run(period)
                     >
-                        {period.label()}
+                        {icon::render(&icon)}
+                        <span>{period.label()}</span>
                     </button>
                 }
             }).collect_view()}
