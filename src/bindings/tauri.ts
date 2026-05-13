@@ -278,8 +278,25 @@ export type AmbientSoundType =
  * `"dark"`); `timer_theme` is the timer palette stem (e.g.
  * `"espresso"`). Both carry `#[serde(default)]` so pre-widening
  * settings JSONs fill in the JS-era cold-start values.
+ * 
+ * `locale` (feature 005) is `Option<Locale>` — `None` = "user has
+ * never explicitly chosen a locale" (legacy records or fresh install
+ * — the resolver runs OS detection on cold start); `Some(Locale)` =
+ * "user explicitly chose this locale" (including English — bypasses
+ * OS detection per FR-011 / Fix A). The `Option` discriminant is the
+ * authoritative "explicit vs. default" signal; value-equality against
+ * `Locale::En` MUST NOT be used as a proxy.
  */
-export type AppearanceSettings = { theme?: string; timer_theme?: string }
+export type AppearanceSettings = { theme?: string; timer_theme?: string; 
+/**
+ * Feature 005: user-selected UI locale. `None` = no explicit
+ * choice yet; `Some(_)` = explicit choice (any variant, including
+ * `Some(En)`). The `Option` discriminant is the resolver's
+ * authoritative "explicit vs. default" signal per FR-009 / FR-011.
+ * Out-of-set wire values (`"fr"`, `null`, etc.) fail enum
+ * deserialisation; `#[serde(default)]` then substitutes `None`.
+ */
+locale?: Locale | null }
 /**
  * Typed error variant returned by every bridge command wrapper.
  * 
@@ -330,6 +347,39 @@ export type BridgeError =
  */
 { kind: "internal"; msg: string }
 export type JsonValue = null | boolean | number | string | JsonValue[] | Partial<{ [key in string]: JsonValue }>
+/**
+ * User-selectable UI locale (feature 005).
+ * 
+ * Closed four-variant sum type. Wire shape is lowercase strings
+ * (`"en"` / `"de"` / `"it"` / `"tr"`) matching the existing `theme`
+ * field's lowercase convention at `:121-123` rather than the
+ * `AmbientSoundType` kebab-case precedent — two-letter ISO-639-1
+ * codes have no internal word boundary that kebab-case would clarify.
+ * 
+ * The `#[default]` attribute on `En` ties this enum to
+ * `#[derive(Default)]`; the default value is used by `Locale::default()`
+ * callers (e.g. the resolver's terminal fallback) — NOT by the
+ * `AppearanceSettings.locale` field, which uses `Option<Locale>` so
+ * `None` (no explicit choice) and `Some(Locale::En)` (explicit
+ * English) are distinguishable per Fix A.
+ */
+export type Locale = 
+/**
+ * English — wire string `"en"`. Source-of-truth locale per Spec A13.
+ */
+"en" | 
+/**
+ * Deutsch — wire string `"de"`.
+ */
+"de" | 
+/**
+ * Italiano — wire string `"it"`.
+ */
+"it" | 
+/**
+ * Türkçe — wire string `"tr"`.
+ */
+"tr"
 /**
  * User-entered manual session record.
  * 

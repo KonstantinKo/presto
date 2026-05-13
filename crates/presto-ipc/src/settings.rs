@@ -108,12 +108,49 @@ impl Default for ShortcutSettings {
     }
 }
 
+/// User-selectable UI locale (feature 005).
+///
+/// Closed four-variant sum type. Wire shape is lowercase strings
+/// (`"en"` / `"de"` / `"it"` / `"tr"`) matching the existing `theme`
+/// field's lowercase convention at `:121-123` rather than the
+/// `AmbientSoundType` kebab-case precedent — two-letter ISO-639-1
+/// codes have no internal word boundary that kebab-case would clarify.
+///
+/// The `#[default]` attribute on `En` ties this enum to
+/// `#[derive(Default)]`; the default value is used by `Locale::default()`
+/// callers (e.g. the resolver's terminal fallback) — NOT by the
+/// `AppearanceSettings.locale` field, which uses `Option<Locale>` so
+/// `None` (no explicit choice) and `Some(Locale::En)` (explicit
+/// English) are distinguishable per Fix A.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
+#[serde(rename_all = "lowercase")]
+pub enum Locale {
+    /// English — wire string `"en"`. Source-of-truth locale per Spec A13.
+    #[default]
+    En,
+    /// Deutsch — wire string `"de"`.
+    De,
+    /// Italiano — wire string `"it"`.
+    It,
+    /// Türkçe — wire string `"tr"`.
+    Tr,
+}
+
 /// Appearance / theme preferences.
 ///
 /// `theme` is the color-mode preference (`"auto"` / `"light"` /
 /// `"dark"`); `timer_theme` is the timer palette stem (e.g.
 /// `"espresso"`). Both carry `#[serde(default)]` so pre-widening
 /// settings JSONs fill in the JS-era cold-start values.
+///
+/// `locale` (feature 005) is `Option<Locale>` — `None` = "user has
+/// never explicitly chosen a locale" (legacy records or fresh install
+/// — the resolver runs OS detection on cold start); `Some(Locale)` =
+/// "user explicitly chose this locale" (including English — bypasses
+/// OS detection per FR-011 / Fix A). The `Option` discriminant is the
+/// authoritative "explicit vs. default" signal; value-equality against
+/// `Locale::En` MUST NOT be used as a proxy.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "specta", derive(specta::Type))]
 pub struct AppearanceSettings {
@@ -121,6 +158,14 @@ pub struct AppearanceSettings {
     pub theme: String,
     #[serde(default = "default_timer_theme")]
     pub timer_theme: String,
+    /// Feature 005: user-selected UI locale. `None` = no explicit
+    /// choice yet; `Some(_)` = explicit choice (any variant, including
+    /// `Some(En)`). The `Option` discriminant is the resolver's
+    /// authoritative "explicit vs. default" signal per FR-009 / FR-011.
+    /// Out-of-set wire values (`"fr"`, `null`, etc.) fail enum
+    /// deserialisation; `#[serde(default)]` then substitutes `None`.
+    #[serde(default)]
+    pub locale: Option<Locale>,
 }
 
 impl Default for AppearanceSettings {
@@ -128,6 +173,7 @@ impl Default for AppearanceSettings {
         Self {
             theme: default_theme(),
             timer_theme: default_timer_theme(),
+            locale: None,
         }
     }
 }
