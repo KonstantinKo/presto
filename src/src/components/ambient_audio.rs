@@ -231,7 +231,6 @@ impl<H: AudioElementHandle + 'static> AmbientAudio<H> {
     /// Idle (the caller is the timer gate effect, which only invokes
     /// `start` on rising edge from `Idle`).
     pub fn start(&mut self, track: AmbientSoundType, volume: u32) {
-        self.target_volume = volume;
         let Some(path) = asset_path(track) else {
             // Defensive: caller should not invoke start with None.
             // Drop silently — preserves engine purity (no toast, no
@@ -241,6 +240,11 @@ impl<H: AudioElementHandle + 'static> AmbientAudio<H> {
         if !matches!(self.state, AmbientAudioState::Idle) {
             return;
         }
+        // Principle III: no defensive state mutation outside the
+        // success path. Set the cached target only after the guards
+        // pass so a rejected `start` does not leave a stale ceiling
+        // around for the next ramp.
+        self.target_volume = volume;
         let handle = (self.factory)();
         handle.set_src(path);
         handle.set_volume(0.0);
@@ -257,24 +261,59 @@ impl<H: AudioElementHandle + 'static> AmbientAudio<H> {
         });
     }
 
-    /// Arc 2: Playing(t) → Paused(t). 200 ms fade-out then pause on
-    /// the resident element. Cancels any in-flight ramp (the new
-    /// fade-out starts from whatever volume the element currently
-    /// has, per the pre-emption rule).
+    /// Arc 2: `Playing(t)` → `Paused(t)` OR `CrossFading(_, incoming)`
+    /// → `Paused(incoming)`. 200 ms fade-out then pause on the resident
+    /// element(s). Cancels any in-flight ramp (the new fade-out
+    /// starts from whatever volume each element currently has, per
+    /// the pre-emption rule).
+    ///
+    /// When pausing mid-cross-fade we retarget BOTH the incoming
+    /// (`current` slot) and outgoing (`previous` slot) elements'
+    /// ramps to 0.0 over 200 ms so the user doesn't hear the
+    /// cross-fade play through. The state lands on the incoming
+    /// track (that's what the next resume will fade back in). The
+    /// outgoing element gets paused + released when the ramp
+    /// completes (see the `Paused` arm of `tick()`'s post-ramp
+    /// dispatch).
     pub fn pause(&mut self) {
-        let AmbientAudioState::Playing { track } = self.state.clone() else {
-            return;
-        };
-        let current_volume = self.in_flight_target_or(f64::from(self.target_volume) / 100.0);
-        self.state = AmbientAudioState::Paused { track };
-        self.ramp = Some(Ramp {
-            total_ms: 200,
-            elapsed_ms: 0,
-            out_from: None,
-            out_to: None,
-            in_from: current_volume,
-            in_to: 0.0,
-        });
+        match self.state.clone() {
+            AmbientAudioState::Playing { track } => {
+                let current_volume =
+                    self.in_flight_target_or(f64::from(self.target_volume) / 100.0);
+                self.state = AmbientAudioState::Paused { track };
+                self.ramp = Some(Ramp {
+                    total_ms: 200,
+                    elapsed_ms: 0,
+                    out_from: None,
+                    out_to: None,
+                    in_from: current_volume,
+                    in_to: 0.0,
+                });
+            }
+            AmbientAudioState::CrossFading { incoming, .. } => {
+                // FR-008: pausing mid-cross-fade must not leak audio.
+                // Retarget both elements' ramps to 0 over 200 ms; the
+                // post-ramp `Paused` dispatch releases the outgoing
+                // slot.
+                let (out_v, in_v) = self.cross_fade_current_volumes();
+                self.state = AmbientAudioState::Paused { track: incoming };
+                self.ramp = Some(Ramp {
+                    total_ms: 200,
+                    elapsed_ms: 0,
+                    out_from: Some(out_v),
+                    out_to: Some(0.0),
+                    in_from: in_v,
+                    in_to: 0.0,
+                });
+            }
+            AmbientAudioState::Idle
+            | AmbientAudioState::Paused { .. }
+            | AmbientAudioState::FadingOut { .. } => {
+                // No-op: nothing playing, already paused, or already
+                // tearing down — caller's gate Effect should not
+                // dispatch pause from these states, but be lenient.
+            }
+        }
     }
 
     /// Arc 3: Paused(t) → Playing(t). `.play()` + 200 ms fade-in
@@ -497,7 +536,14 @@ impl<H: AudioElementHandle + 'static> AmbientAudio<H> {
             }
             AmbientAudioState::Paused { track } => {
                 // Pause fade-out completed — actually pause the
-                // element now that volume has reached 0.
+                // element(s) now that volume has reached 0. If we
+                // entered Paused mid-cross-fade the outgoing handle
+                // is still in `previous`; release it here so the
+                // next resume only fades the incoming element back
+                // in.
+                if let Some(prev) = self.slots.previous.take() {
+                    prev.pause();
+                }
                 if let Some(h) = self.slots.current.as_ref() {
                     h.pause();
                 }
@@ -1079,6 +1125,102 @@ mod tests {
         assert!(
             last.starts_with("set_volume:0.75"),
             "incoming track must settle at retargeted volume; last set_volume was {last}",
+        );
+    }
+
+    /// FR-008 regression pin: pausing mid-cross-fade must fade BOTH
+    /// elements to 0 within 200 ms, land in `Paused(incoming)`, and
+    /// release the outgoing handle.
+    ///
+    /// Before this fix `pause()` only matched `Playing`, so a pause
+    /// invoked during the 300 ms cross-fade window was silently
+    /// no-opped and both elements continued ramping to their
+    /// cross-fade targets — audio played straight through pause.
+    #[test]
+    fn pause_during_cross_fade_fades_both_to_zero() {
+        let factory = Factory::new();
+        let mut driver = AmbientAudio::new(factory.closure());
+        driver.start(AmbientSoundType::Rain, 50);
+        driver.tick(200); // settle at 0.5
+
+        driver.cross_fade(AmbientSoundType::Fire, 50);
+        assert!(matches!(
+            driver.state(),
+            &AmbientAudioState::CrossFading { .. }
+        ));
+
+        // Advance partway through the 300 ms cross-fade.
+        driver.tick(100);
+
+        // Pause mid-cross-fade. State must land on the INCOMING track
+        // (that's what resume will fade back in).
+        driver.pause();
+        assert_eq!(
+            driver.state(),
+            &AmbientAudioState::Paused {
+                track: AmbientSoundType::Fire
+            }
+        );
+
+        let rain_handle = factory.handle(0);
+        let fire_handle = factory.handle(1);
+
+        // Drive the 200 ms fade-out to completion. Both handles must
+        // receive a final `set_volume:0.000` — neither one may be left
+        // sounding after pause.
+        driver.tick(200);
+        let rain_last_vol = rain_handle
+            .calls
+            .borrow()
+            .iter()
+            .rev()
+            .find(|c| c.starts_with("set_volume:"))
+            .cloned()
+            .unwrap_or_default();
+        let fire_last_vol = fire_handle
+            .calls
+            .borrow()
+            .iter()
+            .rev()
+            .find(|c| c.starts_with("set_volume:"))
+            .cloned()
+            .unwrap_or_default();
+        assert_eq!(
+            rain_last_vol, "set_volume:0.000",
+            "outgoing rain element must end at 0 volume; got {rain_last_vol}",
+        );
+        assert_eq!(
+            fire_last_vol, "set_volume:0.000",
+            "incoming fire element must end at 0 volume; got {fire_last_vol}",
+        );
+        // The outgoing rain handle must have been released via pause()
+        // when the ramp completed.
+        assert!(calls_contains(&rain_handle, "pause"));
+
+        // Resume from this Paused state must fade ONLY the incoming
+        // (fire) element from 0 back to target_volume / 100.
+        fire_handle.calls.borrow_mut().clear();
+        driver.resume(50);
+        assert_eq!(
+            driver.state(),
+            &AmbientAudioState::Playing {
+                track: AmbientSoundType::Fire
+            }
+        );
+        assert!(calls_contains(&fire_handle, "play"));
+
+        driver.tick(200);
+        let fire_settled = fire_handle
+            .calls
+            .borrow()
+            .iter()
+            .rev()
+            .find(|c| c.starts_with("set_volume:"))
+            .cloned()
+            .unwrap_or_default();
+        assert!(
+            fire_settled.starts_with("set_volume:0.5"),
+            "incoming track must ramp back to target after resume; got {fire_settled}",
         );
     }
 }

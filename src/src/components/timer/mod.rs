@@ -1487,6 +1487,7 @@ pub fn TimerView() -> impl IntoView {
             },
             std::time::Duration::from_millis(16),
         );
+        // IntervalHandle has no Drop impl in Leptos; the interval continues firing until app exit. Same pattern as metronome at :1381.
         let _ = handle;
     });
 
