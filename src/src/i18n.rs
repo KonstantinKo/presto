@@ -51,4 +51,11 @@ mod tests {
     fn resolve_initial_locale_none_swiss_german_matches_de() {
         assert_eq!(resolve_initial_locale(None, ["de-CH"]), Locale::De);
     }
+
+    /// T012 [RED → T015 GREEN]: an unsupported OS-locale prefix
+    /// (Chinese here) falls back to `Locale::En`. Spec FR-009 step 3.
+    #[test]
+    fn resolve_initial_locale_none_unsupported_falls_back_to_en() {
+        assert_eq!(resolve_initial_locale(None, ["zh-CN"]), Locale::En);
+    }
 }
