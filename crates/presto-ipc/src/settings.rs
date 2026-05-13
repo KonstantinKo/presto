@@ -397,7 +397,37 @@ impl From<SettingsOnDisk> for Settings {
 
 #[cfg(test)]
 mod tests {
-    use super::{AmbientSoundType, NotificationSettings, StatusBarDisplay, TimerSettings};
+    use super::{
+        AmbientSoundType, AppearanceSettings, Locale, NotificationSettings, StatusBarDisplay,
+        TimerSettings,
+    };
+
+    /// Feature 005 T004 (RED → T007 GREEN): pre-feature-005
+    /// `AppearanceSettings` JSON (feature 002/003/004 baseline shape)
+    /// lacking the `locale` key deserialises to `None`. Mirrors the
+    /// `ambient_sound_legacy_fields_default` precedent at `:407-421`.
+    ///
+    /// Critical Fix A invariant: `None` (no explicit choice) MUST be
+    /// distinguishable from `Some(Locale::En)` (explicit English). A
+    /// German-OS user who explicitly picks English persists `Some(En)`;
+    /// the resolver sees `Some(_)` and skips OS detection on next boot.
+    #[test]
+    fn locale_legacy_field_defaults_to_none() {
+        let legacy = r#"{"theme":"auto","timer_theme":"espresso"}"#;
+        let s: AppearanceSettings =
+            serde_json::from_str(legacy).expect("deserialise legacy appearance");
+        assert_eq!(s.locale, None, "legacy record has no explicit locale");
+        assert_ne!(
+            s.locale,
+            Some(Locale::En),
+            "Fix A: None must be distinct from Some(En)"
+        );
+        assert_eq!(s.theme, "auto", "feature-002 theme survives");
+        assert_eq!(
+            s.timer_theme, "espresso",
+            "feature-002 timer_theme survives"
+        );
+    }
 
     /// Feature 004 T004 (RED → T007 GREEN): pre-feature-004
     /// `NotificationSettings` JSON (no ambient fields) deserialises
