@@ -20,8 +20,8 @@ pub use presto_ipc::{
 // lives in `presto-ipc::settings`. Re-exported here for path
 // stability across the codebase.
 pub use presto_ipc::{
-    default_max_session_time, default_weekly_goal, AdvancedSettings, AppearanceSettings,
-    NotificationSettings, ShortcutSettings, StatusBarDisplay, TimerSettings,
+    default_max_session_time, default_weekly_goal, AdvancedSettings, AmbientSoundType,
+    AppearanceSettings, NotificationSettings, ShortcutSettings, StatusBarDisplay, TimerSettings,
 };
 
 // `Settings` + `SettingsOnDisk` migration shim live in
