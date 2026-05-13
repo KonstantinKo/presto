@@ -20,4 +20,18 @@ mod tests {
             Locale::De,
         );
     }
+
+    /// T009 [RED → T015 GREEN]: **Fix A critical case** — explicit
+    /// English MUST NOT be overridden by a German OS locale. The
+    /// `Some(_)` discriminant is the authoritative signal, not
+    /// value-equality against `Locale::En`. A German-OS user who
+    /// explicitly picks English persists `Some(En)`; the resolver
+    /// sees `Some(_)` and skips OS detection.
+    #[test]
+    fn resolve_initial_locale_persisted_some_en_wins() {
+        assert_eq!(
+            resolve_initial_locale(Some(Locale::En), ["de-DE"]),
+            Locale::En,
+        );
+    }
 }
