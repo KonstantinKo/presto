@@ -32,8 +32,10 @@
 #![allow(clippy::must_use_candidate)]
 
 use leptos::prelude::*;
+use leptos_i18n::{t, t_string};
 
 use crate::bridge::types::Settings;
+use crate::i18n::i18n::use_i18n;
 use crate::managers::update::UpdateInfo;
 
 /// Deduplicating push: add `version` to `list` only if not already
@@ -61,6 +63,7 @@ pub fn UpdateNotification(
     update_info: RwSignal<UpdateInfo>,
     settings: RwSignal<Settings>,
 ) -> impl IntoView {
+    let i18n = use_i18n();
     // Local "user closed it" flag. The JS-era surface at
     // `src/components/update-notification.js` retains the dismissal
     // across navigations within the same launch (the spec at
@@ -84,7 +87,10 @@ pub fn UpdateNotification(
     let version_text = Signal::derive(move || {
         update_info.with(|info| match info {
             UpdateInfo::NoUpdate => String::new(),
-            UpdateInfo::Available { version, .. } => format!("Version {version}"),
+            UpdateInfo::Available { version, .. } => {
+                let prefix = t_string!(i18n, update.version_prefix);
+                format!("{prefix} {version}")
+            }
         })
     });
 
@@ -117,7 +123,7 @@ pub fn UpdateNotification(
                     <div class="update-icon">
                         <i class="ri-lightbulb-flash-line"></i>
                     </div>
-                    <span class="update-message">"Update available"</span>
+                    <span class="update-message">{t!(i18n, update.title)}</span>
                     <span class="update-version" id="update-notification-version">
                         {move || version_text.get()}
                     </span>
@@ -139,17 +145,17 @@ pub fn UpdateNotification(
                         class="update-btn update-btn-primary"
                         data-action="download"
                         on:click=on_close
-                    >"Update via Homebrew"</button>
+                    >{t!(i18n, update.install_action)}</button>
                     <button
                         class="update-btn update-btn-secondary"
                         data-action="dismiss"
                         on:click=on_skip
-                    >"Skip release"</button>
+                    >{t!(i18n, update.skip)}</button>
                 </div>
                 <button
                     class="update-close"
                     id="update-notification-close"
-                    aria-label="Close update notification"
+                    aria-label=move || t_string!(i18n, update.close_aria)
                     on:click=on_close
                 >
                     "×"

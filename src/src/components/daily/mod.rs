@@ -24,6 +24,7 @@ pub mod sessions_timeline;
 
 use chrono::{DateTime, Datelike, Utc};
 use leptos::prelude::*;
+use leptos_i18n::t;
 
 use self::day_clamp::clamp_day_to_month;
 use self::month_grid::{next_month, prev_month, MonthGrid};
@@ -32,6 +33,7 @@ use self::sessions_timeline::SessionsTimeline;
 use super::browser_clock::BrowserClock;
 use super::utils::datetime::datetime_from_ms;
 use crate::engine::clock::Clock;
+use crate::i18n::i18n::use_i18n;
 
 /// Daily drill-down view. Two-column layout: month-grid on the left,
 /// sessions-timeline on the right; the off-viewport
@@ -49,6 +51,7 @@ use crate::engine::clock::Clock;
 /// enough, and clamps to the last day otherwise (FR-017, SC-008).
 #[component]
 pub fn DailyView() -> impl IntoView {
+    let i18n = use_i18n();
     let now = datetime_from_ms(BrowserClock.now_ms());
     let month_cursor = RwSignal::new(now);
     let selected_day = RwSignal::new(now);
@@ -83,7 +86,7 @@ pub fn DailyView() -> impl IntoView {
 
     view! {
         <div class="view-container view-section" id="daily-view">
-            <h1>"Daily Overview"</h1>
+            <h1>{t!(i18n, daily.header)}</h1>
 
             <div class="daily-main-layout">
                 <div class="daily-left-column">
