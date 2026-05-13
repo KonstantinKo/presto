@@ -68,4 +68,17 @@ mod tests {
         let empty: [&str; 0] = [];
         assert_eq!(resolve_initial_locale(None, empty), Locale::En);
     }
+
+    /// T014 [RED → T015 GREEN]: first matching supported prefix wins
+    /// when the OS lists multiple preferred languages. `zh-CN`
+    /// (unsupported) is skipped; the next, `de-DE`, matches —
+    /// `tr-TR` (also supported) does NOT override because priority
+    /// order is OS-given. Spec FR-009 priority-first semantics.
+    #[test]
+    fn resolve_initial_locale_none_first_match_wins() {
+        assert_eq!(
+            resolve_initial_locale(None, ["zh-CN", "de-DE", "tr-TR"]),
+            Locale::De,
+        );
+    }
 }
