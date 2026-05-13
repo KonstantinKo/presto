@@ -68,6 +68,19 @@
   transition: background 0.2s ease, border-color 0.2s ease;
 }
 
+/* Feature 005: Language row uses tighter inner spacing so the
+   dropdown sits visually closer to its helper text — matches the
+   density of the Timer Durations rows below. */
+.setting-item.language-setting-item {
+  gap: 0.35rem;
+  padding: 1rem 1.25rem;
+}
+
+.setting-item.language-setting-item .setting-description {
+  margin-top: 0.15rem;
+  margin-bottom: 0;
+}
+
 .setting-item label {
   font-weight: 600;
   color: var(--text-color);
