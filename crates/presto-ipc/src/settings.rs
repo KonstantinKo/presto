@@ -367,6 +367,32 @@ mod tests {
         assert_eq!(back.ambient_sound_volume, 70);
     }
 
+    /// Feature 004 T006 (RED → T007 GREEN): every `AmbientSoundType`
+    /// variant MUST serialise to its kebab-case wire string and
+    /// round-trip in both directions. The `WhiteNoise → "white-noise"`
+    /// pair is the critical multi-word case — a misconfigured
+    /// `#[serde(rename_all = ...)]` would silently encode it as
+    /// `"whitenoise"` or `"white_noise"`.
+    #[test]
+    fn ambient_sound_type_serialises_kebab_case() {
+        let pairs: &[(AmbientSoundType, &str)] = &[
+            (AmbientSoundType::None, r#""none""#),
+            (AmbientSoundType::Rain, r#""rain""#),
+            (AmbientSoundType::Fire, r#""fire""#),
+            (AmbientSoundType::Library, r#""library""#),
+            (AmbientSoundType::Fan, r#""fan""#),
+            (AmbientSoundType::Storm, r#""storm""#),
+            (AmbientSoundType::WhiteNoise, r#""white-noise""#),
+            (AmbientSoundType::Wind, r#""wind""#),
+        ];
+        for (variant, wire) in pairs {
+            let encoded = serde_json::to_string(variant).expect("serialise");
+            assert_eq!(&encoded, wire, "serialise {variant:?}");
+            let decoded: AmbientSoundType = serde_json::from_str(wire).expect("deserialise");
+            assert_eq!(&decoded, variant, "deserialise {wire}");
+        }
+    }
+
     /// T005 (RED → T006 GREEN): pre-002 settings.json without the
     /// `sessions_per_long_break` field deserialises to the default `4`
     /// (preserves bit-for-bit engine behaviour on the legacy load
