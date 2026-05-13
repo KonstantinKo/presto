@@ -33,6 +33,8 @@ const TAURI_MOCK_INIT_SCRIPT = `
     },
     history: [],
     autostartEnabled: false,
+    saveManualSessionsCallCount: 0,
+    lastSaveManualSessionsArgs: null,
   };
 
   function _getTags() {
@@ -107,8 +109,17 @@ const TAURI_MOCK_INIT_SCRIPT = `
             return _state.manualSessions.slice();
 
           case "save_manual_sessions": {
-            if (args && args.sessions) {
-              _state.manualSessions = args.sessions.slice();
+            _state.saveManualSessionsCallCount++;
+            // serde_wasm_bindgen 0.6 serialises BTreeMap as a JS Map, not a plain object.
+            // Use Map.get() when plain-object property access returns undefined.
+            var sessionsArr = (args && args.sessions)
+              ? args.sessions
+              : (args instanceof Map ? args.get("sessions") : null);
+            _state.lastSaveManualSessionsArgs = sessionsArr
+              ? (Array.isArray(sessionsArr) ? sessionsArr.slice() : Array.from(sessionsArr))
+              : (Array.isArray(args) ? args.slice() : null);
+            if (sessionsArr) {
+              _state.manualSessions = Array.isArray(sessionsArr) ? sessionsArr.slice() : Array.from(sessionsArr);
             } else if (Array.isArray(args)) {
               _state.manualSessions = args.slice();
             }
