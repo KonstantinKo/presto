@@ -27,9 +27,11 @@
 #![allow(clippy::must_use_candidate, clippy::too_many_lines)]
 
 use leptos::prelude::*;
+use leptos_i18n::{t, t_string};
 
 use crate::bridge::types::{AmbientSoundType, Settings};
 use crate::components::settings::SettingsToast;
+use crate::i18n::i18n::use_i18n;
 
 /// Map `AmbientSoundType` to its wire-shape string (the value
 /// attribute of each `<option>` in the dropdown). Kept in sync with
@@ -69,6 +71,7 @@ fn ambient_sound_type_from_wire(s: &str) -> AmbientSoundType {
 /// Notifications settings tab.
 #[component]
 pub fn NotificationsSettings(settings: RwSignal<Settings>, toast: SettingsToast) -> impl IntoView {
+    let i18n = use_i18n();
     // Derived signals — read each bool field via `.with(...)`.
     let desktop_enabled =
         Signal::derive(move || settings.with(|s| s.notifications.desktop_notifications));
@@ -93,12 +96,13 @@ pub fn NotificationsSettings(settings: RwSignal<Settings>, toast: SettingsToast)
     // Status text mirrors the JS-era `notifications.js` pattern
     // (`Enabled` / `Disabled` based on the toggle). The e2e spec at
     // `settings-notifications.spec.js:26` asserts `toContainText("Disabled")`
-    // after toggling off.
+    // after toggling off — the spec runs in English mode, so the
+    // localised string still resolves to "Disabled" / "Enabled" there.
     let status_text = Signal::derive(move || {
         if desktop_enabled.get() {
-            "Enabled"
+            t_string!(i18n, settings.notifications.status_enabled).to_string()
         } else {
-            "Disabled"
+            t_string!(i18n, settings.notifications.status_disabled).to_string()
         }
     });
 
@@ -106,25 +110,25 @@ pub fn NotificationsSettings(settings: RwSignal<Settings>, toast: SettingsToast)
         settings.update(|s| {
             s.notifications.desktop_notifications = !s.notifications.desktop_notifications;
         });
-        toast.show("Settings saved");
+        toast.show(t_string!(i18n, settings.toast_saved).to_string());
     };
     let on_sound_toggle = move |_| {
         settings.update(|s| {
             s.notifications.sound_notifications = !s.notifications.sound_notifications;
         });
-        toast.show("Settings saved");
+        toast.show(t_string!(i18n, settings.toast_saved).to_string());
     };
     let on_metronome_toggle = move |_| {
         settings.update(|s| {
             s.notifications.metronome = !s.notifications.metronome;
         });
-        toast.show("Settings saved");
+        toast.show(t_string!(i18n, settings.toast_saved).to_string());
     };
     let on_ambient_toggle = move |_| {
         settings.update(|s| {
             s.notifications.ambient_sound_enabled = !s.notifications.ambient_sound_enabled;
         });
-        toast.show("Settings saved");
+        toast.show(t_string!(i18n, settings.toast_saved).to_string());
     };
     let on_ambient_type_change = move |ev: leptos::ev::Event| {
         let new_value = event_target_value(&ev);
@@ -132,7 +136,7 @@ pub fn NotificationsSettings(settings: RwSignal<Settings>, toast: SettingsToast)
         settings.update(|s| {
             s.notifications.ambient_sound_type = parsed;
         });
-        toast.show("Settings saved");
+        toast.show(t_string!(i18n, settings.toast_saved).to_string());
     };
     let on_ambient_volume_input = move |ev: leptos::ev::Event| {
         let raw = event_target_value(&ev);
@@ -158,13 +162,11 @@ pub fn NotificationsSettings(settings: RwSignal<Settings>, toast: SettingsToast)
 
     view! {
         <div class="category-header">
-            <h1>"Notifications"</h1>
-            <p class="category-description">
-                "Control how and when you receive notifications"
-            </p>
+            <h1>{t!(i18n, settings.notifications.title)}</h1>
+            <p class="category-description">{t!(i18n, settings.notifications.description)}</p>
         </div>
         <div class="settings-section">
-            <h3 class="section-header">"Notification Types"</h3>
+            <h3 class="section-header">{t!(i18n, settings.notifications.types_header)}</h3>
             <div class="setting-item">
                 <label class="checkbox-label">
                     <input
@@ -174,11 +176,9 @@ pub fn NotificationsSettings(settings: RwSignal<Settings>, toast: SettingsToast)
                         on:change=on_desktop_toggle
                     />
                     <span class="checkmark"></span>
-                    "Desktop Notifications"
+                    {t!(i18n, settings.notifications.desktop_label)}
                 </label>
-                <p class="setting-description">
-                    "Show system notifications when timer completes."
-                </p>
+                <p class="setting-description">{t!(i18n, settings.notifications.desktop_help)}</p>
                 // Status panel — always rendered so
                 // `expect(#notification-status).toBeVisible()` at
                 // `spec.js:16` resolves; CSS handles the in/out
@@ -191,7 +191,7 @@ pub fn NotificationsSettings(settings: RwSignal<Settings>, toast: SettingsToast)
                 >
                     <span id="notification-status-text">{move || status_text.get()}</span>
                     <button id="test-notifications-btn" on:click=on_test>
-                        "Test"
+                        {t!(i18n, settings.notifications.test_button)}
                     </button>
                 </div>
             </div>
@@ -204,11 +204,9 @@ pub fn NotificationsSettings(settings: RwSignal<Settings>, toast: SettingsToast)
                         on:change=on_sound_toggle
                     />
                     <span class="checkmark"></span>
-                    "Sound Notifications"
+                    {t!(i18n, settings.notifications.sound_label)}
                 </label>
-                <p class="setting-description">
-                    "Play a sound when timer phases complete"
-                </p>
+                <p class="setting-description">{t!(i18n, settings.notifications.sound_help)}</p>
             </div>
             <div class="setting-item">
                 <label class="checkbox-label">
@@ -219,11 +217,9 @@ pub fn NotificationsSettings(settings: RwSignal<Settings>, toast: SettingsToast)
                         on:change=on_metronome_toggle
                     />
                     <span class="checkmark"></span>
-                    "Enable ticking sound during focus"
+                    {t!(i18n, settings.notifications.metronome_label)}
                 </label>
-                <p class="setting-description">
-                    "Play a soft tick every second while a focus session is running, in sync with the timer countdown."
-                </p>
+                <p class="setting-description">{t!(i18n, settings.notifications.metronome_help)}</p>
             </div>
             // Feature 004: ambient-sound controls. Nested in a
             // single parent `.setting-item` card so the dropdown +
@@ -245,18 +241,16 @@ pub fn NotificationsSettings(settings: RwSignal<Settings>, toast: SettingsToast)
                         on:change=on_ambient_toggle
                     />
                     <span class="checkmark"></span>
-                    "Enable ambient background sound"
+                    {t!(i18n, settings.notifications.ambient_label)}
                 </label>
-                <p class="setting-description">
-                    "Loop a chosen ambient track while a focus session is running. Fades in on resume, fades out on pause/break/overtime."
-                </p>
+                <p class="setting-description">{t!(i18n, settings.notifications.ambient_help)}</p>
                 <div
                     class="ambient-controls"
                     class:disabled=move || !ambient_enabled.get()
                     aria-disabled=move || (!ambient_enabled.get()).then_some("true")
                 >
                     <div class="ambient-control-row">
-                        <label class="setting-label" for="ambient-sound-type">"Ambient sound"</label>
+                        <label class="setting-label" for="ambient-sound-type">{t!(i18n, settings.notifications.ambient_sound_label)}</label>
                         <select
                             id="ambient-sound-type"
                             class="setting-select"
@@ -264,19 +258,19 @@ pub fn NotificationsSettings(settings: RwSignal<Settings>, toast: SettingsToast)
                             on:change=on_ambient_type_change
                             prop:disabled=move || !ambient_enabled.get()
                         >
-                            <option value="none">"None"</option>
-                            <option value="rain">"Rain"</option>
-                            <option value="fire">"Fire"</option>
-                            <option value="library">"Library"</option>
-                            <option value="fan">"Fan"</option>
-                            <option value="storm">"Storm"</option>
-                            <option value="white-noise">"White noise"</option>
-                            <option value="wind">"Wind"</option>
+                            <option value="none">{t!(i18n, settings.notifications.ambient_track_none)}</option>
+                            <option value="rain">{t!(i18n, settings.notifications.ambient_track_rain)}</option>
+                            <option value="fire">{t!(i18n, settings.notifications.ambient_track_fire)}</option>
+                            <option value="library">{t!(i18n, settings.notifications.ambient_track_library)}</option>
+                            <option value="fan">{t!(i18n, settings.notifications.ambient_track_fan)}</option>
+                            <option value="storm">{t!(i18n, settings.notifications.ambient_track_storm)}</option>
+                            <option value="white-noise">{t!(i18n, settings.notifications.ambient_track_white_noise)}</option>
+                            <option value="wind">{t!(i18n, settings.notifications.ambient_track_wind)}</option>
                         </select>
                     </div>
                     <div class="ambient-control-row">
                         <label class="setting-label" for="ambient-sound-volume">
-                            "Volume "
+                            {t!(i18n, settings.notifications.ambient_volume_label)}" "
                             <span class="setting-value">
                                 {move || format!("{}%", ambient_volume.get())}
                             </span>

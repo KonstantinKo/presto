@@ -39,9 +39,11 @@
 #![allow(clippy::must_use_candidate, clippy::too_many_lines)]
 
 use leptos::prelude::*;
+use leptos_i18n::{t, t_string};
 
 use crate::bridge::types::Settings;
 use crate::components::settings::SettingsToast;
+use crate::i18n::i18n::use_i18n;
 
 /// Parse the slider's `<input type="range">` value into u32, falling
 /// back to 30 (the JS-era default) on parse failure.
@@ -52,6 +54,7 @@ fn parse_seconds(raw: &str, fallback: u32) -> u32 {
 /// Automation settings tab.
 #[component]
 pub fn AutomationSettings(settings: RwSignal<Settings>, toast: SettingsToast) -> impl IntoView {
+    let i18n = use_i18n();
     // Notifications-bound signals.
     let auto_start = Signal::derive(move || settings.with(|s| s.notifications.auto_start_timer));
     let continuous =
@@ -70,43 +73,41 @@ pub fn AutomationSettings(settings: RwSignal<Settings>, toast: SettingsToast) ->
         settings.update(|s| {
             s.notifications.auto_start_timer = !s.notifications.auto_start_timer;
         });
-        toast.show("Settings saved");
+        toast.show(t_string!(i18n, settings.toast_saved).to_string());
     };
     let on_continuous = move |_| {
         settings.update(|s| {
             s.notifications.allow_continuous_sessions = !s.notifications.allow_continuous_sessions;
         });
-        toast.show("Settings saved");
+        toast.show(t_string!(i18n, settings.toast_saved).to_string());
     };
     let on_smart_pause = move |_| {
         settings.update(|s| {
             s.notifications.smart_pause = !s.notifications.smart_pause;
         });
-        toast.show("Settings saved");
+        toast.show(t_string!(i18n, settings.toast_saved).to_string());
     };
     let on_timeout = move |ev| {
         let value = parse_seconds(&event_target_value(&ev), 30);
         settings.update(|s| s.notifications.smart_pause_timeout = value);
-        toast.show("Settings saved");
+        toast.show(t_string!(i18n, settings.toast_saved).to_string());
     };
     let on_auto_save = move |_| {
         auto_save.update(|v| *v = !*v);
-        toast.show("Settings saved");
+        toast.show(t_string!(i18n, settings.toast_saved).to_string());
     };
     let on_prevent = move |_| {
         prevent_interruptions.update(|v| *v = !*v);
-        toast.show("Settings saved");
+        toast.show(t_string!(i18n, settings.toast_saved).to_string());
     };
 
     view! {
         <div class="category-header">
-            <h1>"Automation"</h1>
-            <p class="category-description">
-                "Configure automatic behaviors and smart features"
-            </p>
+            <h1>{t!(i18n, settings.automation.title)}</h1>
+            <p class="category-description">{t!(i18n, settings.automation.description)}</p>
         </div>
         <div class="settings-section">
-            <h3 class="section-header">"Timer Automation"</h3>
+            <h3 class="section-header">{t!(i18n, settings.automation.timer_section)}</h3>
             <div class="setting-item">
                 <label class="checkbox-label">
                     <input
@@ -116,11 +117,9 @@ pub fn AutomationSettings(settings: RwSignal<Settings>, toast: SettingsToast) ->
                         on:change=on_auto_start
                     />
                     <span class="checkmark"></span>
-                    "Auto-start Timer"
+                    {t!(i18n, settings.automation.auto_start_label)}
                 </label>
-                <p class="setting-description">
-                    "Automatically start the timer when manually skipping to the next session."
-                </p>
+                <p class="setting-description">{t!(i18n, settings.automation.auto_start_help)}</p>
             </div>
             <div class="setting-item">
                 <label class="checkbox-label">
@@ -131,15 +130,13 @@ pub fn AutomationSettings(settings: RwSignal<Settings>, toast: SettingsToast) ->
                         on:change=on_continuous
                     />
                     <span class="checkmark"></span>
-                    "Allow Continuous Sessions"
+                    {t!(i18n, settings.automation.continuous_label)}
                 </label>
-                <p class="setting-description">
-                    "Allow all sessions to continue beyond their timer duration."
-                </p>
+                <p class="setting-description">{t!(i18n, settings.automation.continuous_help)}</p>
             </div>
         </div>
         <div class="settings-section">
-            <h3 class="section-header">"Smart Features"</h3>
+            <h3 class="section-header">{t!(i18n, settings.automation.smart_section)}</h3>
             <div class="setting-item">
                 <label class="checkbox-label">
                     <input
@@ -149,11 +146,9 @@ pub fn AutomationSettings(settings: RwSignal<Settings>, toast: SettingsToast) ->
                         on:change=on_smart_pause
                     />
                     <span class="checkmark"></span>
-                    "Smart Pause (Auto-pause when inactive)"
+                    {t!(i18n, settings.automation.smart_pause_label)}
                 </label>
-                <p class="setting-description">
-                    "Automatically pause the timer during focus sessions when no activity is detected."
-                </p>
+                <p class="setting-description">{t!(i18n, settings.automation.smart_pause_help)}</p>
             </div>
             // The `#smart-pause-timeout-setting { display: none }` CSS
             // rule in `style/settings.css` is more specific than an
@@ -167,9 +162,9 @@ pub fn AutomationSettings(settings: RwSignal<Settings>, toast: SettingsToast) ->
                 class:visible=move || smart_pause.get()
             >
                 <label for="smart-pause-timeout">
-                    "Inactivity Timeout: "
+                    {t!(i18n, settings.automation.inactivity_timeout_label)}" "
                     <span id="timeout-value">{move || timeout_value.get()}</span>
-                    " seconds"
+                    " "{t!(i18n, settings.automation.seconds_unit)}
                 </label>
                 <input
                     type="range"
@@ -180,13 +175,11 @@ pub fn AutomationSettings(settings: RwSignal<Settings>, toast: SettingsToast) ->
                     prop:value=move || timeout_value.get()
                     on:input=on_timeout
                 />
-                <p class="setting-description">
-                    "How long to wait before pausing during inactivity"
-                </p>
+                <p class="setting-description">{t!(i18n, settings.automation.inactivity_timeout_help)}</p>
             </div>
         </div>
         <div class="settings-section">
-            <h3 class="section-header">"Session Management"</h3>
+            <h3 class="section-header">{t!(i18n, settings.automation.session_section)}</h3>
             <div class="setting-item">
                 <label class="checkbox-label">
                     <input
@@ -196,11 +189,9 @@ pub fn AutomationSettings(settings: RwSignal<Settings>, toast: SettingsToast) ->
                         on:change=on_auto_save
                     />
                     <span class="checkmark"></span>
-                    "Auto-save Completed Sessions"
+                    {t!(i18n, settings.automation.auto_save_label)}
                 </label>
-                <p class="setting-description">
-                    "Automatically save session data when timer completes."
-                </p>
+                <p class="setting-description">{t!(i18n, settings.automation.auto_save_help)}</p>
             </div>
             <div class="setting-item">
                 <label class="checkbox-label">
@@ -211,11 +202,9 @@ pub fn AutomationSettings(settings: RwSignal<Settings>, toast: SettingsToast) ->
                         on:change=on_prevent
                     />
                     <span class="checkmark"></span>
-                    "Prevent Interruptions"
+                    {t!(i18n, settings.automation.prevent_interruptions_label)}
                 </label>
-                <p class="setting-description">
-                    "Show confirmation dialog before allowing session resets during active focus periods."
-                </p>
+                <p class="setting-description">{t!(i18n, settings.automation.prevent_interruptions_help)}</p>
             </div>
         </div>
     }
