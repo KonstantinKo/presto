@@ -378,28 +378,85 @@ const fn local_hh_mm(_ms: i64) -> (u32, u32) {
 }
 
 #[cfg(target_arch = "wasm32")]
+mod chime {
+    use std::cell::RefCell;
+    use web_sys::AudioContext;
+
+    thread_local! {
+        // One AudioContext shared by all chime calls for the WASM module's
+        // lifetime. Avoids the WebKit per-page context cap (~4-6 contexts)
+        // that silently fails `AudioContext::new()` once earlier contexts
+        // accumulate. Mirrors the metronome's singleton pattern.
+        pub(super) static CTX: RefCell<Option<AudioContext>> = const { RefCell::new(None) };
+    }
+
+    pub(super) fn ensure_context() {
+        CTX.with(|cell| {
+            let mut slot = cell.borrow_mut();
+            if slot.is_none() {
+                *slot = AudioContext::new().ok();
+            }
+            // Resume is idempotent on a running context; on macOS WKWebView a
+            // freshly-constructed AudioContext starts suspended unless creation
+            // happened inside a live gesture — `.resume()` unlocks it whenever
+            // the autoplay policy permits.
+            if let Some(ctx) = slot.as_ref() {
+                let _ = ctx.resume();
+            }
+        });
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
 fn play_chime() {
-    use web_sys::{AudioContext, OscillatorType};
-    let Ok(ctx) = AudioContext::new() else { return };
-    let Ok(osc) = ctx.create_oscillator() else {
-        return;
-    };
-    let Ok(gain) = ctx.create_gain() else { return };
-    osc.set_type(OscillatorType::Sine);
-    osc.frequency().set_value(800.0);
-    let now = ctx.current_time();
-    let _ = gain.gain().set_value_at_time(0.3, now);
-    let _ = gain
-        .gain()
-        .exponential_ramp_to_value_at_time(0.01, now + 0.5);
-    let _ = osc.connect_with_audio_node(&gain);
-    let _ = gain.connect_with_audio_node(&ctx.destination());
-    let _ = osc.start();
-    let _ = osc.stop_with_when(now + 0.5);
+    use web_sys::OscillatorType;
+    chime::ensure_context();
+    chime::CTX.with(|cell| {
+        let slot = cell.borrow();
+        let Some(ctx) = slot.as_ref() else { return };
+        let Ok(osc) = ctx.create_oscillator() else {
+            return;
+        };
+        let Ok(gain) = ctx.create_gain() else { return };
+        osc.set_type(OscillatorType::Sine);
+        osc.frequency().set_value(800.0);
+        let now = ctx.current_time();
+        let _ = gain.gain().set_value_at_time(0.3, now);
+        let _ = gain
+            .gain()
+            .exponential_ramp_to_value_at_time(0.01, now + 0.5);
+        let _ = osc.connect_with_audio_node(&gain);
+        let _ = gain.connect_with_audio_node(&ctx.destination());
+        let _ = osc.start();
+        let _ = osc.stop_with_when(now + 0.5);
+    });
+}
+
+/// Returns the cached `AudioContext` used by `play_chime`, or `None` if it has
+/// not yet been initialised. Test-only accessor for the singleton invariant.
+#[cfg(all(target_arch = "wasm32", test))]
+fn chime_audio_context() -> Option<web_sys::AudioContext> {
+    chime::CTX.with(|cell| cell.borrow().clone())
 }
 
 #[cfg(not(target_arch = "wasm32"))]
 const fn play_chime() {}
+
+/// Constructs and resumes the shared `AudioContext` used by `play_chime`.
+/// Call this from every user-gesture entry point (Start/Resume click,
+/// keyboard shortcut) so the cached context is created inside the
+/// synchronous gesture call stack. On macOS WKWebView a context created
+/// inside a gesture is immediately unlockable via `.resume()`; a context
+/// created later (e.g. from the 1 Hz tick) cannot be unlocked until the
+/// next gesture — making transition chimes silent. Calling here costs one
+/// idempotent `.resume()` per gesture and nothing else when already running.
+#[cfg(target_arch = "wasm32")]
+fn prime_audio_context() {
+    chime::ensure_context();
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+const fn prime_audio_context() {}
 
 /// One-shot ticking sound, fired once per second from the 1 Hz tick
 /// Effect during focus sessions. Soft kitchen-timer "tick" — very
@@ -807,6 +864,7 @@ pub fn TimerView() -> impl IntoView {
                 let matches_space = ev.code() == "Space";
                 if matches_shortcut || matches_space {
                     ev.prevent_default();
+                    prime_audio_context();
                     let events = engine
                         .try_update(|state| {
                             if state.is_running() {
@@ -1103,6 +1161,7 @@ pub fn TimerView() -> impl IntoView {
     // the in-memory state machine is correct even though
     // persistence is a no-op on the dev server.
     let on_play_pause = move |_| {
+        prime_audio_context();
         let events = engine
             .try_update(|state| {
                 if state.is_running() {
@@ -2377,5 +2436,42 @@ mod tests {
         let skip = SkipButtonState::Skip;
         assert_eq!(skip.terse_tooltip(), "Skip session");
         assert_eq!(skip.verbose_label(), "Skip session");
+    }
+}
+
+/// Wasm-bindgen tests for the chime singleton invariant.
+/// Gated on `wasm32` because `AudioContext` is a browser API; host-side
+/// `cargo test` would silently drop the bodies.
+/// Run with: `(cd src && wasm-pack test --node)`.
+#[cfg(all(test, target_arch = "wasm32"))]
+mod chime_tests {
+    use super::{chime_audio_context, play_chime};
+    use wasm_bindgen_test::wasm_bindgen_test;
+
+    /// CHK042 — `play_chime` must reuse one `AudioContext` across all calls.
+    /// In node.js `AudioContext` is unavailable (slot stays `None`); the
+    /// invariant is that the slot is CONSISTENT — not that it's `Some`.
+    /// In a browser environment the slot becomes `Some` after the first call
+    /// and every subsequent call returns the same instance.
+    #[wasm_bindgen_test]
+    fn play_chime_reuses_audio_context_across_calls() {
+        play_chime();
+        play_chime();
+        play_chime();
+        let snap1 = chime_audio_context();
+        play_chime();
+        let snap2 = chime_audio_context();
+        // Both snapshots must agree: either both None (AudioContext
+        // unavailable in node) or both point to the same context.
+        match (snap1, snap2) {
+            (None, None) => {}
+            (Some(a), Some(b)) => {
+                assert!(
+                    a == b,
+                    "play_chime must reuse the cached AudioContext across calls"
+                );
+            }
+            _ => panic!("chime AudioContext singleton changed across play_chime calls"),
+        }
     }
 }
