@@ -41,7 +41,7 @@
   "plugins": {
     "updater": {
       "endpoints": [
-        "https://github.com/murdercode/presto/releases/latest/download/latest-{target}.json"
+        "https://github.com/KonstantinKo/presto/releases/latest/download/latest-{target}.json"
       ],
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IENCNDYxMDAyQjIxQkM4MjAKUldRZ3lCdXlBaEJHeXp3bnRHYWRwOVM2WFo1T3IzMXJWUnlJYUtwWlEzcnBKVHpnaXpJNjhmK1gK",
       "dangerousInsecureTransportProtocol": false
