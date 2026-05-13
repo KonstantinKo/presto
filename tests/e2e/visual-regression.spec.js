@@ -97,10 +97,15 @@ test("visual baseline: timer, tags, statistics (4 periods), daily, all settings 
   await expect(page).toHaveScreenshot(["visual-regression", "settings-shortcuts.png"], sidebarMask);
 
   await selectSettingsCategory(page, "Notifications");
-  await expect(page).toHaveScreenshot(
-    ["visual-regression", "settings-notifications.png"],
-    sidebarMask
-  );
+  // Feature 004 (SC-012): three ambient-sound controls render
+  // below the 1280×720 viewport, so the default crop misses them.
+  // Capture the full settings pane so the controls are part of the
+  // visual contract; the sidebar mask still protects every other
+  // baseline from cascade-regenerating on sidebar changes.
+  await expect(page).toHaveScreenshot(["visual-regression", "settings-notifications.png"], {
+    ...sidebarMask,
+    fullPage: true,
+  });
 
   await selectSettingsCategory(page, "Theme");
   await expect(page).toHaveScreenshot(["visual-regression", "settings-theme.png"], sidebarMask);
