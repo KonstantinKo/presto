@@ -225,9 +225,17 @@ pub fn NotificationsSettings(settings: RwSignal<Settings>, toast: SettingsToast)
                     "Play a soft tick every second while a focus session is running, in sync with the timer countdown."
                 </p>
             </div>
-            // Feature 004: ambient-sound controls. Placed below the
-            // metronome row per FR-013; all three visible regardless
-            // of checkbox state per FR-014.
+            // Feature 004: ambient-sound controls. Nested in a
+            // single parent `.setting-item` card so the dropdown +
+            // slider read as DEPENDENT sub-controls of the parent
+            // checkbox (rather than siblings of equal weight). The
+            // dropdown + slider are disabled when the checkbox is
+            // off, with ARIA + opacity feedback (see the
+            // `.ambient-controls.disabled` CSS rule in
+            // `style/settings.css`). All three controls remain
+            // visible regardless of checkbox state per FR-014;
+            // toggling off does not destructively reset the dropdown
+            // or slider per FR-005.
             <div class="setting-item">
                 <label class="checkbox-label">
                     <input
@@ -242,41 +250,49 @@ pub fn NotificationsSettings(settings: RwSignal<Settings>, toast: SettingsToast)
                 <p class="setting-description">
                     "Loop a chosen ambient track while a focus session is running. Fades in on resume, fades out on pause/break/overtime."
                 </p>
-            </div>
-            <div class="setting-item">
-                <label class="setting-label" for="ambient-sound-type">"Ambient sound"</label>
-                <select
-                    id="ambient-sound-type"
-                    class="setting-select"
-                    prop:value=move || ambient_type_wire.get()
-                    on:change=on_ambient_type_change
+                <div
+                    class="ambient-controls"
+                    class:disabled=move || !ambient_enabled.get()
+                    aria-disabled=move || (!ambient_enabled.get()).then_some("true")
                 >
-                    <option value="none">"None"</option>
-                    <option value="rain">"Rain"</option>
-                    <option value="fire">"Fire"</option>
-                    <option value="library">"Library"</option>
-                    <option value="fan">"Fan"</option>
-                    <option value="storm">"Storm"</option>
-                    <option value="white-noise">"White noise"</option>
-                    <option value="wind">"Wind"</option>
-                </select>
-            </div>
-            <div class="setting-item">
-                <label class="setting-label" for="ambient-sound-volume">
-                    "Volume "
-                    <span class="setting-value">
-                        {move || format!("{}%", ambient_volume.get())}
-                    </span>
-                </label>
-                <input
-                    id="ambient-sound-volume"
-                    type="range"
-                    min="0"
-                    max="100"
-                    step="1"
-                    prop:value=move || ambient_volume.get().to_string()
-                    on:input=on_ambient_volume_input
-                />
+                    <div class="ambient-control-row">
+                        <label class="setting-label" for="ambient-sound-type">"Ambient sound"</label>
+                        <select
+                            id="ambient-sound-type"
+                            class="setting-select"
+                            prop:value=move || ambient_type_wire.get()
+                            on:change=on_ambient_type_change
+                            prop:disabled=move || !ambient_enabled.get()
+                        >
+                            <option value="none">"None"</option>
+                            <option value="rain">"Rain"</option>
+                            <option value="fire">"Fire"</option>
+                            <option value="library">"Library"</option>
+                            <option value="fan">"Fan"</option>
+                            <option value="storm">"Storm"</option>
+                            <option value="white-noise">"White noise"</option>
+                            <option value="wind">"Wind"</option>
+                        </select>
+                    </div>
+                    <div class="ambient-control-row">
+                        <label class="setting-label" for="ambient-sound-volume">
+                            "Volume "
+                            <span class="setting-value">
+                                {move || format!("{}%", ambient_volume.get())}
+                            </span>
+                        </label>
+                        <input
+                            id="ambient-sound-volume"
+                            type="range"
+                            min="0"
+                            max="100"
+                            step="1"
+                            prop:value=move || ambient_volume.get().to_string()
+                            on:input=on_ambient_volume_input
+                            prop:disabled=move || !ambient_enabled.get()
+                        />
+                    </div>
+                </div>
             </div>
         </div>
     }

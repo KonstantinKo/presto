@@ -74,16 +74,26 @@ test("notification settings: permission granted, status shown, toggle sound, tes
   await expect(ambientVolume).toHaveValue("30");
 
   // Toggle off; controls stay visible (FR-014) and the dropdown +
-  // slider remember their values (FR-005).
+  // slider remember their values (FR-005). With the parent-checkbox
+  // dependent-control affordance shipped in feature 004, the
+  // dropdown + slider must additionally read as `disabled` so users
+  // (and screen-readers) understand the dependency.
   await ambientEnabled.click();
   await expect(ambientEnabled).not.toBeChecked();
   await expect(ambientType).toBeVisible();
   await expect(ambientVolume).toBeVisible();
   await expect(ambientType).toHaveValue("rain");
   await expect(ambientVolume).toHaveValue("30");
+  await expect(ambientType).toBeDisabled();
+  await expect(ambientVolume).toBeDisabled();
 
-  // Pick "None" while the feature is off — the slider value MUST be
-  // preserved (FR-005 / A11).
+  // Re-enable; controls become interactive again. Pick "None"; the
+  // slider value MUST be preserved across the track-to-None
+  // transition (FR-005 / A11).
+  await ambientEnabled.click();
+  await expect(ambientEnabled).toBeChecked();
+  await expect(ambientType).toBeEnabled();
+  await expect(ambientVolume).toBeEnabled();
   await ambientType.selectOption("none");
   await expect(ambientType).toHaveValue("none");
   await expect(ambientVolume).toHaveValue("30");
