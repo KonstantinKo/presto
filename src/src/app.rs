@@ -47,6 +47,7 @@ use crate::components::update_notification::UpdateNotification;
 use crate::engine::activity_signal::ActivitySignal;
 use crate::engine::durations::Durations;
 use crate::engine::timer::TimerState;
+use crate::i18n::i18n::{use_i18n, I18nContextProvider};
 use crate::managers::navigation::{NavView, NavigationManager, SettingsTab};
 use crate::managers::update::{UpdateInfo, UpdateManager};
 use crate::theme::loader;
@@ -574,6 +575,16 @@ pub fn App() -> impl IntoView {
     }
 
     view! {
+        // Feature 005: wrap the app tree in the leptos_i18n provider
+        // so every `t!(i18n, ...)` call site descends from a live
+        // I18nContext. `enable_cookie=false` because presto persists
+        // the locale through `settings.appearance.locale`, not via
+        // the library's `lf-lang` cookie. The forwarding Effect that
+        // mirrors `settings.appearance.locale` into `i18n.set_locale`
+        // lives in `LocaleSync` below — it must run inside the
+        // provider so `use_i18n()` resolves.
+        <I18nContextProvider enable_cookie=false>
+            <LocaleSync settings=settings/>
         // The sidebar carries a per-mode theme class (`focus` /
         // `break` / `longBreak`) so `style/sidebar.css`'s
         // `.sidebar.focus .sidebar-icon.active { background:
@@ -720,5 +731,34 @@ pub fn App() -> impl IntoView {
                 " Tauri bridge unavailable — settings + sessions are in-memory only."
             </div>
         })}
+        </I18nContextProvider>
     }
+}
+
+/// Locale-forwarding sentinel component.
+///
+/// Lives inside the `<I18nContextProvider>` so `use_i18n()` resolves to a
+/// live context. An Effect watches `settings.appearance.locale` and
+/// forwards every explicit choice into the library's `set_locale`. The
+/// dropdown writes ONE signal (the IPC settings signal); this Effect
+/// propagates to the library so every `t!(i18n, ...)` call site re-
+/// renders in the same Leptos reactive tick (FR-007 / FR-012 / SC-007
+/// "mixed-locale frame avoidance" honoured by Leptos signal batching).
+///
+/// Emits no DOM; the function-body return is an empty `()` view. The
+/// component exists solely to wire the reactive effect inside the
+/// provider's context.
+#[component]
+fn LocaleSync(settings: RwSignal<Settings>) -> impl IntoView {
+    let i18n = use_i18n();
+    Effect::new(move |_| {
+        let persisted = settings.with(|s| s.appearance.locale);
+        // Per FR-011 / Fix A: only an explicit `Some(_)` overrides the
+        // library's own OS-detection path. `None` (legacy / fresh
+        // install) leaves the library's locale alone — the provider's
+        // internal OS-detection has already populated it on mount.
+        if let Some(library_locale) = crate::i18n::compute_initial_library_locale(persisted) {
+            i18n.set_locale(library_locale);
+        }
+    });
 }
