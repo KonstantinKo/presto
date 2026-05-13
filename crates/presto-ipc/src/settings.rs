@@ -322,7 +322,28 @@ impl From<SettingsOnDisk> for Settings {
 
 #[cfg(test)]
 mod tests {
-    use super::{NotificationSettings, StatusBarDisplay, TimerSettings};
+    use super::{AmbientSoundType, NotificationSettings, StatusBarDisplay, TimerSettings};
+
+    /// Feature 004 T004 (RED → T007 GREEN): pre-feature-004
+    /// `NotificationSettings` JSON (no ambient fields) deserialises
+    /// to the documented defaults. Mirrors `metronome_default_off`
+    /// at `:362-375` verbatim — same fixture shape minus the new
+    /// `ambient_sound_*` keys.
+    #[test]
+    fn ambient_sound_legacy_fields_default() {
+        let legacy = r#"{
+            "desktop_notifications": true,
+            "sound_notifications": true,
+            "auto_start_timer": true,
+            "smart_pause": false,
+            "smart_pause_timeout": 30,
+            "metronome": false
+        }"#;
+        let n: NotificationSettings = serde_json::from_str(legacy).expect("deserialise legacy");
+        assert!(!n.ambient_sound_enabled);
+        assert_eq!(n.ambient_sound_type, AmbientSoundType::None);
+        assert_eq!(n.ambient_sound_volume, 50);
+    }
 
     /// T005 (RED → T006 GREEN): pre-002 settings.json without the
     /// `sessions_per_long_break` field deserialises to the default `4`
