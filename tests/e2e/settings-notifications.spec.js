@@ -41,4 +41,50 @@ test("notification settings: permission granted, status shown, toggle sound, tes
   // After clicking, the dialog mock returns without error — just verify no error thrown
   // The primary assertion is that the UI is still functional after the test
   await expect(page.locator("#notification-status")).toBeVisible();
+
+  // Feature 004: ambient-sound controls flow. Three additive
+  // selectors below the metronome row — opt-in checkbox, track
+  // dropdown, volume slider (0..=100). All three visible regardless
+  // of checkbox state (FR-014).
+  const ambientEnabled = page.locator("#ambient-sound-enabled");
+  const ambientType = page.locator("#ambient-sound-type");
+  const ambientVolume = page.locator("#ambient-sound-volume");
+
+  // Cold-start defaults: off / "none" / "50".
+  await expect(ambientEnabled).toBeVisible();
+  await expect(ambientType).toBeVisible();
+  await expect(ambientVolume).toBeVisible();
+  await expect(ambientEnabled).not.toBeChecked();
+  await expect(ambientType).toHaveValue("none");
+  await expect(ambientVolume).toHaveValue("50");
+
+  // Toggle the feature on; pick Rain; drag the slider to 30.
+  await ambientEnabled.click();
+  await expect(ambientEnabled).toBeChecked();
+  await ambientType.selectOption("rain");
+  await expect(ambientType).toHaveValue("rain");
+  await ambientVolume.fill("30");
+  await expect(ambientVolume).toHaveValue("30");
+
+  // Round-trip persistence: leave Notifications and come back.
+  await selectSettingsCategory(page, "General");
+  await selectSettingsCategory(page, "Notifications");
+  await expect(ambientEnabled).toBeChecked();
+  await expect(ambientType).toHaveValue("rain");
+  await expect(ambientVolume).toHaveValue("30");
+
+  // Toggle off; controls stay visible (FR-014) and the dropdown +
+  // slider remember their values (FR-005).
+  await ambientEnabled.click();
+  await expect(ambientEnabled).not.toBeChecked();
+  await expect(ambientType).toBeVisible();
+  await expect(ambientVolume).toBeVisible();
+  await expect(ambientType).toHaveValue("rain");
+  await expect(ambientVolume).toHaveValue("30");
+
+  // Pick "None" while the feature is off — the slider value MUST be
+  // preserved (FR-005 / A11).
+  await ambientType.selectOption("none");
+  await expect(ambientType).toHaveValue("none");
+  await expect(ambientVolume).toHaveValue("30");
 });
