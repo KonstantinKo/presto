@@ -307,6 +307,10 @@ pub fn SessionsHistoryTable() -> impl IntoView {
                             on:click=move |_| {
                                 if let Some(id) = modal_session_id.get_untracked() {
                                     sessions.update(|ss| ss.retain(|s| s.id != id));
+                                    let snapshot = sessions.get_untracked();
+                                    spawn_local(async move {
+                                        let _ = commands::save_manual_sessions(snapshot).await;
+                                    });
                                 }
                                 session_modal_open.set(false);
                             }
@@ -337,6 +341,10 @@ pub fn SessionsHistoryTable() -> impl IntoView {
                                             s.end_time = end;
                                             s.title = title;
                                         }
+                                    });
+                                    let snapshot = sessions.get_untracked();
+                                    spawn_local(async move {
+                                        let _ = commands::save_manual_sessions(snapshot).await;
                                     });
                                 }
                                 session_modal_open.set(false);
