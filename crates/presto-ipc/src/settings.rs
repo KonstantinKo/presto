@@ -429,6 +429,41 @@ mod tests {
         );
     }
 
+    /// Feature 005 T005 (RED → T007 GREEN): each non-default
+    /// `Locale` variant round-trips byte-stable through serde when
+    /// stored on `AppearanceSettings.locale`. Critically asserts the
+    /// Fix A invariant: `Some(Locale::En)` round-trips as `Some(En)`,
+    /// NOT `None` — explicit English MUST persist as a distinct value
+    /// from "no explicit choice" so the resolver bypasses OS detection
+    /// on next cold start.
+    ///
+    /// Also asserts feature-002/003/004 `theme` and `timer_theme`
+    /// fields survive each round-trip alongside the new `locale`
+    /// field (Spec Story 2 AC 5 / SC-003).
+    #[test]
+    fn locale_some_round_trip() {
+        let variants = [Locale::En, Locale::De, Locale::It, Locale::Tr];
+        for variant in variants {
+            let s = AppearanceSettings {
+                theme: "auto".to_string(),
+                timer_theme: "espresso".to_string(),
+                locale: Some(variant),
+            };
+            let json = serde_json::to_string(&s).expect("serialise");
+            let back: AppearanceSettings = serde_json::from_str(&json).expect("deserialise");
+            assert_eq!(
+                back.locale,
+                Some(variant),
+                "Some({variant:?}) round-trips as Some, not None"
+            );
+            assert_eq!(back.theme, "auto", "theme survives round-trip");
+            assert_eq!(
+                back.timer_theme, "espresso",
+                "timer_theme survives round-trip"
+            );
+        }
+    }
+
     /// Feature 004 T004 (RED → T007 GREEN): pre-feature-004
     /// `NotificationSettings` JSON (no ambient fields) deserialises
     /// to the documented defaults. Mirrors `metronome_default_off`
