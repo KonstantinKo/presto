@@ -601,12 +601,12 @@ pub fn App() -> impl IntoView {
                     attr:aria-current=move || if is_calendar.get() { "page" } else { "" }
                     on:click=on_calendar_nav
                 >
-                    // Feature 003 (A6): swap from `ri-calendar-line`
-                    // to the Phosphor `ph-chart-line-up` to reflect
-                    // the Statistics-intent rename. `#calendar-nav`
-                    // and `data-view="calendar"` are preserved (e2e
+                    // Phosphor `ph-chart-line` matches the upstream
+                    // ramazanberkozbek/presto sidebar — single trend
+                    // line, no terminal arrow. `#calendar-nav` and
+                    // `data-view="calendar"` are preserved (e2e
                     // contract).
-                    <i class="ph ph-chart-line-up"></i>
+                    <i class="ph ph-chart-line"></i>
                 </button>
                 <button
                     class="sidebar-icon"
@@ -633,7 +633,7 @@ pub fn App() -> impl IntoView {
                     attr:aria-current=move || if is_settings.get() { "page" } else { "" }
                     on:click=on_settings_nav
                 >
-                    <i class="ri-settings-3-line"></i>
+                    <i class="ph ph-gear"></i>
                 </button>
             </div>
         </nav>
