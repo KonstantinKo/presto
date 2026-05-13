@@ -464,6 +464,40 @@ mod tests {
         }
     }
 
+    /// Feature 005 T006 (RED → T007 GREEN): every `Locale` variant
+    /// MUST serialise to its lowercase wire string (`"en"` / `"de"` /
+    /// `"it"` / `"tr"`) and round-trip in both directions. Wire shape
+    /// matches the existing `theme` field's lowercase convention at
+    /// `:121-123` rather than the `AmbientSoundType` kebab-case
+    /// precedent (two-letter ISO-639-1 codes have no internal word
+    /// boundary that kebab-case would clarify).
+    ///
+    /// Out-of-set wire values (`"fr"`, etc.) MUST fail enum
+    /// deserialisation — the `#[serde(default)]` attribute on the
+    /// `locale` field then substitutes `None` at the parent struct
+    /// level (asserted via the field-level path in T004 /
+    /// `locale_legacy_field_defaults_to_none`).
+    #[test]
+    fn locale_serialises_lowercase() {
+        let cases = [
+            (Locale::En, r#""en""#),
+            (Locale::De, r#""de""#),
+            (Locale::It, r#""it""#),
+            (Locale::Tr, r#""tr""#),
+        ];
+        for (variant, wire) in cases {
+            let encoded = serde_json::to_string(&variant).expect("serialise");
+            assert_eq!(encoded, wire, "serialise {variant:?} → {wire}");
+            let decoded: Locale = serde_json::from_str(wire).expect("deserialise");
+            assert_eq!(decoded, variant, "deserialise {wire} → {variant:?}");
+        }
+        // Out-of-set wire value must fail enum deserialisation outright.
+        assert!(
+            serde_json::from_str::<Locale>(r#""fr""#).is_err(),
+            "unsupported locale code fails serde"
+        );
+    }
+
     /// Feature 004 T004 (RED → T007 GREEN): pre-feature-004
     /// `NotificationSettings` JSON (no ambient fields) deserialises
     /// to the documented defaults. Mirrors `metronome_default_off`
