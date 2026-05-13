@@ -184,7 +184,9 @@ fn shortcut_row(
     };
     let clear_aria = move || {
         let label_text: String = match slot {
-            ShortcutSlot::StartStop => t_string!(i18n, settings.shortcuts.label_start_stop).to_string(),
+            ShortcutSlot::StartStop => {
+                t_string!(i18n, settings.shortcuts.label_start_stop).to_string()
+            }
             ShortcutSlot::Reset => t_string!(i18n, settings.shortcuts.label_reset).to_string(),
             ShortcutSlot::Skip => t_string!(i18n, settings.shortcuts.label_skip).to_string(),
         };

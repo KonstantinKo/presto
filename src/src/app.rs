@@ -48,10 +48,10 @@ use crate::engine::activity_signal::ActivitySignal;
 use crate::engine::durations::Durations;
 use crate::engine::timer::TimerState;
 use crate::i18n::i18n::{use_i18n, I18nContextProvider};
-use leptos_i18n::t_string;
 use crate::managers::navigation::{NavView, NavigationManager, SettingsTab};
 use crate::managers::update::{UpdateInfo, UpdateManager};
 use crate::theme::loader;
+use leptos_i18n::t_string;
 
 /// App-level toast notification queue.
 ///
