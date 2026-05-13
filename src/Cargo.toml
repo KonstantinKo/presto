@@ -71,6 +71,18 @@ features = [
     "AudioNode",
     "AudioParam",
     "AudioDestinationNode",
+    # Web Audio decoded-buffer playback for ambient sounds. HTML5
+    # `<audio loop>` is not sample-accurate gapless on WebKit (LAME
+    # priming bytes for MP3, ~10-50 ms loop seam even for WAV), so
+    # synthesised + organic ambient tracks are routed through
+    # `AudioBufferSourceNode.loop=true` instead. Decoded once via
+    # `AudioContext.decodeAudioData`, played through a per-handle
+    # `GainNode` to keep fade ramps cross-fade-safe.
+    "AudioBuffer",
+    "AudioBufferSourceNode",
+    "Response",
+    "Request",
+    "RequestInit",
     # Feature 004 (T003): looping `<audio>` element + its parent
     # `HtmlMediaElement` for the ambient-sound driver
     # (`components::ambient_audio`). The driver wraps a pair of

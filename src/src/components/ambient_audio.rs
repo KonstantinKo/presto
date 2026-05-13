@@ -1,16 +1,23 @@
 // Ambient background sound driver — feature 004.
 //
 // UI-side side-effect manager. Owns a state machine that controls
-// looping playback through one or two `HtmlAudioElement` handles
-// abstracted behind the `AudioElementHandle` trait so the state
-// machine itself is host-testable (`wasm-pack test --node` has no
-// DOM, so the real `HtmlAudioElement` is unavailable there).
+// looping playback through one or two audio handles abstracted
+// behind the `AudioElementHandle` trait so the state machine
+// itself is host-testable (`cargo test` on the host has no DOM /
+// Web Audio runtime).
+//
+// Browser-side implementation: `WebAudioWrapper` — a Web Audio
+// API path using `AudioBufferSourceNode.loop=true` for
+// sample-accurate gapless looping. (An earlier `HtmlAudioElement`
+// implementation was replaced because HTML5 `<audio loop>` on
+// WebKit / WKWebView is not sample-accurate: MP3 carries LAME
+// priming + end-padding, and even WAV has a ~10–50 ms perceptible
+// seam every wrap.)
 //
 // Mirrors the host-testable projection pattern from
 // `crate::components::icon::IconClass` (feature 003) — the trait is
 // the seam between the pure state machine (testable with
-// `MockAudioHandle`) and the browser implementation
-// (`HtmlAudioWrapper`).
+// `MockAudioHandle`) and the browser-side `WebAudioWrapper`.
 //
 // State machine + transition arcs documented in
 // `specs/004-ambient-sounds/contracts/components.md` §3.
@@ -43,15 +50,27 @@ use presto_ipc::AmbientSoundType;
 /// build here, not silently at runtime with a missing file.
 #[must_use]
 pub const fn asset_path(t: AmbientSoundType) -> Option<&'static str> {
+    // All tracks vendored as WAV (PCM 16-bit). MP3 carries LAME
+    // priming + end-padding bytes that the Web Audio
+    // `AudioBufferSourceNode` decoded-buffer playback path emits
+    // as ~26 ms of silence at every loop wrap — a perceptible
+    // seam. WAV has no codec padding, so the seam is
+    // sample-tight on WebKit. Organic tracks are downsampled to
+    // 22.05 kHz stereo + crossfade-swap loop-prepped (recipe in
+    // `src/assets/audio/README.md`) to keep each file under the
+    // 2 MB asset cap (~1.7 MB each).
     match t {
         AmbientSoundType::None => None,
-        AmbientSoundType::Rain => Some("/assets/audio/ambient/rain.mp3"),
-        AmbientSoundType::Fire => Some("/assets/audio/ambient/fire.mp3"),
-        AmbientSoundType::Library => Some("/assets/audio/ambient/library.mp3"),
-        AmbientSoundType::Fan => Some("/assets/audio/ambient/fan.mp3"),
-        AmbientSoundType::Storm => Some("/assets/audio/ambient/storm.mp3"),
-        AmbientSoundType::WhiteNoise => Some("/assets/audio/ambient/white-noise.mp3"),
-        AmbientSoundType::Wind => Some("/assets/audio/ambient/wind.mp3"),
+        AmbientSoundType::Rain => Some("/assets/audio/ambient/rain.wav"),
+        AmbientSoundType::Fire => Some("/assets/audio/ambient/fire.wav"),
+        AmbientSoundType::Library => Some("/assets/audio/ambient/library.wav"),
+        AmbientSoundType::Fan => Some("/assets/audio/ambient/fan.wav"),
+        AmbientSoundType::Storm => Some("/assets/audio/ambient/storm.wav"),
+        AmbientSoundType::WhiteNoise => Some("/assets/audio/ambient/white-noise.wav"),
+        AmbientSoundType::Wind => Some("/assets/audio/ambient/wind.wav"),
+        AmbientSoundType::PinkNoise => Some("/assets/audio/ambient/pink-noise.wav"),
+        AmbientSoundType::BrownNoise => Some("/assets/audio/ambient/brown-noise.wav"),
+        AmbientSoundType::Binaural => Some("/assets/audio/ambient/binaural.wav"),
     }
 }
 
@@ -64,35 +83,45 @@ pub const fn asset_path(t: AmbientSoundType) -> Option<&'static str> {
 #[derive(Debug, Clone, Copy)]
 pub struct AudioPlayError;
 
-/// Host-testable abstraction over the browser-side `HtmlAudioElement`.
+/// Host-testable abstraction over a browser-side audio handle.
 ///
-/// The five methods cover the surface the state machine needs:
-/// switching the looping source, ramping volume, starting and
-/// stopping playback, and reading the element's current time for
-/// loop-seam diagnostics. `wasm-pack test --node` injects
-/// `MockAudioHandle`; the wasm target injects `HtmlAudioWrapper`.
+/// Five methods cover the surface the state machine needs:
+/// switching the source URL, setting volume, starting playback,
+/// stopping playback, and reading current time. Host tests inject
+/// `MockAudioHandle`; the wasm target injects `WebAudioWrapper`,
+/// which routes through `AudioContext.decodeAudioData` and
+/// `AudioBufferSourceNode.loop=true` for sample-accurate gapless
+/// looping.
 pub trait AudioElementHandle {
-    /// Set the element's `src` attribute. Empty string means "no
-    /// source, do not decode" — used during the pre-warm pattern to
-    /// keep the gesture lease without paying decode cost.
+    /// Set the source URL to fetch + decode. Cache-friendly: a
+    /// second call with the same URL is a no-op (the Web Audio
+    /// implementation keeps a process-wide `AudioBuffer` cache).
+    /// Stops any currently-playing source — switching tracks
+    /// implies the previous source is no longer wanted.
     fn set_src(&self, src: &str);
-    /// Set the element's `.volume` slot — `0.0..=1.0`. Out-of-range
-    /// values may throw at the browser layer (`IndexSizeError`);
-    /// callers are expected to feed valid values. The driver only
-    /// passes values in `0.0..=1.0`.
+    /// Set the playback gain — `0.0..=1.0`. The Web Audio
+    /// implementation maps this onto a `GainNode` `AudioParam`;
+    /// out-of-range values clamp silently at the node.
     fn set_volume(&self, vol: f64);
-    /// Start playback.
+    /// Start playback. Each call creates a fresh source node from
+    /// the cached buffer (Web Audio rule: `AudioBufferSourceNode`
+    /// is single-use). If decode is still in flight, the start is
+    /// queued and fires once the buffer lands.
     ///
     /// # Errors
-    /// Returns `AudioPlayError` if the browser autoplay policy
-    /// blocks the call. The driver swallows the error; the user
+    /// Returns `AudioPlayError` if the browser audio engine
+    /// rejects the start. The driver swallows the error; the user
     /// can re-press Start to retry.
     fn play(&self) -> Result<(), AudioPlayError>;
-    /// Pause playback. The element stays decoded; subsequent
-    /// `.play()` resumes from the same position.
+    /// Stop the current source and drop it. Web Audio sources are
+    /// single-use, so the next `play()` will create a new source
+    /// from the cached buffer (loop restarts from sample 0 rather
+    /// than resuming from the pause instant — acceptable because
+    /// the driver's fade ramps mask the discontinuity).
     fn pause(&self);
-    /// Current playback position (seconds). Used by diagnostics; the
-    /// driver itself does not branch on this value.
+    /// Current playback position (seconds) for diagnostics; the
+    /// driver itself does not branch on this value. Returns `0.0`
+    /// when no source is live.
     fn current_time(&self) -> f64;
 }
 
@@ -125,10 +154,10 @@ pub enum AmbientAudioState {
 
 /// Companion slots holding the actual `AudioElementHandle` instances.
 ///
-/// `current` is the element associated with the latest entered
+/// `current` is the handle associated with the latest entered
 /// `Playing` / `Paused` / `FadingOut` / `CrossFading.incoming` state.
 /// `previous` is occupied only during a cross-fade — it holds the
-/// outgoing element. Both are `None` in `Idle`.
+/// outgoing handle. Both are `None` in `Idle`.
 struct Slots<H: AudioElementHandle> {
     current: Option<Rc<H>>,
     previous: Option<Rc<H>>,
@@ -589,42 +618,381 @@ impl<H: AudioElementHandle + 'static> AmbientAudio<H> {
 }
 
 // ---------------------------------------------------------------------
-// Browser-side implementation
+// Browser-side implementation (Web Audio API)
 // ---------------------------------------------------------------------
+//
+// Earlier wiring used `HtmlAudioElement` with `.loop = true` and the
+// browser's native looper. That path turned out to be unfixably
+// gappy on WebKit / WKWebView: MP3 carries LAME priming + end
+// padding the native looper cannot skip (audible click on every
+// loop), and even WAV has a ~10-50 ms perceptible seam because the
+// HTML5 media element does not loop sample-accurately.
+//
+// `AudioBufferSourceNode` with `loop = true`, by contrast, is
+// defined by the Web Audio spec as bit-perfect sample-accurate
+// gapless. The price is async decode: a `decodeAudioData` call has
+// to resolve before playback can start. We pay that once per track
+// per session and cache the decoded buffer in a process-wide
+// `BUFFER_CACHE`, so subsequent plays / cross-fades / pause-resume
+// cycles are synchronous.
 
-/// Real `HtmlAudioElement` wrapper used in the wasm target.
+/// Web Audio-backed `AudioElementHandle` implementation.
+///
+/// Each instance owns one `GainNode` connected to the shared
+/// `AudioContext`'s destination. The actual playing node is an
+/// `AudioBufferSourceNode` that is recreated on every play /
+/// resume (per Web Audio rules — sources are single-use).
 #[cfg(target_arch = "wasm32")]
-pub struct HtmlAudioWrapper(pub web_sys::HtmlAudioElement);
+pub struct WebAudioWrapper {
+    /// `Some` once `WebAudioWrapper::new()` succeeded in acquiring
+    /// the shared `AudioContext` + a fresh `GainNode`. `None` if
+    /// audio capability is unavailable (no Web Audio in the host).
+    /// Every method below short-circuits on `None`, never panics —
+    /// so the driver remains functional (state machine still
+    /// advances, ramps still tick) even on hostless / mocked
+    /// environments.
+    ctx_and_gain: Option<(web_sys::AudioContext, web_sys::GainNode)>,
+    /// Currently-playing source node. `None` between
+    /// `pause()` (or before the first decode lands) and the next
+    /// `play()`. Single-use per the Web Audio API.
+    source: std::rc::Rc<std::cell::RefCell<Option<web_sys::AudioBufferSourceNode>>>,
+    /// Track URL the caller last requested via `set_src`. Used to
+    /// detect "decode finished but caller has since switched
+    /// tracks" so the stale buffer doesn't pop in.
+    current_src: std::rc::Rc<std::cell::RefCell<String>>,
+    /// True between a `play()` call that found no cached buffer
+    /// and the moment the async decode resolves. The async resolver
+    /// checks this flag and starts playback once the buffer lands.
+    play_pending: std::rc::Rc<std::cell::Cell<bool>>,
+    /// `AudioContext.currentTime` at the most recent `start()` —
+    /// surfaced via `current_time()` for the diagnostics path.
+    play_start: std::rc::Rc<std::cell::Cell<f64>>,
+}
 
 #[cfg(target_arch = "wasm32")]
-impl AudioElementHandle for HtmlAudioWrapper {
-    fn set_src(&self, src: &str) {
-        self.0.set_src(src);
+thread_local! {
+    /// Process-wide singleton `AudioContext`. WebKit caps each page
+    /// at ~4-6 contexts before `AudioContext::new()` silently fails;
+    /// sharing one across every wrapper (and across cross-fades that
+    /// transiently spawn two wrappers) keeps us well under the cap.
+    static SHARED_CTX: std::cell::RefCell<Option<web_sys::AudioContext>> =
+        const { std::cell::RefCell::new(None) };
+    /// Decoded `AudioBuffer` cache keyed by asset URL. Decode is
+    /// idempotent so concurrent decodes of the same URL just race
+    /// to write the same buffer — last writer wins, both readers
+    /// observe a usable buffer. Held across cross-fades so a Rain
+    /// → Fire → Rain bounce decodes once, plays twice.
+    static BUFFER_CACHE: std::cell::RefCell<
+        std::collections::HashMap<String, web_sys::AudioBuffer>,
+    > = std::cell::RefCell::new(std::collections::HashMap::new());
+}
+
+#[cfg(target_arch = "wasm32")]
+fn shared_audio_ctx() -> Option<web_sys::AudioContext> {
+    SHARED_CTX.with(|cell| {
+        let mut slot = cell.borrow_mut();
+        if slot.is_none() {
+            *slot = web_sys::AudioContext::new().ok();
+        }
+        // Idempotent on a running context. Necessary on macOS
+        // WKWebView when the context was created outside a gesture
+        // and is sitting in `suspended` state.
+        if let Some(ctx) = slot.as_ref() {
+            let _ = ctx.resume();
+        }
+        slot.clone()
+    })
+}
+
+/// Halt an `AudioBufferSourceNode`. The `stop` family of methods
+/// is currently deprecation-warning-tagged in `web_sys` 0.3
+/// pending an API refresh, but it remains the correct call to
+/// halt a buffer source per the Web Audio spec — there is no
+/// non-deprecated alternative. Localised allow keeps the warning
+/// out of the broader build.
+#[cfg(target_arch = "wasm32")]
+#[allow(deprecated)]
+fn stop_source(node: &web_sys::AudioBufferSourceNode) {
+    let _ = node.stop_with_when(0.0);
+}
+
+#[cfg(target_arch = "wasm32")]
+impl WebAudioWrapper {
+    /// Build a fresh wrapper. Infallible: if the shared
+    /// `AudioContext` cannot be constructed (no audio hardware,
+    /// headless host, autoplay policy refusal) the wrapper stores
+    /// `None` and every method silently no-ops. The driver's
+    /// state machine still advances normally; just no sound.
+    /// This contract is what lets the `with_driver` factory drop
+    /// its `.expect(...)` — `new()` is never a panic risk.
+    #[must_use]
+    pub fn new() -> Self {
+        let ctx_and_gain = (|| -> Option<(web_sys::AudioContext, web_sys::GainNode)> {
+            let ctx = shared_audio_ctx()?;
+            let gain = ctx.create_gain().ok()?;
+            gain.gain().set_value(0.0);
+            gain.connect_with_audio_node(&ctx.destination()).ok()?;
+            Some((ctx, gain))
+        })();
+        Self {
+            ctx_and_gain,
+            source: std::rc::Rc::new(std::cell::RefCell::new(None)),
+            current_src: std::rc::Rc::new(std::cell::RefCell::new(String::new())),
+            play_pending: std::rc::Rc::new(std::cell::Cell::new(false)),
+            play_start: std::rc::Rc::new(std::cell::Cell::new(0.0)),
+        }
     }
-    fn set_volume(&self, vol: f64) {
-        self.0.set_volume(vol);
+
+    /// Start a fresh `AudioBufferSourceNode` from `buffer`, connect
+    /// it to the wrapper's `GainNode`, kick it off looping. Stops
+    /// any prior source first — defensive; the call sites already
+    /// clear the slot but a leaked source would double-play.
+    fn start_source(&self, buffer: &web_sys::AudioBuffer) {
+        let Some((ctx, gain)) = self.ctx_and_gain.as_ref() else {
+            return;
+        };
+        if let Some(prev) = self.source.borrow_mut().take() {
+            stop_source(&prev);
+        }
+        let Ok(source) = ctx.create_buffer_source() else {
+            return;
+        };
+        source.set_buffer(Some(buffer));
+        source.set_loop(true);
+        if source.connect_with_audio_node(gain).is_err() {
+            return;
+        }
+        if source.start().is_err() {
+            return;
+        }
+        self.play_start.set(ctx.current_time());
+        *self.source.borrow_mut() = Some(source);
     }
-    fn play(&self) -> Result<(), AudioPlayError> {
-        self.0.play().map(|_| ()).map_err(|_| AudioPlayError)
-    }
-    fn pause(&self) {
-        let _ = self.0.pause();
-    }
-    fn current_time(&self) -> f64 {
-        self.0.current_time()
+}
+
+/// Create + resume the shared ambient `AudioContext`.
+///
+/// **Must be called from inside a user-gesture handler**
+/// (start-button click, keyboard shortcut) so macOS `WKWebView`
+/// unlocks the autoplay policy for the context. Subsequent
+/// `WebAudioWrapper::new()` calls (which happen from inside the
+/// gate Effect, outside the gesture) reuse the already-resumed
+/// singleton. Idempotent; cheap once primed.
+///
+/// Mirrors the `prime_audio_context()` pattern at
+/// `crate::components::timer::prime_audio_context` for the chime
+/// `AudioContext`. The two functions independently prime two
+/// separate `AudioContext`s — both share a single gesture
+/// unlock from the user's Start click.
+#[cfg(target_arch = "wasm32")]
+pub fn prime_ambient_audio() {
+    let _ = shared_audio_ctx();
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+pub fn prime_ambient_audio() {}
+
+#[cfg(target_arch = "wasm32")]
+impl Default for WebAudioWrapper {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
 #[cfg(target_arch = "wasm32")]
-impl HtmlAudioWrapper {
-    /// Construct a fresh `HtmlAudioElement`, set `.loop = true`, and
-    /// wrap it. Returns `None` if the element cannot be constructed
-    /// (e.g. headless host without a DOM).
-    #[must_use]
-    pub fn new_looping() -> Option<Self> {
-        let el = web_sys::HtmlAudioElement::new().ok()?;
-        el.set_loop(true);
-        Some(Self(el))
+impl Drop for WebAudioWrapper {
+    /// Disconnect the wrapper's `GainNode` from the shared
+    /// `AudioContext.destination` when the wrapper is dropped.
+    ///
+    /// Web Audio nodes are kept alive by the audio graph as long
+    /// as they remain connected, regardless of JS-side handle
+    /// references. Without this drop the `GainNode` (and any
+    /// `AudioBufferSourceNode` still hanging off it) would leak
+    /// every time the driver drops a wrapper — most visibly on
+    /// every cross-fade completion, which calls `slots.previous.take()`
+    /// to drop the outgoing wrapper.
+    ///
+    /// Disconnecting also implicitly stops any source still routed
+    /// through this gain; we additionally `stop_source()` first as
+    /// belt-and-braces for engines that don't synchronously halt
+    /// disconnected sources.
+    fn drop(&mut self) {
+        if let Some(prev) = self.source.borrow_mut().take() {
+            stop_source(&prev);
+        }
+        if let Some((_, gain)) = self.ctx_and_gain.as_ref() {
+            let _ = gain.disconnect();
+        }
+    }
+}
+
+/// Callback invoked once a decoded buffer lands in
+/// `BUFFER_CACHE`. Boxed because each `set_src` call site
+/// captures a different set of `Rc`'d wrapper fields.
+#[cfg(target_arch = "wasm32")]
+type DecodeNotify = Box<dyn FnOnce(&web_sys::AudioBuffer)>;
+
+/// Shared fetch + `decodeAudioData` pipeline. `notify` is invoked
+/// after the buffer lands in `BUFFER_CACHE`; the wrapper-side
+/// caller uses it to trigger pending playback. `None` = pure
+/// pre-warm.
+#[cfg(target_arch = "wasm32")]
+fn spawn_decode(ctx: web_sys::AudioContext, url: String, notify: Option<DecodeNotify>) {
+    use wasm_bindgen::JsCast;
+    use wasm_bindgen_futures::{spawn_local, JsFuture};
+    spawn_local(async move {
+        let Some(window) = web_sys::window() else {
+            return;
+        };
+        let Ok(resp_val) = JsFuture::from(window.fetch_with_str(&url)).await else {
+            return;
+        };
+        let Ok(resp) = resp_val.dyn_into::<web_sys::Response>() else {
+            return;
+        };
+        let Ok(ab_promise) = resp.array_buffer() else {
+            return;
+        };
+        let Ok(ab_val) = JsFuture::from(ab_promise).await else {
+            return;
+        };
+        let Ok(array_buffer) = ab_val.dyn_into::<js_sys::ArrayBuffer>() else {
+            return;
+        };
+        let Ok(decode_promise) = ctx.decode_audio_data(&array_buffer) else {
+            return;
+        };
+        let Ok(buf_val) = JsFuture::from(decode_promise).await else {
+            return;
+        };
+        let Ok(buffer) = buf_val.dyn_into::<web_sys::AudioBuffer>() else {
+            return;
+        };
+        BUFFER_CACHE.with(|c| {
+            c.borrow_mut().insert(url, buffer.clone());
+        });
+        if let Some(notify) = notify {
+            notify(&buffer);
+        }
+    });
+}
+
+#[cfg(target_arch = "wasm32")]
+impl AudioElementHandle for WebAudioWrapper {
+    fn set_src(&self, src: &str) {
+        if *self.current_src.borrow() == src {
+            return;
+        }
+        *self.current_src.borrow_mut() = src.to_string();
+        if let Some(prev) = self.source.borrow_mut().take() {
+            stop_source(&prev);
+        }
+        let Some((ctx, gain)) = self.ctx_and_gain.as_ref() else {
+            return;
+        };
+        // Cache hit: nothing to do until `play()` fires.
+        let cached = BUFFER_CACHE.with(|c| c.borrow().get(src).cloned());
+        if cached.is_some() {
+            return;
+        }
+        // Cache miss: kick off decode. If a `play()` is pending by
+        // the time decode resolves, the closure starts the source.
+        let source_slot = self.source.clone();
+        let current_src = self.current_src.clone();
+        let play_pending = self.play_pending.clone();
+        let play_start = self.play_start.clone();
+        let ctx_for_start = ctx.clone();
+        let gain_for_start = gain.clone();
+        let url = src.to_string();
+        let url_for_check = url.clone();
+        let notify = Box::new(move |buffer: &web_sys::AudioBuffer| {
+            // Stale: the caller has since switched tracks. Decoded
+            // buffer is still in the cache for next time; just don't
+            // play this one.
+            if *current_src.borrow() != url_for_check {
+                return;
+            }
+            if !play_pending.get() {
+                return;
+            }
+            play_pending.set(false);
+            if let Some(prev) = source_slot.borrow_mut().take() {
+                stop_source(&prev);
+            }
+            let Ok(source) = ctx_for_start.create_buffer_source() else {
+                return;
+            };
+            source.set_buffer(Some(buffer));
+            source.set_loop(true);
+            if source.connect_with_audio_node(&gain_for_start).is_err() {
+                return;
+            }
+            if source.start().is_err() {
+                return;
+            }
+            play_start.set(ctx_for_start.current_time());
+            *source_slot.borrow_mut() = Some(source);
+        });
+        spawn_decode(ctx.clone(), url, Some(notify));
+    }
+
+    fn set_volume(&self, vol: f64) {
+        let Some((_, gain)) = self.ctx_and_gain.as_ref() else {
+            return;
+        };
+        // GainNode AudioParam takes `f32`. The driver only ever
+        // passes 0..=1; out-of-range values would silently clamp at
+        // the node, not throw.
+        #[allow(clippy::cast_possible_truncation)]
+        gain.gain().set_value(vol as f32);
+    }
+
+    fn play(&self) -> Result<(), AudioPlayError> {
+        // No source URL set → nothing to play. Returning without
+        // touching `play_pending` avoids a footgun where a `play()`
+        // called before `set_src` would arm `play_pending=true`,
+        // then the next `set_src` would auto-start playback even
+        // though the caller never explicitly requested it.
+        if self.current_src.borrow().is_empty() {
+            return Ok(());
+        }
+        let cached =
+            BUFFER_CACHE.with(|c| c.borrow().get(&*self.current_src.borrow()).cloned());
+        if let Some(buffer) = cached {
+            self.start_source(&buffer);
+            self.play_pending.set(false);
+        } else {
+            // Decode still in flight. Mark pending; the
+            // `spawn_decode` notify closure starts the source when
+            // the buffer lands.
+            self.play_pending.set(true);
+        }
+        Ok(())
+    }
+
+    fn pause(&self) {
+        self.play_pending.set(false);
+        if let Some(prev) = self.source.borrow_mut().take() {
+            stop_source(&prev);
+        }
+    }
+
+    fn current_time(&self) -> f64 {
+        // Only meaningful when a source is actively running. Between
+        // `pause()` and the next `play()` the `play_start` anchor is
+        // stale, so reporting `ctx.current_time() - play_start` would
+        // grow as wall-clock — misleading vs. the
+        // `HtmlAudioElement.currentTime` it replaces (frozen at the
+        // pause instant). Driver does not branch on this value; it is
+        // surfaced only for diagnostics. Returning 0 when no source is
+        // live is the safe answer.
+        if self.source.borrow().is_none() {
+            return 0.0;
+        }
+        let Some((ctx, _)) = self.ctx_and_gain.as_ref() else {
+            return 0.0;
+        };
+        ctx.current_time() - self.play_start.get()
     }
 }
 
@@ -634,21 +1002,23 @@ thread_local! {
     /// `with_driver` call inside the timer component's gate effect.
     /// `RefCell` is fine because Leptos's CSR runtime is single-
     /// threaded (one WebAssembly main thread per app instance).
-    static DRIVER: std::cell::RefCell<Option<AmbientAudio<HtmlAudioWrapper>>> =
+    static DRIVER: std::cell::RefCell<Option<AmbientAudio<WebAudioWrapper>>> =
         const { std::cell::RefCell::new(None) };
 }
 
-/// Run a closure against the process-wide driver, materialising it
-/// on first call. Wasm-only; the wasm target has a DOM so the
-/// factory always succeeds.
+/// Run a closure against the process-wide driver.
+///
+/// Wasm-only. Driver is materialised on the first call. Factory
+/// is infallible — `WebAudioWrapper::new()` stores `None`
+/// internally if audio capability is unavailable and the wrapper
+/// silently no-ops.
 #[cfg(target_arch = "wasm32")]
-pub fn with_driver<R>(f: impl FnOnce(&mut AmbientAudio<HtmlAudioWrapper>) -> R) -> Option<R> {
+pub fn with_driver<R>(f: impl FnOnce(&mut AmbientAudio<WebAudioWrapper>) -> R) -> Option<R> {
     DRIVER.with(|cell| {
         let mut slot = cell.borrow_mut();
         if slot.is_none() {
-            let factory: Rc<dyn Fn() -> Rc<HtmlAudioWrapper>> = Rc::new(|| {
-                Rc::new(HtmlAudioWrapper::new_looping().expect("HtmlAudioElement::new"))
-            });
+            let factory: Rc<dyn Fn() -> Rc<WebAudioWrapper>> =
+                Rc::new(|| Rc::new(WebAudioWrapper::new()));
             *slot = Some(AmbientAudio::new(factory));
         }
         slot.as_mut().map(f)
@@ -659,15 +1029,32 @@ pub fn with_driver<R>(f: impl FnOnce(&mut AmbientAudio<HtmlAudioWrapper>) -> R) 
 /// `with_driver` import. Returns `None` because there's no driver
 /// to drive without a DOM.
 #[cfg(not(target_arch = "wasm32"))]
-pub fn with_driver<R>(_f: impl FnOnce(&mut AmbientAudio<HtmlAudioWrapper>) -> R) -> Option<R> {
+pub fn with_driver<R>(_f: impl FnOnce(&mut AmbientAudio<WebAudioWrapper>) -> R) -> Option<R> {
     None
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-pub struct HtmlAudioWrapper;
+pub struct WebAudioWrapper;
 
 #[cfg(not(target_arch = "wasm32"))]
-impl AudioElementHandle for HtmlAudioWrapper {
+impl WebAudioWrapper {
+    /// Host-side stub matching the wasm-side `new()` surface so
+    /// the factory compiles unconditionally.
+    #[must_use]
+    pub const fn new() -> Self {
+        Self
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+impl Default for WebAudioWrapper {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+impl AudioElementHandle for WebAudioWrapper {
     fn set_src(&self, _src: &str) {}
     fn set_volume(&self, _vol: f64) {}
     fn play(&self) -> Result<(), AudioPlayError> {
@@ -687,9 +1074,70 @@ impl AudioElementHandle for HtmlAudioWrapper {
 
 #[cfg(test)]
 mod tests {
-    use super::{AmbientAudio, AmbientAudioState, AmbientSoundType, AudioElementHandle};
+    use super::{
+        asset_path, AmbientAudio, AmbientAudioState, AmbientSoundType, AudioElementHandle,
+    };
     use std::cell::RefCell;
+    use std::collections::HashSet;
     use std::rc::Rc;
+
+    /// Every non-`None` variant must resolve to a `.wav` path under
+    /// `/assets/audio/ambient/`. The path strings are the only thing
+    /// `WebAudioWrapper.set_src` is given — a typo here = a silent
+    /// 404 in production with no compile-time tripwire.
+    #[test]
+    fn asset_path_returns_wav_for_every_non_none_variant() {
+        const VARIANTS: &[AmbientSoundType] = &[
+            AmbientSoundType::Rain,
+            AmbientSoundType::Fire,
+            AmbientSoundType::Library,
+            AmbientSoundType::Fan,
+            AmbientSoundType::Storm,
+            AmbientSoundType::WhiteNoise,
+            AmbientSoundType::Wind,
+            AmbientSoundType::PinkNoise,
+            AmbientSoundType::BrownNoise,
+            AmbientSoundType::Binaural,
+        ];
+        for v in VARIANTS {
+            let p = asset_path(*v).unwrap_or_else(|| panic!("no asset path for {v:?}"));
+            assert!(
+                p.starts_with("/assets/audio/ambient/"),
+                "{v:?} path not under /assets/audio/ambient/: {p}",
+            );
+            assert!(
+                std::path::Path::new(p)
+                    .extension()
+                    .is_some_and(|ext| ext.eq_ignore_ascii_case("wav")),
+                "{v:?} path not a .wav (Web Audio loop seam relies on no MP3 priming): {p}",
+            );
+        }
+        assert_eq!(asset_path(AmbientSoundType::None), None);
+    }
+
+    /// Path uniqueness: two enum variants pointing at the same file
+    /// would silently collapse the cache key in `BUFFER_CACHE`, so a
+    /// duplicate path is a real bug, not a stylistic nit.
+    #[test]
+    fn asset_paths_are_unique() {
+        const VARIANTS: &[AmbientSoundType] = &[
+            AmbientSoundType::Rain,
+            AmbientSoundType::Fire,
+            AmbientSoundType::Library,
+            AmbientSoundType::Fan,
+            AmbientSoundType::Storm,
+            AmbientSoundType::WhiteNoise,
+            AmbientSoundType::Wind,
+            AmbientSoundType::PinkNoise,
+            AmbientSoundType::BrownNoise,
+            AmbientSoundType::Binaural,
+        ];
+        let mut seen: HashSet<&'static str> = HashSet::new();
+        for v in VARIANTS {
+            let p = asset_path(*v).expect("path");
+            assert!(seen.insert(p), "duplicate asset path: {p}");
+        }
+    }
 
     #[derive(Default)]
     struct MockAudioHandle {
@@ -770,7 +1218,7 @@ mod tests {
         let rain_handle = factory.handle(0);
         assert!(calls_contains(
             &rain_handle,
-            "set_src:/assets/audio/ambient/rain.mp3"
+            "set_src:/assets/audio/ambient/rain.wav"
         ));
         assert!(calls_contains(&rain_handle, "play"));
 
@@ -859,7 +1307,7 @@ mod tests {
         let fire_handle = factory.handle(1);
         assert!(calls_contains(
             &fire_handle,
-            "set_src:/assets/audio/ambient/fire.mp3"
+            "set_src:/assets/audio/ambient/fire.wav"
         ));
         assert!(calls_contains(&fire_handle, "play"));
 

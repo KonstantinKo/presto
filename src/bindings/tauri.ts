@@ -270,7 +270,30 @@ export type AmbientSoundType =
 /**
  * Wind — vendored at `assets/audio/ambient/wind.mp3`.
  */
-"wind"
+"wind" | 
+/**
+ * Pink noise — vendored at `assets/audio/ambient/pink-noise.wav`.
+ * Synthesised via `ffmpeg anoisesrc=color=pink`; perceptually
+ * flat across octaves and the noise-colour most cited in
+ * cognition / sleep research. Loops seamlessly because the
+ * signal is stochastic with no periodic structure.
+ */
+"pink-noise" | 
+/**
+ * Brown noise — vendored at
+ * `assets/audio/ambient/brown-noise.wav`. Synthesised via
+ * `ffmpeg anoisesrc=color=brown`; -6 dB/octave roll-off makes
+ * it deeper / less hissy than white. Loops seamlessly.
+ */
+"brown-noise" | 
+/**
+ * Binaural beat (40 Hz gamma) — vendored at
+ * `assets/audio/ambient/binaural.wav`. Pure 200 Hz / 240 Hz
+ * sines, one per channel; the 40 Hz delta is perceived as a
+ * beat only when worn on headphones. Loops seamlessly (sine
+ * periods align at any integer-second boundary).
+ */
+"binaural"
 /**
  * Appearance / theme preferences.
  * 

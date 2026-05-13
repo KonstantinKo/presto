@@ -45,6 +45,9 @@ const fn ambient_sound_type_wire(t: AmbientSoundType) -> &'static str {
         AmbientSoundType::Storm => "storm",
         AmbientSoundType::WhiteNoise => "white-noise",
         AmbientSoundType::Wind => "wind",
+        AmbientSoundType::PinkNoise => "pink-noise",
+        AmbientSoundType::BrownNoise => "brown-noise",
+        AmbientSoundType::Binaural => "binaural",
     }
 }
 
@@ -62,6 +65,9 @@ fn ambient_sound_type_from_wire(s: &str) -> AmbientSoundType {
         "storm" => AmbientSoundType::Storm,
         "white-noise" => AmbientSoundType::WhiteNoise,
         "wind" => AmbientSoundType::Wind,
+        "pink-noise" => AmbientSoundType::PinkNoise,
+        "brown-noise" => AmbientSoundType::BrownNoise,
+        "binaural" => AmbientSoundType::Binaural,
         _ => AmbientSoundType::None,
     }
 }
@@ -270,8 +276,11 @@ pub fn NotificationsSettings(settings: RwSignal<Settings>, toast: SettingsToast)
                             <option value="library">"Library"</option>
                             <option value="fan">"Fan"</option>
                             <option value="storm">"Storm"</option>
-                            <option value="white-noise">"White noise"</option>
                             <option value="wind">"Wind"</option>
+                            <option value="white-noise">"White noise"</option>
+                            <option value="pink-noise">"Pink noise"</option>
+                            <option value="brown-noise">"Brown noise"</option>
+                            <option value="binaural">"Binaural 40 Hz (headphones)"</option>
                         </select>
                     </div>
                     <div class="ambient-control-row">
@@ -300,6 +309,49 @@ pub fn NotificationsSettings(settings: RwSignal<Settings>, toast: SettingsToast)
 
 #[cfg(test)]
 mod tests {
+    use super::{ambient_sound_type_from_wire, ambient_sound_type_wire, AmbientSoundType};
+
+    /// `wire ↔ from_wire` are inverses for every variant. A mismatch
+    /// would either save a track the dropdown can't render or render
+    /// an `<option>` the parser silently maps to `None`. Both fail
+    /// modes are silent in the UI — a unit test is the only tripwire.
+    #[test]
+    fn ambient_sound_type_wire_roundtrip_all_variants() {
+        const VARIANTS: &[AmbientSoundType] = &[
+            AmbientSoundType::None,
+            AmbientSoundType::Rain,
+            AmbientSoundType::Fire,
+            AmbientSoundType::Library,
+            AmbientSoundType::Fan,
+            AmbientSoundType::Storm,
+            AmbientSoundType::WhiteNoise,
+            AmbientSoundType::Wind,
+            AmbientSoundType::PinkNoise,
+            AmbientSoundType::BrownNoise,
+            AmbientSoundType::Binaural,
+        ];
+        for v in VARIANTS {
+            let wire = ambient_sound_type_wire(*v);
+            let parsed = ambient_sound_type_from_wire(wire);
+            assert_eq!(
+                parsed, *v,
+                "wire round-trip lost {v:?} via {wire:?} → {parsed:?}",
+            );
+        }
+    }
+
+    /// Unknown wire strings fall through to `None` per the
+    /// "absence is first-class" invariant (FR-002, A5). Catches a
+    /// future refactor that swaps the catch-all for a panic.
+    #[test]
+    fn ambient_sound_type_from_wire_unknown_falls_to_none() {
+        assert_eq!(
+            ambient_sound_type_from_wire("totally-not-a-variant"),
+            AmbientSoundType::None,
+        );
+        assert_eq!(ambient_sound_type_from_wire(""), AmbientSoundType::None);
+    }
+
     /// T206 — selector contract pin. Sourced from
     /// `tests/e2e/settings-notifications.spec.js`.
     #[test]

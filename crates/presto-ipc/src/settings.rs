@@ -70,6 +70,23 @@ pub enum AmbientSoundType {
     WhiteNoise,
     /// Wind — vendored at `assets/audio/ambient/wind.mp3`.
     Wind,
+    /// Pink noise — vendored at `assets/audio/ambient/pink-noise.wav`.
+    /// Synthesised via `ffmpeg anoisesrc=color=pink`; perceptually
+    /// flat across octaves and the noise-colour most cited in
+    /// cognition / sleep research. Loops seamlessly because the
+    /// signal is stochastic with no periodic structure.
+    PinkNoise,
+    /// Brown noise — vendored at
+    /// `assets/audio/ambient/brown-noise.wav`. Synthesised via
+    /// `ffmpeg anoisesrc=color=brown`; -6 dB/octave roll-off makes
+    /// it deeper / less hissy than white. Loops seamlessly.
+    BrownNoise,
+    /// Binaural beat (40 Hz gamma) — vendored at
+    /// `assets/audio/ambient/binaural.wav`. Pure 200 Hz / 240 Hz
+    /// sines, one per channel; the 40 Hz delta is perceived as a
+    /// beat only when worn on headphones. Loops seamlessly (sine
+    /// periods align at any integer-second boundary).
+    Binaural,
 }
 
 /// Default volume for the ambient-sound slider (feature 004).
@@ -462,6 +479,9 @@ mod tests {
             (AmbientSoundType::Storm, r#""storm""#),
             (AmbientSoundType::WhiteNoise, r#""white-noise""#),
             (AmbientSoundType::Wind, r#""wind""#),
+            (AmbientSoundType::PinkNoise, r#""pink-noise""#),
+            (AmbientSoundType::BrownNoise, r#""brown-noise""#),
+            (AmbientSoundType::Binaural, r#""binaural""#),
         ];
         for (variant, wire) in pairs {
             let encoded = serde_json::to_string(variant).expect("serialise");

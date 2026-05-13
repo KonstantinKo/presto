@@ -24,11 +24,14 @@
          Trunk drops the source dir at the dist root using the
          leaf name only (`dist/icons/`). -->
     <link data-trunk rel="copy-dir" href="assets/icons" data-target-path="assets/icons" />
-    <!-- Feature 004 (T002): vendor the ambient-sound MP3 tree
+    <!-- Feature 004 (T002): vendor the ambient-sound asset tree
          same-origin. Mirrors `src/assets/audio/` (the `ambient/`
-         subdirectory plus its README) into `dist/assets/audio/` so the
-         seven `HtmlAudioElement.src = "/assets/audio/ambient/<track>.mp3"`
+         subdirectory plus its README) into `dist/assets/audio/` so
+         the `HtmlAudioElement.src = "/assets/audio/ambient/<track>.{mp3,wav}"`
          lookups in `components::ambient_audio` resolve at runtime.
+         Synthesised tracks (pink/brown/white noise, binaural) are
+         WAV — no MP3 codec padding, so the HTML5 `<audio loop>`
+         seam is sample-tight. Organic tracks stay MP3 for size.
          No CDN — the `_blockExternal` fixture in the e2e suite must
          stay green (FR-017 / Principle II — Local-Only). -->
     <link data-trunk rel="copy-dir" href="assets/audio" data-target-path="assets/audio" />

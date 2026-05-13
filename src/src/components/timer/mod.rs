@@ -447,7 +447,7 @@ const fn play_chime() {}
 /// Constructs and resumes the shared `AudioContext` used by `play_chime`.
 /// Call this from every user-gesture entry point (Start/Resume click,
 /// keyboard shortcut) so the cached context is created inside the
-/// synchronous gesture call stack. On macOS WKWebView a context created
+/// synchronous gesture call stack. On macOS `WKWebView` a context created
 /// inside a gesture is immediately unlockable via `.resume()`; a context
 /// created later (e.g. from the 1 Hz tick) cannot be unlocked until the
 /// next gesture — making transition chimes silent. Calling here costs one
@@ -867,6 +867,7 @@ pub fn TimerView() -> impl IntoView {
                 if matches_shortcut || matches_space {
                     ev.prevent_default();
                     prime_audio_context();
+                    ambient_audio::prime_ambient_audio();
                     let events = engine
                         .try_update(|state| {
                             if state.is_running() {
@@ -1164,6 +1165,7 @@ pub fn TimerView() -> impl IntoView {
     // persistence is a no-op on the dev server.
     let on_play_pause = move |_| {
         prime_audio_context();
+        ambient_audio::prime_ambient_audio();
         let events = engine
             .try_update(|state| {
                 if state.is_running() {
