@@ -34,6 +34,55 @@ pub enum StatusBarDisplay {
     IconOnly,
 }
 
+/// Ambient-sound track selection (feature 004).
+///
+/// Closed sum type: eight variants, one per vendored ambient track
+/// plus `None` ("no track selected"). `None` is a first-class
+/// variant — not `Option<AmbientSoundType>` and not a string sentinel
+/// — so the type system encodes the absence case directly
+/// (Principle III). Wire shape is kebab-case strings (`"none"`,
+/// `"rain"`, ..., `"white-noise"`, `"wind"`), mirroring the
+/// `StatusBarDisplay` precedent at `:27`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
+#[serde(rename_all = "kebab-case")]
+pub enum AmbientSoundType {
+    /// No track selected — playback is a no-op even when
+    /// `ambient_sound_enabled = true`. Preserves the user's volume
+    /// slider value (FR-005 / A11). Wire string `"none"`.
+    #[default]
+    None,
+    /// Rain loop — vendored at `assets/audio/ambient/rain.mp3`.
+    Rain,
+    /// Fire / crackle loop — vendored at `assets/audio/ambient/fire.mp3`.
+    Fire,
+    /// Library / café ambience — vendored at
+    /// `assets/audio/ambient/library.mp3`.
+    Library,
+    /// Fan hum — vendored at `assets/audio/ambient/fan.mp3`.
+    Fan,
+    /// Storm — vendored at `assets/audio/ambient/storm.mp3`.
+    Storm,
+    /// White noise — vendored at
+    /// `assets/audio/ambient/white-noise.mp3`. CRITICAL: the
+    /// multi-word variant — `#[serde(rename_all = "kebab-case")]`
+    /// emits it as `"white-noise"`, not `"whitenoise"`.
+    WhiteNoise,
+    /// Wind — vendored at `assets/audio/ambient/wind.mp3`.
+    Wind,
+}
+
+/// Default volume for the ambient-sound slider (feature 004).
+///
+/// `50` = "noticeable but not loud" per A9. Used by the
+/// `#[serde(default = "default_ambient_sound_volume")]` attribute
+/// on `NotificationSettings::ambient_sound_volume` so pre-feature-004
+/// settings JSONs lacking the field deserialise to this value.
+#[must_use]
+pub const fn default_ambient_sound_volume() -> u32 {
+    50
+}
+
 /// Keyboard-shortcut bindings bundle.
 ///
 /// Each field is `Option<String>` because users can clear a binding
@@ -184,6 +233,28 @@ pub struct NotificationSettings {
     /// is unaware. Locked to the second; not user-configurable.
     #[serde(default)]
     pub metronome: bool,
+    /// Feature 004: when true AND `ambient_sound_type != None`
+    /// AND the timer is in the focus running state, the selected
+    /// ambient track loops at the configured volume. Default `false`
+    /// (opt-in per Principle II). UI-side side effect only — engine
+    /// is unaware.
+    #[serde(default)]
+    pub ambient_sound_enabled: bool,
+    /// Feature 004: currently-selected ambient track. `None` is a
+    /// first-class "no track selected" sentinel (FR-002 / A5 /
+    /// Principle III). Toggling `ambient_sound_enabled` off OR
+    /// picking `None` from the dropdown both halt playback while
+    /// preserving the other field's value (FR-005).
+    #[serde(default)]
+    pub ambient_sound_type: AmbientSoundType,
+    /// Feature 004: output amplitude, 0..=100 inclusive. Clamped at
+    /// the Settings UI input boundary (`<input type="range" min="0"
+    /// max="100">`); the audio call site reads the stored value and
+    /// passes it through to `HtmlAudioElement::set_volume` without
+    /// re-clamping (Principle III — validate at boundaries only).
+    /// Default `50` per FR-003 / A9.
+    #[serde(default = "default_ambient_sound_volume")]
+    pub ambient_sound_volume: u32,
 }
 
 impl Default for NotificationSettings {
@@ -197,6 +268,10 @@ impl Default for NotificationSettings {
             smart_pause: false,
             smart_pause_timeout: 30,
             metronome: false,
+            // Feature 004 additions — opt-in defaults.
+            ambient_sound_enabled: false,
+            ambient_sound_type: AmbientSoundType::None,
+            ambient_sound_volume: 50,
         }
     }
 }
@@ -322,7 +397,79 @@ impl From<SettingsOnDisk> for Settings {
 
 #[cfg(test)]
 mod tests {
-    use super::{NotificationSettings, StatusBarDisplay, TimerSettings};
+    use super::{AmbientSoundType, NotificationSettings, StatusBarDisplay, TimerSettings};
+
+    /// Feature 004 T004 (RED → T007 GREEN): pre-feature-004
+    /// `NotificationSettings` JSON (no ambient fields) deserialises
+    /// to the documented defaults. Mirrors `metronome_default_off`
+    /// at `:362-375` verbatim — same fixture shape minus the new
+    /// `ambient_sound_*` keys.
+    #[test]
+    fn ambient_sound_legacy_fields_default() {
+        let legacy = r#"{
+            "desktop_notifications": true,
+            "sound_notifications": true,
+            "auto_start_timer": true,
+            "smart_pause": false,
+            "smart_pause_timeout": 30,
+            "metronome": false
+        }"#;
+        let n: NotificationSettings = serde_json::from_str(legacy).expect("deserialise legacy");
+        assert!(!n.ambient_sound_enabled);
+        assert_eq!(n.ambient_sound_type, AmbientSoundType::None);
+        assert_eq!(n.ambient_sound_volume, 50);
+    }
+
+    /// Feature 004 T005 (RED → T007 GREEN): non-default ambient
+    /// values (`enabled=true`, `type=WhiteNoise`, `volume=70`)
+    /// round-trip byte-stable through serde, AND the feature-002
+    /// `metronome: true` field survives the round-trip alongside
+    /// the new fields (Acceptance Scenario 2.6).
+    #[test]
+    fn ambient_sound_round_trip() {
+        let n = NotificationSettings {
+            metronome: true,
+            ambient_sound_enabled: true,
+            ambient_sound_type: AmbientSoundType::WhiteNoise,
+            ambient_sound_volume: 70,
+            ..NotificationSettings::default()
+        };
+        let json = serde_json::to_string(&n).expect("serialise");
+        let back: NotificationSettings = serde_json::from_str(&json).expect("deserialise");
+        assert!(
+            back.metronome,
+            "metronome (feature 002) survives round-trip"
+        );
+        assert!(back.ambient_sound_enabled);
+        assert_eq!(back.ambient_sound_type, AmbientSoundType::WhiteNoise);
+        assert_eq!(back.ambient_sound_volume, 70);
+    }
+
+    /// Feature 004 T006 (RED → T007 GREEN): every `AmbientSoundType`
+    /// variant MUST serialise to its kebab-case wire string and
+    /// round-trip in both directions. The `WhiteNoise → "white-noise"`
+    /// pair is the critical multi-word case — a misconfigured
+    /// `#[serde(rename_all = ...)]` would silently encode it as
+    /// `"whitenoise"` or `"white_noise"`.
+    #[test]
+    fn ambient_sound_type_serialises_kebab_case() {
+        let pairs: &[(AmbientSoundType, &str)] = &[
+            (AmbientSoundType::None, r#""none""#),
+            (AmbientSoundType::Rain, r#""rain""#),
+            (AmbientSoundType::Fire, r#""fire""#),
+            (AmbientSoundType::Library, r#""library""#),
+            (AmbientSoundType::Fan, r#""fan""#),
+            (AmbientSoundType::Storm, r#""storm""#),
+            (AmbientSoundType::WhiteNoise, r#""white-noise""#),
+            (AmbientSoundType::Wind, r#""wind""#),
+        ];
+        for (variant, wire) in pairs {
+            let encoded = serde_json::to_string(variant).expect("serialise");
+            assert_eq!(&encoded, wire, "serialise {variant:?}");
+            let decoded: AmbientSoundType = serde_json::from_str(wire).expect("deserialise");
+            assert_eq!(&decoded, variant, "deserialise {wire}");
+        }
+    }
 
     /// T005 (RED → T006 GREEN): pre-002 settings.json without the
     /// `sessions_per_long_break` field deserialises to the default `4`

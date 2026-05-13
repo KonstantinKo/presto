@@ -19,6 +19,7 @@
 // the e2e suite; the tests in this module pin the selector strings
 // inline.
 
+pub mod ambient_audio;
 pub mod browser_clock;
 pub mod daily;
 pub mod icon;

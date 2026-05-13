@@ -261,6 +261,33 @@
   margin-top: 0.25rem;
 }
 
+/* Feature 004: ambient-sound dependent-controls cluster. Wraps the
+   track dropdown + volume slider inside the parent `.setting-item`
+   card so they read as sub-controls of the "Enable ambient
+   background sound" checkbox. Dimmed + pointer-events disabled when
+   the parent checkbox is off; the controls themselves carry the
+   native `disabled` attribute for keyboard / screen-reader users. */
+.ambient-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+  padding-left: 1.75rem;
+  border-left: 2px solid var(--shared-border);
+  transition: opacity 0.2s ease;
+}
+
+.ambient-controls.disabled {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.ambient-control-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
 #smart-pause-timeout-setting {
   margin-top: 0.5rem;
   display: none;

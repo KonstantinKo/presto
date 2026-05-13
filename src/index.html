@@ -24,6 +24,14 @@
          Trunk drops the source dir at the dist root using the
          leaf name only (`dist/icons/`). -->
     <link data-trunk rel="copy-dir" href="assets/icons" data-target-path="assets/icons" />
+    <!-- Feature 004 (T002): vendor the ambient-sound MP3 tree
+         same-origin. Mirrors `src/assets/audio/` (the `ambient/`
+         subdirectory plus its README) into `dist/assets/audio/` so the
+         seven `HtmlAudioElement.src = "/assets/audio/ambient/<track>.mp3"`
+         lookups in `components::ambient_audio` resolve at runtime.
+         No CDN — the `_blockExternal` fixture in the e2e suite must
+         stay green (FR-017 / Principle II — Local-Only). -->
+    <link data-trunk rel="copy-dir" href="assets/audio" data-target-path="assets/audio" />
     <link rel="stylesheet" href="/assets/icons/remixicon.css" />
     <!-- Feature 003 (T002): vendor the Phosphor regular-weight webfont
          same-origin. The `copy-dir` directive above already mirrors the

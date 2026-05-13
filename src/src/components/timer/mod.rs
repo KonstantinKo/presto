@@ -61,9 +61,11 @@ use self::tray::{build_tray_text, dispatch_tray_update};
 use super::browser_clock::BrowserClock;
 use crate::app::AppToast;
 use crate::bridge::commands;
+use crate::bridge::types::AmbientSoundType;
 use crate::bridge::types::SessionType;
 use crate::bridge::types::TimerMode;
 use crate::bridge::types::{ManualSession, Session, Settings, Tag};
+use crate::components::ambient_audio;
 use crate::engine::clock::Clock;
 use crate::engine::durations::Durations;
 use crate::engine::timer::{TimerEvent, TimerState};
@@ -1435,6 +1437,127 @@ pub fn TimerView() -> impl IntoView {
         // failure means the JS bridge is missing (host tests / SSR
         // — neither applies to the wasm target this component
         // mounts on), so swallow.
+        let _ = handle;
+    });
+
+    // Feature 004 (R-004 fix): unified ambient-sound gate Effect.
+    //
+    // Earlier wiring split the decision across two Effects (a
+    // gate_high Effect + a pause sub-Effect). That collapsed
+    // "enabled+track" with "actively playing this instant" into a
+    // single boolean, so disabling the feature *while paused* never
+    // fired a fade-out — gate_high was already false from the pause,
+    // so the disable transition was a non-event. The driver got
+    // stranded in `Paused`, and the next focus session's `start()`
+    // no-opped because the state machine wasn't `Idle`.
+    //
+    // The fix splits the gate into two orthogonal predicates:
+    //   * `enabled_and_track_selected` — settings-level intent
+    //     (ambient on AND a non-None track selected).
+    //   * `active_focus` — engine-level "should be sounding right
+    //     now" (Focus mode, running, not paused / auto-paused,
+    //     time_remaining > 0).
+    //
+    // Transitions are then dispatched by comparing both predicates
+    // against the prior tick. Disable always tears down the resident
+    // element (regardless of pause state); enable while active starts
+    // playback; pause/resume while still enabled flips between
+    // Playing and Paused without destroying the element.
+    //
+    // The driver is a process-wide singleton (`with_driver`) so the
+    // resident `HtmlAudioElement` pair survives across breaks /
+    // long-breaks / auto-starts within the same app session, holding
+    // the WKWebView gesture lease for continuous-sessions auto-resume
+    // (research.md Decision 1).
+    Effect::new(move |prev: Option<(bool, bool, AmbientSoundType, u32)>| {
+        let enabled = settings.with(|s| s.notifications.ambient_sound_enabled);
+        let track = settings.with(|s| s.notifications.ambient_sound_type);
+        let volume = settings.with(|s| s.notifications.ambient_sound_volume);
+        let enabled_and_track_selected = enabled && !matches!(track, AmbientSoundType::None);
+
+        let mode_focus = engine.with(|s| matches!(s.current_mode(), TimerMode::Focus));
+        let active_focus = mode_focus
+            && engine.with(|s| {
+                s.is_running()
+                    && !s.is_paused()
+                    && !s.is_auto_paused()
+                    && s.time_remaining_secs() > 0
+            });
+
+        let (prev_enabled_track, prev_active, prev_track, prev_volume) =
+            prev.unwrap_or((false, false, AmbientSoundType::None, volume));
+
+        if prev_enabled_track && !enabled_and_track_selected {
+            // Intent flipped off — fade out from whatever state we
+            // were in (Playing, Paused, or CrossFading; the driver
+            // handles all three arcs to Idle). This is the
+            // load-bearing arc for the "disable while paused"
+            // recovery: without it, the driver stays in `Paused`
+            // and the next focus session can't start playback.
+            let _ = ambient_audio::with_driver(ambient_audio::AmbientAudio::fade_out);
+        } else if !prev_enabled_track && enabled_and_track_selected && active_focus {
+            // Intent just flipped on AND we're already inside an
+            // active focus session — start playback immediately.
+            let _ = ambient_audio::with_driver(|drv| drv.start(track, volume));
+        } else if enabled_and_track_selected && prev_enabled_track {
+            // Intent stays on — handle engine-side transitions and
+            // settings tweaks while enabled.
+            if active_focus && !prev_active {
+                // Focus just became active (start / resume / new
+                // focus phase). The driver itself decides whether
+                // this is Idle→Playing or Paused→Playing based on
+                // its current state.
+                let _ = ambient_audio::with_driver(|drv| {
+                    match drv.state().clone() {
+                        ambient_audio::AmbientAudioState::Paused {
+                            track: paused_track,
+                        } if paused_track != track => {
+                            // Track changed while paused — element is already at
+                            // volume 0 (pause fade completed). fade_out transitions
+                            // to FadingOut; tick(200) drives the ramp to Idle
+                            // synchronously so start() can spawn a fresh element.
+                            drv.fade_out();
+                            drv.tick(200);
+                            drv.start(track, volume);
+                        }
+                        ambient_audio::AmbientAudioState::Paused { .. } => drv.resume(volume),
+                        ambient_audio::AmbientAudioState::Idle => drv.start(track, volume),
+                        // Already mid-arc (Playing / CrossFading /
+                        // FadingOut) — no entry transition needed;
+                        // the existing ramp completes on its own.
+                        _ => {}
+                    }
+                });
+            } else if !active_focus && prev_active {
+                // Focus left the active sub-state (pause /
+                // auto-pause / break / overtime). Pause the
+                // resident element rather than tearing it down.
+                let _ = ambient_audio::with_driver(ambient_audio::AmbientAudio::pause);
+            } else if active_focus && prev_active && prev_track != track {
+                // Track changed mid-focus — cross-fade.
+                let _ = ambient_audio::with_driver(|drv| drv.cross_fade(track, volume));
+            } else if active_focus && prev_active && prev_volume != volume {
+                // Volume slider moved while playing.
+                let _ = ambient_audio::with_driver(|drv| drv.set_volume(volume));
+            }
+        }
+
+        (enabled_and_track_selected, active_focus, track, volume)
+    });
+
+    // Feature 004: ramp ticker. Advances any in-flight fade ramp at
+    // ~16 ms (60 Hz). The driver no-ops when no ramp is active, so
+    // the cost is a single function call per tick when ambient is
+    // disabled / Idle.
+    #[cfg(target_arch = "wasm32")]
+    Effect::new(move |_: Option<()>| {
+        let handle = set_interval_with_handle(
+            move || {
+                let _ = ambient_audio::with_driver(|drv| drv.tick(16));
+            },
+            std::time::Duration::from_millis(16),
+        );
+        // IntervalHandle has no Drop impl in Leptos; the interval continues firing until app exit. Same pattern as metronome at :1381.
         let _ = handle;
     });
 

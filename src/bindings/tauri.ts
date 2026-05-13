@@ -222,6 +222,56 @@ async exportSessionsXlsx(path: string, sessions: ManualSession[]) : Promise<Resu
  */
 export type AdvancedSettings = { debug_mode?: boolean }
 /**
+ * Ambient-sound track selection (feature 004).
+ * 
+ * Closed sum type: eight variants, one per vendored ambient track
+ * plus `None` ("no track selected"). `None` is a first-class
+ * variant — not `Option<AmbientSoundType>` and not a string sentinel
+ * — so the type system encodes the absence case directly
+ * (Principle III). Wire shape is kebab-case strings (`"none"`,
+ * `"rain"`, ..., `"white-noise"`, `"wind"`), mirroring the
+ * `StatusBarDisplay` precedent at `:27`.
+ */
+export type AmbientSoundType = 
+/**
+ * No track selected — playback is a no-op even when
+ * `ambient_sound_enabled = true`. Preserves the user's volume
+ * slider value (FR-005 / A11). Wire string `"none"`.
+ */
+"none" | 
+/**
+ * Rain loop — vendored at `assets/audio/ambient/rain.mp3`.
+ */
+"rain" | 
+/**
+ * Fire / crackle loop — vendored at `assets/audio/ambient/fire.mp3`.
+ */
+"fire" | 
+/**
+ * Library / café ambience — vendored at
+ * `assets/audio/ambient/library.mp3`.
+ */
+"library" | 
+/**
+ * Fan hum — vendored at `assets/audio/ambient/fan.mp3`.
+ */
+"fan" | 
+/**
+ * Storm — vendored at `assets/audio/ambient/storm.mp3`.
+ */
+"storm" | 
+/**
+ * White noise — vendored at
+ * `assets/audio/ambient/white-noise.mp3`. CRITICAL: the
+ * multi-word variant — `#[serde(rename_all = "kebab-case")]`
+ * emits it as `"white-noise"`, not `"whitenoise"`.
+ */
+"white-noise" | 
+/**
+ * Wind — vendored at `assets/audio/ambient/wind.mp3`.
+ */
+"wind"
+/**
  * Appearance / theme preferences.
  * 
  * `theme` is the color-mode preference (`"auto"` / `"light"` /
@@ -344,7 +394,32 @@ smart_pause_timeout: number;
  * (opt-in per Principle II). UI-side side effect only — engine
  * is unaware. Locked to the second; not user-configurable.
  */
-metronome?: boolean }
+metronome?: boolean; 
+/**
+ * Feature 004: when true AND `ambient_sound_type != None`
+ * AND the timer is in the focus running state, the selected
+ * ambient track loops at the configured volume. Default `false`
+ * (opt-in per Principle II). UI-side side effect only — engine
+ * is unaware.
+ */
+ambient_sound_enabled?: boolean; 
+/**
+ * Feature 004: currently-selected ambient track. `None` is a
+ * first-class "no track selected" sentinel (FR-002 / A5 /
+ * Principle III). Toggling `ambient_sound_enabled` off OR
+ * picking `None` from the dropdown both halt playback while
+ * preserving the other field's value (FR-005).
+ */
+ambient_sound_type?: AmbientSoundType; 
+/**
+ * Feature 004: output amplitude, 0..=100 inclusive. Clamped at
+ * the Settings UI input boundary (`<input type="range" min="0"
+ * max="100">`); the audio call site reads the stored value and
+ * passes it through to `HtmlAudioElement::set_volume` without
+ * re-clamping (Principle III — validate at boundaries only).
+ * Default `50` per FR-003 / A9.
+ */
+ambient_sound_volume?: number }
 /**
  * Pomodoro session record persisted in the user's app-data
  * directory. Backend type alias: `PomodoroSession`.
