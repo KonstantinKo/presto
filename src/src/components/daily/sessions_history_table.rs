@@ -24,9 +24,11 @@
 
 use leptos::prelude::*;
 use leptos::task::spawn_local;
+use leptos_i18n::{t, t_string};
 
 use crate::bridge::commands;
 use crate::bridge::types::{ManualSession, SessionType};
+use crate::i18n::i18n::use_i18n;
 
 const TITLE_DISPLAY_CAP: usize = 40;
 
@@ -105,6 +107,7 @@ fn end_time_from_start_duration(start: &str, duration: u32) -> (String, u32) {
 
 #[component]
 pub fn SessionsHistoryTable() -> impl IntoView {
+    let i18n = use_i18n();
     let sessions =
         use_context::<RwSignal<Vec<ManualSession>>>().unwrap_or_else(|| RwSignal::new(Vec::new()));
 
@@ -139,12 +142,12 @@ pub fn SessionsHistoryTable() -> impl IntoView {
     view! {
         <div class="sessions-history-card">
             <div class="sessions-header">
-                <h3>"Session History"</h3>
+                <h3>{t!(i18n, daily.history_title)}</h3>
                 <div class="sessions-controls">
                     <button
                         id="export-sessions-btn"
                         class="export-btn"
-                        title="Export to Excel"
+                        title=move || t_string!(i18n, daily.history_export_title).to_string()
                         on:click=move |_| {
                             let snapshot = sessions.get_untracked();
                             spawn_local(async move {
@@ -162,7 +165,8 @@ pub fn SessionsHistoryTable() -> impl IntoView {
                         }
                     >
                         <i class="ri-download-line"></i>
-                        " Export"
+                        " "
+                        {t!(i18n, daily.history_export_label)}
                     </button>
                 </div>
             </div>
@@ -170,10 +174,10 @@ pub fn SessionsHistoryTable() -> impl IntoView {
                 <table class="sessions-table" id="sessions-table">
                     <thead>
                         <tr>
-                            <th>"Time"</th>
-                            <th>"Title"</th>
-                            <th>"Duration"</th>
-                            <th>"Actions"</th>
+                            <th>{t!(i18n, daily.history_col_time)}</th>
+                            <th>{t!(i18n, daily.history_col_title)}</th>
+                            <th>{t!(i18n, daily.history_col_duration)}</th>
+                            <th>{t!(i18n, daily.history_col_actions)}</th>
                         </tr>
                     </thead>
                     <tbody id="sessions-table-body">
@@ -196,9 +200,9 @@ pub fn SessionsHistoryTable() -> impl IntoView {
                                         <td>
                                             <button
                                                 class="edit-session-btn"
-                                                aria-label="Edit session"
+                                                aria-label=move || t_string!(i18n, daily.history_edit_aria).to_string()
                                                 on:click=move |_| on_open_modal(session_for_modal.clone())
-                                            >"Edit"</button>
+                                            >{t!(i18n, daily.history_edit_button)}</button>
                                         </td>
                                     </tr>
                                 }
@@ -216,28 +220,28 @@ pub fn SessionsHistoryTable() -> impl IntoView {
             >
                 <form class="session-modal" id="session-form" role="dialog" aria-modal="true" aria-labelledby="session-modal-title">
                     <div class="session-modal-header">
-                        <h3 id="session-modal-title">"Edit session"</h3>
+                        <h3 id="session-modal-title">{t!(i18n, daily.modal_title)}</h3>
                         <button
                             type="button"
                             id="close-session-modal"
                             class="close-btn"
-                            aria-label="Close edit modal"
+                            aria-label=move || t_string!(i18n, daily.modal_close_aria).to_string()
                             on:click=on_close_modal
                         >"\u{00d7}"</button>
                     </div>
                     <div class="session-modal-body">
-                        <label for="session-title">"Title"</label>
+                        <label for="session-title">{t!(i18n, daily.modal_field_title)}</label>
                         <input
                             type="text"
                             id="session-title"
                             maxlength="120"
-                            placeholder="What is this session for?"
+                            placeholder=move || t_string!(i18n, daily.modal_title_placeholder).to_string()
                             prop:value=move || modal_title.get()
                             on:input=move |ev| {
                                 modal_title.set(event_target_value(&ev));
                             }
                         />
-                        <label for="session-start-time">"Start Time"</label>
+                        <label for="session-start-time">{t!(i18n, daily.modal_field_start)}</label>
                         <input
                             type="time"
                             id="session-start-time"
@@ -253,7 +257,7 @@ pub fn SessionsHistoryTable() -> impl IntoView {
                                 modal_duration.set(new_dur);
                             }
                         />
-                        <label for="session-end-time">"End Time"</label>
+                        <label for="session-end-time">{t!(i18n, daily.modal_field_end)}</label>
                         <input
                             type="time"
                             id="session-end-time"
@@ -273,7 +277,7 @@ pub fn SessionsHistoryTable() -> impl IntoView {
                                 modal_duration.set(final_dur);
                             }
                         />
-                        <label for="session-duration">"Duration (minutes)"</label>
+                        <label for="session-duration">{t!(i18n, daily.modal_field_duration)}</label>
                         <input
                             type="number"
                             id="session-duration"
@@ -299,7 +303,7 @@ pub fn SessionsHistoryTable() -> impl IntoView {
                             id="cancel-session-btn"
                             class="btn-secondary"
                             on:click=on_close_modal
-                        >"Cancel"</button>
+                        >{t!(i18n, daily.modal_cancel)}</button>
                         <button
                             type="button"
                             id="delete-session-btn"
@@ -310,7 +314,7 @@ pub fn SessionsHistoryTable() -> impl IntoView {
                                 }
                                 session_modal_open.set(false);
                             }
-                        >"Delete"</button>
+                        >{t!(i18n, daily.modal_delete)}</button>
                         <button
                             type="button"
                             id="save-session-btn"
@@ -341,7 +345,7 @@ pub fn SessionsHistoryTable() -> impl IntoView {
                                 }
                                 session_modal_open.set(false);
                             }
-                        >"Save"</button>
+                        >{t!(i18n, daily.modal_save)}</button>
                     </div>
                 </form>
             </div>

@@ -13,8 +13,10 @@
 )]
 
 use leptos::prelude::*;
+use leptos_i18n::t_string;
 
 use crate::components::icon::{self, IconClass};
+use crate::i18n::i18n::use_i18n;
 
 /// Closed sum type for the four Statistics-view periods.
 ///
@@ -43,17 +45,6 @@ impl Period {
         }
     }
 
-    /// Human-readable tab label. English-only per FR-038.
-    #[must_use]
-    pub const fn label(self) -> &'static str {
-        match self {
-            Self::Daily => "Daily",
-            Self::Weekly => "Weekly",
-            Self::Monthly => "Monthly",
-            Self::Yearly => "Yearly",
-        }
-    }
-
     /// Leading-icon remix class name for the period pill. Matches the
     /// ramazanberkozbek fork's icon set for visual parity.
     #[must_use]
@@ -78,6 +69,7 @@ pub fn PeriodSelector(
     current: RwSignal<Period>,
     #[prop(into)] on_select: Callback<Period>,
 ) -> impl IntoView {
+    let i18n = use_i18n();
     let variants = [
         Period::Daily,
         Period::Weekly,
@@ -86,11 +78,17 @@ pub fn PeriodSelector(
     ];
 
     view! {
-        <div class="period-tabs" role="tablist" aria-label="Statistics period">
+        <div class="period-tabs" role="tablist" aria-label=move || t_string!(i18n, stats.period_aria_label).to_string()>
             {variants.into_iter().map(|period| {
                 let is_active =
                     Signal::derive(move || current.with(|c| *c == period));
                 let icon = IconClass::from_icon_name(period.icon_name());
+                let label = Signal::derive(move || match period {
+                    Period::Daily => t_string!(i18n, stats.period_daily).to_string(),
+                    Period::Weekly => t_string!(i18n, stats.period_weekly).to_string(),
+                    Period::Monthly => t_string!(i18n, stats.period_monthly).to_string(),
+                    Period::Yearly => t_string!(i18n, stats.period_yearly).to_string(),
+                });
                 view! {
                     <button
                         class="period-btn"
@@ -101,7 +99,7 @@ pub fn PeriodSelector(
                         on:click=move |_| on_select.run(period)
                     >
                         {icon::render(&icon)}
-                        <span>{period.label()}</span>
+                        <span>{move || label.get()}</span>
                     </button>
                 }
             }).collect_view()}

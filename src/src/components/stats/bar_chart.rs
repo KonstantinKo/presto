@@ -18,6 +18,9 @@
 )]
 
 use leptos::prelude::*;
+use leptos_i18n::{t, t_string};
+
+use crate::i18n::i18n::use_i18n;
 
 /// Reusable bar-chart input contract.
 ///
@@ -154,6 +157,7 @@ pub fn BarChart(
     min_bar_height_px: u32,
     #[prop(into, optional)] title: String,
 ) -> impl IntoView {
+    let i18n = use_i18n();
     let props = BarChartConfig {
         max_scale,
         x_axis_labels,
@@ -163,7 +167,7 @@ pub fn BarChart(
     let total: u32 = props.bar_values.iter().copied().sum();
     let spec = compute_render_spec(&props);
     let header_title = if title.is_empty() {
-        "Focus Time Distribution".to_string()
+        t_string!(i18n, stats.chart_default_title).to_string()
     } else {
         title
     };
@@ -182,7 +186,7 @@ pub fn BarChart(
             <div class="distribution-header">
                 <h3 class="section-header">{header_title}</h3>
                 <div class="total-focus-time">
-                    <span class="label">"Total focus time:"</span>
+                    <span class="label">{t!(i18n, stats.chart_total_label)}</span>
                     <span class="value">{total_text}</span>
                 </div>
             </div>
@@ -214,11 +218,11 @@ pub fn BarChart(
             <div class="distribution-legend">
                 <div class="legend-item">
                     <span class="legend-dot focus"></span>
-                    <span>"Focus"</span>
+                    <span>{t!(i18n, stats.legend_focus)}</span>
                 </div>
                 <div class="legend-item">
                     <span class="legend-dot break"></span>
-                    <span>"Break"</span>
+                    <span>{t!(i18n, stats.legend_break)}</span>
                 </div>
             </div>
         </div>

@@ -261,7 +261,7 @@ pub fn ThemeSettings(settings: RwSignal<Settings>, toast: SettingsToast) -> impl
                                             <div
                                                 class="timer-preview-status"
                                                 style=preview_styles.status
-                                            >"Focus Session"</div>
+                                            >{t!(i18n, settings.theme.preview_focus_session)}</div>
                                         </div>
                                         <div class="color-preview-strip">
                                             <div

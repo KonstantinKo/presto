@@ -166,10 +166,10 @@ pub fn GeneralSettings(settings: RwSignal<Settings>, toast: SettingsToast) -> im
                     prop:value=active_locale_value
                     on:change=on_locale_change
                 >
-                    <option value="en">"English"</option>
-                    <option value="de">"Deutsch"</option>
-                    <option value="it">"Italiano"</option>
-                    <option value="tr">"Türkçe"</option>
+                    <option value="en">"English"</option>  // i18n-exempt: language self-name
+                    <option value="de">"Deutsch"</option>  // i18n-exempt: language self-name
+                    <option value="it">"Italiano"</option>  // i18n-exempt: language self-name
+                    <option value="tr">"Türkçe"</option>  // i18n-exempt: language self-name
                 </select>
                 <p class="setting-description">{t!(i18n, settings.general.language_help)}</p>
             </div>
