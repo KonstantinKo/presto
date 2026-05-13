@@ -42,4 +42,13 @@ mod tests {
     fn resolve_initial_locale_none_falls_to_os_de() {
         assert_eq!(resolve_initial_locale(None, ["de-DE"]), Locale::De);
     }
+
+    /// T011 [RED → T015 GREEN]: Swiss German `de-CH` matches
+    /// `Locale::De` via the two-letter prefix. The prefix splitter
+    /// must not require a country tag and must lowercase both halves
+    /// of the BCP-47 tag before matching.
+    #[test]
+    fn resolve_initial_locale_none_swiss_german_matches_de() {
+        assert_eq!(resolve_initial_locale(None, ["de-CH"]), Locale::De);
+    }
 }
