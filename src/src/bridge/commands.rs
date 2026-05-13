@@ -1404,7 +1404,7 @@ mod tests {
             session_mode: TimerMode::Focus,
             current_session: 2,
             total_sessions: 4,
-            mode_icon: Some("🧠".to_string()),
+            mode_icon: Some("\u{25c9}".to_string()),
         }
     }
 

@@ -38,15 +38,24 @@ pub(super) fn build_tray_text(state: &TimerState, settings: &Settings) -> (Strin
     let is_overtime = time_signed < 0 && allow_continuous;
     let mode = state.current_mode();
 
+    // Glyphs lifted from ramazanberkozbek/presto — chosen so they
+    // render as a single monospace cell in the macOS menu bar (no
+    // emoji shaping that would push the title off-baseline).
+    // Pause is the only state override; overtime drops to the mode
+    // icon to match the reference's minimal set.
     let mode_icon: &str = if is_paused {
-        "\u{23f8}\u{fe0f}"
-    } else if is_overtime {
-        "\u{23f0}"
+        // ⏸ pause symbol forced to text presentation via U+FE0E so
+        // macOS renders the slim outlined pair (not the chunky emoji
+        // variant) at the same baseline as the mode glyphs.
+        "\u{23f8}\u{fe0e}"
     } else {
         match mode {
-            TimerMode::Focus => "\u{1f9e0}",
-            TimerMode::Break => "\u{2615}",
-            TimerMode::LongBreak => "\u{1f319}",
+            // ◉ filled circle = focus
+            TimerMode::Focus => "\u{25c9}",
+            // ☼ sun = short break (daytime rest)
+            TimerMode::Break => "\u{263c}",
+            // ☾ moon = long break (night rest)
+            TimerMode::LongBreak => "\u{263e}",
         }
     };
 
@@ -129,9 +138,9 @@ mod tests {
             text.starts_with("25:00 (0/10)"),
             "expected 'mm:ss (c/t)' real text prefix; got {text:?}"
         );
-        // Brain emoji override for Focus mode (consumed by backend's
+        // ◉ glyph override for Focus mode (consumed by backend's
         // `format!("{icon} {timer_text}")`).
-        assert_eq!(icon.as_deref(), Some("\u{1f9e0}"));
+        assert_eq!(icon.as_deref(), Some("\u{25c9}"));
         // 14-char padding to a zero-width-space-suffixed string —
         // backend reserves stable width for "+99:99 (99/99)".
         assert_eq!(
@@ -153,8 +162,8 @@ mod tests {
         };
         let (text, icon) = build_tray_text(&state, &settings);
         assert_eq!(
-            text, "\u{1f9e0}",
-            "IconOnly must put emoji into the text slot"
+            text, "\u{25c9}",
+            "IconOnly must put the mode glyph into the text slot"
         );
         assert_eq!(
             icon.as_deref(),
@@ -182,8 +191,8 @@ mod tests {
         let (_, icon) = build_tray_text(&state, &Settings::default());
         assert_eq!(
             icon.as_deref(),
-            Some("\u{23f8}\u{fe0f}"),
-            "paused state must override mode emoji with pause glyph"
+            Some("\u{23f8}\u{fe0e}"),
+            "paused state must override the mode glyph with the text-variant pause glyph"
         );
     }
 
@@ -192,19 +201,19 @@ mod tests {
     /// through the pomodoro cycle: every 4th focus completion lands
     /// in `LongBreak`.
     #[test]
-    fn default_mode_emojis() {
+    fn default_mode_glyphs() {
         let mut state = TimerState::new(Durations::default());
         let settings = Settings::default();
 
-        // Focus — brain glyph.
+        // Focus — ◉ filled circle.
         let (_, icon) = build_tray_text(&state, &settings);
-        assert_eq!(icon.as_deref(), Some("\u{1f9e0}"));
+        assert_eq!(icon.as_deref(), Some("\u{25c9}"));
 
         // Skip 1: Focus → Break (count=1).
         let _ = state.skip();
         assert_eq!(state.current_mode(), TimerMode::Break);
         let (_, icon) = build_tray_text(&state, &settings);
-        assert_eq!(icon.as_deref(), Some("\u{2615}"), "Break = coffee");
+        assert_eq!(icon.as_deref(), Some("\u{263c}"), "Break = sun");
 
         // Cycle six more skips; after the 7th skip,
         // completed_pomodoros == 4 → LongBreak.
@@ -214,6 +223,6 @@ mod tests {
         assert_eq!(state.completed_pomodoros(), 4);
         assert_eq!(state.current_mode(), TimerMode::LongBreak);
         let (_, icon) = build_tray_text(&state, &settings);
-        assert_eq!(icon.as_deref(), Some("\u{1f319}"), "LongBreak = moon");
+        assert_eq!(icon.as_deref(), Some("\u{263e}"), "LongBreak = moon");
     }
 }

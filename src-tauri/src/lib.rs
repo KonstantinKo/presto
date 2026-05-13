@@ -330,10 +330,15 @@ async fn update_tray_icon(
         *result_guard = (|| -> Result<(), BridgeError> {
             if let Some(tray) = app_clone.tray_by_id("main") {
                 let icon = mode_icon.unwrap_or_else(|| {
+                    // Glyphs lifted from ramazanberkozbek/presto — render
+                    // as monospace text in the macOS menu bar.
                     match session_mode {
-                        TimerMode::Focus => "🧠",
-                        TimerMode::Break => "☕",
-                        TimerMode::LongBreak => "🌙",
+                        // ◉ filled circle = focus
+                        TimerMode::Focus => "\u{25c9}",
+                        // ☼ sun = short break
+                        TimerMode::Break => "\u{263c}",
+                        // ☾ moon = long break
+                        TimerMode::LongBreak => "\u{263e}",
                     }
                     .to_string()
                 });
@@ -665,7 +670,10 @@ pub fn run() {
                 // We seed an initial title so the countdown text is present from
                 // boot — no icon is set so macOS doesn't render a duplicate
                 // template silhouette next to the emoji glyph in the title.
-                let initial_tray_title = "\u{1f9e0} 25:00 (0/10)";
+                // ◉ glyph matches the focus icon emitted by `tray.rs` so
+                // the initial frame doesn't flash a different symbol before
+                // the first `update_tray_icon` payload arrives.
+                let initial_tray_title = "\u{25c9} 25:00 (0/10)";
                 let tray_builder = TrayIconBuilder::with_id("main")
                     .menu(&menu)
                     .show_menu_on_left_click(true)
