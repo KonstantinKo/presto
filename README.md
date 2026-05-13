@@ -81,6 +81,15 @@ xattr -d com.apple.quarantine /Applications/presto.app
 - Xcode Command Line Tools (macOS): `xcode-select --install`
 - Linux: `webkit2gtk-4.1`, `libsoup3`, `libappindicator3-1` (or distro equivalents)
 
+#### Linux runtime dependencies
+
+For MP3 audio decoding (used by the ambient-sound feature and other audio paths) on Linux builds, the WebKitGTK runtime requires the GStreamer "bad" + libav plugin packages to be installed alongside the core media stack:
+
+- **Fedora / RHEL**: `gstreamer1-plugins-bad-free`, `gstreamer1-libav`
+- **Debian / Ubuntu**: `gstreamer1.0-plugins-bad`, `gstreamer1.0-libav`
+
+macOS (WKWebView) and Windows (WebView2) ship with MP3 decoders by default; no extra runtime dependency on those platforms.
+
 There is no Node.js or npm dependency at the repo root post-cutover. The end-to-end test suite has its own scoped `package.json` under `tests/e2e/` that pins `@playwright/test`.
 
 #### Steps
