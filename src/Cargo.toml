@@ -67,6 +67,15 @@ features = [
     "AudioNode",
     "AudioParam",
     "AudioDestinationNode",
+    # Feature 004 (T003): looping `<audio>` element + its parent
+    # `HtmlMediaElement` for the ambient-sound driver
+    # (`components::ambient_audio`). The driver wraps a pair of
+    # persistent `HtmlAudioElement` instances and ramps their
+    # `.volume` via `HtmlMediaElement.set_volume` during fades and
+    # cross-fades. Reuses the existing `web-sys` crate; no new
+    # dependency line, no `Cargo.lock` mutation.
+    "HtmlAudioElement",
+    "HtmlMediaElement",
     # `window.crypto.randomUUID()` powers collision-free tag id
     # generation in `components::timer::random_uuid`. Mirrors the
     # JS-era `crypto.randomUUID()` at `tag-manager.js:287`.
