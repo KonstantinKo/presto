@@ -1,0 +1,370 @@
+- generic [active] [ref=e1]:
+  - navigation [ref=e2]:
+    - generic [ref=e4]:
+      - generic [ref=e5]:
+        - link "AGENTEX AGENTEX v1.0" [ref=e6] [cursor=pointer]:
+          - /url: /
+          - generic [ref=e7]: AGENTEX AGENTEX
+          - generic [ref=e8]: v1.0
+        - generic [ref=e9]:
+          - link "Dashboard" [ref=e10] [cursor=pointer]:
+            - /url: /
+            - img [ref=e11]
+            - generic [ref=e16]: Dashboard
+          - link "Queue" [ref=e17] [cursor=pointer]:
+            - /url: /queue
+            - img [ref=e18]
+            - generic [ref=e19]: Queue
+          - link "Projects" [ref=e20] [cursor=pointer]:
+            - /url: /projects
+            - img [ref=e21]
+            - generic [ref=e23]: Projects
+      - generic [ref=e27]: SYSTEM ONLINE
+  - main [ref=e28]:
+    - generic [ref=e29]:
+      - alert [ref=e451]:
+        - generic [ref=e452]:
+          - img [ref=e454]
+          - paragraph [ref=e457]: "PR #62 adopted. Job created and watching for reviews."
+          - button "close" [ref=e458] [cursor=pointer]:
+            - img [ref=e459]
+      - generic [ref=e462]:
+        - generic [ref=e463]:
+          - generic [ref=e464]:
+            - heading "presto presto" [level=1] [ref=e465]
+            - link "KonstantinKo/presto" [ref=e466] [cursor=pointer]:
+              - /url: https://github.com/KonstantinKo/presto
+              - img [ref=e467]
+              - text: KonstantinKo/presto
+          - generic [ref=e469]:
+            - link "PREVIEW" [ref=e38] [cursor=pointer]:
+              - /url: /projects/12/preview
+              - img [ref=e39]
+              - text: PREVIEW
+            - button "ENABLE APK" [ref=e470] [cursor=pointer]:
+              - img [ref=e471]
+              - text: ENABLE APK
+            - button "MAINTENANCE" [ref=e474] [cursor=pointer]:
+              - img [ref=e475]
+              - text: MAINTENANCE
+            - button "AUDIT" [ref=e478] [cursor=pointer]:
+              - img [ref=e479]
+              - text: AUDIT
+              - img [ref=e481]
+            - button "PAUSE" [ref=e483] [cursor=pointer]:
+              - img [ref=e484]
+              - text: PAUSE
+            - link "EDIT" [ref=e58] [cursor=pointer]:
+              - /url: /projects/12/edit
+              - img [ref=e59]
+              - text: EDIT
+        - generic [ref=e487]:
+          - generic [ref=e488]:
+            - heading "DETAILS" [level=2] [ref=e490]:
+              - img [ref=e491]
+              - text: DETAILS
+            - generic [ref=e494]:
+              - generic [ref=e495]:
+                - term [ref=e496]: STATUS
+                - definition [ref=e497]:
+                  - generic [ref=e498]: ACTIVE
+              - generic [ref=e499]:
+                - term [ref=e500]: WORKFLOW
+                - definition [ref=e501]: plan_and_build
+              - generic [ref=e502]:
+                - term [ref=e503]: PRIORITY BOOST
+                - definition [ref=e504]: "+0"
+              - generic [ref=e505]:
+                - term [ref=e506]: LAST COMPLETED
+                - definition [ref=e507]: 2026-05-13 11:55
+              - generic [ref=e508]:
+                - term [ref=e509]: AUTO-MAINTENANCE
+                - definition [ref=e510]: 13/7
+          - generic [ref=e511]:
+            - heading "CONFIGURATION" [level=2] [ref=e513]:
+              - img [ref=e514]
+              - text: CONFIGURATION
+            - generic [ref=e518]: "{}"
+        - generic [ref=e519]:
+          - generic [ref=e520]:
+            - heading "JOB HISTORY" [level=2] [ref=e521]:
+              - img [ref=e522]
+              - text: JOB HISTORY
+            - generic [ref=e524]: 20 TOTAL
+          - table [ref=e526]:
+            - rowgroup [ref=e527]:
+              - row "ISSUE TYPE STATUS QUEUED COMPLETED" [ref=e528]:
+                - columnheader "ISSUE" [ref=e529]:
+                  - generic [ref=e530]: ISSUE
+                - columnheader "TYPE" [ref=e531]:
+                  - generic [ref=e532]: TYPE
+                - columnheader "STATUS" [ref=e533]:
+                  - generic [ref=e534]: STATUS
+                - columnheader "QUEUED" [ref=e535]:
+                  - generic [ref=e536]: QUEUED
+                - columnheader "COMPLETED" [ref=e537]:
+                  - generic [ref=e538]: COMPLETED
+            - rowgroup [ref=e114]:
+              - 'row "[PR #62] feat: i18n with EN/DE/IT/TR locales + leptos_i18n integration (#005) FEATURE WAITING 2026-05-13 16:06 -" [ref=e539] [cursor=pointer]':
+                - 'cell "[PR #62] feat: i18n with EN/DE/IT/TR locales + leptos_i18n integration (#005)" [ref=e540]':
+                  - generic [ref=e542]: "[PR #62] feat: i18n with EN/DE/IT/TR locales + leptos_i18n integration (#005)"
+                - cell "FEATURE" [ref=e543]:
+                  - generic [ref=e544]:
+                    - img [ref=e545]
+                    - text: FEATURE
+                - cell "WAITING" [ref=e547]:
+                  - generic [ref=e548]: WAITING
+                - cell "2026-05-13 16:06" [ref=e550]
+                - cell "-" [ref=e551]
+              - row "#57 Strip stale Supabase CSP allowlist entry from tauri.conf.json CHORE COMPLETED 2026-05-13 11:00 2026-05-13 11:22" [ref=e130] [cursor=pointer]:
+                - cell "#57 Strip stale Supabase CSP allowlist entry from tauri.conf.json" [ref=e131]:
+                  - generic [ref=e132]:
+                    - generic [ref=e133]: "#57"
+                    - generic [ref=e134]: Strip stale Supabase CSP allowlist entry from tauri.conf.json
+                - cell "CHORE" [ref=e135]:
+                  - generic [ref=e552]:
+                    - img [ref=e553]
+                    - text: CHORE
+                - cell "COMPLETED" [ref=e140]:
+                  - generic [ref=e556]: COMPLETED
+                - cell "2026-05-13 11:00" [ref=e143]
+                - cell "2026-05-13 11:22" [ref=e144]
+              - row "#54 sessions_history_table delete/save mutate only local signal — no IPC persistence BUG COMPLETED 2026-05-13 11:00 2026-05-13 11:55" [ref=e115] [cursor=pointer]:
+                - cell "#54 sessions_history_table delete/save mutate only local signal — no IPC persistence" [ref=e116]:
+                  - generic [ref=e117]:
+                    - generic [ref=e118]: "#54"
+                    - generic [ref=e119]: sessions_history_table delete/save mutate only local signal — no IPC persistence
+                - cell "BUG" [ref=e120]:
+                  - generic [ref=e558]:
+                    - img [ref=e559]
+                    - text: BUG
+                - cell "COMPLETED" [ref=e125]:
+                  - generic [ref=e562]: COMPLETED
+                - cell "2026-05-13 11:00" [ref=e128]
+                - cell "2026-05-13 11:55" [ref=e129]
+              - 'row "[PR #59] feat: opt-in ambient background sounds during focus (#004) FEATURE COMPLETED 2026-05-13 10:06 2026-05-13 10:37" [ref=e145] [cursor=pointer]':
+                - 'cell "[PR #59] feat: opt-in ambient background sounds during focus (#004)" [ref=e146]':
+                  - generic [ref=e148]: "[PR #59] feat: opt-in ambient background sounds during focus (#004)"
+                - cell "FEATURE" [ref=e149]:
+                  - generic [ref=e564]:
+                    - img [ref=e565]
+                    - text: FEATURE
+                - cell "COMPLETED" [ref=e153]:
+                  - generic [ref=e567]: COMPLETED
+                - cell "2026-05-13 10:06" [ref=e156]
+                - cell "2026-05-13 10:37" [ref=e157]
+              - row "#56 Notification chime unreliable on macOS (start + transition sounds intermittent) BUG COMPLETED 2026-05-13 08:30 2026-05-13 09:00" [ref=e158] [cursor=pointer]:
+                - cell "#56 Notification chime unreliable on macOS (start + transition sounds intermittent)" [ref=e159]:
+                  - generic [ref=e160]:
+                    - generic [ref=e161]: "#56"
+                    - generic [ref=e162]: Notification chime unreliable on macOS (start + transition sounds intermittent)
+                - cell "BUG" [ref=e163]:
+                  - generic [ref=e569]:
+                    - img [ref=e570]
+                    - text: BUG
+                - cell "COMPLETED" [ref=e168]:
+                  - generic [ref=e573]: COMPLETED
+                - cell "2026-05-13 08:30" [ref=e171]
+                - cell "2026-05-13 09:00" [ref=e172]
+              - 'row "[PR #55] feat: UI parity port from ramazanberkozbek/presto FEATURE COMPLETED 2026-05-13 06:55 2026-05-13 07:47" [ref=e173] [cursor=pointer]':
+                - 'cell "[PR #55] feat: UI parity port from ramazanberkozbek/presto" [ref=e174]':
+                  - generic [ref=e176]: "[PR #55] feat: UI parity port from ramazanberkozbek/presto"
+                - cell "FEATURE" [ref=e177]:
+                  - generic [ref=e575]:
+                    - img [ref=e576]
+                    - text: FEATURE
+                - cell "COMPLETED" [ref=e181]:
+                  - generic [ref=e578]: COMPLETED
+                - cell "2026-05-13 06:55" [ref=e184]
+                - cell "2026-05-13 07:47" [ref=e185]
+              - 'row "[PR #52] feat: Statistics period tabs + Daily view + Phosphor icons + control tooltips (#003) FEATURE COMPLETED 2026-05-12 17:15 2026-05-12 18:48" [ref=e186] [cursor=pointer]':
+                - 'cell "[PR #52] feat: Statistics period tabs + Daily view + Phosphor icons + control tooltips (#003)" [ref=e187]':
+                  - generic [ref=e189]: "[PR #52] feat: Statistics period tabs + Daily view + Phosphor icons + control tooltips (#003)"
+                - cell "FEATURE" [ref=e190]:
+                  - generic [ref=e580]:
+                    - img [ref=e581]
+                    - text: FEATURE
+                - cell "COMPLETED" [ref=e194]:
+                  - generic [ref=e583]: COMPLETED
+                - cell "2026-05-12 17:15" [ref=e197]
+                - cell "2026-05-12 18:48" [ref=e198]
+              - 'row "[PR #51] Feature 002: per-session titles + configurable long-break + opt-in metronome FEATURE COMPLETED 2026-05-12 11:51 2026-05-12 12:51" [ref=e199] [cursor=pointer]':
+                - 'cell "[PR #51] Feature 002: per-session titles + configurable long-break + opt-in metronome" [ref=e200]':
+                  - generic [ref=e202]: "[PR #51] Feature 002: per-session titles + configurable long-break + opt-in metronome"
+                - cell "FEATURE" [ref=e203]:
+                  - generic [ref=e585]:
+                    - img [ref=e586]
+                    - text: FEATURE
+                - cell "COMPLETED" [ref=e207]:
+                  - generic [ref=e588]: COMPLETED
+                - cell "2026-05-12 11:51" [ref=e210]
+                - cell "2026-05-12 12:51" [ref=e211]
+              - 'row "[PR #50] Local-only pivot: strip auth/sync/team/analytics FEATURE COMPLETED 2026-05-12 07:59 2026-05-12 08:33" [ref=e212] [cursor=pointer]':
+                - 'cell "[PR #50] Local-only pivot: strip auth/sync/team/analytics" [ref=e213]':
+                  - generic [ref=e215]: "[PR #50] Local-only pivot: strip auth/sync/team/analytics"
+                - cell "FEATURE" [ref=e216]:
+                  - generic [ref=e590]:
+                    - img [ref=e591]
+                    - text: FEATURE
+                - cell "COMPLETED" [ref=e220]:
+                  - generic [ref=e593]: COMPLETED
+                - cell "2026-05-12 07:59" [ref=e223]
+                - cell "2026-05-12 08:33" [ref=e224]
+              - 'row "[PR #49] Fix regression sweep + shared IPC types crate + tauri-specta wiring FEATURE COMPLETED 2026-05-11 20:37 2026-05-12 06:50" [ref=e225] [cursor=pointer]':
+                - 'cell "[PR #49] Fix regression sweep + shared IPC types crate + tauri-specta wiring" [ref=e226]':
+                  - generic [ref=e228]: "[PR #49] Fix regression sweep + shared IPC types crate + tauri-specta wiring"
+                - cell "FEATURE" [ref=e229]:
+                  - generic [ref=e595]:
+                    - img [ref=e596]
+                    - text: FEATURE
+                - cell "COMPLETED" [ref=e233]:
+                  - generic [ref=e598]: COMPLETED
+                - cell "2026-05-11 20:37" [ref=e236]
+                - cell "2026-05-12 06:50" [ref=e237]
+              - 'row "#40 macOS: system tray icon does not appear at runtime BUG COMPLETED 2026-05-11 13:33 2026-05-11 14:25" [ref=e238] [cursor=pointer]':
+                - 'cell "#40 macOS: system tray icon does not appear at runtime" [ref=e239]':
+                  - generic [ref=e240]:
+                    - generic [ref=e241]: "#40"
+                    - generic [ref=e242]: "macOS: system tray icon does not appear at runtime"
+                - cell "BUG" [ref=e243]:
+                  - generic [ref=e600]:
+                    - img [ref=e601]
+                    - text: BUG
+                - cell "COMPLETED" [ref=e248]:
+                  - generic [ref=e604]: COMPLETED
+                - cell "2026-05-11 13:33" [ref=e251]
+                - cell "2026-05-11 14:25" [ref=e252]
+              - row "#39 Restore secondary UI affordances, semantic HTML attributes, and the missing display font BUG COMPLETED 2026-05-11 13:28 2026-05-11 15:05" [ref=e253] [cursor=pointer]:
+                - cell "#39 Restore secondary UI affordances, semantic HTML attributes, and the missing display font" [ref=e254]:
+                  - generic [ref=e255]:
+                    - generic [ref=e256]: "#39"
+                    - generic [ref=e257]: Restore secondary UI affordances, semantic HTML attributes, and the missing display font
+                - cell "BUG" [ref=e258]:
+                  - generic [ref=e606]:
+                    - img [ref=e607]
+                    - text: BUG
+                - cell "COMPLETED" [ref=e263]:
+                  - generic [ref=e610]: COMPLETED
+                - cell "2026-05-11 13:28" [ref=e266]
+                - cell "2026-05-11 15:05" [ref=e267]
+              - 'row "#38 Visual: mode-aware projections + active-state class bindings never wired BUG COMPLETED 2026-05-11 12:23 2026-05-11 13:03" [ref=e268] [cursor=pointer]':
+                - 'cell "#38 Visual: mode-aware projections + active-state class bindings never wired" [ref=e269]':
+                  - generic [ref=e270]:
+                    - generic [ref=e271]: "#38"
+                    - generic [ref=e272]: "Visual: mode-aware projections + active-state class bindings never wired"
+                - cell "BUG" [ref=e273]:
+                  - generic [ref=e612]:
+                    - img [ref=e613]
+                    - text: BUG
+                - cell "COMPLETED" [ref=e278]:
+                  - generic [ref=e616]: COMPLETED
+                - cell "2026-05-11 12:23" [ref=e281]
+                - cell "2026-05-11 13:03" [ref=e282]
+              - 'row "#37 Timer engine: restore event-driven side effects + fix unit/clamp/timezone errors BUG COMPLETED 2026-05-11 06:08 2026-05-11 07:22" [ref=e283] [cursor=pointer]':
+                - 'cell "#37 Timer engine: restore event-driven side effects + fix unit/clamp/timezone errors" [ref=e284]':
+                  - generic [ref=e285]:
+                    - generic [ref=e286]: "#37"
+                    - generic [ref=e287]: "Timer engine: restore event-driven side effects + fix unit/clamp/timezone errors"
+                - cell "BUG" [ref=e288]:
+                  - generic [ref=e618]:
+                    - img [ref=e619]
+                    - text: BUG
+                - cell "COMPLETED" [ref=e293]:
+                  - generic [ref=e622]: COMPLETED
+                - cell "2026-05-11 06:08" [ref=e296]
+                - cell "2026-05-11 07:22" [ref=e297]
+              - row "Vision Audit (full run) VISION AUDIT RUNNING 2026-05-11 01:20 -" [ref=e298] [cursor=pointer]:
+                - cell "Vision Audit (full run)" [ref=e299]:
+                  - generic [ref=e301]: Vision Audit (full run)
+                - cell "VISION AUDIT" [ref=e302]:
+                  - generic [ref=e624]:
+                    - img [ref=e625]
+                    - text: VISION AUDIT
+                - cell "RUNNING" [ref=e307]:
+                  - generic [ref=e628]: RUNNING
+                - cell "2026-05-11 01:20" [ref=e310]
+                - cell "-" [ref=e311]
+              - row "Maintenance (full run) MAINTENANCE COMPLETED 2026-05-10 22:45 2026-05-11 01:20" [ref=e312] [cursor=pointer]:
+                - cell "Maintenance (full run)" [ref=e313]:
+                  - generic [ref=e315]: Maintenance (full run)
+                - cell "MAINTENANCE" [ref=e316]:
+                  - generic [ref=e630]:
+                    - img [ref=e631]
+                    - text: MAINTENANCE
+                - cell "COMPLETED" [ref=e320]:
+                  - generic [ref=e633]: COMPLETED
+                - cell "2026-05-10 22:45" [ref=e323]
+                - cell "2026-05-11 01:20" [ref=e324]
+              - 'row "#36 Settings: complete the data-model and the read/write wires across the app BUG COMPLETED 2026-05-10 21:33 2026-05-10 22:45" [ref=e325] [cursor=pointer]':
+                - 'cell "#36 Settings: complete the data-model and the read/write wires across the app" [ref=e326]':
+                  - generic [ref=e327]:
+                    - generic [ref=e328]: "#36"
+                    - generic [ref=e329]: "Settings: complete the data-model and the read/write wires across the app"
+                - cell "BUG" [ref=e330]:
+                  - generic [ref=e635]:
+                    - img [ref=e636]
+                    - text: BUG
+                - cell "COMPLETED" [ref=e335]:
+                  - generic [ref=e639]: COMPLETED
+                - cell "2026-05-10 21:33" [ref=e338]
+                - cell "2026-05-10 22:45" [ref=e339]
+              - 'row "[PR #34] 001: Leptos frontend migration — Phase 4f ripple cleanup + R-004 bridge wiring FEATURE COMPLETED 2026-05-10 16:14 2026-05-10 17:12" [ref=e340] [cursor=pointer]':
+                - 'cell "[PR #34] 001: Leptos frontend migration — Phase 4f ripple cleanup + R-004 bridge wiring" [ref=e341]':
+                  - generic [ref=e343]: "[PR #34] 001: Leptos frontend migration — Phase 4f ripple cleanup + R-004 bridge wiring"
+                - cell "FEATURE" [ref=e344]:
+                  - generic [ref=e641]:
+                    - img [ref=e642]
+                    - text: FEATURE
+                - cell "COMPLETED" [ref=e348]:
+                  - generic [ref=e644]: COMPLETED
+                - cell "2026-05-10 16:14" [ref=e351]
+                - cell "2026-05-10 17:12" [ref=e352]
+              - 'row "[PR #25] Retrofit spec-kit: constitution v1.0.0, gates, AGENTS.md, VISION.md FEATURE COMPLETED 2026-05-09 20:45 2026-05-09 20:47" [ref=e353] [cursor=pointer]':
+                - 'cell "[PR #25] Retrofit spec-kit: constitution v1.0.0, gates, AGENTS.md, VISION.md" [ref=e354]':
+                  - generic [ref=e356]: "[PR #25] Retrofit spec-kit: constitution v1.0.0, gates, AGENTS.md, VISION.md"
+                - cell "FEATURE" [ref=e357]:
+                  - generic [ref=e646]:
+                    - img [ref=e647]
+                    - text: FEATURE
+                - cell "COMPLETED" [ref=e361]:
+                  - generic [ref=e649]: COMPLETED
+                - cell "2026-05-09 20:45" [ref=e364]
+                - cell "2026-05-09 20:47" [ref=e365]
+              - row "#23 Add automated visual regression testing (Playwright visual comparison) FEATURE COMPLETED 2026-05-09 16:12 2026-05-09 16:57" [ref=e366] [cursor=pointer]:
+                - cell "#23 Add automated visual regression testing (Playwright visual comparison)" [ref=e367]:
+                  - generic [ref=e368]:
+                    - generic [ref=e369]: "#23"
+                    - generic [ref=e370]: Add automated visual regression testing (Playwright visual comparison)
+                - cell "FEATURE" [ref=e371]:
+                  - generic [ref=e651]:
+                    - img [ref=e652]
+                    - text: FEATURE
+                - cell "COMPLETED" [ref=e375]:
+                  - generic [ref=e654]: COMPLETED
+                - cell "2026-05-09 16:12" [ref=e378]
+                - cell "2026-05-09 16:57" [ref=e379]
+        - generic [ref=e656]:
+          - generic [ref=e657]:
+            - heading "UNMANAGED PULL REQUESTS" [level=2] [ref=e658]:
+              - img [ref=e659]
+              - text: UNMANAGED PULL REQUESTS
+            - button [ref=e663] [cursor=pointer]:
+              - img [ref=e664]
+          - generic [ref=e668]:
+            - img [ref=e669]
+            - paragraph [ref=e673]: NO UNMANAGED PRS
+            - paragraph [ref=e674]: All open PRs are being managed by jobs
+        - generic [ref=e675]:
+          - heading "DANGER ZONE" [level=2] [ref=e677]:
+            - img [ref=e678]
+            - text: DANGER ZONE
+          - generic [ref=e680]:
+            - paragraph [ref=e681]: Deleting this project will permanently remove all associated jobs and data.
+            - button "DELETE PROJECT" [ref=e682] [cursor=pointer]:
+              - img [ref=e683]
+              - text: DELETE PROJECT
+  - contentinfo [ref=e421]:
+    - generic [ref=e422]:
+      - generic [ref=e423]: AGENTIC DEVELOPER WORKFLOW SERVER
+      - generic [ref=e424]: │
+      - generic [ref=e425]: OPERATIONAL

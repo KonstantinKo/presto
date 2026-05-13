@@ -11,9 +11,11 @@
 )]
 
 use leptos::prelude::*;
+use leptos_i18n::t;
 
 use crate::bridge::types::{ManualSession, SessionType};
 use crate::components::stats::line_chart::{LineChart, LineChartConfig};
+use crate::i18n::i18n::use_i18n;
 
 /// Aggregate focus minutes per hour-of-day, averaged over a sliding
 /// `window_days`-day window ending at `today_yyyy_mm_dd` (the anchor).
@@ -94,6 +96,7 @@ pub fn PeakFocusTime(
     #[prop(into)] window_days: Signal<u32>,
     #[prop(into)] anchor_yyyy_mm_dd: Signal<String>,
 ) -> impl IntoView {
+    let i18n = use_i18n();
     let cfg = Signal::derive(move || {
         let buckets = sessions.with(|ss| {
             anchor_yyyy_mm_dd.with(|anchor| compute_hourly_averages(ss, anchor, window_days.get()))
@@ -112,9 +115,9 @@ pub fn PeakFocusTime(
 
     view! {
         <div class="line-chart-card">
-            <h3 class="section-header">"Peak Focus Time of Day"</h3>
+            <h3 class="section-header">{t!(i18n, stats.peak_focus_time_title)}</h3>
             <p class="line-chart-subhead">
-                "Average minutes focused per hour."
+                {t!(i18n, stats.peak_focus_time_subhead)}
             </p>
             <LineChart cfg=cfg.get() />
         </div>

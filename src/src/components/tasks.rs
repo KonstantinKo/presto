@@ -28,8 +28,10 @@
 #![allow(clippy::must_use_candidate)]
 
 use leptos::prelude::*;
+use leptos_i18n::{t, t_string};
 
 use crate::bridge::types::Task;
+use crate::i18n::i18n::use_i18n;
 
 /// Tasks view — adds / toggles-complete / deletes tasks against an
 /// in-memory `RwSignal<Vec<Task>>`. The Tauri-side `save_tasks` /
@@ -40,6 +42,7 @@ use crate::bridge::types::Task;
 /// of the timer state machine.
 #[component]
 pub fn TasksView() -> impl IntoView {
+    let i18n = use_i18n();
     // In-memory task list. Phase 4c reads the persisted seed from
     // `bridge::commands::load_tasks` and supplies it via context;
     // today's local default is the empty list — equivalent to the
@@ -111,19 +114,19 @@ pub fn TasksView() -> impl IntoView {
 
     view! {
         <div class="view-container hidden view-section" id="tasks-view">
-            <h1 class="page-header">"Tasks"</h1>
+            <h1 class="page-header">{t!(i18n, tasks.page_header)}</h1>
 
             // New-task input row.
             <div class="task-input-row" id="task-input-row">
                 <input
                     type="text"
                     id="new-task-input"
-                    placeholder="Add a task..."
-                    aria-label="New task"
+                    placeholder=move || t_string!(i18n, tasks.input_placeholder).to_string()
+                    aria-label=move || t_string!(i18n, tasks.input_aria).to_string()
                     prop:value=move || new_text.get()
                     on:input=move |ev| new_text.set(event_target_value(&ev))
                 />
-                <button id="add-task-btn" class="add-task-btn" on:click=on_add>"Add"</button>
+                <button id="add-task-btn" class="add-task-btn" on:click=on_add>{t!(i18n, tasks.add_button)}</button>
             </div>
 
             // Task list.
@@ -134,6 +137,7 @@ pub fn TasksView() -> impl IntoView {
                     children=move |task| {
                         let task_id = task.id;
                         let completed = task.completed;
+                        let delete_label = task.text.clone();
                         let label = task.text.clone();
                         let display = task.text;
                         view! {
@@ -152,7 +156,7 @@ pub fn TasksView() -> impl IntoView {
                                 <span class="task-text">{display}</span>
                                 <button
                                     class="task-delete-btn"
-                                    aria-label="Delete task"
+                                    aria-label=move || t_string!(i18n, tasks.delete_aria, name = delete_label.as_str())
                                     on:click=move |_| on_delete(task_id)
                                 >"×"</button>
                             </li>

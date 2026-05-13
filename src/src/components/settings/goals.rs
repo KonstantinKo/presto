@@ -19,9 +19,11 @@
 #![allow(clippy::must_use_candidate)]
 
 use leptos::prelude::*;
+use leptos_i18n::{t, t_string};
 
 use crate::bridge::types::Settings;
 use crate::components::settings::SettingsToast;
+use crate::i18n::i18n::use_i18n;
 
 /// Parse an `<input type="number">` value into `u32`, falling back to
 /// `fallback` when the input is empty / non-numeric / out of range.
@@ -32,26 +34,25 @@ fn parse_minutes(raw: &str, fallback: u32) -> u32 {
 /// Goals settings tab — single weekly-goal input.
 #[component]
 pub fn GoalsSettings(settings: RwSignal<Settings>, toast: SettingsToast) -> impl IntoView {
+    let i18n = use_i18n();
     let weekly_goal =
         Signal::derive(move || settings.with(|s| s.timer.weekly_goal_minutes.to_string()));
 
     let on_change = move |ev| {
         let value = parse_minutes(&event_target_value(&ev), 125);
         settings.update(|s| s.timer.weekly_goal_minutes = value);
-        toast.show("Settings saved");
+        toast.show(t_string!(i18n, settings.toast_saved).to_string());
     };
 
     view! {
         <div class="category-header">
-            <h1>"Weekly Goals"</h1>
-            <p class="category-description">
-                "Set your weekly focus time targets and productivity goals"
-            </p>
+            <h1>{t!(i18n, settings.goals.title)}</h1>
+            <p class="category-description">{t!(i18n, settings.goals.description)}</p>
         </div>
         <div class="settings-section">
-            <h3 class="section-header">"Focus Goals"</h3>
+            <h3 class="section-header">{t!(i18n, settings.goals.focus_section)}</h3>
             <div class="setting-item">
-                <label for="weekly-goal-minutes">"Weekly Goal (minutes):"</label>
+                <label for="weekly-goal-minutes">{t!(i18n, settings.goals.weekly_label)}</label>
                 <input
                     type="number"
                     id="weekly-goal-minutes"
@@ -61,9 +62,7 @@ pub fn GoalsSettings(settings: RwSignal<Settings>, toast: SettingsToast) -> impl
                     prop:value=move || weekly_goal.get()
                     on:change=on_change
                 />
-                <p class="setting-description">
-                    "Target focus time for Monday through Friday (default: 125 minutes = 5 sessions of 25 minutes). Saturday and Sunday are excluded from calculation."
-                </p>
+                <p class="setting-description">{t!(i18n, settings.goals.weekly_help)}</p>
             </div>
         </div>
     }

@@ -19,24 +19,12 @@
 
 use chrono::{DateTime, Datelike, Days, Months, Utc};
 use leptos::prelude::*;
+use leptos_i18n::t_string;
 
 use crate::engine::date_format::format_session_date;
+use crate::i18n::i18n::{use_i18n, Locale as I18nLocale};
 
-const DAY_NAMES: [&str; 7] = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-const MONTH_FULL_NAMES: [&str; 12] = [
-    "January",
-    "February",
-    "March",
-    "April",
-    "May",
-    "June",
-    "July",
-    "August",
-    "September",
-    "October",
-    "November",
-    "December",
-];
+type I18nCtx = leptos_i18n::I18nContext<I18nLocale>;
 
 fn start_of_week_sunday(anchor: DateTime<Utc>) -> DateTime<Utc> {
     let weekday = anchor.weekday().num_days_from_sunday();
@@ -51,13 +39,47 @@ fn build_month_grid(anchor: DateTime<Utc>) -> Vec<DateTime<Utc>> {
         .collect()
 }
 
-fn format_month_label(anchor: DateTime<Utc>) -> String {
+/// Localised month name lookup per `month_idx` (0 = January).
+///
+/// Feature 005: each branch is a static catalogue key so the
+/// proc-macro can compile-time-check the lookup. Returns owned
+/// `String` because the caller composes it into `"{name} {year}"`.
+fn localised_month_name(i18n: I18nCtx, month_idx: usize) -> String {
+    match month_idx {
+        0 => t_string!(i18n, calendar.month_jan).to_string(),
+        1 => t_string!(i18n, calendar.month_feb).to_string(),
+        2 => t_string!(i18n, calendar.month_mar).to_string(),
+        3 => t_string!(i18n, calendar.month_apr).to_string(),
+        4 => t_string!(i18n, calendar.month_may).to_string(),
+        5 => t_string!(i18n, calendar.month_jun).to_string(),
+        6 => t_string!(i18n, calendar.month_jul).to_string(),
+        7 => t_string!(i18n, calendar.month_aug).to_string(),
+        8 => t_string!(i18n, calendar.month_sep).to_string(),
+        9 => t_string!(i18n, calendar.month_oct).to_string(),
+        10 => t_string!(i18n, calendar.month_nov).to_string(),
+        11 => t_string!(i18n, calendar.month_dec).to_string(),
+        _ => String::from("Unknown"),
+    }
+}
+
+fn format_month_label(i18n: I18nCtx, anchor: DateTime<Utc>) -> String {
     let month_idx = anchor.month0() as usize;
-    let name = MONTH_FULL_NAMES
-        .get(month_idx)
-        .copied()
-        .unwrap_or("Unknown");
+    let name = localised_month_name(i18n, month_idx);
     format!("{name} {year}", year = anchor.year())
+}
+
+/// Day-of-week header row labels — Sunday-first. Per Fix B the column
+/// order stays Sun-first across all locales; only the labels change.
+fn day_name_for(i18n: I18nCtx, idx: usize) -> String {
+    match idx {
+        0 => t_string!(i18n, calendar.dow_sun).to_string(),
+        1 => t_string!(i18n, calendar.dow_mon).to_string(),
+        2 => t_string!(i18n, calendar.dow_tue).to_string(),
+        3 => t_string!(i18n, calendar.dow_wed).to_string(),
+        4 => t_string!(i18n, calendar.dow_thu).to_string(),
+        5 => t_string!(i18n, calendar.dow_fri).to_string(),
+        _ => t_string!(i18n, calendar.dow_sat).to_string(),
+    }
 }
 
 /// Month-grid component for the Daily view. The grid runs Sunday-
@@ -88,7 +110,8 @@ pub fn MonthGrid(
     #[prop(into)] on_next_month: Callback<()>,
     #[prop(into)] on_select_day: Callback<DateTime<Utc>>,
 ) -> impl IntoView {
-    let month_label = Signal::derive(move || format_month_label(month_cursor.get()));
+    let i18n = use_i18n();
+    let month_label = Signal::derive(move || format_month_label(i18n, month_cursor.get()));
     let grid = Signal::derive(move || build_month_grid(month_cursor.get()));
     let today_label = format_session_date(today.timestamp_millis());
 
@@ -98,20 +121,25 @@ pub fn MonthGrid(
                 <button
                     id="prev-month"
                     class="nav-btn"
-                    aria-label="Previous month"
+                    aria-label=move || t_string!(i18n, calendar.prev_month_aria)
                     on:click=move |_| on_prev_month.run(())
                 >"<"</button>
                 <h3 id="current-month">{move || month_label.get()}</h3>
                 <button
                     id="next-month"
                     class="nav-btn"
-                    aria-label="Next month"
+                    aria-label=move || t_string!(i18n, calendar.next_month_aria)
                     on:click=move |_| on_next_month.run(())
                 >">"</button>
             </div>
-            // Day-of-week header row (Sun-first; FR-018).
+            // Day-of-week header row (Sun-first; FR-018). Per Fix B the
+            // column order stays Sun-first across all locales; only the
+            // labels change.
             <div class="calendar-grid calendar-day-names">
-                {DAY_NAMES.iter().map(|name| view! { <div class="day-name">{*name}</div> }).collect_view()}
+                {(0..7usize).map(|idx| {
+                    let label = day_name_for(i18n, idx);
+                    view! { <div class="day-name">{label}</div> }
+                }).collect_view()}
             </div>
             <div class="calendar-grid" id="calendar-grid">
                 <For

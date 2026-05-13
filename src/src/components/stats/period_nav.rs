@@ -10,6 +10,10 @@
 // - Weekly: `#prev-week` / `#next-week` / `#week-range` (PRESERVED)
 // - Monthly: `#prev-month-period` / `#next-month-period` / `#month-range`
 // - Yearly: `#prev-year` / `#next-year` / `#year-range`
+//
+// Feature 005: range-label projectors take an `I18nCtx` and source
+// month / weekday names from the localised `calendar.*` catalogue.
+// Aria-labels and number separators stay numeric (locale-stable).
 
 #![allow(
     clippy::must_use_candidate,
@@ -19,60 +23,67 @@
 
 use chrono::{DateTime, Datelike, Days, Months, Utc};
 use leptos::prelude::*;
+use leptos_i18n::t_string;
 
 use super::period_selector::Period;
+use crate::i18n::i18n::use_i18n;
 
-const MONTH_FULL_NAMES: [&str; 12] = [
-    "January",
-    "February",
-    "March",
-    "April",
-    "May",
-    "June",
-    "July",
-    "August",
-    "September",
-    "October",
-    "November",
-    "December",
-];
+type I18nCtx = leptos_i18n::I18nContext<crate::i18n::i18n::Locale>;
 
-const MONTH_SHORT_NAMES: [&str; 12] = [
-    "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
-];
-
-const WEEKDAY_NAMES: [&str; 7] = [
-    "Monday",
-    "Tuesday",
-    "Wednesday",
-    "Thursday",
-    "Friday",
-    "Saturday",
-    "Sunday",
-];
-
-fn month_short(month: u32) -> &'static str {
-    let idx = month.saturating_sub(1) as usize;
-    MONTH_SHORT_NAMES.get(idx).copied().unwrap_or("???")
+fn month_short(i18n: I18nCtx, month: u32) -> String {
+    match month {
+        1 => t_string!(i18n, calendar.month_jan).to_string(),
+        2 => t_string!(i18n, calendar.month_feb).to_string(),
+        3 => t_string!(i18n, calendar.month_mar).to_string(),
+        4 => t_string!(i18n, calendar.month_apr).to_string(),
+        5 => t_string!(i18n, calendar.month_may).to_string(),
+        6 => t_string!(i18n, calendar.month_jun).to_string(),
+        7 => t_string!(i18n, calendar.month_jul).to_string(),
+        8 => t_string!(i18n, calendar.month_aug).to_string(),
+        9 => t_string!(i18n, calendar.month_sep).to_string(),
+        10 => t_string!(i18n, calendar.month_oct).to_string(),
+        11 => t_string!(i18n, calendar.month_nov).to_string(),
+        _ => t_string!(i18n, calendar.month_dec).to_string(),
+    }
 }
 
-fn month_full(month: u32) -> &'static str {
-    let idx = month.saturating_sub(1) as usize;
-    MONTH_FULL_NAMES.get(idx).copied().unwrap_or("Unknown")
+fn month_full(i18n: I18nCtx, month: u32) -> String {
+    match month {
+        1 => t_string!(i18n, calendar.month_january).to_string(),
+        2 => t_string!(i18n, calendar.month_february).to_string(),
+        3 => t_string!(i18n, calendar.month_march).to_string(),
+        4 => t_string!(i18n, calendar.month_april).to_string(),
+        5 => t_string!(i18n, calendar.month_may_long).to_string(),
+        6 => t_string!(i18n, calendar.month_june).to_string(),
+        7 => t_string!(i18n, calendar.month_july).to_string(),
+        8 => t_string!(i18n, calendar.month_august).to_string(),
+        9 => t_string!(i18n, calendar.month_september).to_string(),
+        10 => t_string!(i18n, calendar.month_october).to_string(),
+        11 => t_string!(i18n, calendar.month_november).to_string(),
+        _ => t_string!(i18n, calendar.month_december).to_string(),
+    }
 }
 
-fn weekday_full(anchor: DateTime<Utc>) -> &'static str {
+fn weekday_full(i18n: I18nCtx, anchor: DateTime<Utc>) -> String {
     let idx = anchor.weekday().num_days_from_monday() as usize;
-    WEEKDAY_NAMES.get(idx).copied().unwrap_or("Unknown")
+    match idx {
+        0 => t_string!(i18n, calendar.weekday_monday).to_string(),
+        1 => t_string!(i18n, calendar.weekday_tuesday).to_string(),
+        2 => t_string!(i18n, calendar.weekday_wednesday).to_string(),
+        3 => t_string!(i18n, calendar.weekday_thursday).to_string(),
+        4 => t_string!(i18n, calendar.weekday_friday).to_string(),
+        5 => t_string!(i18n, calendar.weekday_saturday).to_string(),
+        _ => t_string!(i18n, calendar.weekday_sunday).to_string(),
+    }
 }
 
 /// Format the Daily range label: `"<Weekday>, <Month> <Day>, <Year>"`.
 #[must_use]
-pub fn format_day_range(anchor: DateTime<Utc>) -> String {
+pub fn format_day_range(i18n: I18nCtx, anchor: DateTime<Utc>) -> String {
     format!(
         "{weekday}, {month} {day}, {year}",
-        weekday = weekday_full(anchor),
-        month = month_short(anchor.month()),
+        weekday = weekday_full(i18n, anchor),
+        month = month_short(i18n, anchor.month()),
         day = anchor.day(),
         year = anchor.year(),
     )
@@ -83,7 +94,7 @@ pub fn format_day_range(anchor: DateTime<Utc>) -> String {
 /// Cross-year: `"<MonStart> <D> <Ystart> - <MonEnd> <D> <Yend>"`.
 /// Anchor is treated as the Mon-Sun span containing it.
 #[must_use]
-pub fn format_week_range(anchor: DateTime<Utc>) -> String {
+pub fn format_week_range(i18n: I18nCtx, anchor: DateTime<Utc>) -> String {
     let weekday = anchor.weekday().num_days_from_monday();
     let start = anchor - Days::new(u64::from(weekday));
     let end = start + Days::new(6);
@@ -93,28 +104,28 @@ pub fn format_week_range(anchor: DateTime<Utc>) -> String {
         format!(
             "{start_month} {start_day} - {end_month} {end_day} {year}",
             start_day = start.day(),
-            start_month = month_short(start.month()),
+            start_month = month_short(i18n, start.month()),
             end_day = end.day(),
-            end_month = month_short(end.month()),
+            end_month = month_short(i18n, end.month()),
             year = end_year,
         )
     } else {
         format!(
             "{start_month} {start_day} {start_year} - {end_month} {end_day} {end_year}",
             start_day = start.day(),
-            start_month = month_short(start.month()),
+            start_month = month_short(i18n, start.month()),
             end_day = end.day(),
-            end_month = month_short(end.month()),
+            end_month = month_short(i18n, end.month()),
         )
     }
 }
 
 /// Format the Monthly range label: `"<Month> <Year>"`.
 #[must_use]
-pub fn format_month_range(anchor: DateTime<Utc>) -> String {
+pub fn format_month_range(i18n: I18nCtx, anchor: DateTime<Utc>) -> String {
     format!(
         "{month} {year}",
-        month = month_full(anchor.month()),
+        month = month_full(i18n, anchor.month()),
         year = anchor.year(),
     )
 }
@@ -172,10 +183,11 @@ pub fn step_cursor(cursor: DateTime<Utc>, period: Period, forward: bool) -> Date
 /// behaviour (FR-008); this component is shape-only.
 #[component]
 pub fn PeriodNav(period: Signal<Period>, cursor: RwSignal<DateTime<Utc>>) -> impl IntoView {
+    let i18n = use_i18n();
     let range_label = Signal::derive(move || match period.get() {
-        Period::Daily => format_day_range(cursor.get()),
-        Period::Weekly => format_week_range(cursor.get()),
-        Period::Monthly => format_month_range(cursor.get()),
+        Period::Daily => format_day_range(i18n, cursor.get()),
+        Period::Weekly => format_week_range(i18n, cursor.get()),
+        Period::Monthly => format_month_range(i18n, cursor.get()),
         Period::Yearly => format_year_range(cursor.get()),
     });
 
@@ -192,32 +204,32 @@ pub fn PeriodNav(period: Signal<Period>, cursor: RwSignal<DateTime<Utc>>) -> imp
         <div class="period-nav week-selector">
             {move || match period.get() {
                 Period::Daily => view! {
-                    <button id="prev-day" class="nav-btn" aria-label="Previous day" on:click=on_prev>"<"</button>
+                    <button id="prev-day" class="nav-btn" aria-label=move || t_string!(i18n, stats.nav_prev_day_aria).to_string() on:click=on_prev>"<"</button>
                     <div class="week-display">
                         <span id="day-range">{move || range_label.get()}</span>
                     </div>
-                    <button id="next-day" class="nav-btn" aria-label="Next day" on:click=on_next>">"</button>
+                    <button id="next-day" class="nav-btn" aria-label=move || t_string!(i18n, stats.nav_next_day_aria).to_string() on:click=on_next>">"</button>
                 }.into_any(),
                 Period::Weekly => view! {
-                    <button id="prev-week" class="nav-btn" aria-label="Previous week" on:click=on_prev>"<"</button>
+                    <button id="prev-week" class="nav-btn" aria-label=move || t_string!(i18n, stats.nav_prev_week_aria).to_string() on:click=on_prev>"<"</button>
                     <div class="week-display">
                         <span id="week-range">{move || range_label.get()}</span>
                     </div>
-                    <button id="next-week" class="nav-btn" aria-label="Next week" on:click=on_next>">"</button>
+                    <button id="next-week" class="nav-btn" aria-label=move || t_string!(i18n, stats.nav_next_week_aria).to_string() on:click=on_next>">"</button>
                 }.into_any(),
                 Period::Monthly => view! {
-                    <button id="prev-month-period" class="nav-btn" aria-label="Previous month" on:click=on_prev>"<"</button>
+                    <button id="prev-month-period" class="nav-btn" aria-label=move || t_string!(i18n, stats.nav_prev_month_aria).to_string() on:click=on_prev>"<"</button>
                     <div class="week-display">
                         <span id="month-range">{move || range_label.get()}</span>
                     </div>
-                    <button id="next-month-period" class="nav-btn" aria-label="Next month" on:click=on_next>">"</button>
+                    <button id="next-month-period" class="nav-btn" aria-label=move || t_string!(i18n, stats.nav_next_month_aria).to_string() on:click=on_next>">"</button>
                 }.into_any(),
                 Period::Yearly => view! {
-                    <button id="prev-year" class="nav-btn" aria-label="Previous year" on:click=on_prev>"<"</button>
+                    <button id="prev-year" class="nav-btn" aria-label=move || t_string!(i18n, stats.nav_prev_year_aria).to_string() on:click=on_prev>"<"</button>
                     <div class="week-display">
                         <span id="year-range">{move || range_label.get()}</span>
                     </div>
-                    <button id="next-year" class="nav-btn" aria-label="Next year" on:click=on_next>">"</button>
+                    <button id="next-year" class="nav-btn" aria-label=move || t_string!(i18n, stats.nav_next_year_aria).to_string() on:click=on_next>">"</button>
                 }.into_any(),
             }}
         </div>
@@ -226,27 +238,13 @@ pub fn PeriodNav(period: Signal<Period>, cursor: RwSignal<DateTime<Utc>>) -> imp
 
 #[cfg(test)]
 mod tests {
-    use super::{format_day_range, format_month_range, format_week_range, format_year_range};
+    use super::format_year_range;
     use chrono::{TimeZone, Utc};
 
-    #[test]
-    fn day_range_formats_as_weekday_month_day_year() {
-        let anchor = Utc.with_ymd_and_hms(2026, 5, 12, 12, 0, 0).unwrap();
-        assert_eq!(format_day_range(anchor), "Tuesday, May 12, 2026");
-    }
-
-    #[test]
-    fn week_range_formats_mon_to_sun() {
-        // 2026-05-09 is a Saturday; Mon-Sun span = May 4 - May 10.
-        let anchor = Utc.with_ymd_and_hms(2026, 5, 9, 12, 0, 0).unwrap();
-        assert_eq!(format_week_range(anchor), "May 4 - May 10 2026");
-    }
-
-    #[test]
-    fn month_range_uses_full_name() {
-        let anchor = Utc.with_ymd_and_hms(2026, 5, 12, 12, 0, 0).unwrap();
-        assert_eq!(format_month_range(anchor), "May 2026");
-    }
+    // `format_day_range`, `format_week_range`, `format_month_range`
+    // now route through the i18n context for month / weekday names;
+    // they're exercised end-to-end by the e2e suite. The year-only
+    // formatter is locale-stable so its test stays here.
 
     #[test]
     fn year_range_is_year_only() {

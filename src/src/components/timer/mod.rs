@@ -40,7 +40,6 @@
 // bridge) is the post-merge plan's larger refactor.
 #![allow(clippy::must_use_candidate, clippy::too_many_lines)]
 
-mod messages;
 mod tag_tracking;
 mod tray;
 
@@ -48,12 +47,9 @@ use std::collections::HashMap;
 
 use leptos::prelude::*;
 use leptos::task::spawn_local;
+use leptos_i18n::{t, t_string};
 use wasm_bindgen::JsCast;
 
-use self::messages::{
-    break_completed_desktop_body, break_completed_toast, overtime_started_messages,
-    pomodoro_completed_desktop_body, pomodoro_completed_toast, session_skipped_toast,
-};
 use self::tag_tracking::{
     apply_tag_tracking_events, tag_tracking_flush_all, tag_tracking_flush_one, tag_tracking_start,
 };
@@ -69,6 +65,7 @@ use crate::components::ambient_audio;
 use crate::engine::clock::Clock;
 use crate::engine::durations::Durations;
 use crate::engine::timer::{TimerEvent, TimerState};
+use crate::i18n::i18n::use_i18n;
 
 /// Icon-picker catalogue (feature 003 Bundle C: 3 remixicon entries +
 /// 9 Phosphor entries — FR-020 / FR-021). The five legacy emoji
@@ -112,6 +109,12 @@ const DEFAULT_NEW_TAG_ICON: &str = "ri-brain-line";
 /// `_smoke.spec.js` first-paint assertion expects "Focus"; the
 /// `sessions-history.spec.js` flow asserts the badge becomes "Break"
 /// after the focus session completes.
+///
+/// Feature 005: kept as the English source-of-truth for the
+/// `mode_label_covers_every_variant` test. View call sites have moved
+/// to `t!(i18n, timer.mode_*)` so the rendered output is localised;
+/// this fn remains the canonical mapping the test pins against.
+#[cfg(test)]
 const fn mode_label(mode: TimerMode) -> &'static str {
     match mode {
         TimerMode::Focus => "Focus",
@@ -125,10 +128,15 @@ const fn mode_label(mode: TimerMode) -> &'static str {
 /// Tie-break ordering: `is_paused` wins over `is_auto_paused` wins
 /// over overtime — overtime can only show while `is_running`, so it
 /// is mutually exclusive with both pause states.
+///
+/// Feature 005: kept as the English source-of-truth for the
+/// `mode_label_with_status_*` tests. View call sites compose the
+/// localised label inline via `t_string!(i18n, timer.*)`.
 //
 // Four bool params reflect four orthogonal `TimerState` predicates.
 // Grouping them into a struct would add ceremony without improving
 // readability at the single call site.
+#[cfg(test)]
 #[allow(clippy::fn_params_excessive_bools)]
 fn mode_label_with_status(
     mode: TimerMode,
@@ -302,11 +310,18 @@ pub enum SkipButtonState {
 }
 
 impl SkipButtonState {
+    /// Verbose accessible label — distinct from the terse tooltip per
+    /// Spec A11 / SC-004 / contracts §3. The catalogue is the
+    /// runtime source of truth (`timer.ctrl_skip_session_aria`); this
+    /// const fn is the host-side test fixture that pins the English
+    /// form for the cargo-test matrix.
     #[must_use]
     pub const fn verbose_label(self) -> &'static str {
-        "Skip session"
+        "Skip current session and advance to the next phase"
     }
 
+    /// Terse tooltip — short form shown in `data-tooltip`. Catalogue
+    /// key `timer.ctrl_skip_session`.
     #[must_use]
     pub const fn terse_tooltip(self) -> &'static str {
         "Skip session"
@@ -537,11 +552,18 @@ const fn random_uuid() -> String {
 // Tray-icon formatter + dispatch moved to the `tray` submodule.
 // `tag_tracking_*` helpers + dispatch moved to `tag_tracking`.
 
+/// Typed alias for the `leptos_i18n` context. Threaded into `handle_events`
+/// so every toast / desktop-notification body fires through the live
+/// `t_string!` catalogue lookup (feature 005). Copy semantics — pass by
+/// value at every call site.
+type I18nCtx = leptos_i18n::I18nContext<crate::i18n::i18n::Locale>;
+
 fn handle_events(
     events: &[TimerEvent],
     settings: &Settings,
     toast: AppToast,
     warning_signal: RwSignal<bool>,
+    i18n: I18nCtx,
 ) {
     let has_overtime = events
         .iter()
@@ -552,18 +574,23 @@ fn handle_events(
                 completed_pomodoros,
             } => {
                 if !has_overtime {
-                    toast.show(pomodoro_completed_toast(
-                        *completed_pomodoros,
-                        settings.timer.sessions_per_long_break,
-                    ));
+                    let is_long_break =
+                        completed_pomodoros.is_multiple_of(settings.timer.sessions_per_long_break);
+                    let toast_text = if is_long_break {
+                        t_string!(i18n, timer.messages.pomodoro_completed_toast_long)
+                    } else {
+                        t_string!(i18n, timer.messages.pomodoro_completed_toast_short)
+                    };
+                    toast.show(toast_text);
                     if settings.notifications.sound_notifications {
                         play_chime();
                     }
                     if settings.notifications.desktop_notifications {
-                        let desk_body = pomodoro_completed_desktop_body(
-                            *completed_pomodoros,
-                            settings.timer.sessions_per_long_break,
-                        );
+                        let desk_body = if is_long_break {
+                            t_string!(i18n, timer.messages.pomodoro_completed_desktop_long)
+                        } else {
+                            t_string!(i18n, timer.messages.pomodoro_completed_desktop_short)
+                        };
                         spawn_local(async move {
                             let _ =
                                 crate::bridge::notification::send_notification("Presto", desk_body)
@@ -574,12 +601,34 @@ fn handle_events(
                 warning_signal.set(false);
             }
             TimerEvent::BreakCompleted { mode } => {
-                toast.show(break_completed_toast(*mode));
+                let toast_text = match mode {
+                    TimerMode::Break => t_string!(i18n, timer.messages.break_completed_toast_break),
+                    TimerMode::LongBreak => {
+                        t_string!(i18n, timer.messages.break_completed_toast_long_break)
+                    }
+                    // Defensive default — `BreakCompleted` carries Break
+                    // or LongBreak only; `Focus` would be an engine
+                    // regression.
+                    TimerMode::Focus => {
+                        t_string!(i18n, timer.messages.break_completed_toast_focus)
+                    }
+                };
+                toast.show(toast_text);
                 if settings.notifications.sound_notifications {
                     play_chime();
                 }
                 if settings.notifications.desktop_notifications {
-                    let desk_body = break_completed_desktop_body(*mode);
+                    let desk_body = match mode {
+                        TimerMode::Break => {
+                            t_string!(i18n, timer.messages.break_completed_desktop_break)
+                        }
+                        TimerMode::LongBreak => {
+                            t_string!(i18n, timer.messages.break_completed_desktop_long_break)
+                        }
+                        TimerMode::Focus => {
+                            t_string!(i18n, timer.messages.break_completed_desktop_focus)
+                        }
+                    };
                     spawn_local(async move {
                         let _ = crate::bridge::notification::send_notification("Presto", desk_body)
                             .await;
@@ -587,37 +636,67 @@ fn handle_events(
                 }
             }
             TimerEvent::TwoMinutesRemaining => {
-                toast.show("2 minutes remaining! \u{1f525}");
+                toast.show(t_string!(i18n, timer.messages.two_minutes_remaining));
                 warning_signal.set(true);
             }
             TimerEvent::ThirtySecondsRemaining => {
-                toast.show("30 seconds left! \u{23f0}");
+                toast.show(t_string!(i18n, timer.messages.thirty_seconds_remaining));
                 warning_signal.set(true);
             }
             TimerEvent::SessionStarted => {
-                toast.show("Timer started! \u{1f345}");
+                toast.show(t_string!(i18n, timer.toast.timer_started));
                 if settings.notifications.sound_notifications {
                     play_chime();
                 }
             }
-            TimerEvent::SessionPaused => toast.show("Timer paused \u{23f8}\u{fe0f}"),
+            TimerEvent::SessionPaused => {
+                toast.show(t_string!(i18n, timer.toast.timer_paused));
+            }
             TimerEvent::SessionResumed => {
-                toast.show("Timer resumed \u{25b6}\u{fe0f}");
+                toast.show(t_string!(i18n, timer.toast.timer_resumed));
                 if settings.notifications.sound_notifications {
                     play_chime();
                 }
             }
             TimerEvent::SessionSkipped { skipped_mode, .. } => {
-                toast.show(session_skipped_toast(*skipped_mode));
+                let toast_text = match skipped_mode {
+                    TimerMode::Focus => {
+                        t_string!(i18n, timer.messages.session_skipped_toast_focus)
+                    }
+                    TimerMode::Break => {
+                        t_string!(i18n, timer.messages.session_skipped_toast_break)
+                    }
+                    TimerMode::LongBreak => {
+                        t_string!(i18n, timer.messages.session_skipped_toast_long_break)
+                    }
+                };
+                toast.show(toast_text);
                 warning_signal.set(false);
             }
             TimerEvent::AutoPaused => {
-                toast.show("Smart Pause: timer paused due to inactivity \u{23f8}\u{fe0f}");
+                toast.show(t_string!(i18n, timer.toast.smart_pause_activated));
             }
-            TimerEvent::AutoResumed => toast.show("Welcome back! Timer resumed \u{25b6}\u{fe0f}"),
-            TimerEvent::ManualSessionRecorded { .. } => toast.show("Manual session recorded"),
+            TimerEvent::AutoResumed => {
+                toast.show(t_string!(i18n, timer.toast.auto_resumed));
+            }
+            TimerEvent::ManualSessionRecorded { .. } => {
+                toast.show(t_string!(i18n, timer.toast.manual_session_recorded));
+            }
             TimerEvent::OvertimeStarted { mode } => {
-                let (toast_msg, desk_body) = overtime_started_messages(*mode);
+                let (toast_msg, desk_body) = match mode {
+                    TimerMode::Focus => (
+                        t_string!(i18n, timer.messages.overtime_started_toast_focus),
+                        t_string!(i18n, timer.messages.overtime_started_desktop_focus),
+                    ),
+                    TimerMode::Break => (
+                        t_string!(i18n, timer.messages.overtime_started_toast_break),
+                        t_string!(i18n, timer.messages.overtime_started_desktop_break),
+                    ),
+                    TimerMode::LongBreak => (
+                        t_string!(i18n, timer.messages.overtime_started_toast_long_break),
+                        t_string!(i18n, timer.messages.overtime_started_desktop_long_break),
+                    ),
+                };
                 toast.show(toast_msg);
                 if settings.notifications.sound_notifications {
                     play_chime();
@@ -696,6 +775,12 @@ pub fn TimerView() -> impl IntoView {
         .unwrap_or_else(|| RwSignal::new(TimerState::new(initial_durations)));
     let app_toast = use_context::<AppToast>().unwrap_or_default();
     let warning_signal = RwSignal::new(false);
+
+    // Feature 005: i18n context handle. Live for the lifetime of the
+    // component; every `t!(...)` / `t_string!(...)` call site below
+    // re-renders in the same reactive tick on locale change
+    // (FR-007 / FR-012).
+    let i18n = use_i18n();
 
     // React to settings changes: rebase the engine's `Durations`
     // when the Settings signal moves. The effect re-runs whenever
@@ -884,6 +969,7 @@ pub fn TimerView() -> impl IntoView {
                         &settings.get_untracked(),
                         app_toast,
                         warning_signal,
+                        i18n,
                     );
                     apply_tag_tracking_events(&events, active_session_tags, selected_tag_ids);
                 }
@@ -1038,14 +1124,18 @@ pub fn TimerView() -> impl IntoView {
                 s.time_remaining_secs_signed() < 0,
             )
         });
-        let suffix = if is_paused_v {
-            " (Paused)"
+        // Feature 005: localised mode suffix. Each branch is a static
+        // key so the proc-macro can compile-time-check it; the actual
+        // wording (e.g. "(Paused)" -> "(Pausiert)") lives in the
+        // catalogues.
+        let suffix: String = if is_paused_v {
+            format!(" {}", t_string!(i18n, timer.status_paused))
         } else if is_auto_paused_v {
-            " (Auto-paused)"
+            format!(" {}", t_string!(i18n, timer.status_auto_paused))
         } else if is_running_v && is_ot {
-            " (Overtime)"
+            format!(" {}", t_string!(i18n, timer.status_overtime))
         } else {
-            ""
+            String::new()
         };
         if mode == TimerMode::Focus {
             let matched: Vec<String> = selected_tag_ids.with(|sel| {
@@ -1060,12 +1150,20 @@ pub fn TimerView() -> impl IntoView {
                 let base = if matched.len() == 1 {
                     matched[0].clone()
                 } else {
-                    format!("{} Tags", matched.len())
+                    format!("{} {}", matched.len(), t_string!(i18n, tag.tags_plural))
                 };
                 return format!("{base}{suffix}");
             }
         }
-        mode_label_with_status(mode, is_running_v, is_paused_v, is_auto_paused_v, is_ot)
+        // Feature 005: localised mode label. Reuse the same suffix
+        // string computed above (already localised); the base label
+        // (Focus / Break / Long Break) comes from the catalogue.
+        let base = match mode {
+            TimerMode::Focus => t_string!(i18n, timer.mode_focus).to_string(),
+            TimerMode::Break => t_string!(i18n, timer.mode_break).to_string(),
+            TimerMode::LongBreak => t_string!(i18n, timer.mode_long_break).to_string(),
+        };
+        format!("{base}{suffix}")
     });
     let status_icon = Signal::derive(move || {
         let mode = engine.with(TimerState::current_mode);
@@ -1103,20 +1201,44 @@ pub fn TimerView() -> impl IntoView {
     // sync (CHK041 / FR-026).
     let stop_btn_state =
         Signal::derive(move || StopButtonState::from_mode(engine.with(TimerState::current_mode)));
-    let verbose_label_stop = Signal::derive(move || stop_btn_state.get().verbose_label());
-    let terse_tooltip_stop = Signal::derive(move || stop_btn_state.get().terse_tooltip());
+    // Feature 005: localised verbose / terse tooltip strings per
+    // button state. The state enums (`StopButtonState`, etc.) keep
+    // their `verbose_label`/`terse_tooltip` const-fn projections as
+    // the English source-of-truth for tests; the rendered strings
+    // come from the i18n catalogue via the `t_string!` macro.
+    let verbose_label_stop = Signal::derive(move || match stop_btn_state.get() {
+        StopButtonState::Reset => t_string!(i18n, timer.ctrl_reset_aria).to_string(),
+        StopButtonState::Undo => t_string!(i18n, timer.ctrl_undo_aria).to_string(),
+    });
+    let terse_tooltip_stop = Signal::derive(move || match stop_btn_state.get() {
+        StopButtonState::Reset => t_string!(i18n, timer.ctrl_reset).to_string(),
+        StopButtonState::Undo => t_string!(i18n, timer.ctrl_undo).to_string(),
+    });
 
     let play_pause_btn_state = Signal::derive(move || {
         engine.with(|s| {
             PlayPauseButtonState::from_run_state(s.is_running(), s.is_paused(), s.is_auto_paused())
         })
     });
-    let verbose_label_play = Signal::derive(move || play_pause_btn_state.get().verbose_label());
-    let terse_tooltip_play = Signal::derive(move || play_pause_btn_state.get().terse_tooltip());
+    let verbose_label_play =
+        Signal::derive(move || t_string!(i18n, timer.ctrl_play_pause_aria).to_string());
+    let terse_tooltip_play = Signal::derive(move || match play_pause_btn_state.get() {
+        PlayPauseButtonState::Start => t_string!(i18n, timer.ctrl_start).to_string(),
+        PlayPauseButtonState::Pause => t_string!(i18n, timer.ctrl_pause).to_string(),
+        PlayPauseButtonState::Resume => t_string!(i18n, timer.ctrl_resume).to_string(),
+    });
 
-    let skip_btn_state = Signal::derive(move || SkipButtonState::Skip);
-    let verbose_label_skip = Signal::derive(move || skip_btn_state.get().verbose_label());
-    let terse_tooltip_skip = Signal::derive(move || skip_btn_state.get().terse_tooltip());
+    // Skip button has no state variants (FR-029); only its rendered
+    // string is reactive, driven by the locale signal. The verbose
+    // form (aria-label / title) is intentionally a distinct catalogue
+    // key from the terse tooltip — Spec A11 + SC-004 + contracts §3
+    // forbid value-equality between the two so a future copy edit on
+    // one cannot accidentally collapse them (CHK041
+    // drift-impossibility).
+    let verbose_label_skip =
+        Signal::derive(move || t_string!(i18n, timer.ctrl_skip_session_aria).to_string());
+    let terse_tooltip_skip =
+        Signal::derive(move || t_string!(i18n, timer.ctrl_skip_session).to_string());
 
     // Update document title with overtime prefix when running in overtime.
     Effect::new(move |_| {
@@ -1182,6 +1304,7 @@ pub fn TimerView() -> impl IntoView {
             &settings.get_untracked(),
             app_toast,
             warning_signal,
+            i18n,
         );
         apply_tag_tracking_events(&events, active_session_tags, selected_tag_ids);
         dispatch_tray_update(engine, settings, true);
@@ -1203,7 +1326,7 @@ pub fn TimerView() -> impl IntoView {
         // the session resets.
         tag_tracking_flush_all(active_session_tags, BrowserClock.now_ms());
         // Toast mirrors `pomodoro-timer.js:871` ("Session deleted ❌").
-        app_toast.show("Session deleted \u{274c}");
+        app_toast.show(t_string!(i18n, timer.toast.session_deleted));
         dispatch_tray_update(engine, settings, true);
     };
     let on_skip = move |_| {
@@ -1213,6 +1336,7 @@ pub fn TimerView() -> impl IntoView {
             &settings.get_untracked(),
             app_toast,
             warning_signal,
+            i18n,
         );
         apply_tag_tracking_events(&events, active_session_tags, selected_tag_ids);
         // Clear the per-session title on skip — mirrors the zero-cross clear at
@@ -1227,6 +1351,7 @@ pub fn TimerView() -> impl IntoView {
                 &settings.get_untracked(),
                 app_toast,
                 warning_signal,
+                i18n,
             );
             apply_tag_tracking_events(&start_events, active_session_tags, selected_tag_ids);
         }
@@ -1245,7 +1370,7 @@ pub fn TimerView() -> impl IntoView {
         });
         // Toast mirrors `pomodoro-timer.js:902-904` ("5 minutes
         // subtracted from timer ⏰").
-        app_toast.show("5 minutes subtracted from timer \u{23f0}");
+        app_toast.show(t_string!(i18n, timer.toast.minutes_subtracted));
     };
     let on_adjust_plus = move |_| {
         engine.update(|state| {
@@ -1254,7 +1379,7 @@ pub fn TimerView() -> impl IntoView {
         if engine.with(|s| s.time_remaining_secs() > 120) {
             warning_signal.set(false);
         }
-        app_toast.show("5 minutes added to timer \u{23f0}");
+        app_toast.show(t_string!(i18n, timer.toast.minutes_added));
     };
 
     // 1 Hz tick loop. Ticking unconditionally (not gated on
@@ -1405,6 +1530,7 @@ pub fn TimerView() -> impl IntoView {
                     &settings.get_untracked(),
                     app_toast,
                     warning_signal,
+                    i18n,
                 );
                 apply_tag_tracking_events(&events, active_session_tags, selected_tag_ids);
 
@@ -1647,7 +1773,7 @@ pub fn TimerView() -> impl IntoView {
                         class:active=move || tag_dropdown_open.get()
                     >
                         <div class="tag-dropdown-header">
-                            <span>"Choose tag"</span>
+                            <span>{t!(i18n, tag.choose_header)}</span>
                         </div>
                         <div class="tag-list" id="tag-list" role="list">
                             <For
@@ -1668,10 +1794,12 @@ pub fn TimerView() -> impl IntoView {
                                         crate::components::icon::IconClass::from_icon_name(
                                             &tag.icon,
                                         );
-                                    let delete_label = format!(
-                                        "Delete {name} tag",
-                                        name = tag.name,
-                                    );
+                                    // Feature 005: localised delete-tag aria-label.
+                                    // The tag name is dynamic data (user-typed),
+                                    // never localised — only the surrounding
+                                    // "Delete ... tag" template is translated.
+                                    let delete_label =
+                                        t_string!(i18n, tag.delete_aria, name = tag.name.as_str());
                                     // Multi-select highlight: a row is
                                     // `selected` whenever its id is in
                                     // `selected_tag_ids`. Clicking the
@@ -1818,9 +1946,9 @@ pub fn TimerView() -> impl IntoView {
                                     </div>
                                     <input
                                         type="text"
-                                        placeholder="New tag..."
+                                        placeholder=move || t_string!(i18n, tag.new_placeholder)
                                         id="new-tag-name"
-                                        aria-label="New tag name"
+                                        aria-label=move || t_string!(i18n, tag.new_aria_label)
                                         prop:value=move || new_tag_name.get()
                                         on:click=move |ev| ev.stop_propagation()
                                         on:input=move |ev| new_tag_name.set(event_target_value(&ev))
@@ -1861,7 +1989,7 @@ pub fn TimerView() -> impl IntoView {
                             id="session-title-input"
                             class="session-title-input"
                             maxlength="120"
-                            placeholder="What is this session for?"
+                            placeholder=move || t_string!(i18n, timer.session_title_placeholder)
                             prop:value=move || session_title.get()
                             on:input=move |ev| {
                                 session_title.set(event_target_value(&ev));
@@ -2038,8 +2166,8 @@ pub fn TimerView() -> impl IntoView {
                             settings.with(|s| s.notifications.smart_pause),
                         )
                         style="display: block"
-                        data-tooltip="Smart Pause: Click to toggle automatic pause when inactive"
-                        title="Smart Pause: Click to toggle automatic pause when inactive"
+                        data-tooltip=move || t_string!(i18n, timer.indicator_smart_pause)
+                        title=move || t_string!(i18n, timer.indicator_smart_pause)
                         on:click=move |_| settings.update(|s| {
                             s.notifications.smart_pause = !s.notifications.smart_pause;
                         })
@@ -2051,8 +2179,8 @@ pub fn TimerView() -> impl IntoView {
                         "play-circle",
                         settings.with(|s| s.notifications.auto_start_timer),
                     )
-                    data-tooltip="Auto-start: Click to toggle automatic session start"
-                    title="Auto-start: Click to toggle automatic session start"
+                    data-tooltip=move || t_string!(i18n, timer.indicator_auto_start)
+                    title=move || t_string!(i18n, timer.indicator_auto_start)
                     on:click=move |_| settings.update(|s| {
                         s.notifications.auto_start_timer = !s.notifications.auto_start_timer;
                     })
@@ -2063,8 +2191,8 @@ pub fn TimerView() -> impl IntoView {
                         "repeat",
                         settings.with(|s| s.notifications.allow_continuous_sessions),
                     )
-                    data-tooltip="Continuous Sessions: Click to toggle continuous mode"
-                    title="Continuous Sessions: Click to toggle continuous mode"
+                    data-tooltip=move || t_string!(i18n, timer.indicator_continuous)
+                    title=move || t_string!(i18n, timer.indicator_continuous)
                     on:click=move |_| settings.update(|s| {
                         s.notifications.allow_continuous_sessions =
                             !s.notifications.allow_continuous_sessions;
@@ -2073,8 +2201,8 @@ pub fn TimerView() -> impl IntoView {
                 <button
                     class="timer-adjust-btn"
                     id="timer-minus-btn"
-                    title="Subtract 5 minutes"
-                    aria-label="Subtract 5 minutes"
+                    title=move || t_string!(i18n, timer.adjust_minus_aria)
+                    aria-label=move || t_string!(i18n, timer.adjust_minus_aria)
                     on:click=on_adjust_minus
                 >
                     <span>"-5"</span>
@@ -2082,8 +2210,8 @@ pub fn TimerView() -> impl IntoView {
                 <button
                     class="timer-adjust-btn"
                     id="timer-plus-btn"
-                    title="Add 5 minutes"
-                    aria-label="Add 5 minutes"
+                    title=move || t_string!(i18n, timer.adjust_plus_aria)
+                    aria-label=move || t_string!(i18n, timer.adjust_plus_aria)
                     on:click=on_adjust_plus
                 >
                     <span>"+5"</span>
@@ -2509,14 +2637,25 @@ mod tests {
         assert_ne!(running.verbose_label(), running.terse_tooltip());
     }
 
-    /// FR-029 — `#skip-btn` has no state variants; verbose == terse
-    /// here happens to be true (the only button where it is). The
-    /// test pins this so a future state addition catches the change.
+    /// FR-029 — `#skip-btn` has no state variants. Verbose and terse
+    /// are DISTINCT (Spec A11 / SC-004 / contracts §3 + CHK041
+    /// drift-impossibility): the verbose form describes the action
+    /// ("advance to the next phase"); the terse form is the short
+    /// tooltip ("Skip session"). The catalogue is the runtime source
+    /// of truth — these const fixtures pin the English wording.
     #[test]
-    fn skip_btn_verbose_and_terse_are_skip_session() {
+    fn skip_btn_verbose_and_terse_are_distinct() {
         let state = SkipButtonState::Skip;
-        assert_eq!(state.verbose_label(), "Skip session");
+        assert_eq!(
+            state.verbose_label(),
+            "Skip current session and advance to the next phase",
+        );
         assert_eq!(state.terse_tooltip(), "Skip session");
+        assert_ne!(
+            state.verbose_label(),
+            state.terse_tooltip(),
+            "Spec A11 / SC-004: skip verbose and terse MUST NOT collapse",
+        );
     }
 
     /// SC-012 — full state-matrix sweep. For each
@@ -2557,10 +2696,14 @@ mod tests {
                 assert_eq!(play.verbose_label(), "Start or pause timer");
             }
         }
-        // Skip is mode-invariant per FR-029.
+        // Skip is mode-invariant per FR-029. Verbose and terse are
+        // distinct (Spec A11 / SC-004 + CHK041 drift-impossibility).
         let skip = SkipButtonState::Skip;
         assert_eq!(skip.terse_tooltip(), "Skip session");
-        assert_eq!(skip.verbose_label(), "Skip session");
+        assert_eq!(
+            skip.verbose_label(),
+            "Skip current session and advance to the next phase",
+        );
     }
 }
 

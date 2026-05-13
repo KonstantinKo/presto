@@ -24,11 +24,23 @@ test("control-button tooltips expose data-tooltip + react to keyboard focus", as
   await expect(playPauseBtn).toHaveAttribute("aria-label", "Start or pause timer");
   await expect(playPauseBtn).toHaveAttribute("title", "Start or pause timer");
 
-  // FR-029 — skip: terse == verbose == "Skip session".
+  // FR-029 — skip: terse "Skip session", verbose "Skip current
+  // session and advance to the next phase". Spec A11 + SC-004 +
+  // contracts §3 require these to be DISTINCT catalogue keys
+  // (`timer.ctrl_skip_session` for the terse tooltip, and
+  // `timer.ctrl_skip_session_aria` for the verbose aria-label / title)
+  // so a copy edit on one cannot silently collapse the pair (CHK041
+  // drift-impossibility).
   const skipBtn = page.locator("#skip-btn");
   await expect(skipBtn).toHaveAttribute("data-tooltip", "Skip session");
-  await expect(skipBtn).toHaveAttribute("aria-label", "Skip session");
-  await expect(skipBtn).toHaveAttribute("title", "Skip session");
+  await expect(skipBtn).toHaveAttribute(
+    "aria-label",
+    "Skip current session and advance to the next phase",
+  );
+  await expect(skipBtn).toHaveAttribute(
+    "title",
+    "Skip current session and advance to the next phase",
+  );
 
   // SC-013 — tooltip shows on both `:hover` AND `:focus-visible` per
   // FR-030. We probe the `::after` pseudo-element's `opacity` via

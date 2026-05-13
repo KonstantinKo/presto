@@ -13,8 +13,10 @@
 )]
 
 use leptos::prelude::*;
+use leptos_i18n::t;
 
 use crate::bridge::types::{ManualSession, SessionType};
+use crate::i18n::i18n::use_i18n;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TrendRow {
@@ -87,12 +89,13 @@ pub fn FocusTrend(
     sessions: Signal<Vec<ManualSession>>,
     #[prop(into)] rows: Signal<Vec<(String, String)>>,
 ) -> impl IntoView {
+    let i18n = use_i18n();
     let trend =
         Signal::derive(move || sessions.with(|ss| rows.with(|rs| compute_focus_trend(ss, rs))));
 
     view! {
         <div class="focus-trend-card">
-            <h3 class="section-header">"Daily Focus Trend"</h3>
+            <h3 class="section-header">{t!(i18n, stats.focus_trend_title)}</h3>
             <div class="trend-days-container">
                 {move || {
                     let snapshot = trend.get();

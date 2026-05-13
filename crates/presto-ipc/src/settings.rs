@@ -36,13 +36,14 @@ pub enum StatusBarDisplay {
 
 /// Ambient-sound track selection (feature 004).
 ///
-/// Closed sum type: eight variants, one per vendored ambient track
+/// Closed sum type: eleven variants, one per vendored ambient track
 /// plus `None` ("no track selected"). `None` is a first-class
 /// variant — not `Option<AmbientSoundType>` and not a string sentinel
 /// — so the type system encodes the absence case directly
 /// (Principle III). Wire shape is kebab-case strings (`"none"`,
-/// `"rain"`, ..., `"white-noise"`, `"wind"`), mirroring the
-/// `StatusBarDisplay` precedent at `:27`.
+/// `"rain"`, ..., `"white-noise"`, `"wind"`, `"pink-noise"`,
+/// `"brown-noise"`, `"binaural"`), mirroring the `StatusBarDisplay`
+/// precedent at `:27`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[cfg_attr(feature = "specta", derive(specta::Type))]
 #[serde(rename_all = "kebab-case")]
@@ -52,23 +53,23 @@ pub enum AmbientSoundType {
     /// slider value (FR-005 / A11). Wire string `"none"`.
     #[default]
     None,
-    /// Rain loop — vendored at `assets/audio/ambient/rain.mp3`.
+    /// Rain loop — vendored at `assets/audio/ambient/rain.wav`.
     Rain,
-    /// Fire / crackle loop — vendored at `assets/audio/ambient/fire.mp3`.
+    /// Fire / crackle loop — vendored at `assets/audio/ambient/fire.wav`.
     Fire,
     /// Library / café ambience — vendored at
-    /// `assets/audio/ambient/library.mp3`.
+    /// `assets/audio/ambient/library.wav`.
     Library,
-    /// Fan hum — vendored at `assets/audio/ambient/fan.mp3`.
+    /// Fan hum — vendored at `assets/audio/ambient/fan.wav`.
     Fan,
-    /// Storm — vendored at `assets/audio/ambient/storm.mp3`.
+    /// Storm — vendored at `assets/audio/ambient/storm.wav`.
     Storm,
     /// White noise — vendored at
-    /// `assets/audio/ambient/white-noise.mp3`. CRITICAL: the
+    /// `assets/audio/ambient/white-noise.wav`. CRITICAL: the
     /// multi-word variant — `#[serde(rename_all = "kebab-case")]`
     /// emits it as `"white-noise"`, not `"whitenoise"`.
     WhiteNoise,
-    /// Wind — vendored at `assets/audio/ambient/wind.mp3`.
+    /// Wind — vendored at `assets/audio/ambient/wind.wav`.
     Wind,
     /// Pink noise — vendored at `assets/audio/ambient/pink-noise.wav`.
     /// Synthesised via `ffmpeg anoisesrc=color=pink`; perceptually
@@ -125,12 +126,49 @@ impl Default for ShortcutSettings {
     }
 }
 
+/// User-selectable UI locale (feature 005).
+///
+/// Closed four-variant sum type. Wire shape is lowercase strings
+/// (`"en"` / `"de"` / `"it"` / `"tr"`) matching the existing `theme`
+/// field's lowercase convention at `:121-123` rather than the
+/// `AmbientSoundType` kebab-case precedent — two-letter ISO-639-1
+/// codes have no internal word boundary that kebab-case would clarify.
+///
+/// The `#[default]` attribute on `En` ties this enum to
+/// `#[derive(Default)]`; the default value is used by `Locale::default()`
+/// callers (e.g. the resolver's terminal fallback) — NOT by the
+/// `AppearanceSettings.locale` field, which uses `Option<Locale>` so
+/// `None` (no explicit choice) and `Some(Locale::En)` (explicit
+/// English) are distinguishable per Fix A.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
+#[serde(rename_all = "lowercase")]
+pub enum Locale {
+    /// English — wire string `"en"`. Source-of-truth locale per Spec A13.
+    #[default]
+    En,
+    /// Deutsch — wire string `"de"`.
+    De,
+    /// Italiano — wire string `"it"`.
+    It,
+    /// Türkçe — wire string `"tr"`.
+    Tr,
+}
+
 /// Appearance / theme preferences.
 ///
 /// `theme` is the color-mode preference (`"auto"` / `"light"` /
 /// `"dark"`); `timer_theme` is the timer palette stem (e.g.
 /// `"espresso"`). Both carry `#[serde(default)]` so pre-widening
 /// settings JSONs fill in the JS-era cold-start values.
+///
+/// `locale` (feature 005) is `Option<Locale>` — `None` = "user has
+/// never explicitly chosen a locale" (legacy records or fresh install
+/// — the resolver runs OS detection on cold start); `Some(Locale)` =
+/// "user explicitly chose this locale" (including English — bypasses
+/// OS detection per FR-011 / Fix A). The `Option` discriminant is the
+/// authoritative "explicit vs. default" signal; value-equality against
+/// `Locale::En` MUST NOT be used as a proxy.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "specta", derive(specta::Type))]
 pub struct AppearanceSettings {
@@ -138,6 +176,51 @@ pub struct AppearanceSettings {
     pub theme: String,
     #[serde(default = "default_timer_theme")]
     pub timer_theme: String,
+    /// Feature 005: user-selected UI locale. `None` = no explicit
+    /// choice yet; `Some(_)` = explicit choice (any variant, including
+    /// `Some(En)`). The `Option` discriminant is the resolver's
+    /// authoritative "explicit vs. default" signal per FR-009 / FR-011.
+    ///
+    /// Lenient deserialisation: an out-of-set wire value (`"fr"`,
+    /// `42`, etc.) degrades silently to `None` rather than failing the
+    /// whole-struct parse. Spec Story 2 AC 4 requires that an unknown
+    /// locale code in a hand-edited settings.json must NOT brick the
+    /// settings load — the resolver then falls back to OS detection.
+    /// The `Locale` enum itself remains strict on its own
+    /// deserialisation surface; only this field is forgiving (two
+    /// separate contracts).
+    #[serde(default, deserialize_with = "deserialize_locale_lenient")]
+    pub locale: Option<Locale>,
+}
+
+/// Lenient `Option<Locale>` deserialiser for
+/// `AppearanceSettings.locale` (Spec Story 2 AC 4).
+///
+/// Routes through `serde_json::Value` so an unknown enum value (`"fr"`)
+/// returns `Ok(None)` instead of bubbling a struct-level serde error.
+/// `null` and a missing field both also yield `None` (the
+/// `#[serde(default)]` attribute handles the missing-field case before
+/// this function is even called; this function handles the
+/// present-but-invalid case).
+///
+/// **Accepted limitation (FR-026):** an invalid wire value (`"fr"`, `42`,
+/// etc.) coerces SILENTLY to `None` rather than logging or surfacing
+/// the rejection. The resolver then falls back to OS-language
+/// detection per FR-009 step 2 — which lands the user in a usable
+/// state without bricking the settings load. Telemetry on this branch
+/// is deliberately omitted in v1 (presto is single-user, fully local,
+/// no analytics surface — see VISION.md). A future surface (an
+/// "advanced diagnostics" toggle) could route through `tracing` if
+/// debugging hand-edited settings files becomes a recurring need.
+fn deserialize_locale_lenient<'de, D>(deserializer: D) -> Result<Option<Locale>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let value: Option<serde_json::Value> = Option::deserialize(deserializer)?;
+    match value {
+        None | Some(serde_json::Value::Null) => Ok(None),
+        Some(v) => Ok(serde_json::from_value::<Locale>(v).ok()),
+    }
 }
 
 impl Default for AppearanceSettings {
@@ -145,6 +228,7 @@ impl Default for AppearanceSettings {
         Self {
             theme: default_theme(),
             timer_theme: default_timer_theme(),
+            locale: None,
         }
     }
 }
@@ -414,7 +498,123 @@ impl From<SettingsOnDisk> for Settings {
 
 #[cfg(test)]
 mod tests {
-    use super::{AmbientSoundType, NotificationSettings, StatusBarDisplay, TimerSettings};
+    use super::{
+        AmbientSoundType, AppearanceSettings, Locale, NotificationSettings, StatusBarDisplay,
+        TimerSettings,
+    };
+
+    /// Feature 005 T004 (RED → T007 GREEN): pre-feature-005
+    /// `AppearanceSettings` JSON (feature 002/003/004 baseline shape)
+    /// lacking the `locale` key deserialises to `None`. Mirrors the
+    /// `ambient_sound_legacy_fields_default` precedent at `:407-421`.
+    ///
+    /// Critical Fix A invariant: `None` (no explicit choice) MUST be
+    /// distinguishable from `Some(Locale::En)` (explicit English). A
+    /// German-OS user who explicitly picks English persists `Some(En)`;
+    /// the resolver sees `Some(_)` and skips OS detection on next boot.
+    #[test]
+    fn locale_legacy_field_defaults_to_none() {
+        let legacy = r#"{"theme":"auto","timer_theme":"espresso"}"#;
+        let s: AppearanceSettings =
+            serde_json::from_str(legacy).expect("deserialise legacy appearance");
+        assert_eq!(s.locale, None, "legacy record has no explicit locale");
+        assert_ne!(
+            s.locale,
+            Some(Locale::En),
+            "Fix A: None must be distinct from Some(En)"
+        );
+        assert_eq!(s.theme, "auto", "feature-002 theme survives");
+        assert_eq!(
+            s.timer_theme, "espresso",
+            "feature-002 timer_theme survives"
+        );
+    }
+
+    /// Feature 005 T005 (RED → T007 GREEN): each non-default
+    /// `Locale` variant round-trips byte-stable through serde when
+    /// stored on `AppearanceSettings.locale`. Critically asserts the
+    /// Fix A invariant: `Some(Locale::En)` round-trips as `Some(En)`,
+    /// NOT `None` — explicit English MUST persist as a distinct value
+    /// from "no explicit choice" so the resolver bypasses OS detection
+    /// on next cold start.
+    ///
+    /// Also asserts feature-002/003/004 `theme` and `timer_theme`
+    /// fields survive each round-trip alongside the new `locale`
+    /// field (Spec Story 2 AC 5 / SC-003).
+    #[test]
+    fn locale_some_round_trip() {
+        let variants = [Locale::En, Locale::De, Locale::It, Locale::Tr];
+        for variant in variants {
+            let s = AppearanceSettings {
+                theme: "auto".to_string(),
+                timer_theme: "espresso".to_string(),
+                locale: Some(variant),
+            };
+            let json = serde_json::to_string(&s).expect("serialise");
+            let back: AppearanceSettings = serde_json::from_str(&json).expect("deserialise");
+            assert_eq!(
+                back.locale,
+                Some(variant),
+                "Some({variant:?}) round-trips as Some, not None"
+            );
+            assert_eq!(back.theme, "auto", "theme survives round-trip");
+            assert_eq!(
+                back.timer_theme, "espresso",
+                "timer_theme survives round-trip"
+            );
+        }
+    }
+
+    /// Feature 005 T006 (RED → T007 GREEN): every `Locale` variant
+    /// MUST serialise to its lowercase wire string (`"en"` / `"de"` /
+    /// `"it"` / `"tr"`) and round-trip in both directions. Wire shape
+    /// matches the existing `theme` field's lowercase convention at
+    /// `:121-123` rather than the `AmbientSoundType` kebab-case
+    /// precedent (two-letter ISO-639-1 codes have no internal word
+    /// boundary that kebab-case would clarify).
+    ///
+    /// Out-of-set wire values (`"fr"`, etc.) MUST fail enum
+    /// deserialisation — the `#[serde(default)]` attribute on the
+    /// `locale` field then substitutes `None` at the parent struct
+    /// level (asserted via the field-level path in T004 /
+    /// `locale_legacy_field_defaults_to_none`).
+    #[test]
+    fn locale_serialises_lowercase() {
+        let cases = [
+            (Locale::En, r#""en""#),
+            (Locale::De, r#""de""#),
+            (Locale::It, r#""it""#),
+            (Locale::Tr, r#""tr""#),
+        ];
+        for (variant, wire) in cases {
+            let encoded = serde_json::to_string(&variant).expect("serialise");
+            assert_eq!(encoded, wire, "serialise {variant:?} → {wire}");
+            let decoded: Locale = serde_json::from_str(wire).expect("deserialise");
+            assert_eq!(decoded, variant, "deserialise {wire} → {variant:?}");
+        }
+        // Out-of-set wire value must fail enum deserialisation outright.
+        assert!(
+            serde_json::from_str::<Locale>(r#""fr""#).is_err(),
+            "unsupported locale code fails serde"
+        );
+    }
+
+    /// Feature 005 Story 2 AC 4: when `settings.json` carries an
+    /// out-of-set `locale` value (e.g. hand-edited to `"fr"`), the
+    /// `AppearanceSettings` struct MUST deserialise — silently
+    /// degrading the unknown value to `None` so the resolver falls
+    /// back to OS detection. The companion `Locale`-only test above
+    /// guards the inner enum's strictness; this test guards the
+    /// field-level leniency. Two separate contracts.
+    #[test]
+    fn locale_invalid_value_falls_back_to_none() {
+        let invalid = r#"{"theme":"auto","timer_theme":"espresso","locale":"fr"}"#;
+        let s: AppearanceSettings =
+            serde_json::from_str(invalid).expect("invalid locale must not error");
+        assert_eq!(s.locale, None);
+        assert_eq!(s.theme, "auto");
+        assert_eq!(s.timer_theme, "espresso");
+    }
 
     /// Feature 004 T004 (RED → T007 GREEN): pre-feature-004
     /// `NotificationSettings` JSON (no ambient fields) deserialises

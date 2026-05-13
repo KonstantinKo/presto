@@ -33,10 +33,12 @@
 #![allow(clippy::must_use_candidate)]
 
 use leptos::prelude::*;
+use leptos_i18n::{t, t_string};
 use wasm_bindgen::JsCast as _;
 
 use crate::bridge::types::Settings;
 use crate::components::settings::SettingsToast;
+use crate::i18n::i18n::use_i18n;
 use crate::theme::loader::{apply_timer_theme, resolve_color_mode, system_prefers_dark};
 use crate::theme::metadata::{is_compatible, ThemeMeta, THEME_METADATA};
 
@@ -107,6 +109,7 @@ fn preview_styles_for(meta: &ThemeMeta) -> PreviewStyles {
 /// Theme settings tab — light/dark/auto picker + timer theme grid.
 #[component]
 pub fn ThemeSettings(settings: RwSignal<Settings>, toast: SettingsToast) -> impl IntoView {
+    let i18n = use_i18n();
     // Color-theme handler resolves `auto` against the OS preference
     // and applies the concrete `data-theme` token. Also persists
     // the preference string ("auto"/"light"/"dark") to the shared
@@ -116,7 +119,7 @@ pub fn ThemeSettings(settings: RwSignal<Settings>, toast: SettingsToast) -> impl
         let resolved = resolve_color_mode(normalised, system_prefers_dark());
         set_html_attr("data-theme", resolved);
         settings.update(|s| s.appearance.theme = normalised.to_string());
-        toast.show("Settings saved");
+        toast.show(t_string!(i18n, settings.toast_saved).to_string());
     };
     // Timer-theme handler applies the data-timer-theme attribute via
     // the loader and also persists to the shared settings signal.
@@ -124,7 +127,7 @@ pub fn ThemeSettings(settings: RwSignal<Settings>, toast: SettingsToast) -> impl
         apply_timer_theme(id);
         set_html_attr("data-timer-theme", id);
         settings.update(|s| s.appearance.timer_theme = id.to_string());
-        toast.show("Settings saved");
+        toast.show(t_string!(i18n, settings.toast_saved).to_string());
     };
 
     let current_theme = Signal::derive(move || settings.with(|s| s.appearance.theme.clone()));
@@ -133,56 +136,52 @@ pub fn ThemeSettings(settings: RwSignal<Settings>, toast: SettingsToast) -> impl
 
     view! {
         <div class="category-header">
-            <h1>"Theme"</h1>
-            <p class="category-description">
-                "Customize the appearance and visual style of the application"
-            </p>
+            <h1>{t!(i18n, settings.theme.title)}</h1>
+            <p class="category-description">{t!(i18n, settings.theme.description)}</p>
         </div>
         <div class="settings-section">
-            <h3 class="section-header">"Color Theme"</h3>
+            <h3 class="section-header">{t!(i18n, settings.theme.color_section)}</h3>
             <div class="setting-item">
-                <label for="theme-selector">"Theme Mode:"</label>
+                <label for="theme-selector">{t!(i18n, settings.theme.mode_label)}</label>
                 <div class="theme-selector" id="theme-selector">
                     <button
                         class="theme-option"
                         class:active=move || current_theme.get() == "auto"
                         data-theme="auto"
-                        title="Auto (Follow System)"
+                        title=move || t_string!(i18n, settings.theme.mode_auto_aria)
                         on:click=move |_| on_theme("auto")
                     >
                         <i class="ri-contrast-2-line"></i>
-                        <span>"Auto"</span>
+                        <span>{t!(i18n, settings.theme.mode_auto)}</span>
                     </button>
                     <button
                         class="theme-option"
                         class:active=move || current_theme.get() == "light"
                         data-theme="light"
-                        title="Light Mode"
+                        title=move || t_string!(i18n, settings.theme.mode_light_aria)
                         on:click=move |_| on_theme("light")
                     >
                         <i class="ri-sun-line"></i>
-                        <span>"Light"</span>
+                        <span>{t!(i18n, settings.theme.mode_light)}</span>
                     </button>
                     <button
                         class="theme-option"
                         class:active=move || current_theme.get() == "dark"
                         data-theme="dark"
-                        title="Dark Mode"
+                        title=move || t_string!(i18n, settings.theme.mode_dark_aria)
                         on:click=move |_| on_theme("dark")
                     >
                         <i class="ri-moon-line"></i>
-                        <span>"Dark"</span>
+                        <span>{t!(i18n, settings.theme.mode_dark)}</span>
                     </button>
                 </div>
-                <p class="setting-description">
-                    "Choose your preferred color theme. Auto will automatically switch between light and dark mode based on your system preferences."
-                </p>
+                <p class="setting-description">{t!(i18n, settings.theme.mode_help)}</p>
             </div>
         </div>
         <div class="settings-section">
-            <h3 class="section-header">"Timer Colors"</h3>
+            <h3 class="section-header">{t!(i18n, settings.theme.timer_section)}</h3>
             <div class="setting-item">
-                <label for="timer-theme-selector">"Timer Theme:"</label>
+                <label for="timer-theme-selector">{t!(i18n, settings.theme.timer_theme_label)}</label>
                 <div class="timer-theme-grid" id="timer-theme-grid">
                     {THEME_METADATA
                         .iter()
@@ -262,7 +261,7 @@ pub fn ThemeSettings(settings: RwSignal<Settings>, toast: SettingsToast) -> impl
                                             <div
                                                 class="timer-preview-status"
                                                 style=preview_styles.status
-                                            >"Focus Session"</div>
+                                            >{t!(i18n, settings.theme.preview_focus_session)}</div>
                                         </div>
                                         <div class="color-preview-strip">
                                             <div
@@ -284,9 +283,7 @@ pub fn ThemeSettings(settings: RwSignal<Settings>, toast: SettingsToast) -> impl
                         })
                         .collect::<Vec<_>>()}
                 </div>
-                <p class="setting-description">
-                    "Choose a color theme for your timer sessions."
-                </p>
+                <p class="setting-description">{t!(i18n, settings.theme.timer_theme_help)}</p>
             </div>
         </div>
     }
