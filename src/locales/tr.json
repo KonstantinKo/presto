@@ -1,4 +1,8 @@
 {
+  "app": {
+    "degraded_mode_title": "Sınırlı mod.",
+    "degraded_mode_body": "Tauri köprüsü kullanılamıyor — ayarlar + oturumlar yalnızca bellekte."
+  },
   "settings": {
     "shell_header": "Ayarlar",
     "autosave_info": "Ayarlar otomatik olarak kaydedilir",
@@ -167,6 +171,7 @@
     "ctrl_pause": "Duraklat",
     "ctrl_resume": "Devam et",
     "ctrl_skip_session": "Oturumu atla",
+    "ctrl_skip_session_aria": "Mevcut oturumu atla ve sonraki aşamaya geç",
     "ctrl_reset_aria": "Zamanlayıcıyı sıfırla",
     "ctrl_undo_aria": "Son oturumu geri al",
     "ctrl_play_pause_aria": "Zamanlayıcıyı başlat veya duraklat",

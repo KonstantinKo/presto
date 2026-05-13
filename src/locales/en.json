@@ -1,4 +1,8 @@
 {
+  "app": {
+    "degraded_mode_title": "Degraded mode.",
+    "degraded_mode_body": "Tauri bridge unavailable — settings + sessions are in-memory only."
+  },
   "settings": {
     "shell_header": "Settings",
     "autosave_info": "Settings are saved automatically",
@@ -167,6 +171,7 @@
     "ctrl_pause": "Pause",
     "ctrl_resume": "Resume",
     "ctrl_skip_session": "Skip session",
+    "ctrl_skip_session_aria": "Skip current session and advance to the next phase",
     "ctrl_reset_aria": "Reset timer",
     "ctrl_undo_aria": "Undo last session",
     "ctrl_play_pause_aria": "Start or pause timer",

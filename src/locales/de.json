@@ -1,4 +1,8 @@
 {
+  "app": {
+    "degraded_mode_title": "Eingeschränkter Modus.",
+    "degraded_mode_body": "Tauri-Bridge nicht verfügbar — Einstellungen + Sitzungen sind nur im Speicher."
+  },
   "settings": {
     "shell_header": "Einstellungen",
     "autosave_info": "Einstellungen werden automatisch gespeichert",
@@ -167,6 +171,7 @@
     "ctrl_pause": "Pause",
     "ctrl_resume": "Fortsetzen",
     "ctrl_skip_session": "Sitzung überspringen",
+    "ctrl_skip_session_aria": "Aktuelle Sitzung überspringen und zur nächsten Phase wechseln",
     "ctrl_reset_aria": "Timer zurücksetzen",
     "ctrl_undo_aria": "Letzte Sitzung rückgängig machen",
     "ctrl_play_pause_aria": "Timer starten oder pausieren",

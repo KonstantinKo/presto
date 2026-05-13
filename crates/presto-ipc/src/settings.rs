@@ -162,10 +162,37 @@ pub struct AppearanceSettings {
     /// choice yet; `Some(_)` = explicit choice (any variant, including
     /// `Some(En)`). The `Option` discriminant is the resolver's
     /// authoritative "explicit vs. default" signal per FR-009 / FR-011.
-    /// Out-of-set wire values (`"fr"`, `null`, etc.) fail enum
-    /// deserialisation; `#[serde(default)]` then substitutes `None`.
-    #[serde(default)]
+    ///
+    /// Lenient deserialisation: an out-of-set wire value (`"fr"`,
+    /// `42`, etc.) degrades silently to `None` rather than failing the
+    /// whole-struct parse. Spec Story 2 AC 4 requires that an unknown
+    /// locale code in a hand-edited settings.json must NOT brick the
+    /// settings load — the resolver then falls back to OS detection.
+    /// The `Locale` enum itself remains strict on its own
+    /// deserialisation surface; only this field is forgiving (two
+    /// separate contracts).
+    #[serde(default, deserialize_with = "deserialize_locale_lenient")]
     pub locale: Option<Locale>,
+}
+
+/// Lenient `Option<Locale>` deserialiser for
+/// `AppearanceSettings.locale` (Spec Story 2 AC 4).
+///
+/// Routes through `serde_json::Value` so an unknown enum value (`"fr"`)
+/// returns `Ok(None)` instead of bubbling a struct-level serde error.
+/// `null` and a missing field both also yield `None` (the
+/// `#[serde(default)]` attribute handles the missing-field case before
+/// this function is even called; this function handles the
+/// present-but-invalid case).
+fn deserialize_locale_lenient<'de, D>(deserializer: D) -> Result<Option<Locale>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let value: Option<serde_json::Value> = Option::deserialize(deserializer)?;
+    match value {
+        None | Some(serde_json::Value::Null) => Ok(None),
+        Some(v) => Ok(serde_json::from_value::<Locale>(v).ok()),
+    }
 }
 
 impl Default for AppearanceSettings {
@@ -542,6 +569,23 @@ mod tests {
             serde_json::from_str::<Locale>(r#""fr""#).is_err(),
             "unsupported locale code fails serde"
         );
+    }
+
+    /// Feature 005 Story 2 AC 4: when `settings.json` carries an
+    /// out-of-set `locale` value (e.g. hand-edited to `"fr"`), the
+    /// `AppearanceSettings` struct MUST deserialise — silently
+    /// degrading the unknown value to `None` so the resolver falls
+    /// back to OS detection. The companion `Locale`-only test above
+    /// guards the inner enum's strictness; this test guards the
+    /// field-level leniency. Two separate contracts.
+    #[test]
+    fn locale_invalid_value_falls_back_to_none() {
+        let invalid = r#"{"theme":"auto","timer_theme":"espresso","locale":"fr"}"#;
+        let s: AppearanceSettings =
+            serde_json::from_str(invalid).expect("invalid locale must not error");
+        assert_eq!(s.locale, None);
+        assert_eq!(s.theme, "auto");
+        assert_eq!(s.timer_theme, "espresso");
     }
 
     /// Feature 004 T004 (RED → T007 GREEN): pre-feature-004

@@ -293,8 +293,15 @@ export type AppearanceSettings = { theme?: string; timer_theme?: string;
  * choice yet; `Some(_)` = explicit choice (any variant, including
  * `Some(En)`). The `Option` discriminant is the resolver's
  * authoritative "explicit vs. default" signal per FR-009 / FR-011.
- * Out-of-set wire values (`"fr"`, `null`, etc.) fail enum
- * deserialisation; `#[serde(default)]` then substitutes `None`.
+ * 
+ * Lenient deserialisation: an out-of-set wire value (`"fr"`,
+ * `42`, etc.) degrades silently to `None` rather than failing the
+ * whole-struct parse. Spec Story 2 AC 4 requires that an unknown
+ * locale code in a hand-edited settings.json must NOT brick the
+ * settings load — the resolver then falls back to OS detection.
+ * The `Locale` enum itself remains strict on its own
+ * deserialisation surface; only this field is forgiving (two
+ * separate contracts).
  */
 locale?: Locale | null }
 /**

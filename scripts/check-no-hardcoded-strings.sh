@@ -1,10 +1,13 @@
 #!/usr/bin/env bash
 # Hardcoded-English gate for Leptos `view! {}` blocks. Reject any
 # inline English text node — a literal `>"Word..."<` shape between
-# JSX-style tags — in `src/src/components/`. This is the regression
-# that surfaced during feature 005 (stats view shipped Batch 2 with
-# every label hardcoded in English because the spec's scope only
-# listed a subset of files).
+# JSX-style tags — anywhere under `src/src/` (excluding `engine/` and
+# `tests/`). This is the regression that surfaced during feature 005
+# (stats view shipped Batch 2 with every label hardcoded in English
+# because the spec's scope only listed a subset of files; the
+# degraded-mode banner in `src/src/app.rs` shipped with bare English
+# literals for the same reason — sibling to `components/` is in scope
+# too).
 #
 # All user-visible UI strings should route through
 # `t!(i18n, ...)` or `t_string!(i18n, ...)` so the four-locale catalogue
@@ -19,6 +22,8 @@
 #   localised because the dropdown shows each language in its own
 #   tongue regardless of the active locale).
 # - `target/` build artefacts.
+# - `src/src/engine/` (no UI strings — pure state machine).
+# - `tests/` (test fixtures contain expected English text by design).
 #
 # Detection shape:
 #   `>"<Capitalised word>...<"<`  — typical text-node literal.
@@ -30,18 +35,22 @@
 set -euo pipefail
 
 ROOT="${1:-$(git rev-parse --show-toplevel)}"
-COMPONENTS_DIR="$ROOT/src/src/components"
+SCAN_DIR="$ROOT/src/src"
 
-if [ ! -d "$COMPONENTS_DIR" ]; then
-    echo "no components directory at $COMPONENTS_DIR — skipping gate"
+if [ ! -d "$SCAN_DIR" ]; then
+    echo "no scan directory at $SCAN_DIR — skipping gate"
     exit 0
 fi
 
-# Build a list of `.rs` files under components/, strip out anything
-# inside a `#[cfg(test)]` / `mod tests` block, then grep for the
-# inline-text shape. Awk handles the test-block stripping so the
-# subsequent grep is fed only production view code.
-violations=$(find "$COMPONENTS_DIR" -name '*.rs' -type f -print0 \
+# Build a list of `.rs` files under `src/src/` (excluding `engine/`
+# and any `tests/` subtree), strip out anything inside a
+# `#[cfg(test)]` / `mod tests` block, then grep for the inline-text
+# shape. Awk handles the test-block stripping so the subsequent grep
+# is fed only production view code.
+violations=$(find "$SCAN_DIR" -name '*.rs' -type f \
+        -not -path "$SCAN_DIR/engine/*" \
+        -not -path "*/tests/*" \
+        -print0 \
     | xargs -0 awk '
         BEGIN { skip = 0; depth = 0 }
         # Enter a test-only block.
@@ -75,4 +84,4 @@ if [ -n "$violations" ]; then
     exit 1
 fi
 
-echo "OK: no hardcoded English text nodes in src/src/components/ view blocks"
+echo "OK: no hardcoded English text nodes in src/src/ view blocks (engine/ + tests/ exempt)"

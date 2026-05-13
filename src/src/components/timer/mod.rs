@@ -315,11 +315,18 @@ pub enum SkipButtonState {
 }
 
 impl SkipButtonState {
+    /// Verbose accessible label — distinct from the terse tooltip per
+    /// Spec A11 / SC-004 / contracts §3. The catalogue is the
+    /// runtime source of truth (`timer.ctrl_skip_session_aria`); this
+    /// const fn is the host-side test fixture that pins the English
+    /// form for the cargo-test matrix.
     #[must_use]
     pub const fn verbose_label(self) -> &'static str {
-        "Skip session"
+        "Skip current session and advance to the next phase"
     }
 
+    /// Terse tooltip — short form shown in `data-tooltip`. Catalogue
+    /// key `timer.ctrl_skip_session`.
     #[must_use]
     pub const fn terse_tooltip(self) -> &'static str {
         "Skip session"
@@ -1161,9 +1168,14 @@ pub fn TimerView() -> impl IntoView {
     });
 
     // Skip button has no state variants (FR-029); only its rendered
-    // string is reactive, driven by the locale signal.
+    // string is reactive, driven by the locale signal. The verbose
+    // form (aria-label / title) is intentionally a distinct catalogue
+    // key from the terse tooltip — Spec A11 + SC-004 + contracts §3
+    // forbid value-equality between the two so a future copy edit on
+    // one cannot accidentally collapse them (CHK041
+    // drift-impossibility).
     let verbose_label_skip =
-        Signal::derive(move || t_string!(i18n, timer.ctrl_skip_session).to_string());
+        Signal::derive(move || t_string!(i18n, timer.ctrl_skip_session_aria).to_string());
     let terse_tooltip_skip =
         Signal::derive(move || t_string!(i18n, timer.ctrl_skip_session).to_string());
 
@@ -2559,14 +2571,25 @@ mod tests {
         assert_ne!(running.verbose_label(), running.terse_tooltip());
     }
 
-    /// FR-029 — `#skip-btn` has no state variants; verbose == terse
-    /// here happens to be true (the only button where it is). The
-    /// test pins this so a future state addition catches the change.
+    /// FR-029 — `#skip-btn` has no state variants. Verbose and terse
+    /// are DISTINCT (Spec A11 / SC-004 / contracts §3 + CHK041
+    /// drift-impossibility): the verbose form describes the action
+    /// ("advance to the next phase"); the terse form is the short
+    /// tooltip ("Skip session"). The catalogue is the runtime source
+    /// of truth — these const fixtures pin the English wording.
     #[test]
-    fn skip_btn_verbose_and_terse_are_skip_session() {
+    fn skip_btn_verbose_and_terse_are_distinct() {
         let state = SkipButtonState::Skip;
-        assert_eq!(state.verbose_label(), "Skip session");
+        assert_eq!(
+            state.verbose_label(),
+            "Skip current session and advance to the next phase",
+        );
         assert_eq!(state.terse_tooltip(), "Skip session");
+        assert_ne!(
+            state.verbose_label(),
+            state.terse_tooltip(),
+            "Spec A11 / SC-004: skip verbose and terse MUST NOT collapse",
+        );
     }
 
     /// SC-012 — full state-matrix sweep. For each
@@ -2607,10 +2630,14 @@ mod tests {
                 assert_eq!(play.verbose_label(), "Start or pause timer");
             }
         }
-        // Skip is mode-invariant per FR-029.
+        // Skip is mode-invariant per FR-029. Verbose and terse are
+        // distinct (Spec A11 / SC-004 + CHK041 drift-impossibility).
         let skip = SkipButtonState::Skip;
         assert_eq!(skip.terse_tooltip(), "Skip session");
-        assert_eq!(skip.verbose_label(), "Skip session");
+        assert_eq!(
+            skip.verbose_label(),
+            "Skip current session and advance to the next phase",
+        );
     }
 }
 

@@ -1,4 +1,8 @@
 {
+  "app": {
+    "degraded_mode_title": "Modalità degradata.",
+    "degraded_mode_body": "Bridge Tauri non disponibile — impostazioni + sessioni sono solo in memoria."
+  },
   "settings": {
     "shell_header": "Impostazioni",
     "autosave_info": "Le impostazioni vengono salvate automaticamente",
@@ -167,6 +171,7 @@
     "ctrl_pause": "Pausa",
     "ctrl_resume": "Riprendi",
     "ctrl_skip_session": "Salta sessione",
+    "ctrl_skip_session_aria": "Salta la sessione corrente e passa alla fase successiva",
     "ctrl_reset_aria": "Reimposta timer",
     "ctrl_undo_aria": "Annulla ultima sessione",
     "ctrl_play_pause_aria": "Avvia o metti in pausa il timer",

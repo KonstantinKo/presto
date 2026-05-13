@@ -51,7 +51,7 @@ use crate::i18n::i18n::{use_i18n, I18nContextProvider};
 use crate::managers::navigation::{NavView, NavigationManager, SettingsTab};
 use crate::managers::update::{UpdateInfo, UpdateManager};
 use crate::theme::loader;
-use leptos_i18n::t_string;
+use leptos_i18n::{t, t_string};
 
 /// App-level toast notification queue.
 ///
@@ -677,10 +677,7 @@ pub fn App() -> impl IntoView {
         </div>
 
         {bridge_absent.then(|| view! {
-            <div class="degraded-mode-banner" role="status">
-                <strong>"Degraded mode."</strong>
-                " Tauri bridge unavailable — settings + sessions are in-memory only."
-            </div>
+            <DegradedModeBanner/>
         })}
         </I18nContextProvider>
     }
@@ -712,6 +709,28 @@ fn LocaleSync(settings: RwSignal<Settings>) -> impl IntoView {
             i18n.set_locale(library_locale);
         }
     });
+}
+
+/// Degraded-mode banner. Shown when the Tauri JS bridge is absent
+/// (Trunk dev server / browser-only load).
+///
+/// Lives inside the `<I18nContextProvider>` so `use_i18n()` resolves;
+/// the two visible strings (`degraded_mode_title` / `degraded_mode_body`)
+/// are catalogue-driven so all four locales render the warning in the
+/// active UI language (feature 005). The DOM shape — `<div
+/// class="degraded-mode-banner" role="status">` wrapping `<strong>` +
+/// trailing text node — is preserved exactly so any external CSS or
+/// e2e selector keyed on the banner class continues to match.
+#[component]
+fn DegradedModeBanner() -> impl IntoView {
+    let i18n = use_i18n();
+    view! {
+        <div class="degraded-mode-banner" role="status">
+            <strong>{t!(i18n, app.degraded_mode_title)}</strong>
+            " "
+            {t!(i18n, app.degraded_mode_body)}
+        </div>
+    }
 }
 
 /// Sidebar nav component. Lives inside the `<I18nContextProvider>` so
