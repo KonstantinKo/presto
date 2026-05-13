@@ -345,6 +345,28 @@ mod tests {
         assert_eq!(n.ambient_sound_volume, 50);
     }
 
+    /// Feature 004 T005 (RED → T007 GREEN): non-default ambient
+    /// values (`enabled=true`, `type=WhiteNoise`, `volume=70`)
+    /// round-trip byte-stable through serde, AND the feature-002
+    /// `metronome: true` field survives the round-trip alongside
+    /// the new fields (Acceptance Scenario 2.6).
+    #[test]
+    fn ambient_sound_round_trip() {
+        let n = NotificationSettings {
+            metronome: true,
+            ambient_sound_enabled: true,
+            ambient_sound_type: AmbientSoundType::WhiteNoise,
+            ambient_sound_volume: 70,
+            ..NotificationSettings::default()
+        };
+        let json = serde_json::to_string(&n).expect("serialise");
+        let back: NotificationSettings = serde_json::from_str(&json).expect("deserialise");
+        assert!(back.metronome, "metronome (feature 002) survives round-trip");
+        assert!(back.ambient_sound_enabled);
+        assert_eq!(back.ambient_sound_type, AmbientSoundType::WhiteNoise);
+        assert_eq!(back.ambient_sound_volume, 70);
+    }
+
     /// T005 (RED → T006 GREEN): pre-002 settings.json without the
     /// `sessions_per_long_break` field deserialises to the default `4`
     /// (preserves bit-for-bit engine behaviour on the legacy load
