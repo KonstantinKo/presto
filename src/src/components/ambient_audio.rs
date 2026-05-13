@@ -367,7 +367,8 @@ impl<H: AudioElementHandle + 'static> AmbientAudio<H> {
     /// Arc 10: `Playing(t)` → `Playing(t)` self-arc. Immediate volume
     /// update on the resident element; no fade, no restart. While
     /// in `Paused` / `Idle` / `FadingOut`, updates the stored target
-    /// only (no element change).
+    /// only (no element change). During `CrossFading`, retargets the
+    /// incoming ramp's endpoint so a slider drag mid-fade is honoured.
     pub fn set_volume(&mut self, volume: u32) {
         self.target_volume = volume;
         match &self.state {
@@ -381,13 +382,23 @@ impl<H: AudioElementHandle + 'static> AmbientAudio<H> {
                     ramp.in_to = f64::from(volume) / 100.0;
                 }
             }
+            AmbientAudioState::CrossFading { .. } => {
+                // V2 fix: retarget the incoming ramp endpoint so a
+                // slider drag during the 300 ms cross-fade isn't
+                // ignored. The outgoing ramp's endpoint stays at 0
+                // (the outgoing track is fading to silence regardless
+                // of what the user wants the incoming track to settle
+                // at).
+                if let Some(ramp) = self.ramp.as_mut() {
+                    ramp.in_to = f64::from(volume) / 100.0;
+                }
+            }
             AmbientAudioState::Paused { .. }
             | AmbientAudioState::Idle
-            | AmbientAudioState::FadingOut { .. }
-            | AmbientAudioState::CrossFading { .. } => {
+            | AmbientAudioState::FadingOut { .. } => {
                 // Per pre-emption rules: volume change while
                 // not-actively-playing updates the stored target only.
-                // On next resume / cross-fade-complete / Idle→Playing
+                // On next resume / fade-out-complete / Idle→Playing
                 // entry, the new value drives the fade-in.
             }
         }
@@ -950,5 +961,124 @@ mod tests {
         // completion — both are valid).
         let h = factory.handle(0);
         assert!(calls_contains(&h, "pause"));
+    }
+
+    /// R-004 regression pin: disable-while-paused fires `fade_out`
+    /// from `Paused` and lands cleanly in `Idle` with the resident
+    /// slot vacated.
+    ///
+    /// Before this fix the timer-side gate Effect skipped the
+    /// fade-out because its `gate_high` boolean was already false
+    /// when pause flipped `active_focus` off, so disabling the feature
+    /// while paused was a non-event and the driver was stranded in
+    /// `Paused`. The driver-side state machine ALWAYS supported the
+    /// `Paused` → `FadingOut` → `Idle` arc (Scenario 9 above); this
+    /// test pins that contract so a future refactor at the driver
+    /// layer can't silently regress the bug that the timer fix
+    /// depends on.
+    #[test]
+    fn disable_while_paused_tears_down_cleanly() {
+        let factory = Factory::new();
+        let mut driver = AmbientAudio::new(factory.closure());
+        driver.start(AmbientSoundType::Fan, 60);
+        driver.tick(200);
+
+        // Pause: settle fully so the driver is in `Paused` with no
+        // ramp in flight.
+        driver.pause();
+        driver.tick(200);
+        assert!(matches!(driver.state(), &AmbientAudioState::Paused { .. }));
+
+        // The R-004 fix has the timer-side Effect call `fade_out`
+        // when the user disables ambient while paused. Replay that
+        // dispatch here against the driver directly.
+        driver.fade_out();
+        assert!(matches!(
+            driver.state(),
+            &AmbientAudioState::FadingOut { .. }
+        ));
+
+        driver.tick(200);
+        assert_eq!(driver.state(), &AmbientAudioState::Idle);
+        // After landing in Idle a fresh focus session must be able
+        // to spawn a NEW element via `start()` — confirm the slot
+        // was vacated. We assert this indirectly by starting a new
+        // track and verifying the factory materialises a SECOND
+        // handle.
+        let count_before = factory.count();
+        driver.start(AmbientSoundType::Wind, 60);
+        assert_eq!(
+            factory.count(),
+            count_before + 1,
+            "post-fade-out start must spawn a fresh element"
+        );
+    }
+
+    /// V2 regression pin: volume slider drag mid-cross-fade retargets
+    /// the incoming ramp endpoint. Outgoing ramp stays anchored at 0
+    /// (the outgoing track is fading to silence regardless of slider).
+    ///
+    /// Before this fix the `CrossFading` arm fell into the generic
+    /// "stored target only" branch shared with `Paused` / `Idle` /
+    /// `FadingOut`, so a slider drag during the 300 ms cross-fade was
+    /// silently dropped and the incoming track settled at whatever
+    /// the previous target had been.
+    #[test]
+    fn volume_change_during_cross_fade() {
+        let factory = Factory::new();
+        let mut driver = AmbientAudio::new(factory.closure());
+        driver.start(AmbientSoundType::Rain, 50);
+        driver.tick(200); // settle at 0.5
+
+        driver.cross_fade(AmbientSoundType::Fire, 50);
+        assert!(matches!(
+            driver.state(),
+            &AmbientAudioState::CrossFading { .. }
+        ));
+
+        // Drag the slider to 75 in the middle of the cross-fade.
+        driver.set_volume(75);
+
+        // The incoming ramp endpoint must reflect the new target.
+        let ramp = driver
+            .ramp
+            .as_ref()
+            .expect("cross_fade installs a ramp; set_volume preserves it");
+        assert!(
+            (ramp.in_to - 0.75).abs() < 1e-9,
+            "incoming ramp endpoint should retarget to 0.75; got {}",
+            ramp.in_to,
+        );
+        // The outgoing ramp endpoint is anchored at 0 regardless of
+        // the slider (fading to silence).
+        assert_eq!(
+            ramp.out_to,
+            Some(0.0),
+            "outgoing ramp endpoint must stay at 0.0",
+        );
+
+        // Drive the cross-fade to completion and confirm the
+        // incoming element settles at the NEW target (0.75), not the
+        // original 0.50.
+        driver.tick(300);
+        assert_eq!(
+            driver.state(),
+            &AmbientAudioState::Playing {
+                track: AmbientSoundType::Fire
+            }
+        );
+        let fire_handle = factory.handle(1);
+        let last = fire_handle
+            .calls
+            .borrow()
+            .iter()
+            .rev()
+            .find(|c| c.starts_with("set_volume:"))
+            .cloned()
+            .unwrap_or_default();
+        assert!(
+            last.starts_with("set_volume:0.75"),
+            "incoming track must settle at retargeted volume; last set_volume was {last}",
+        );
     }
 }

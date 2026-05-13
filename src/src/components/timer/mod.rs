@@ -1381,76 +1381,98 @@ pub fn TimerView() -> impl IntoView {
         let _ = handle;
     });
 
-    // Feature 004: ambient-sound gate Effect. Mirrors the metronome
-    // gate at :1358-1368 structurally, but the gate transitions are
-    // dispatched into the `ambient_audio` driver rather than firing a
-    // single tone. The metronome remains a per-tick play_metronome_tick
-    // call inside the 1 Hz Effect above and is NOT modified here
-    // (FR-006 / Principle I — engine purity).
+    // Feature 004 (R-004 fix): unified ambient-sound gate Effect.
+    //
+    // Earlier wiring split the decision across two Effects (a
+    // gate_high Effect + a pause sub-Effect). That collapsed
+    // "enabled+track" with "actively playing this instant" into a
+    // single boolean, so disabling the feature *while paused* never
+    // fired a fade-out — gate_high was already false from the pause,
+    // so the disable transition was a non-event. The driver got
+    // stranded in `Paused`, and the next focus session's `start()`
+    // no-opped because the state machine wasn't `Idle`.
+    //
+    // The fix splits the gate into two orthogonal predicates:
+    //   * `enabled_and_track_selected` — settings-level intent
+    //     (ambient on AND a non-None track selected).
+    //   * `active_focus` — engine-level "should be sounding right
+    //     now" (Focus mode, running, not paused / auto-paused,
+    //     time_remaining > 0).
+    //
+    // Transitions are then dispatched by comparing both predicates
+    // against the prior tick. Disable always tears down the resident
+    // element (regardless of pause state); enable while active starts
+    // playback; pause/resume while still enabled flips between
+    // Playing and Paused without destroying the element.
     //
     // The driver is a process-wide singleton (`with_driver`) so the
     // resident `HtmlAudioElement` pair survives across breaks /
     // long-breaks / auto-starts within the same app session, holding
     // the WKWebView gesture lease for continuous-sessions auto-resume
     // (research.md Decision 1).
-    Effect::new(move |prev_gate: Option<(bool, AmbientSoundType, u32)>| {
+    Effect::new(move |prev: Option<(bool, bool, AmbientSoundType, u32)>| {
         let enabled = settings.with(|s| s.notifications.ambient_sound_enabled);
         let track = settings.with(|s| s.notifications.ambient_sound_type);
         let volume = settings.with(|s| s.notifications.ambient_sound_volume);
+        let enabled_and_track_selected = enabled && !matches!(track, AmbientSoundType::None);
+
         let mode_focus = engine.with(|s| matches!(s.current_mode(), TimerMode::Focus));
-        let running_active = engine.with(|s| {
-            s.is_running() && !s.is_paused() && !s.is_auto_paused() && s.time_remaining_secs() > 0
-        });
-        let gate_high =
-            enabled && !matches!(track, AmbientSoundType::None) && mode_focus && running_active;
+        let active_focus = mode_focus
+            && engine.with(|s| {
+                s.is_running()
+                    && !s.is_paused()
+                    && !s.is_auto_paused()
+                    && s.time_remaining_secs() > 0
+            });
 
-        let (prev_gate_high, prev_track, prev_volume) =
-            prev_gate.unwrap_or((false, AmbientSoundType::None, volume));
+        let (prev_enabled_track, prev_active, prev_track, prev_volume) =
+            prev.unwrap_or((false, false, AmbientSoundType::None, volume));
 
-        if !gate_high && prev_gate_high {
-            // Falling edge — fade out.
+        if prev_enabled_track && !enabled_and_track_selected {
+            // Intent flipped off — fade out from whatever state we
+            // were in (Playing, Paused, or CrossFading; the driver
+            // handles all three arcs to Idle). This is the
+            // load-bearing arc for the "disable while paused"
+            // recovery: without it, the driver stays in `Paused`
+            // and the next focus session can't start playback.
             let _ = ambient_audio::with_driver(ambient_audio::AmbientAudio::fade_out);
-        } else if gate_high && !prev_gate_high {
-            // Rising edge — start. The gate just rose, the resident
-            // state should be Idle (or FadingOut from a prior cycle,
-            // in which case the driver's `start` is a no-op until
-            // FadingOut completes — that's an accepted race per
-            // contracts/components.md §"Pre-emption rules").
+        } else if !prev_enabled_track && enabled_and_track_selected && active_focus {
+            // Intent just flipped on AND we're already inside an
+            // active focus session — start playback immediately.
             let _ = ambient_audio::with_driver(|drv| drv.start(track, volume));
-        } else if gate_high && prev_gate_high && prev_track != track {
-            // Track change while gate is high — cross-fade.
-            let _ = ambient_audio::with_driver(|drv| drv.cross_fade(track, volume));
-        } else if gate_high && prev_gate_high && prev_volume != volume {
-            // Volume change while playing.
-            let _ = ambient_audio::with_driver(|drv| drv.set_volume(volume));
+        } else if enabled_and_track_selected && prev_enabled_track {
+            // Intent stays on — handle engine-side transitions and
+            // settings tweaks while enabled.
+            if active_focus && !prev_active {
+                // Focus just became active (start / resume / new
+                // focus phase). The driver itself decides whether
+                // this is Idle→Playing or Paused→Playing based on
+                // its current state.
+                let _ = ambient_audio::with_driver(|drv| {
+                    match drv.state() {
+                        ambient_audio::AmbientAudioState::Paused { .. } => drv.resume(volume),
+                        ambient_audio::AmbientAudioState::Idle => drv.start(track, volume),
+                        // Already mid-arc (Playing / CrossFading /
+                        // FadingOut) — no entry transition needed;
+                        // the existing ramp completes on its own.
+                        _ => {}
+                    }
+                });
+            } else if !active_focus && prev_active {
+                // Focus left the active sub-state (pause /
+                // auto-pause / break / overtime). Pause the
+                // resident element rather than tearing it down.
+                let _ = ambient_audio::with_driver(ambient_audio::AmbientAudio::pause);
+            } else if active_focus && prev_active && prev_track != track {
+                // Track changed mid-focus — cross-fade.
+                let _ = ambient_audio::with_driver(|drv| drv.cross_fade(track, volume));
+            } else if active_focus && prev_active && prev_volume != volume {
+                // Volume slider moved while playing.
+                let _ = ambient_audio::with_driver(|drv| drv.set_volume(volume));
+            }
         }
 
-        (gate_high, track, volume)
-    });
-
-    // Feature 004: ambient-sound pause/resume sub-gate Effect. Tracks
-    // the pause / smart-pause / overtime sub-state independently of
-    // the main enabled+mode gate above so a pause inside Focus
-    // transitions Playing → Paused (fade-out + .pause()) rather than
-    // tearing down the resident element. Resume re-enters Playing.
-    Effect::new(move |prev: Option<bool>| {
-        let mode_focus = engine.with(|s| matches!(s.current_mode(), TimerMode::Focus));
-        let enabled = settings.with(|s| s.notifications.ambient_sound_enabled);
-        let track = settings.with(|s| s.notifications.ambient_sound_type);
-        let volume = settings.with(|s| s.notifications.ambient_sound_volume);
-        let in_active_focus = mode_focus
-            && enabled
-            && !matches!(track, AmbientSoundType::None)
-            && engine.with(|s| s.time_remaining_secs() > 0);
-        let is_paused_now = engine.with(|s| s.is_paused() || s.is_auto_paused());
-        let pause_active = in_active_focus && is_paused_now;
-        let prev_pause = prev.unwrap_or(false);
-        if pause_active && !prev_pause {
-            let _ = ambient_audio::with_driver(ambient_audio::AmbientAudio::pause);
-        } else if !pause_active && prev_pause && in_active_focus {
-            let _ = ambient_audio::with_driver(|drv| drv.resume(volume));
-        }
-        pause_active
+        (enabled_and_track_selected, active_focus, track, volume)
     });
 
     // Feature 004: ramp ticker. Advances any in-flight fade ramp at

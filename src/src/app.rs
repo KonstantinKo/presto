@@ -260,13 +260,21 @@ pub fn App() -> impl IntoView {
                     let to_save = snapshot.clone();
                     handle_clone.set(None);
                     spawn_local(async move {
-                        // Errors absorbed — the bridge-unavailable
-                        // path on the dev server is expected; a real
-                        // Tauri build only fails here for filesystem
-                        // failures (which would surface in dev tools
-                        // rather than UI). The next mutation fires
-                        // another save.
-                        let _ = commands::save_settings(to_save).await;
+                        // Bridge-unavailable on the dev server is the
+                        // expected branch (the dev surface has no
+                        // Tauri runtime), and a real Tauri build only
+                        // surfaces an Err here on filesystem failure.
+                        // Either way, the user should be told their
+                        // edit didn't reach disk — flag it through the
+                        // app-level toast queue. The bridge-absent
+                        // path is filtered out so dev runs don't toast
+                        // on every keystroke.
+                        match commands::save_settings(to_save).await {
+                            Ok(()) | Err(crate::bridge::types::BridgeError::BridgeUnavailable) => {}
+                            Err(_) => {
+                                app_toast.show("Failed to save settings");
+                            }
+                        }
                     });
                 },
                 std::time::Duration::from_millis(300),
