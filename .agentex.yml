@@ -49,6 +49,13 @@ qa:
     # references under src/src/engine/. The engine is a pure Rust state
     # machine; DOM input enters via the bridge layer.
     - bash scripts/check-engine-purity.sh
+    # Hardcoded-English gate (feature 005-i18n): reject inline text
+    # literals in Leptos `view! {}` blocks under `src/src/components/`.
+    # All user-visible UI strings must route through `t!(i18n, ...)` /
+    # `t_string!(i18n, ...)` so the four-locale catalogue stays the
+    # single source of truth. See `scripts/check-no-hardcoded-strings.sh`
+    # for the exemption syntax (`// i18n-exempt`).
+    - bash scripts/check-no-hardcoded-strings.sh
     # Baseline-cap gate (T244, Principle IV): at most 2 visual-regression
     # baseline PNGs may change in a single PR. >2 escalates to a
     # constitution-amendment-or-spec-revision discussion.
