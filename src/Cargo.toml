@@ -61,6 +61,10 @@ features = [
     # Port of the JS-era `playNotificationSound` oscillator (800 Hz sine,
     # 0.5 s exponential decay) gated on `Settings.notifications.sound_notifications`.
     "AudioContext",
+    # `AudioContextState` allows reading `.state()` on the cached context.
+    # Used in `prime_audio_context` to skip `.resume()` when already running,
+    # avoiding a spurious promise allocation on every Start click.
+    "AudioContextState",
     "OscillatorType",
     "GainNode",
     "OscillatorNode",
