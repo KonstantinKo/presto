@@ -694,7 +694,15 @@ pub fn App() -> impl IntoView {
             <For
                 each=move || app_toast.messages.get()
                 key=|(id, _)| *id
-                children=move |(_, text)| view! { <div class="notification-ping" role="status">{text}</div> }
+                children=move |(_, text)| view! {
+                    <div
+                        class="notification-ping"
+                        class:focus=move || matches!(engine.with(TimerState::current_mode), TimerMode::Focus)
+                        class:break=move || matches!(engine.with(TimerState::current_mode), TimerMode::Break)
+                        class:longBreak=move || matches!(engine.with(TimerState::current_mode), TimerMode::LongBreak)
+                        role="status"
+                    >{text}</div>
+                }
             />
         </div>
 

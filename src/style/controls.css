@@ -50,50 +50,59 @@
   height: 30px;
 }
 
-/* Timer state specific control styles */
+/* Timer state specific control styles — applied via .container.{focus,break,longBreak} on #timer-view (the wrapper carries the active mode class). */
+.container.focus .control-btn,
 .controls.focus .control-btn {
   background-color: var(--focus-secondary-btn);
   color: var(--focus-timer-color);
 }
 
+.container.focus .control-btn.primary,
 .controls.focus .control-btn.primary {
   background-color: var(--focus-primary-btn);
   color: var(--focus-timer-color);
 }
 
+.container.break .control-btn,
 .controls.break .control-btn {
   background-color: var(--break-secondary-btn);
   color: var(--break-timer-color);
 }
 
+.container.break .control-btn.primary,
 .controls.break .control-btn.primary {
   background-color: var(--break-primary-btn);
   color: var(--break-timer-color);
 }
 
+.container.longBreak .control-btn,
 .controls.longBreak .control-btn {
   background-color: var(--long-break-secondary-btn);
   color: var(--long-break-timer-color);
 }
 
+.container.longBreak .control-btn.primary,
 .controls.longBreak .control-btn.primary {
   background-color: var(--long-break-primary-btn);
   color: var(--long-break-timer-color);
 }
 
 /* Hover effects for each timer state */
+.container.focus .control-btn.primary:hover:not(:disabled),
 .controls.focus .control-btn.primary:hover:not(:disabled) {
   opacity: 0.9;
   transform: translateY(-2px);
   box-shadow: 0 6px 20px color-mix(in srgb, var(--focus-color) 30%, transparent);
 }
 
+.container.break .control-btn.primary:hover:not(:disabled),
 .controls.break .control-btn.primary:hover:not(:disabled) {
   opacity: 0.9;
   transform: translateY(-2px);
   box-shadow: 0 6px 20px color-mix(in srgb, var(--break-color) 30%, transparent);
 }
 
+.container.longBreak .control-btn.primary:hover:not(:disabled),
 .controls.longBreak .control-btn.primary:hover:not(:disabled) {
   opacity: 0.9;
   transform: translateY(-2px);

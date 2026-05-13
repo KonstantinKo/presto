@@ -1380,7 +1380,13 @@ pub fn TimerView() -> impl IntoView {
     });
 
     view! {
-        <div class="view-container" id="timer-view">
+        <div class="view-container container" id="timer-view"
+            class:focus=move || engine.with(|s| s.current_mode() == TimerMode::Focus)
+            class:break=move || engine.with(|s| s.current_mode() == TimerMode::Break)
+            class:longBreak=move || engine.with(|s| s.current_mode() == TimerMode::LongBreak)
+            class:overtime=move || is_overtime.get()
+            class:warning=move || warning_signal.get()
+        >
             // Progress dots — one dot per session in the daily total.
             // Mirrors the JS-era `pomodoro-timer.js:renderProgressDots`
             // surface. Each dot's `completed` class is gated on the
@@ -1395,8 +1401,13 @@ pub fn TimerView() -> impl IntoView {
                     (0..total)
                         .map(|i| {
                             let is_done = i < completed;
+                            let is_current = i == completed && completed < total;
                             view! {
-                                <div class="dot" class:completed=is_done></div>
+                                <div
+                                    class="dot"
+                                    class:completed=is_done
+                                    class:current=is_current
+                                ></div>
                             }
                         })
                         .collect::<Vec<_>>()

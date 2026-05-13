@@ -139,7 +139,7 @@ pub fn ThemeSettings(settings: RwSignal<Settings>, toast: SettingsToast) -> impl
             </p>
         </div>
         <div class="settings-section">
-            <h3>"Color Theme"</h3>
+            <h3 class="section-header">"Color Theme"</h3>
             <div class="setting-item">
                 <label for="theme-selector">"Theme Mode:"</label>
                 <div class="theme-selector" id="theme-selector">
@@ -180,7 +180,7 @@ pub fn ThemeSettings(settings: RwSignal<Settings>, toast: SettingsToast) -> impl
             </div>
         </div>
         <div class="settings-section">
-            <h3>"Timer Colors"</h3>
+            <h3 class="section-header">"Timer Colors"</h3>
             <div class="setting-item">
                 <label for="timer-theme-selector">"Timer Theme:"</label>
                 <div class="timer-theme-grid" id="timer-theme-grid">

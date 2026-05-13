@@ -83,7 +83,7 @@ pub fn DailyView() -> impl IntoView {
 
     view! {
         <div class="view-container view-section" id="daily-view">
-            <h1>"Daily"</h1>
+            <h1>"Daily Overview"</h1>
 
             <div class="daily-main-layout">
                 <div class="daily-left-column">

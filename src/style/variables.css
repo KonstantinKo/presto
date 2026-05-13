@@ -21,6 +21,15 @@
   --text-light: #7f8c8d;
   --warning-color: #e67e22;
 
+  /* Surface + border tokens shared across cards/tables/timelines.
+     Single source of truth: setting these flips theme automatically
+     for every component that uses var(--card-bg) / var(--shared-border)
+     instead of literal colours. */
+  --card-bg: #ffffff;
+  --card-bg-subtle: #f8f9fa;
+  --shared-border: #e5e7eb;
+  --input-border: #d1d5db;
+
   /* Smart indicator colors */
   --smart-indicator-active: #3b82f6;
   --smart-indicator-inactive: #94a3b8;
@@ -37,6 +46,12 @@
   --accent-color: #f8fafc;
   --text-light: #94a3b8;
   --warning-color: #f59e0b;
+
+  /* Dark surface + border tokens */
+  --card-bg: #1e293b;
+  --card-bg-subtle: #0f172a;
+  --shared-border: #334155;
+  --input-border: #475569;
 
   /* Smart indicator colors for dark theme */
   --smart-indicator-active: #60a5fa;
@@ -55,6 +70,12 @@
     --accent-color: #f8fafc;
     --text-light: #94a3b8;
     --warning-color: #f59e0b;
+
+    /* Auto-dark surface + border tokens */
+    --card-bg: #1e293b;
+    --card-bg-subtle: #0f172a;
+    --shared-border: #334155;
+    --input-border: #475569;
 
     /* Smart indicator colors for auto dark theme */
     --smart-indicator-active: #60a5fa;

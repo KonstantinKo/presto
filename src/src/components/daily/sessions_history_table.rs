@@ -26,7 +26,7 @@ use leptos::prelude::*;
 use leptos::task::spawn_local;
 
 use crate::bridge::commands;
-use crate::bridge::types::ManualSession;
+use crate::bridge::types::{ManualSession, SessionType};
 
 const TITLE_DISPLAY_CAP: usize = 40;
 
@@ -120,7 +120,18 @@ pub fn SessionsHistoryTable() -> impl IntoView {
         modal_start.set(session.start_time.clone());
         modal_end.set(session.end_time.clone());
         modal_duration.set(session.duration);
-        modal_title.set(session.title.unwrap_or_default());
+        let fallback = match session.session_type {
+            SessionType::Focus => "Focus",
+            SessionType::Break => "Break",
+            SessionType::LongBreak => "Long Break",
+            SessionType::Custom => "Custom",
+        };
+        modal_title.set(
+            session
+                .title
+                .filter(|t| !t.is_empty())
+                .unwrap_or_else(|| fallback.to_string()),
+        );
         session_modal_open.set(true);
     };
     let on_close_modal = move |_| session_modal_open.set(false);

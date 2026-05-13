@@ -90,7 +90,7 @@ pub fn NotificationsSettings(settings: RwSignal<Settings>, toast: SettingsToast)
             </p>
         </div>
         <div class="settings-section">
-            <h3>"Notification Types"</h3>
+            <h3 class="section-header">"Notification Types"</h3>
             <div class="setting-item">
                 <label class="checkbox-label">
                     <input

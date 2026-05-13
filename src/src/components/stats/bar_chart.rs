@@ -70,7 +70,34 @@ pub struct BarRenderSpec {
     pub value: u32,
 }
 
-const CHART_HEIGHT_PX: u32 = 200;
+/// Effective bar pixel height. The CSS shell sets `.bar-chart-grid`
+/// to 220px tall with a 22px row reserved at the bottom for x-axis
+/// labels (see `style/bar-chart.css`); the bar plot itself occupies
+/// the remaining 198px. Keep this constant in sync with that layout
+/// so a `value == max_scale` bar exactly fills the plot row.
+const CHART_HEIGHT_PX: u32 = 198;
+const Y_TICK_COUNT: u32 = 5;
+
+/// Compute Y-axis tick values for the bar chart.
+///
+/// Always returns `Y_TICK_COUNT + 1` values, top-down: `max_scale`,
+/// then four evenly-spaced midpoints (computed via rounded division
+/// so small `max_scale` values still emit six monotonically-decreasing
+/// ticks), then 0. The `BarChart` view consumes this to render the
+/// Y-axis labels alongside the matching number of horizontal
+/// gridlines positioned by `nth-child(1..=6)`.
+#[must_use]
+pub fn compute_y_ticks(max_scale: u32) -> Vec<u32> {
+    let denom = Y_TICK_COUNT;
+    let mut out = Vec::with_capacity((denom as usize) + 1);
+    for i in (0..=denom).rev() {
+        // Rounded integer division: `(max * i + denom/2) / denom`.
+        let numerator = u64::from(max_scale) * u64::from(i) + u64::from(denom / 2);
+        let tick = u32::try_from(numerator / u64::from(denom)).unwrap_or(max_scale);
+        out.push(tick);
+    }
+    out
+}
 
 /// Compute the per-bar render spec for a given props instance. Pure
 /// function — no DOM, no signals. The Leptos `BarChart` component
@@ -125,6 +152,7 @@ pub fn BarChart(
     x_axis_labels: Vec<String>,
     bar_values: Vec<u32>,
     min_bar_height_px: u32,
+    #[prop(into, optional)] title: String,
 ) -> impl IntoView {
     let props = BarChartConfig {
         max_scale,
@@ -134,23 +162,64 @@ pub fn BarChart(
     };
     let total: u32 = props.bar_values.iter().copied().sum();
     let spec = compute_render_spec(&props);
+    let header_title = if title.is_empty() {
+        "Focus Time Distribution".to_string()
+    } else {
+        title
+    };
+    let total_hours = total / 60;
+    let total_minutes = total % 60;
+    let total_text = if total_hours == 0 {
+        format!("{total_minutes}m")
+    } else {
+        format!("{total_hours}h {total_minutes}m")
+    };
+
+    let y_ticks = compute_y_ticks(props.max_scale);
 
     view! {
         <div class="bar-chart-card">
-            <div class="bar-chart-container">
-                {spec.into_iter().map(|bar| {
-                    let style = format!("height: {}px", bar.height_px);
-                    let title_text = format!("{}: {} min", bar.label, bar.value);
-                    view! {
-                        <div class="bar-column">
-                            <div class="bar" style=style title=title_text></div>
-                            <span class="bar-label">{bar.label}</span>
-                        </div>
-                    }
-                }).collect_view()}
+            <div class="distribution-header">
+                <h3 class="section-header">{header_title}</h3>
+                <div class="total-focus-time">
+                    <span class="label">"Total focus time:"</span>
+                    <span class="value">{total_text}</span>
+                </div>
             </div>
-            <div class="bar-chart-footer">
-                <span class="bar-chart-total">{format!("Total: {total} min")}</span>
+            <div class="bar-chart-plot">
+                <div class="bar-chart-y-axis">
+                    {y_ticks.iter().map(|v| view! {
+                        <span class="bar-chart-y-tick">{v.to_string()}</span>
+                    }).collect_view()}
+                </div>
+                <div class="bar-chart-grid">
+                    {(0..y_ticks.len()).map(|_| view! {
+                        <div class="bar-chart-gridline"></div>
+                    }).collect_view()}
+                    <div class="bar-chart-container">
+                        {spec.into_iter().map(|bar| {
+                            let style = format!("height: {}px", bar.height_px);
+                            let title_text = format!("{}: {} min", bar.label, bar.value);
+                            let bar_class = if bar.value == 0 { "bar bar-empty" } else { "bar" };
+                            view! {
+                                <div class="bar-column">
+                                    <div class=bar_class style=style title=title_text></div>
+                                    <span class="bar-label">{bar.label}</span>
+                                </div>
+                            }
+                        }).collect_view()}
+                    </div>
+                </div>
+            </div>
+            <div class="distribution-legend">
+                <div class="legend-item">
+                    <span class="legend-dot focus"></span>
+                    <span>"Focus"</span>
+                </div>
+                <div class="legend-item">
+                    <span class="legend-dot break"></span>
+                    <span>"Break"</span>
+                </div>
             </div>
         </div>
     }
@@ -255,7 +324,7 @@ mod tests {
     }
 
     /// SC-004: max-scale value renders at the chart's full pixel
-    /// height (`CHART_HEIGHT_PX` constant in this module = 200 px).
+    /// height (`CHART_HEIGHT_PX` constant in this module = 198 px).
     #[test]
     fn max_value_renders_at_full_height() {
         let labels: Vec<String> = vec!["Mon".to_string()];
@@ -268,8 +337,34 @@ mod tests {
         };
         let spec = compute_render_spec(&props);
         assert_eq!(
-            spec[0].height_px, 200,
+            spec[0].height_px, 198,
             "value == max_scale should render at full chart height"
         );
+    }
+
+    #[test]
+    fn y_ticks_emit_six_evenly_spaced_values_for_daily_60() {
+        let ticks = super::compute_y_ticks(60);
+        assert_eq!(ticks, vec![60, 48, 36, 24, 12, 0]);
+    }
+
+    #[test]
+    fn y_ticks_emit_six_evenly_spaced_values_for_weekly_20() {
+        let ticks = super::compute_y_ticks(20);
+        assert_eq!(ticks, vec![20, 16, 12, 8, 4, 0]);
+    }
+
+    #[test]
+    fn y_ticks_handles_small_max_scale_still_returns_six_values() {
+        let ticks = super::compute_y_ticks(3);
+        assert_eq!(ticks.len(), 6, "must emit one tick per gridline");
+        assert_eq!(ticks.first(), Some(&3));
+        assert_eq!(ticks.last(), Some(&0));
+    }
+
+    #[test]
+    fn y_ticks_zero_returns_six_zeros() {
+        let ticks = super::compute_y_ticks(0);
+        assert_eq!(ticks, vec![0, 0, 0, 0, 0, 0]);
     }
 }
