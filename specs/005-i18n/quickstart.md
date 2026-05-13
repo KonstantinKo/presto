@@ -249,6 +249,24 @@ time and emits a diagnostic. Adding a bespoke
 with its own bug surface (path globs, JSON parsing, key-set extraction).
 The existing CI clippy gate is sufficient — see `research.md` Decision 3.
 
+### Gate verification result (Phase 0 / T003)
+
+Verified on the `005-i18n` branch with `leptos_i18n = "=0.5.11"`: adding
+`{ "probe": "probe" }` to `en.json` / `de.json` / `it.json` while leaving
+`tr.json` as `{}` caused `cargo clippy --workspace --all-targets --frozen
+-- -D warnings` to fail with:
+
+```text
+error: use of deprecated function `i18n::i18n::warnings::w0`:
+       Missing key "probe" in locale "tr"
+ --> src/src/i18n.rs:1:1
+  | leptos_i18n::load_locales!();
+  | = note: `-D deprecated` implied by `-D warnings`
+```
+
+The proc-macro path is **live**; no fallback `scripts/check-translation-
+completeness.sh` is required. The clippy gate is the missing-key gate.
+
 ## How to switch locale in the running app
 
 ### Via the Settings → General dropdown (the canonical user path)
