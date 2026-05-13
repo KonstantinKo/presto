@@ -362,7 +362,7 @@
   align-items: center;
   gap: 4px;
   padding: 0.4rem 0.55rem;
-  background: var(--card-bg);
+  background: transparent;
   color: var(--text-color);
   border: 1px solid var(--sidebar-item-border);
   border-radius: 0.5rem;
@@ -382,12 +382,12 @@
 
 [data-theme="dark"] .selected-icon-btn {
   color: #e2e8f0;
-  background: var(--card-bg);
+  background: transparent;
 }
 @media (prefers-color-scheme: dark) {
   [data-theme="auto"] .selected-icon-btn {
     color: #e2e8f0;
-    background: var(--card-bg);
+    background: transparent;
   }
 }
 
@@ -484,7 +484,7 @@
   transition: all 0.2s ease;
   font-size: 16px;
   color: var(--text-color);
-  background-color: var(--card-bg);
+  background-color: transparent;
 }
 
 .icon-option i,
@@ -513,14 +513,14 @@
 [data-theme="dark"] .icon-option,
 [data-theme="dark"] .emoji-option {
   color: #e2e8f0;
-  background-color: var(--card-bg);
+  background-color: transparent;
 }
 
 @media (prefers-color-scheme: dark) {
   [data-theme="auto"] .icon-option,
   [data-theme="auto"] .emoji-option {
     color: #e2e8f0;
-    background-color: var(--card-bg);
+    background-color: transparent;
   }
 }
 
