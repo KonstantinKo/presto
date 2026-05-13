@@ -52,9 +52,17 @@ the three RED-first tests).
 ### `Default` impl
 
 Returns `Locale::En` via `#[default]` on the variant — derived
-automatically by `#[derive(Default)]`. This is the default value
-used by `#[serde(default)]` on the `locale` field of
-`AppearanceSettings`.
+automatically by `#[derive(Default)]`. This is the terminal fallback
+used by the resolver, NOT the default value for the `locale` field of
+`AppearanceSettings`. That field is declared as `locale: Option<Locale>`,
+so `#[serde(default)]` produces `None` (no explicit locale choice) — not
+`Locale::En`. `None` and `Some(Locale::En)` are intentionally distinct:
+`None` means "user has never chosen" (resolver runs OS detection), while
+`Some(Locale::En)` means "user explicitly chose English" (OS detection
+bypassed). Aligns with the `Default` impl on `AppearanceSettings` and the
+legacy fixture round-trip asserted by
+`presto_ipc::settings::tests::locale_legacy_field_defaults_to_none`
+(see `crates/presto-ipc/src/settings.rs`).
 
 ### Out-of-set wire value behaviour
 

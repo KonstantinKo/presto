@@ -326,7 +326,7 @@ commit (see `plan.md` Phase 0):
 cargo test --workspace --frozen \
     -p presto-ipc \
     -- \
-    locale_legacy_field_defaults_en \
+    locale_legacy_field_defaults_none \
     locale_round_trip \
     locale_serialises_lowercase
 ```
@@ -481,12 +481,13 @@ whose OS locale is non-English. Easiest path: rename your local
 `settings.json` to `settings.json.bak`, set `LANG=de_DE.UTF-8` in
 the shell, and launch the app. The cold-start path should:
 
-1. Read `settings.appearance.locale` → falls back to `Locale::En`
-   (the file doesn't exist; `Settings::default()` returns).
-2. The library's `<I18nContextProvider initial_locale=None>` path
-   triggers OS detection via `leptos-use::use_locales` →
+1. Read `settings.appearance.locale` → returns `None`
+   (the file doesn't exist; `Settings::default()` / `AppearanceSettings::default()`
+   returns `locale: None`).
+2. `<I18nContextProvider>` (leptos_i18n v0.5.11) initialises and triggers
+   OS/locale detection internally via `leptos-use::use_locales` →
    `navigator.languages` returns the platform-mapped value (e.g.
-   `["de-DE", "de", "en-US"]`).
+   `["de-DE", "de", "en-US"]`). There is no public `initial_locale` prop.
 3. The first matching supported prefix wins → `Locale::De`.
 4. The UI renders in German on first paint.
 5. Picking a different locale from the dropdown writes the picked
