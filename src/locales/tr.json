@@ -223,7 +223,7 @@
     "new_placeholder": "Yeni etiket...",
     "new_aria_label": "Yeni etiket adı",
     "delete_aria": "{{ name }} etiketini sil",
-    "tags_plural": "Etiket"
+    "tags_plural": "Etiketler"
   },
   "sidebar": {
     "timer_tooltip": "Zamanlayıcı",
@@ -236,7 +236,7 @@
     "add_button": "Ekle",
     "input_placeholder": "Görev ekle...",
     "input_aria": "Yeni görev",
-    "delete_aria": "Görevi sil"
+    "delete_aria": "{{ name }} görevini sil"
   },
   "daily": {
     "header": "Günlük Genel Bakış",
@@ -368,6 +368,7 @@
     "tag_usage_title_weekly": "Bu haftaki etiket kullanımı",
     "tag_usage_title_monthly": "Bu ayki etiket kullanımı",
     "tag_usage_title_yearly": "Bu yılki etiket kullanımı",
-    "tag_usage_empty": "Bu dönemde etiketli oturum yok"
+    "tag_usage_empty": "Bu dönemde etiketli oturum yok",
+    "minutes_unit": "dk"
   }
 }

@@ -124,16 +124,16 @@ pub fn SessionsHistoryTable() -> impl IntoView {
         modal_end.set(session.end_time.clone());
         modal_duration.set(session.duration);
         let fallback = match session.session_type {
-            SessionType::Focus => "Focus",
-            SessionType::Break => "Break",
-            SessionType::LongBreak => "Long Break",
-            SessionType::Custom => "Custom",
+            SessionType::Focus => t_string!(i18n, timer.mode_focus).to_string(),
+            SessionType::Break => t_string!(i18n, timer.mode_break).to_string(),
+            SessionType::LongBreak => t_string!(i18n, timer.mode_long_break).to_string(),
+            SessionType::Custom => t_string!(i18n, daily.session_type_custom).to_string(),
         };
         modal_title.set(
             session
                 .title
                 .filter(|t| !t.trim().is_empty())
-                .unwrap_or_else(|| fallback.to_string()),
+                .unwrap_or(fallback),
         );
         session_modal_open.set(true);
     };
@@ -187,7 +187,7 @@ pub fn SessionsHistoryTable() -> impl IntoView {
                             children=move |row| {
                                 let session_for_modal = row.clone();
                                 let time_range = format!("{} – {}", row.start_time, row.end_time);
-                                let duration_text = format!("{} min", row.duration);
+                                let duration_text = format!("{} {}", row.duration, t_string!(i18n, stats.minutes_unit));
                                 let title_cell = title_cell_view(
                                     row.title.as_deref(),
                                     row.tags.as_deref(),

@@ -203,7 +203,7 @@ pub fn BarChart(
                     <div class="bar-chart-container">
                         {spec.into_iter().map(|bar| {
                             let style = format!("height: {}px", bar.height_px);
-                            let title_text = format!("{}: {} min", bar.label, bar.value);
+                            let title_text = format!("{}: {} {}", bar.label, bar.value, t_string!(i18n, stats.minutes_unit));
                             let bar_class = if bar.value == 0 { "bar bar-empty" } else { "bar" };
                             view! {
                                 <div class="bar-column">

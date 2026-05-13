@@ -462,7 +462,7 @@ on a desktop and walk:
    strings render in German.
 5. Navigate to Daily. Confirm `Daily Overview` → `Tagesübersicht` and
    the `Today's Sessions` / `No sessions completed` strings render in
-   German. The `chrono`-formatted date strings (e.g. `Mon, May 13`)
+   German. The `chrono`-formatted date strings (e.g. `Wed, May 13`)
    stay in English (Spec Clarifications 2026-05-13 / FR-025 / A8).
 6. Open the tag picker. Confirm the `New tag…` placeholder and
    `Choose tag` header render in German.

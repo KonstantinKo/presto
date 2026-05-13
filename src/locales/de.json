@@ -50,7 +50,7 @@
       "metronome_label": "Tickgeräusch während des Fokus aktivieren",
       "metronome_help": "Spielt während einer Fokus-Sitzung jede Sekunde ein leises Ticken — synchron zum Countdown.",
       "ambient_label": "Hintergrund-Klangkulisse aktivieren",
-      "ambient_help": "Spielt einen gewählten Ambiente-Klang in Schleife, während eine Fokus-Sitzung läuft. Fade-In beim Fortsetzen, Fade-Out bei Pause / Mola / Überzeit.",
+      "ambient_help": "Spielt einen gewählten Ambiente-Klang in Schleife, während eine Fokus-Sitzung läuft. Fade-In beim Fortsetzen, Fade-Out bei Pause / Kurzpause / Überzeit.",
       "ambient_sound_label": "Ambiente-Klang",
       "ambient_volume_label": "Lautstärke",
       "ambient_track_none": "Keiner",
@@ -236,7 +236,7 @@
     "add_button": "Hinzufügen",
     "input_placeholder": "Aufgabe hinzufügen...",
     "input_aria": "Neue Aufgabe",
-    "delete_aria": "Aufgabe löschen"
+    "delete_aria": "{{ name }} löschen"
   },
   "daily": {
     "header": "Tagesübersicht",
@@ -368,6 +368,7 @@
     "tag_usage_title_weekly": "Tag-Nutzung diese Woche",
     "tag_usage_title_monthly": "Tag-Nutzung diesen Monat",
     "tag_usage_title_yearly": "Tag-Nutzung dieses Jahr",
-    "tag_usage_empty": "Keine getaggten Sitzungen in diesem Zeitraum"
+    "tag_usage_empty": "Keine getaggten Sitzungen in diesem Zeitraum",
+    "minutes_unit": "Min."
   }
 }

@@ -236,7 +236,7 @@
     "add_button": "Add",
     "input_placeholder": "Add a task...",
     "input_aria": "New task",
-    "delete_aria": "Delete task"
+    "delete_aria": "Delete {{ name }}"
   },
   "daily": {
     "header": "Daily Overview",
@@ -266,18 +266,18 @@
   "calendar": {
     "prev_month_aria": "Previous month",
     "next_month_aria": "Next month",
-    "month_jan": "January",
-    "month_feb": "February",
-    "month_mar": "March",
-    "month_apr": "April",
+    "month_jan": "Jan",
+    "month_feb": "Feb",
+    "month_mar": "Mar",
+    "month_apr": "Apr",
     "month_may": "May",
-    "month_jun": "June",
-    "month_jul": "July",
-    "month_aug": "August",
-    "month_sep": "September",
-    "month_oct": "October",
-    "month_nov": "November",
-    "month_dec": "December",
+    "month_jun": "Jun",
+    "month_jul": "Jul",
+    "month_aug": "Aug",
+    "month_sep": "Sep",
+    "month_oct": "Oct",
+    "month_nov": "Nov",
+    "month_dec": "Dec",
     "month_january": "January",
     "month_february": "February",
     "month_march": "March",
@@ -368,6 +368,7 @@
     "tag_usage_title_weekly": "Tag Usage This Week",
     "tag_usage_title_monthly": "Tag Usage This Month",
     "tag_usage_title_yearly": "Tag Usage This Year",
-    "tag_usage_empty": "No tagged sessions in this period"
+    "tag_usage_empty": "No tagged sessions in this period",
+    "minutes_unit": "min"
   }
 }

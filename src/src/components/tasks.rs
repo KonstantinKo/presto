@@ -137,6 +137,7 @@ pub fn TasksView() -> impl IntoView {
                     children=move |task| {
                         let task_id = task.id;
                         let completed = task.completed;
+                        let delete_label = task.text.clone();
                         let label = task.text.clone();
                         let display = task.text;
                         view! {
@@ -155,7 +156,7 @@ pub fn TasksView() -> impl IntoView {
                                 <span class="task-text">{display}</span>
                                 <button
                                     class="task-delete-btn"
-                                    aria-label=move || t_string!(i18n, tasks.delete_aria).to_string()
+                                    aria-label=move || t_string!(i18n, tasks.delete_aria, name = delete_label.as_str())
                                     on:click=move |_| on_delete(task_id)
                                 >"×"</button>
                             </li>

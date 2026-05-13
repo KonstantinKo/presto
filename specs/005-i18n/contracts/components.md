@@ -59,10 +59,13 @@ used by `#[serde(default)]` on the `locale` field of
 ### Out-of-set wire value behaviour
 
 A hand-edited / corrupted `settings.json` containing
-`appearance.locale = "fr"` (or `null`, `""`, `42`, `"english"`) fails
-serde's strict enum deserialisation. The `#[serde(default)]`
-attribute on the field catches the failure and substitutes
-`Locale::En`. Asserted by
+`appearance.locale = "fr"` (or `null`, `""`, `42`, `"english"`) is
+handled by the custom `deserialize_locale_lenient` function (not
+`#[serde(default)]` alone). It attempts lenient parsing via
+`serde_json::from_value::<Locale>(v).ok()` and yields `None` for
+unsupported wire values (e.g. `"fr"`). The effective fallback
+observed by the system is `None` (no explicit locale — the resolver
+runs OS detection or falls back to English), not `Locale::En`. Asserted by
 `presto_ipc::settings::tests::locale_unsupported_wire_falls_back_to_en`
 (per Spec Story 2 AC 4 / FR-004).
 
@@ -278,29 +281,30 @@ the persistence path (via the existing debounced settings-autosave
 Effect at `src/src/app.rs:215+`) the single source of truth for
 on-disk state.
 
-### OS-detection helper: `<I18nContextProvider initial_locale=...>`
+### OS-detection helper: `<I18nContextProvider>` + `compute_initial_library_locale`
 
-`leptos_i18n` integrates with `leptos-use::use_locales` to read the
-browser's preferred-language list (`navigator.languages`) at boot.
-The provider's `initial_locale` prop accepts an `Option<Locale>`:
+`leptos_i18n` v0.5.11 does **not** expose an `initial_locale` prop on
+`I18nContextProvider`. Instead, the provider runs the OS-detection /
+resolution chain automatically (via `leptos-use::use_locales` →
+`navigator.languages` → fallback to the `[package.metadata.leptos-i18n]`
+default) when it mounts.
 
-- `None` → run the library's full resolution chain (OS detection
-  via `navigator.languages`, falling back to the default locale
-  declared in `[package.metadata.leptos-i18n]`).
-- `Some(locale)` → use the provided value verbatim, skipping
-  detection.
-
-The presto wiring:
+The presto wiring sets the persisted locale from inside a child
+component that lives inside the provider tree:
 
 ```rust
-// In src/src/app.rs boot path:
-let initial = i18n::compute_initial_library_locale(&loaded_settings);
-view! {
-    <I18nContextProvider initial_locale=initial>
-        // ... app tree
-    </I18nContextProvider>
-}
+// In src/src/app.rs:
+<I18nContextProvider enable_cookie=false>
+    // ... child component reads persisted settings and calls
+    // i18n.set_locale() if settings.appearance.locale is Some(_)
+</I18nContextProvider>
 ```
+
+`compute_initial_library_locale` is a pure helper in `src/src/i18n.rs`
+that maps `Option<presto_ipc::Locale>` → `Option<i18n::Locale>`.
+It is called inside the provider tree (not passed as a prop) to perform
+the locale set after mount. Callers should **not** pass its result to
+`I18nContextProvider` — the prop does not exist in v0.5.11.
 
 Where `compute_initial_library_locale` lives in `src/src/i18n.rs`:
 

@@ -236,7 +236,7 @@
     "add_button": "Aggiungi",
     "input_placeholder": "Aggiungi un'attività...",
     "input_aria": "Nuova attività",
-    "delete_aria": "Elimina attività"
+    "delete_aria": "Elimina {{ name }}"
   },
   "daily": {
     "header": "Panoramica giornaliera",
@@ -368,6 +368,7 @@
     "tag_usage_title_weekly": "Utilizzo tag questa settimana",
     "tag_usage_title_monthly": "Utilizzo tag questo mese",
     "tag_usage_title_yearly": "Utilizzo tag quest'anno",
-    "tag_usage_empty": "Nessuna sessione taggata in questo periodo"
+    "tag_usage_empty": "Nessuna sessione taggata in questo periodo",
+    "minutes_unit": "min"
   }
 }
