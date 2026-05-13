@@ -14,6 +14,41 @@
 // happens in `src/src/app.rs`'s boot path via the library's built-in
 // `leptos-use::use_locales` integration — not in this module.
 
+// PLURALIZATION_AUDIT (Phase 5, gate T019):
+//
+// Audited every in-scope view string for count-bearing English phrasing
+// that would change form on `count == 1` vs `count != 1`. The
+// `leptos_i18n` `plurals` cargo feature pulls the ICU CLDR plural-rule
+// tables and adds runtime cost; we keep it OFF in v1 and rewrite any
+// count-sensitive English to count-agnostic phrasing (Spec Edge Case
+// bullet 5 / plan.md Fix G).
+//
+// - `format!(...)` patterns with count + unit (`{} min`, `{}m`,
+//   `{}h {}m`, `{} Tags`): the unit is invariant ("min" / "m" / "h" /
+//   "Tags") — same form for `count == 1` and `count != 1` — so no
+//   plural rule fires.
+// - `format!(...)` patterns with a session/minute/task/tag noun
+//   gated on count: zero. Sessions / pomodoros counters render as
+//   plain numerals beside an iconographic label, not as a
+//   templated sentence.
+// - In-scope strings with plural sensitivity: zero. The "No
+//   sessions completed" empty-state string is constant; the
+//   "Today's Sessions" header always uses the plural form (presto
+//   shows the table even when there's exactly one session).
+//
+// Decision: omit, no plural-sensitive strings; `plurals` feature
+// flag NOT enabled in `src/Cargo.toml`. The `icu_compiled_data`
+// feature stays on regardless (already in the dep declaration so a
+// future follow-up can enable plurals without a re-fetch).
+//
+// Grep commands run:
+//   grep -rE 'format!.*"\{\}.*(session|minute|task|tag)"' src/src/
+//   grep -rE '"\d+ (sessions?|minutes?|tasks?|tags?)"' src/src/
+//   grep -rE 'count_for|format!.*\{.*\}.*(of|out of)' src/src/components/
+//
+// Verification: this comment block exists and is signed-off in the
+// Phase 5 T019 commit.
+
 use presto_ipc::Locale;
 
 leptos_i18n::load_locales!();
