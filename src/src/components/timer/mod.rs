@@ -61,9 +61,11 @@ use self::tray::{build_tray_text, dispatch_tray_update};
 use super::browser_clock::BrowserClock;
 use crate::app::AppToast;
 use crate::bridge::commands;
+use crate::bridge::types::AmbientSoundType;
 use crate::bridge::types::SessionType;
 use crate::bridge::types::TimerMode;
 use crate::bridge::types::{ManualSession, Session, Settings, Tag};
+use crate::components::ambient_audio;
 use crate::engine::clock::Clock;
 use crate::engine::durations::Durations;
 use crate::engine::timer::{TimerEvent, TimerState};
@@ -1376,6 +1378,93 @@ pub fn TimerView() -> impl IntoView {
         // failure means the JS bridge is missing (host tests / SSR
         // — neither applies to the wasm target this component
         // mounts on), so swallow.
+        let _ = handle;
+    });
+
+    // Feature 004: ambient-sound gate Effect. Mirrors the metronome
+    // gate at :1358-1368 structurally, but the gate transitions are
+    // dispatched into the `ambient_audio` driver rather than firing a
+    // single tone. The metronome remains a per-tick play_metronome_tick
+    // call inside the 1 Hz Effect above and is NOT modified here
+    // (FR-006 / Principle I — engine purity).
+    //
+    // The driver is a process-wide singleton (`with_driver`) so the
+    // resident `HtmlAudioElement` pair survives across breaks /
+    // long-breaks / auto-starts within the same app session, holding
+    // the WKWebView gesture lease for continuous-sessions auto-resume
+    // (research.md Decision 1).
+    Effect::new(move |prev_gate: Option<(bool, AmbientSoundType, u32)>| {
+        let enabled = settings.with(|s| s.notifications.ambient_sound_enabled);
+        let track = settings.with(|s| s.notifications.ambient_sound_type);
+        let volume = settings.with(|s| s.notifications.ambient_sound_volume);
+        let mode_focus = engine.with(|s| matches!(s.current_mode(), TimerMode::Focus));
+        let running_active = engine.with(|s| {
+            s.is_running() && !s.is_paused() && !s.is_auto_paused() && s.time_remaining_secs() > 0
+        });
+        let gate_high =
+            enabled && !matches!(track, AmbientSoundType::None) && mode_focus && running_active;
+
+        let (prev_gate_high, prev_track, prev_volume) =
+            prev_gate.unwrap_or((false, AmbientSoundType::None, volume));
+
+        if !gate_high && prev_gate_high {
+            // Falling edge — fade out.
+            let _ = ambient_audio::with_driver(ambient_audio::AmbientAudio::fade_out);
+        } else if gate_high && !prev_gate_high {
+            // Rising edge — start. The gate just rose, the resident
+            // state should be Idle (or FadingOut from a prior cycle,
+            // in which case the driver's `start` is a no-op until
+            // FadingOut completes — that's an accepted race per
+            // contracts/components.md §"Pre-emption rules").
+            let _ = ambient_audio::with_driver(|drv| drv.start(track, volume));
+        } else if gate_high && prev_gate_high && prev_track != track {
+            // Track change while gate is high — cross-fade.
+            let _ = ambient_audio::with_driver(|drv| drv.cross_fade(track, volume));
+        } else if gate_high && prev_gate_high && prev_volume != volume {
+            // Volume change while playing.
+            let _ = ambient_audio::with_driver(|drv| drv.set_volume(volume));
+        }
+
+        (gate_high, track, volume)
+    });
+
+    // Feature 004: ambient-sound pause/resume sub-gate Effect. Tracks
+    // the pause / smart-pause / overtime sub-state independently of
+    // the main enabled+mode gate above so a pause inside Focus
+    // transitions Playing → Paused (fade-out + .pause()) rather than
+    // tearing down the resident element. Resume re-enters Playing.
+    Effect::new(move |prev: Option<bool>| {
+        let mode_focus = engine.with(|s| matches!(s.current_mode(), TimerMode::Focus));
+        let enabled = settings.with(|s| s.notifications.ambient_sound_enabled);
+        let track = settings.with(|s| s.notifications.ambient_sound_type);
+        let volume = settings.with(|s| s.notifications.ambient_sound_volume);
+        let in_active_focus = mode_focus
+            && enabled
+            && !matches!(track, AmbientSoundType::None)
+            && engine.with(|s| s.time_remaining_secs() > 0);
+        let is_paused_now = engine.with(|s| s.is_paused() || s.is_auto_paused());
+        let pause_active = in_active_focus && is_paused_now;
+        let prev_pause = prev.unwrap_or(false);
+        if pause_active && !prev_pause {
+            let _ = ambient_audio::with_driver(ambient_audio::AmbientAudio::pause);
+        } else if !pause_active && prev_pause && in_active_focus {
+            let _ = ambient_audio::with_driver(|drv| drv.resume(volume));
+        }
+        pause_active
+    });
+
+    // Feature 004: ramp ticker. Advances any in-flight fade ramp at
+    // ~16 ms (60 Hz). The driver no-ops when no ramp is active, so
+    // the cost is a single function call per tick when ambient is
+    // disabled / Idle.
+    #[cfg(target_arch = "wasm32")]
+    Effect::new(move |_: Option<()>| {
+        let handle = set_interval_with_handle(
+            move || {
+                let _ = ambient_audio::with_driver(|drv| drv.tick(16));
+            },
+            std::time::Duration::from_millis(16),
+        );
         let _ = handle;
     });
 
