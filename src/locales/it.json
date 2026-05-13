@@ -1,8 +1,37 @@
 {
   "settings": {
+    "shell_header": "Impostazioni",
+    "autosave_info": "Le impostazioni vengono salvate automaticamente",
+    "reset_defaults_button": "Ripristina predefinite",
+    "toast_saved": "Impostazioni salvate",
+    "toast_save_failed": "Impossibile salvare le impostazioni",
+    "toast_reset_defaults": "Impostazioni ripristinate ai valori predefiniti",
+    "tab_general": "Generale",
+    "tab_shortcuts": "Scorciatoie",
+    "tab_notifications": "Notifiche",
+    "tab_theme": "Tema",
+    "tab_automation": "Automazione",
+    "tab_goals": "Obiettivi",
+    "tab_advanced": "Avanzate",
+    "tab_updates": "Aggiornamenti",
     "general": {
+      "title": "Impostazioni generali",
+      "description": "Configura le durate del timer e i comportamenti di base",
       "language_label": "Lingua:",
-      "language_help": "Gli aggiornamenti del catalogo arriveranno nelle prossime versioni. Riavvio non necessario."
+      "language_help": "Gli aggiornamenti del catalogo arriveranno nelle prossime versioni. Riavvio non necessario.",
+      "timer_durations_header": "Durate del timer",
+      "focus_duration_label": "Durata del focus (minuti):",
+      "focus_duration_help": "Quanto devono durare le sessioni di focus",
+      "break_duration_label": "Pausa breve (minuti):",
+      "break_duration_help": "Durata delle pause brevi tra sessioni di focus",
+      "long_break_duration_label": "Pausa lunga (minuti):",
+      "long_break_duration_help": "Durata delle pause lunghe al completamento di un ciclo",
+      "total_sessions_label": "Sessioni giornaliere:",
+      "total_sessions_help": "Numero di sessioni di focus da completare ogni giorno",
+      "sessions_per_long_break_label": "Sessioni per pausa lunga:",
+      "sessions_per_long_break_help": "Quante sessioni di focus prima di una pausa lunga",
+      "max_session_time_label": "Durata massima sessione (minuti):",
+      "max_session_time_help": "Tempo massimo per sessione prima dell'auto-pausa (predefinito: 2 ore)"
     }
   },
   "timer": {
@@ -34,5 +63,11 @@
     "new_aria_label": "Nome del nuovo tag",
     "delete_aria": "Elimina tag {{ name }}",
     "tags_plural": "Tag"
+  },
+  "sidebar": {
+    "timer_tooltip": "Timer",
+    "statistics_tooltip": "Statistiche",
+    "daily_tooltip": "Oggi",
+    "settings_tooltip": "Impostazioni"
   }
 }

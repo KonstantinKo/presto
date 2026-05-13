@@ -1,8 +1,37 @@
 {
   "settings": {
+    "shell_header": "Ayarlar",
+    "autosave_info": "Ayarlar otomatik olarak kaydedilir",
+    "reset_defaults_button": "Varsayılanlara sıfırla",
+    "toast_saved": "Ayarlar kaydedildi",
+    "toast_save_failed": "Ayarlar kaydedilemedi",
+    "toast_reset_defaults": "Ayarlar varsayılanlara sıfırlandı",
+    "tab_general": "Genel",
+    "tab_shortcuts": "Kısayollar",
+    "tab_notifications": "Bildirimler",
+    "tab_theme": "Tema",
+    "tab_automation": "Otomasyon",
+    "tab_goals": "Hedefler",
+    "tab_advanced": "Gelişmiş",
+    "tab_updates": "Güncellemeler",
     "general": {
+      "title": "Genel Ayarlar",
+      "description": "Zamanlayıcı sürelerini ve temel davranışları yapılandırın",
       "language_label": "Dil:",
-      "language_help": "Katalog güncellemeleri ileriki sürümlerde gelecek. Yeniden başlatma gerekmiyor."
+      "language_help": "Katalog güncellemeleri ileriki sürümlerde gelecek. Yeniden başlatma gerekmiyor.",
+      "timer_durations_header": "Zamanlayıcı süreleri",
+      "focus_duration_label": "Odak süresi (dakika):",
+      "focus_duration_help": "Odak oturumları ne kadar sürmeli",
+      "break_duration_label": "Kısa mola (dakika):",
+      "break_duration_help": "Odak oturumları arasındaki kısa molaların süresi",
+      "long_break_duration_label": "Uzun mola (dakika):",
+      "long_break_duration_help": "Bir döngünün tamamlanmasının ardından uzun mola süresi",
+      "total_sessions_label": "Günlük oturum:",
+      "total_sessions_help": "Her gün tamamlanacak odak oturum sayısı",
+      "sessions_per_long_break_label": "Uzun mola başına oturum:",
+      "sessions_per_long_break_help": "Uzun moladan önce kaç odak oturumu",
+      "max_session_time_label": "En uzun oturum süresi (dakika):",
+      "max_session_time_help": "Otomatik duraklatma öncesi en uzun oturum süresi (varsayılan: 2 saat)"
     }
   },
   "timer": {
@@ -34,5 +63,11 @@
     "new_aria_label": "Yeni etiket adı",
     "delete_aria": "{{ name }} etiketini sil",
     "tags_plural": "Etiket"
+  },
+  "sidebar": {
+    "timer_tooltip": "Zamanlayıcı",
+    "statistics_tooltip": "İstatistikler",
+    "daily_tooltip": "Bugün",
+    "settings_tooltip": "Ayarlar"
   }
 }

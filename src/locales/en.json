@@ -1,8 +1,37 @@
 {
   "settings": {
+    "shell_header": "Settings",
+    "autosave_info": "Settings are saved automatically",
+    "reset_defaults_button": "Reset to Defaults",
+    "toast_saved": "Settings saved",
+    "toast_save_failed": "Failed to save settings",
+    "toast_reset_defaults": "Settings reset to defaults",
+    "tab_general": "General",
+    "tab_shortcuts": "Shortcuts",
+    "tab_notifications": "Notifications",
+    "tab_theme": "Theme",
+    "tab_automation": "Automation",
+    "tab_goals": "Goals",
+    "tab_advanced": "Advanced",
+    "tab_updates": "Updates",
     "general": {
+      "title": "General Settings",
+      "description": "Configure timer durations and basic behavior",
       "language_label": "Language:",
-      "language_help": "Catalogue updates ship in future releases. Restart not required."
+      "language_help": "Catalogue updates ship in future releases. Restart not required.",
+      "timer_durations_header": "Timer Durations",
+      "focus_duration_label": "Focus Duration (minutes):",
+      "focus_duration_help": "How long should focus sessions last",
+      "break_duration_label": "Short Break (minutes):",
+      "break_duration_help": "Duration for short breaks between focus sessions",
+      "long_break_duration_label": "Long Break (minutes):",
+      "long_break_duration_help": "Duration for long breaks after completing a cycle",
+      "total_sessions_label": "Daily Sessions:",
+      "total_sessions_help": "Number of focus sessions to complete each day",
+      "sessions_per_long_break_label": "Sessions per Long Break:",
+      "sessions_per_long_break_help": "How many focus sessions before a long break",
+      "max_session_time_label": "Max Session Time (minutes):",
+      "max_session_time_help": "Maximum time per session before auto-pause (default: 2 hours)"
     }
   },
   "timer": {
@@ -34,5 +63,11 @@
     "new_aria_label": "New tag name",
     "delete_aria": "Delete {{ name }} tag",
     "tags_plural": "Tags"
+  },
+  "sidebar": {
+    "timer_tooltip": "Timer",
+    "statistics_tooltip": "Statistics",
+    "daily_tooltip": "Daily",
+    "settings_tooltip": "Settings"
   }
 }

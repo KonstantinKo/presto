@@ -59,8 +59,10 @@
 #![allow(clippy::must_use_candidate, clippy::too_many_lines)]
 
 use leptos::prelude::*;
+use leptos_i18n::{t, t_string};
 
 use crate::bridge::types::Settings;
+use crate::i18n::i18n::use_i18n;
 use crate::managers::navigation::SettingsTab;
 
 pub mod advanced;
@@ -84,7 +86,15 @@ pub mod updates;
 #[derive(Clone, Copy)]
 pub struct SettingsToast {
     /// Latest message; `None` when no toast is currently shown.
-    pub message: RwSignal<Option<&'static str>>,
+    ///
+    /// Feature 005: widened from `&'static str` to `String` so the
+    /// localised "Settings saved" text (which is computed via the
+    /// `t_string!` macro at the call site) can flow through. The
+    /// e2e suite still filters the toast surface by the rendered
+    /// text — `RwSignal<Option<String>>` keeps the lifetime story
+    /// equivalent (the autoclear Effect drops the `String` once
+    /// the 2s timeout fires).
+    pub message: RwSignal<Option<String>>,
 }
 
 impl SettingsToast {
@@ -103,8 +113,8 @@ impl SettingsToast {
     /// `src/managers/settings-manager.js` after `saveSettings`. The
     /// auto-clear timeout fires inside the shell's `Effect::new` so
     /// the lifecycle stays tied to the settings view.
-    pub fn show(self, text: &'static str) {
-        self.message.set(Some(text));
+    pub fn show(self, text: impl Into<String>) {
+        self.message.set(Some(text.into()));
     }
 }
 
@@ -152,6 +162,7 @@ pub fn SettingsView(
     /// embeddings can pass `|_| {}` as a no-op.
     on_select_tab: Callback<SettingsTab>,
 ) -> impl IntoView {
+    let i18n = use_i18n();
     let toast = SettingsToast::new();
 
     // Auto-clear the toast after 2s — matches the JS-era
@@ -188,15 +199,28 @@ pub fn SettingsView(
                 // `selectSettingsCategory` fixture's locator at
                 // `screens.js:71`.
                 <div class="settings-sidebar sidebar-base">
-                    <h2>"Settings"</h2>
+                    <h2>{t!(i18n, settings.shell_header)}</h2>
                     <nav class="settings-nav sidebar-nav">
                         {settings_nav_items()
                             .into_iter()
                             .map(|item| {
                                 let target = item.target;
-                                let label = item.label;
                                 let icon = item.icon;
                                 let on_click = move |_| on_select_tab.run(target);
+                                // Feature 005: localised tab label per
+                                // variant. Each `match` arm is a static
+                                // catalogue key so the proc-macro can
+                                // compile-time-check the lookup.
+                                let label_view = move || match target {
+                                    SettingsTab::General => t!(i18n, settings.tab_general).into_any(),
+                                    SettingsTab::Shortcuts => t!(i18n, settings.tab_shortcuts).into_any(),
+                                    SettingsTab::Notifications => t!(i18n, settings.tab_notifications).into_any(),
+                                    SettingsTab::Theme => t!(i18n, settings.tab_theme).into_any(),
+                                    SettingsTab::Automation => t!(i18n, settings.tab_automation).into_any(),
+                                    SettingsTab::Goals => t!(i18n, settings.tab_goals).into_any(),
+                                    SettingsTab::Advanced => t!(i18n, settings.tab_advanced).into_any(),
+                                    SettingsTab::Updates => t!(i18n, settings.tab_updates).into_any(),
+                                };
                                 view! {
                                     <button
                                         class="settings-nav-item nav-item-base"
@@ -205,7 +229,7 @@ pub fn SettingsView(
                                         on:click=on_click
                                     >
                                         <i class=icon></i>
-                                        <span>{label}</span>
+                                        <span>{label_view}</span>
                                     </button>
                                 }
                             })
@@ -280,15 +304,15 @@ pub fn SettingsView(
                     // matching the JS-era DOM at `index.html:1208`.
                     <div class="settings-actions setting-item">
                         <div class="auto-save-info">
-                            <span class="auto-save-text">"✓ Settings are saved automatically"</span>
+                            <span class="auto-save-text">"✓ " {t!(i18n, settings.autosave_info)}</span>
                         </div>
                         <button
                             class="btn-secondary"
                             on:click=move |_| {
                                 settings.set(Settings::default());
-                                toast.show("Settings reset to defaults");
+                                toast.show(t_string!(i18n, settings.toast_reset_defaults).to_string());
                             }
-                        >"Reset to Defaults"</button>
+                        >{t!(i18n, settings.reset_defaults_button)}</button>
                     </div>
                 </div>
             </div>
@@ -323,6 +347,12 @@ struct SettingsNavItem {
     /// snake-case form the `screens.js` fixture sends.
     category: &'static str,
     /// Display label.
+    ///
+    /// Feature 005: kept on the struct as the canonical English
+    /// source-of-truth (matched against by the `settings_nav_items_*`
+    /// tests below); rendered output comes from `t!(i18n, settings.tab_*)`
+    /// at the view call site instead.
+    #[allow(dead_code)]
     label: &'static str,
     /// Remixicon class (`ri-*-line` etc.).
     icon: &'static str,

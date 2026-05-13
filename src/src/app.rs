@@ -48,6 +48,7 @@ use crate::engine::activity_signal::ActivitySignal;
 use crate::engine::durations::Durations;
 use crate::engine::timer::TimerState;
 use crate::i18n::i18n::{use_i18n, I18nContextProvider};
+use leptos_i18n::t_string;
 use crate::managers::navigation::{NavView, NavigationManager, SettingsTab};
 use crate::managers::update::{UpdateInfo, UpdateManager};
 use crate::theme::loader;
@@ -179,10 +180,12 @@ pub fn App() -> impl IntoView {
         })
     });
 
-    let on_timer_nav = move |_| nav.update(|n| n.transition_to(NavView::Timer));
-    let on_calendar_nav = move |_| nav.update(|n| n.transition_to(NavView::Calendar));
-    let on_daily_nav = move |_| nav.update(|n| n.transition_to(NavView::Daily));
-    let on_settings_nav = move |_| nav.update(NavigationManager::enter_settings);
+    // Feature 005: sidebar nav handlers moved inline at the
+    // `<Sidebar/>` call site below, since the Sidebar component now
+    // takes `Callback<()>` props (the conversion from a sidebar
+    // `MouseEvent` to `()` happens inside the Sidebar body so the
+    // i18n-aware tooltips can render from there). See the call site
+    // for the four nav transitions.
 
     let on_select_settings_tab = Callback::new(move |tab: SettingsTab| {
         nav.update(|n| n.select_settings_tab(tab));
@@ -593,69 +596,17 @@ pub fn App() -> impl IntoView {
         // with a saturated red background, which is gated on this
         // theme class. The class is driven by `engine.current_mode()`
         // so break/long-break states also flip the highlight color.
-        <nav
-            class="sidebar"
-            class:focus=move || matches!(engine.with(TimerState::current_mode), TimerMode::Focus)
-            class:break=move || matches!(engine.with(TimerState::current_mode), TimerMode::Break)
-            class:longBreak=move || matches!(engine.with(TimerState::current_mode), TimerMode::LongBreak)
-        >
-            <div class="sidebar-icons">
-                <button
-                    class="sidebar-icon"
-                    class:active=move || is_timer.get()
-                    id="timer-nav"
-                    data-view="timer"
-                    title="Timer"
-                    attr:aria-current=move || if is_timer.get() { "page" } else { "" }
-                    on:click=on_timer_nav
-                >
-                    <i class="ri-timer-line"></i>
-                </button>
-                <button
-                    class="sidebar-icon"
-                    class:active=move || is_calendar.get()
-                    id="calendar-nav"
-                    data-view="calendar"
-                    title="Statistics"
-                    attr:aria-current=move || if is_calendar.get() { "page" } else { "" }
-                    on:click=on_calendar_nav
-                >
-                    // Phosphor `ph-chart-line` matches the upstream
-                    // ramazanberkozbek/presto sidebar — single trend
-                    // line, no terminal arrow. `#calendar-nav` and
-                    // `data-view="calendar"` are preserved (e2e
-                    // contract).
-                    <i class="ph ph-chart-line"></i>
-                </button>
-                <button
-                    class="sidebar-icon"
-                    class:active=move || is_daily.get()
-                    id="daily-nav"
-                    data-view="daily"
-                    title="Daily"
-                    attr:aria-current=move || if is_daily.get() { "page" } else { "" }
-                    on:click=on_daily_nav
-                >
-                    // Feature 003 Bundle B: new Daily drill-down nav
-                    // entry (FR-012). Sits between Calendar (renamed
-                    // Statistics in intent) and Settings.
-                    <i class="ph ph-calendar-check"></i>
-                </button>
-            </div>
-            <div class="sidebar-bottom">
-                <button
-                    class="sidebar-icon-large"
-                    class:active=move || is_settings.get()
-                    id="settings-nav"
-                    data-view="settings"
-                    title="Settings"
-                    attr:aria-current=move || if is_settings.get() { "page" } else { "" }
-                    on:click=on_settings_nav
-                >
-                    <i class="ph ph-gear"></i>
-                </button>
-            </div>
-        </nav>
+        <Sidebar
+            engine=engine
+            is_timer=is_timer
+            is_calendar=is_calendar
+            is_daily=is_daily
+            is_settings=is_settings
+            on_timer_nav=Callback::new(move |()| nav.update(|n| n.transition_to(NavView::Timer)))
+            on_calendar_nav=Callback::new(move |()| nav.update(|n| n.transition_to(NavView::Calendar)))
+            on_daily_nav=Callback::new(move |()| nav.update(|n| n.transition_to(NavView::Daily)))
+            on_settings_nav=Callback::new(move |()| nav.update(NavigationManager::enter_settings))
+        />
 
         <main class="main-content">
             // Each view container carries `.hidden` when inactive —
@@ -761,4 +712,82 @@ fn LocaleSync(settings: RwSignal<Settings>) -> impl IntoView {
             i18n.set_locale(library_locale);
         }
     });
+}
+
+/// Sidebar nav component. Lives inside the `<I18nContextProvider>` so
+/// `use_i18n()` resolves; its tooltip / aria-label strings come from
+/// the i18n catalogue (FR-013 sidebar surface). The DOM shape and
+/// `id` / `data-view` / `class:active` contract are preserved exactly
+/// — only the visible tooltip strings (`title=` attributes) flip on
+/// locale change.
+#[component]
+fn Sidebar(
+    engine: RwSignal<TimerState>,
+    is_timer: Signal<bool>,
+    is_calendar: Signal<bool>,
+    is_daily: Signal<bool>,
+    is_settings: Signal<bool>,
+    on_timer_nav: Callback<()>,
+    on_calendar_nav: Callback<()>,
+    on_daily_nav: Callback<()>,
+    on_settings_nav: Callback<()>,
+) -> impl IntoView {
+    let i18n = use_i18n();
+    view! {
+        <nav
+            class="sidebar"
+            class:focus=move || matches!(engine.with(TimerState::current_mode), TimerMode::Focus)
+            class:break=move || matches!(engine.with(TimerState::current_mode), TimerMode::Break)
+            class:longBreak=move || matches!(engine.with(TimerState::current_mode), TimerMode::LongBreak)
+        >
+            <div class="sidebar-icons">
+                <button
+                    class="sidebar-icon"
+                    class:active=move || is_timer.get()
+                    id="timer-nav"
+                    data-view="timer"
+                    title=move || t_string!(i18n, sidebar.timer_tooltip)
+                    attr:aria-current=move || if is_timer.get() { "page" } else { "" }
+                    on:click=move |_| on_timer_nav.run(())
+                >
+                    <i class="ri-timer-line"></i>
+                </button>
+                <button
+                    class="sidebar-icon"
+                    class:active=move || is_calendar.get()
+                    id="calendar-nav"
+                    data-view="calendar"
+                    title=move || t_string!(i18n, sidebar.statistics_tooltip)
+                    attr:aria-current=move || if is_calendar.get() { "page" } else { "" }
+                    on:click=move |_| on_calendar_nav.run(())
+                >
+                    <i class="ph ph-chart-line"></i>
+                </button>
+                <button
+                    class="sidebar-icon"
+                    class:active=move || is_daily.get()
+                    id="daily-nav"
+                    data-view="daily"
+                    title=move || t_string!(i18n, sidebar.daily_tooltip)
+                    attr:aria-current=move || if is_daily.get() { "page" } else { "" }
+                    on:click=move |_| on_daily_nav.run(())
+                >
+                    <i class="ph ph-calendar-check"></i>
+                </button>
+            </div>
+            <div class="sidebar-bottom">
+                <button
+                    class="sidebar-icon-large"
+                    class:active=move || is_settings.get()
+                    id="settings-nav"
+                    data-view="settings"
+                    title=move || t_string!(i18n, sidebar.settings_tooltip)
+                    attr:aria-current=move || if is_settings.get() { "page" } else { "" }
+                    on:click=move |_| on_settings_nav.run(())
+                >
+                    <i class="ph ph-gear"></i>
+                </button>
+            </div>
+        </nav>
+    }
 }
