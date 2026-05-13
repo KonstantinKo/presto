@@ -48,6 +48,7 @@ use std::collections::HashMap;
 
 use leptos::prelude::*;
 use leptos::task::spawn_local;
+use leptos_i18n::{t, t_string};
 use wasm_bindgen::JsCast;
 
 use self::messages::{
@@ -69,6 +70,7 @@ use crate::components::ambient_audio;
 use crate::engine::clock::Clock;
 use crate::engine::durations::Durations;
 use crate::engine::timer::{TimerEvent, TimerState};
+use crate::i18n::i18n::use_i18n;
 
 /// Icon-picker catalogue (feature 003 Bundle C: 3 remixicon entries +
 /// 9 Phosphor entries — FR-020 / FR-021). The five legacy emoji
@@ -112,6 +114,12 @@ const DEFAULT_NEW_TAG_ICON: &str = "ri-brain-line";
 /// `_smoke.spec.js` first-paint assertion expects "Focus"; the
 /// `sessions-history.spec.js` flow asserts the badge becomes "Break"
 /// after the focus session completes.
+///
+/// Feature 005: kept as the English source-of-truth for the
+/// `mode_label_covers_every_variant` test. View call sites have moved
+/// to `t!(i18n, timer.mode_*)` so the rendered output is localised;
+/// this fn remains the canonical mapping the test pins against.
+#[cfg(test)]
 const fn mode_label(mode: TimerMode) -> &'static str {
     match mode {
         TimerMode::Focus => "Focus",
@@ -125,10 +133,15 @@ const fn mode_label(mode: TimerMode) -> &'static str {
 /// Tie-break ordering: `is_paused` wins over `is_auto_paused` wins
 /// over overtime — overtime can only show while `is_running`, so it
 /// is mutually exclusive with both pause states.
+///
+/// Feature 005: kept as the English source-of-truth for the
+/// `mode_label_with_status_*` tests. View call sites compose the
+/// localised label inline via `t_string!(i18n, timer.*)`.
 //
 // Four bool params reflect four orthogonal `TimerState` predicates.
 // Grouping them into a struct would add ceremony without improving
 // readability at the single call site.
+#[cfg(test)]
 #[allow(clippy::fn_params_excessive_bools)]
 fn mode_label_with_status(
     mode: TimerMode,
@@ -697,6 +710,12 @@ pub fn TimerView() -> impl IntoView {
     let app_toast = use_context::<AppToast>().unwrap_or_default();
     let warning_signal = RwSignal::new(false);
 
+    // Feature 005: i18n context handle. Live for the lifetime of the
+    // component; every `t!(...)` / `t_string!(...)` call site below
+    // re-renders in the same reactive tick on locale change
+    // (FR-007 / FR-012).
+    let i18n = use_i18n();
+
     // React to settings changes: rebase the engine's `Durations`
     // when the Settings signal moves. The effect re-runs whenever
     // settings change; the engine's `set_durations` rebases the
@@ -1037,14 +1056,18 @@ pub fn TimerView() -> impl IntoView {
                 s.time_remaining_secs_signed() < 0,
             )
         });
-        let suffix = if is_paused_v {
-            " (Paused)"
+        // Feature 005: localised mode suffix. Each branch is a static
+        // key so the proc-macro can compile-time-check it; the actual
+        // wording (e.g. "(Paused)" -> "(Pausiert)") lives in the
+        // catalogues.
+        let suffix: String = if is_paused_v {
+            format!(" {}", t_string!(i18n, timer.status_paused))
         } else if is_auto_paused_v {
-            " (Auto-paused)"
+            format!(" {}", t_string!(i18n, timer.status_auto_paused))
         } else if is_running_v && is_ot {
-            " (Overtime)"
+            format!(" {}", t_string!(i18n, timer.status_overtime))
         } else {
-            ""
+            String::new()
         };
         if mode == TimerMode::Focus {
             let matched: Vec<String> = selected_tag_ids.with(|sel| {
@@ -1059,12 +1082,20 @@ pub fn TimerView() -> impl IntoView {
                 let base = if matched.len() == 1 {
                     matched[0].clone()
                 } else {
-                    format!("{} Tags", matched.len())
+                    format!("{} {}", matched.len(), t_string!(i18n, tag.tags_plural))
                 };
                 return format!("{base}{suffix}");
             }
         }
-        mode_label_with_status(mode, is_running_v, is_paused_v, is_auto_paused_v, is_ot)
+        // Feature 005: localised mode label. Reuse the same suffix
+        // string computed above (already localised); the base label
+        // (Focus / Break / Long Break) comes from the catalogue.
+        let base = match mode {
+            TimerMode::Focus => t_string!(i18n, timer.mode_focus).to_string(),
+            TimerMode::Break => t_string!(i18n, timer.mode_break).to_string(),
+            TimerMode::LongBreak => t_string!(i18n, timer.mode_long_break).to_string(),
+        };
+        format!("{base}{suffix}")
     });
     let status_icon = Signal::derive(move || {
         let mode = engine.with(TimerState::current_mode);
@@ -1102,20 +1133,39 @@ pub fn TimerView() -> impl IntoView {
     // sync (CHK041 / FR-026).
     let stop_btn_state =
         Signal::derive(move || StopButtonState::from_mode(engine.with(TimerState::current_mode)));
-    let verbose_label_stop = Signal::derive(move || stop_btn_state.get().verbose_label());
-    let terse_tooltip_stop = Signal::derive(move || stop_btn_state.get().terse_tooltip());
+    // Feature 005: localised verbose / terse tooltip strings per
+    // button state. The state enums (`StopButtonState`, etc.) keep
+    // their `verbose_label`/`terse_tooltip` const-fn projections as
+    // the English source-of-truth for tests; the rendered strings
+    // come from the i18n catalogue via the `t_string!` macro.
+    let verbose_label_stop = Signal::derive(move || match stop_btn_state.get() {
+        StopButtonState::Reset => t_string!(i18n, timer.ctrl_reset_aria).to_string(),
+        StopButtonState::Undo => t_string!(i18n, timer.ctrl_undo_aria).to_string(),
+    });
+    let terse_tooltip_stop = Signal::derive(move || match stop_btn_state.get() {
+        StopButtonState::Reset => t_string!(i18n, timer.ctrl_reset).to_string(),
+        StopButtonState::Undo => t_string!(i18n, timer.ctrl_undo).to_string(),
+    });
 
     let play_pause_btn_state = Signal::derive(move || {
         engine.with(|s| {
             PlayPauseButtonState::from_run_state(s.is_running(), s.is_paused(), s.is_auto_paused())
         })
     });
-    let verbose_label_play = Signal::derive(move || play_pause_btn_state.get().verbose_label());
-    let terse_tooltip_play = Signal::derive(move || play_pause_btn_state.get().terse_tooltip());
+    let verbose_label_play =
+        Signal::derive(move || t_string!(i18n, timer.ctrl_play_pause_aria).to_string());
+    let terse_tooltip_play = Signal::derive(move || match play_pause_btn_state.get() {
+        PlayPauseButtonState::Start => t_string!(i18n, timer.ctrl_start).to_string(),
+        PlayPauseButtonState::Pause => t_string!(i18n, timer.ctrl_pause).to_string(),
+        PlayPauseButtonState::Resume => t_string!(i18n, timer.ctrl_resume).to_string(),
+    });
 
-    let skip_btn_state = Signal::derive(move || SkipButtonState::Skip);
-    let verbose_label_skip = Signal::derive(move || skip_btn_state.get().verbose_label());
-    let terse_tooltip_skip = Signal::derive(move || skip_btn_state.get().terse_tooltip());
+    // Skip button has no state variants (FR-029); only its rendered
+    // string is reactive, driven by the locale signal.
+    let verbose_label_skip =
+        Signal::derive(move || t_string!(i18n, timer.ctrl_skip_session).to_string());
+    let terse_tooltip_skip =
+        Signal::derive(move || t_string!(i18n, timer.ctrl_skip_session).to_string());
 
     // Update document title with overtime prefix when running in overtime.
     Effect::new(move |_| {
@@ -1645,7 +1695,7 @@ pub fn TimerView() -> impl IntoView {
                         class:active=move || tag_dropdown_open.get()
                     >
                         <div class="tag-dropdown-header">
-                            <span>"Choose tag"</span>
+                            <span>{t!(i18n, tag.choose_header)}</span>
                         </div>
                         <div class="tag-list" id="tag-list" role="list">
                             <For
@@ -1666,10 +1716,12 @@ pub fn TimerView() -> impl IntoView {
                                         crate::components::icon::IconClass::from_icon_name(
                                             &tag.icon,
                                         );
-                                    let delete_label = format!(
-                                        "Delete {name} tag",
-                                        name = tag.name,
-                                    );
+                                    // Feature 005: localised delete-tag aria-label.
+                                    // The tag name is dynamic data (user-typed),
+                                    // never localised — only the surrounding
+                                    // "Delete ... tag" template is translated.
+                                    let delete_label =
+                                        t_string!(i18n, tag.delete_aria, name = tag.name.as_str());
                                     // Multi-select highlight: a row is
                                     // `selected` whenever its id is in
                                     // `selected_tag_ids`. Clicking the
@@ -1816,9 +1868,9 @@ pub fn TimerView() -> impl IntoView {
                                     </div>
                                     <input
                                         type="text"
-                                        placeholder="New tag..."
+                                        placeholder=move || t_string!(i18n, tag.new_placeholder)
                                         id="new-tag-name"
-                                        aria-label="New tag name"
+                                        aria-label=move || t_string!(i18n, tag.new_aria_label)
                                         prop:value=move || new_tag_name.get()
                                         on:click=move |ev| ev.stop_propagation()
                                         on:input=move |ev| new_tag_name.set(event_target_value(&ev))
@@ -1859,7 +1911,7 @@ pub fn TimerView() -> impl IntoView {
                             id="session-title-input"
                             class="session-title-input"
                             maxlength="120"
-                            placeholder="What is this session for?"
+                            placeholder=move || t_string!(i18n, timer.session_title_placeholder)
                             prop:value=move || session_title.get()
                             on:input=move |ev| {
                                 session_title.set(event_target_value(&ev));
@@ -2036,8 +2088,8 @@ pub fn TimerView() -> impl IntoView {
                             settings.with(|s| s.notifications.smart_pause),
                         )
                         style="display: block"
-                        data-tooltip="Smart Pause: Click to toggle automatic pause when inactive"
-                        title="Smart Pause: Click to toggle automatic pause when inactive"
+                        data-tooltip=move || t_string!(i18n, timer.indicator_smart_pause)
+                        title=move || t_string!(i18n, timer.indicator_smart_pause)
                         on:click=move |_| settings.update(|s| {
                             s.notifications.smart_pause = !s.notifications.smart_pause;
                         })
@@ -2049,8 +2101,8 @@ pub fn TimerView() -> impl IntoView {
                         "play-circle",
                         settings.with(|s| s.notifications.auto_start_timer),
                     )
-                    data-tooltip="Auto-start: Click to toggle automatic session start"
-                    title="Auto-start: Click to toggle automatic session start"
+                    data-tooltip=move || t_string!(i18n, timer.indicator_auto_start)
+                    title=move || t_string!(i18n, timer.indicator_auto_start)
                     on:click=move |_| settings.update(|s| {
                         s.notifications.auto_start_timer = !s.notifications.auto_start_timer;
                     })
@@ -2061,8 +2113,8 @@ pub fn TimerView() -> impl IntoView {
                         "repeat",
                         settings.with(|s| s.notifications.allow_continuous_sessions),
                     )
-                    data-tooltip="Continuous Sessions: Click to toggle continuous mode"
-                    title="Continuous Sessions: Click to toggle continuous mode"
+                    data-tooltip=move || t_string!(i18n, timer.indicator_continuous)
+                    title=move || t_string!(i18n, timer.indicator_continuous)
                     on:click=move |_| settings.update(|s| {
                         s.notifications.allow_continuous_sessions =
                             !s.notifications.allow_continuous_sessions;
@@ -2071,8 +2123,8 @@ pub fn TimerView() -> impl IntoView {
                 <button
                     class="timer-adjust-btn"
                     id="timer-minus-btn"
-                    title="Subtract 5 minutes"
-                    aria-label="Subtract 5 minutes"
+                    title=move || t_string!(i18n, timer.adjust_minus_aria)
+                    aria-label=move || t_string!(i18n, timer.adjust_minus_aria)
                     on:click=on_adjust_minus
                 >
                     <span>"-5"</span>
@@ -2080,8 +2132,8 @@ pub fn TimerView() -> impl IntoView {
                 <button
                     class="timer-adjust-btn"
                     id="timer-plus-btn"
-                    title="Add 5 minutes"
-                    aria-label="Add 5 minutes"
+                    title=move || t_string!(i18n, timer.adjust_plus_aria)
+                    aria-label=move || t_string!(i18n, timer.adjust_plus_aria)
                     on:click=on_adjust_plus
                 >
                     <span>"+5"</span>

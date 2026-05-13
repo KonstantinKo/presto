@@ -4,5 +4,35 @@
       "language_label": "Sprache:",
       "language_help": "Katalog-Updates werden mit zukünftigen Versionen ausgeliefert. Kein Neustart erforderlich."
     }
+  },
+  "timer": {
+    "mode_focus": "Fokus",
+    "mode_break": "Pause",
+    "mode_long_break": "Lange Pause",
+    "status_paused": "(Pausiert)",
+    "status_auto_paused": "(Auto-pausiert)",
+    "status_overtime": "(Überzeit)",
+    "ctrl_reset": "Zurücksetzen",
+    "ctrl_undo": "Rückgängig",
+    "ctrl_start": "Start",
+    "ctrl_pause": "Pause",
+    "ctrl_resume": "Fortsetzen",
+    "ctrl_skip_session": "Sitzung überspringen",
+    "ctrl_reset_aria": "Timer zurücksetzen",
+    "ctrl_undo_aria": "Letzte Sitzung rückgängig machen",
+    "ctrl_play_pause_aria": "Timer starten oder pausieren",
+    "session_title_placeholder": "Wofür ist diese Sitzung?",
+    "indicator_smart_pause": "Smart-Pause: Klicken, um automatische Pause bei Inaktivität umzuschalten",
+    "indicator_auto_start": "Auto-Start: Klicken, um automatischen Sitzungsstart umzuschalten",
+    "indicator_continuous": "Fortlaufende Sitzungen: Klicken, um den fortlaufenden Modus umzuschalten",
+    "adjust_minus_aria": "5 Minuten abziehen",
+    "adjust_plus_aria": "5 Minuten hinzufügen"
+  },
+  "tag": {
+    "choose_header": "Tag wählen",
+    "new_placeholder": "Neuer Tag...",
+    "new_aria_label": "Name des neuen Tags",
+    "delete_aria": "Tag {{ name }} löschen",
+    "tags_plural": "Tags"
   }
 }

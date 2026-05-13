@@ -4,5 +4,35 @@
       "language_label": "Dil:",
       "language_help": "Katalog güncellemeleri ileriki sürümlerde gelecek. Yeniden başlatma gerekmiyor."
     }
+  },
+  "timer": {
+    "mode_focus": "Odak",
+    "mode_break": "Mola",
+    "mode_long_break": "Uzun Mola",
+    "status_paused": "(Duraklatıldı)",
+    "status_auto_paused": "(Otomatik duraklatıldı)",
+    "status_overtime": "(Ek süre)",
+    "ctrl_reset": "Sıfırla",
+    "ctrl_undo": "Geri al",
+    "ctrl_start": "Başlat",
+    "ctrl_pause": "Duraklat",
+    "ctrl_resume": "Devam et",
+    "ctrl_skip_session": "Oturumu atla",
+    "ctrl_reset_aria": "Zamanlayıcıyı sıfırla",
+    "ctrl_undo_aria": "Son oturumu geri al",
+    "ctrl_play_pause_aria": "Zamanlayıcıyı başlat veya duraklat",
+    "session_title_placeholder": "Bu oturum ne için?",
+    "indicator_smart_pause": "Akıllı Duraklatma: Hareketsizlikte otomatik duraklatmayı açıp kapatmak için tıklayın",
+    "indicator_auto_start": "Otomatik başlat: Otomatik oturum başlatmayı açıp kapatmak için tıklayın",
+    "indicator_continuous": "Sürekli oturumlar: Sürekli modu açıp kapatmak için tıklayın",
+    "adjust_minus_aria": "5 dakika çıkar",
+    "adjust_plus_aria": "5 dakika ekle"
+  },
+  "tag": {
+    "choose_header": "Etiket seç",
+    "new_placeholder": "Yeni etiket...",
+    "new_aria_label": "Yeni etiket adı",
+    "delete_aria": "{{ name }} etiketini sil",
+    "tags_plural": "Etiket"
   }
 }

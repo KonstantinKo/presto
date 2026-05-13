@@ -4,5 +4,35 @@
       "language_label": "Language:",
       "language_help": "Catalogue updates ship in future releases. Restart not required."
     }
+  },
+  "timer": {
+    "mode_focus": "Focus",
+    "mode_break": "Break",
+    "mode_long_break": "Long Break",
+    "status_paused": "(Paused)",
+    "status_auto_paused": "(Auto-paused)",
+    "status_overtime": "(Overtime)",
+    "ctrl_reset": "Reset",
+    "ctrl_undo": "Undo",
+    "ctrl_start": "Start",
+    "ctrl_pause": "Pause",
+    "ctrl_resume": "Resume",
+    "ctrl_skip_session": "Skip session",
+    "ctrl_reset_aria": "Reset timer",
+    "ctrl_undo_aria": "Undo last session",
+    "ctrl_play_pause_aria": "Start or pause timer",
+    "session_title_placeholder": "What is this session for?",
+    "indicator_smart_pause": "Smart Pause: Click to toggle automatic pause when inactive",
+    "indicator_auto_start": "Auto-start: Click to toggle automatic session start",
+    "indicator_continuous": "Continuous Sessions: Click to toggle continuous mode",
+    "adjust_minus_aria": "Subtract 5 minutes",
+    "adjust_plus_aria": "Add 5 minutes"
+  },
+  "tag": {
+    "choose_header": "Choose tag",
+    "new_placeholder": "New tag...",
+    "new_aria_label": "New tag name",
+    "delete_aria": "Delete {{ name }} tag",
+    "tags_plural": "Tags"
   }
 }
