@@ -34,4 +34,12 @@ mod tests {
             Locale::En,
         );
     }
+
+    /// T010 [RED → T015 GREEN]: `None` (no explicit choice) falls
+    /// through to OS detection; `de-DE` matches `Locale::De` via the
+    /// two-letter prefix. Spec FR-009 step 2.
+    #[test]
+    fn resolve_initial_locale_none_falls_to_os_de() {
+        assert_eq!(resolve_initial_locale(None, ["de-DE"]), Locale::De);
+    }
 }
