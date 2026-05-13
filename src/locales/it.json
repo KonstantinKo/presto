@@ -1,1 +1,8 @@
-{}
+{
+  "settings": {
+    "general": {
+      "language_label": "Lingua:",
+      "language_help": "Gli aggiornamenti del catalogo arriveranno nelle prossime versioni. Riavvio non necessario."
+    }
+  }
+}

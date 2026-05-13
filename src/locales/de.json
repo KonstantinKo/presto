@@ -1,1 +1,8 @@
-{}
+{
+  "settings": {
+    "general": {
+      "language_label": "Sprache:",
+      "language_help": "Katalog-Updates werden mit zukünftigen Versionen ausgeliefert. Kein Neustart erforderlich."
+    }
+  }
+}

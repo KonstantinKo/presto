@@ -37,6 +37,9 @@ use leptos::prelude::*;
 
 use crate::bridge::types::Settings;
 use crate::components::settings::SettingsToast;
+use crate::i18n::i18n::{use_i18n, Locale as I18nLocale};
+use leptos_i18n::t;
+use presto_ipc::Locale;
 
 /// Parse an `<input type="number">` value into `u32`, falling back to
 /// `fallback` when the input is empty / non-numeric / out of range.
@@ -113,6 +116,35 @@ pub fn GeneralSettings(settings: RwSignal<Settings>, toast: SettingsToast) -> im
         toast.show("Settings saved");
     };
 
+    // Feature 005: locale switcher.
+    //
+    // The active-locale projection reads from the library's
+    // `I18nContext` (single source of truth at render time), falling
+    // back to `Locale::En` when no explicit choice has been made yet
+    // (the resolver / OS-detection path has already populated the
+    // context by this point on cold start).
+    let i18n = use_i18n();
+    let active_locale_value = move || match i18n.get_locale() {
+        I18nLocale::en => "en",
+        I18nLocale::de => "de",
+        I18nLocale::it => "it",
+        I18nLocale::tr => "tr",
+    };
+    let on_locale_change = move |ev: leptos::ev::Event| {
+        let value = event_target_value(&ev);
+        let parsed = match value.as_str() {
+            "de" => Locale::De,
+            "it" => Locale::It,
+            "tr" => Locale::Tr,
+            _ => Locale::En,
+        };
+        // Per Fix A: always wrap in `Some` so the resolver records an
+        // explicit choice — `None` would re-trigger OS detection on
+        // next cold start. Persistence flows through the existing
+        // debounced settings-autosave Effect at `src/src/app.rs:215+`.
+        settings.update(|s| s.appearance.locale = Some(parsed));
+    };
+
     view! {
         <div class="category-header">
             <h1>"General Settings"</h1>
@@ -121,6 +153,25 @@ pub fn GeneralSettings(settings: RwSignal<Settings>, toast: SettingsToast) -> im
             </p>
         </div>
         <div class="settings-section base-section">
+            // Feature 005: locale switcher row. Sits above the
+            // timer-durations section per FR-015 / Spec Story 1 AC 4.
+            // The four `<option>` labels are native self-names —
+            // hard-coded literals, NEVER re-translated when the active
+            // locale changes (FR-015).
+            <div class="setting-item">
+                <label for="locale-selector">{t!(i18n, settings.general.language_label)}</label>
+                <select
+                    id="locale-selector"
+                    prop:value=active_locale_value
+                    on:change=on_locale_change
+                >
+                    <option value="en">"English"</option>
+                    <option value="de">"Deutsch"</option>
+                    <option value="it">"Italiano"</option>
+                    <option value="tr">"Türkçe"</option>
+                </select>
+                <p class="setting-description">{t!(i18n, settings.general.language_help)}</p>
+            </div>
             <h3 class="section-header">"Timer Durations"</h3>
             <div class="setting-item">
                 <label for="focus-duration">"Focus Duration (minutes):"</label>

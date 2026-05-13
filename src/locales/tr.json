@@ -1,1 +1,8 @@
-{}
+{
+  "settings": {
+    "general": {
+      "language_label": "Dil:",
+      "language_help": "Katalog güncellemeleri ileriki sürümlerde gelecek. Yeniden başlatma gerekmiyor."
+    }
+  }
+}

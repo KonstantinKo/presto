@@ -1,1 +1,8 @@
-{}
+{
+  "settings": {
+    "general": {
+      "language_label": "Language:",
+      "language_help": "Catalogue updates ship in future releases. Restart not required."
+    }
+  }
+}

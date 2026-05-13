@@ -1,6 +1,43 @@
 import { test, expect } from "./fixtures/index.js";
 import { gotoTimer, openSettings, selectSettingsCategory, tapTab } from "./fixtures/screens.js";
 
+test("locale switcher in general settings flips localised strings and persists across navigation", async ({ page }) => {
+  await gotoTimer(page);
+  await openSettings(page);
+  await selectSettingsCategory(page, "General");
+
+  // The `#locale-selector` row is the first control on the General tab
+  // (above the timer-durations section per FR-015).
+  const localeSelector = page.locator("#locale-selector");
+  await expect(localeSelector).toBeVisible();
+  await expect(localeSelector).toHaveValue("en");
+
+  // The surrounding `<label for="locale-selector">` is localised; in
+  // English it reads "Language:".
+  const languageLabel = page.locator('label[for="locale-selector"]');
+  await expect(languageLabel).toHaveText("Language:");
+
+  // Switch to German.
+  await localeSelector.selectOption("de");
+  // The same label now renders in German — confirms the i18n provider
+  // sees the new locale and re-runs every `t!(...)` call site in a
+  // single Leptos reactive tick (FR-007 / FR-012 / SC-007).
+  await expect(languageLabel).toHaveText("Sprache:");
+
+  // Persist-across-navigation check. Navigate away and back; the
+  // dropdown reflects the saved selection (the debounced auto-save
+  // Effect writes through the IPC settings signal).
+  await tapTab(page, "Timer");
+  await tapTab(page, "Settings");
+  await selectSettingsCategory(page, "General");
+  await expect(localeSelector).toHaveValue("de");
+  await expect(languageLabel).toHaveText("Sprache:");
+
+  // Switch back to English so the test env exits clean.
+  await localeSelector.selectOption("en");
+  await expect(languageLabel).toHaveText("Language:");
+});
+
 test("changing focus duration in general settings updates the timer display", async ({ page }) => {
   await gotoTimer(page);
   await expect(page.locator("#timer-minutes")).toHaveText("25");
