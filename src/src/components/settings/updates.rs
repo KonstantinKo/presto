@@ -32,9 +32,11 @@
 #![allow(clippy::must_use_candidate, clippy::too_many_lines)]
 
 use leptos::prelude::*;
+use leptos_i18n::{t, t_string};
 
 use crate::bridge::types::Settings;
 use crate::components::settings::SettingsToast;
+use crate::i18n::i18n::use_i18n;
 
 /// Updates settings tab.
 #[component]
@@ -46,6 +48,7 @@ pub fn UpdatesSettings(
     settings: RwSignal<Settings>,
     toast: SettingsToast,
 ) -> impl IntoView {
+    let i18n = use_i18n();
     // Local UI state for the auto-check + pre-release toggles. Phase
     // 4c folds these into `Settings` proper (the JS-era
     // `presto_auto_check_updates` localStorage key carried this in
@@ -70,11 +73,11 @@ pub fn UpdatesSettings(
 
     let on_auto_toggle = move |_| {
         auto_check.update(|v| *v = !*v);
-        toast.show("Settings saved");
+        toast.show(t_string!(i18n, settings.toast_saved).to_string());
     };
     let on_prerelease_toggle = move |_| {
         include_prerelease.update(|v| *v = !*v);
-        toast.show("Settings saved");
+        toast.show(t_string!(i18n, settings.toast_saved).to_string());
     };
 
     // Manual check handler. The e2e spec at
@@ -100,15 +103,14 @@ pub fn UpdatesSettings(
         }
     };
 
-    // Status text — "Checking for updates..." until the manual
-    // check resolves; "Update available" once `update_info` is
-    // populated. The spec asserts `toContainText("available")` at
-    // line 46.
+    // Status text — uses localised strings. The e2e spec at
+    // `settings-updates.spec.js:46` asserts `toContainText("available")`;
+    // English catalogue carries "Update available", which matches.
     let status_text = Signal::derive(move || {
         if update_info.with(Option::is_some) {
-            "Update available"
+            t_string!(i18n, settings.updates.status_available).to_string()
         } else {
-            "Checking for updates..."
+            t_string!(i18n, settings.updates.status_checking).to_string()
         }
     });
     let info_visible = Signal::derive(move || update_info.with(Option::is_some));
@@ -116,17 +118,15 @@ pub fn UpdatesSettings(
 
     view! {
         <div class="category-header">
-            <h1>"App Updates"</h1>
-            <p class="category-description">
-                "Manage application updates and version information"
-            </p>
+            <h1>{t!(i18n, settings.updates.title)}</h1>
+            <p class="category-description">{t!(i18n, settings.updates.description)}</p>
         </div>
         <div class="settings-section">
-            <h3 class="section-header">"Current Version"</h3>
+            <h3 class="section-header">{t!(i18n, settings.updates.current_version_section)}</h3>
             <div class="setting-item">
                 <div class="version-info">
                     <div class="current-version">
-                        <span class="version-label">"Installed Version:"</span>
+                        <span class="version-label">{t!(i18n, settings.updates.installed_version_label)}</span>
                         <span class="version-number" id="current-version">{current_version}</span>
                     </div>
                     <div class="update-status" id="update-status">
@@ -136,13 +136,13 @@ pub fn UpdatesSettings(
                 <div class="version-actions">
                     <button class="btn btn-primary" id="check-updates-btn" on:click=on_check>
                         <i class="ri-refresh-line"></i>
-                        "Check for Updates"
+                        {t!(i18n, settings.updates.check_button)}
                     </button>
                 </div>
             </div>
         </div>
         <div class="settings-section">
-            <h3 class="section-header">"Update Settings"</h3>
+            <h3 class="section-header">{t!(i18n, settings.updates.update_settings_section)}</h3>
             <div class="setting-item">
                 <label class="checkbox-label">
                     <input
@@ -152,11 +152,9 @@ pub fn UpdatesSettings(
                         on:change=on_auto_toggle
                     />
                     <span class="checkmark"></span>
-                    "Automatically check for updates"
+                    {t!(i18n, settings.updates.auto_check_label)}
                 </label>
-                <p class="setting-description">
-                    "Check for new versions automatically when the app starts."
-                </p>
+                <p class="setting-description">{t!(i18n, settings.updates.auto_check_help)}</p>
             </div>
             <div class="setting-item">
                 <label class="checkbox-label">
@@ -167,11 +165,9 @@ pub fn UpdatesSettings(
                         on:change=on_prerelease_toggle
                     />
                     <span class="checkmark"></span>
-                    "Include pre-release versions"
+                    {t!(i18n, settings.updates.prerelease_label)}
                 </label>
-                <p class="setting-description">
-                    "Also check for beta and pre-release versions."
-                </p>
+                <p class="setting-description">{t!(i18n, settings.updates.prerelease_help)}</p>
             </div>
         </div>
         // The `#update-info` panel. The e2e spec at line 36 expects
@@ -186,9 +182,9 @@ pub fn UpdatesSettings(
             }
         >
             <div class="update-details">
-                <h4>"Update Available"</h4>
+                <h4>{t!(i18n, settings.updates.update_available_header)}</h4>
                 <div class="version-comparison">
-                    <span class="version-label">"Latest:"</span>
+                    <span class="version-label">{t!(i18n, settings.updates.latest_label)}</span>
                     <span class="version-value" id="latest-version-display">
                         {move || latest_version.get()}
                     </span>

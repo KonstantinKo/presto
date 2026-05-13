@@ -37,6 +37,9 @@ use leptos::prelude::*;
 
 use crate::bridge::types::Settings;
 use crate::components::settings::SettingsToast;
+use crate::i18n::i18n::{use_i18n, Locale as I18nLocale};
+use leptos_i18n::{t, t_string};
+use presto_ipc::Locale;
 
 /// Parse an `<input type="number">` value into `u32`, falling back to
 /// `fallback` when the input is empty / non-numeric / out of range.
@@ -50,6 +53,10 @@ fn parse_minutes(raw: &str, fallback: u32) -> u32 {
 /// numeric inputs, each bound to a slice of `settings.timer`.
 #[component]
 pub fn GeneralSettings(settings: RwSignal<Settings>, toast: SettingsToast) -> impl IntoView {
+    // Feature 005: i18n context for the locale switcher + every
+    // localised label / toast in this component.
+    let i18n = use_i18n();
+
     // Derived signals — read each field via `.with(...)` so we
     // borrow the inner record without cloning. Each renders to a
     // `String` because `<input>`'s `prop:value` binds to a string.
@@ -78,27 +85,27 @@ pub fn GeneralSettings(settings: RwSignal<Settings>, toast: SettingsToast) -> im
     let on_focus_change = move |ev| {
         let value = parse_minutes(&event_target_value(&ev), 25);
         settings.update(|s| s.timer.focus_duration = value);
-        toast.show("Settings saved");
+        toast.show(t_string!(i18n, settings.toast_saved).to_string());
     };
     let on_break_change = move |ev| {
         let value = parse_minutes(&event_target_value(&ev), 5);
         settings.update(|s| s.timer.break_duration = value);
-        toast.show("Settings saved");
+        toast.show(t_string!(i18n, settings.toast_saved).to_string());
     };
     let on_long_break_change = move |ev| {
         let value = parse_minutes(&event_target_value(&ev), 20);
         settings.update(|s| s.timer.long_break_duration = value);
-        toast.show("Settings saved");
+        toast.show(t_string!(i18n, settings.toast_saved).to_string());
     };
     let on_total_sessions_change = move |ev| {
         let value = parse_minutes(&event_target_value(&ev), 10);
         settings.update(|s| s.timer.total_sessions = value);
-        toast.show("Settings saved");
+        toast.show(t_string!(i18n, settings.toast_saved).to_string());
     };
     let on_max_session_change = move |ev| {
         let value = parse_minutes(&event_target_value(&ev), 120);
         settings.update(|s| s.timer.max_session_time = value);
-        toast.show("Settings saved");
+        toast.show(t_string!(i18n, settings.toast_saved).to_string());
     };
     // Feature 002 Bundle B (T021): explicit clamp to 1–10 at the
     // input boundary. Browser `min`/`max` is a UX hint only — a
@@ -110,20 +117,75 @@ pub fn GeneralSettings(settings: RwSignal<Settings>, toast: SettingsToast) -> im
         let raw = parse_minutes(&event_target_value(&ev), 4);
         let value = raw.clamp(1, 10);
         settings.update(|s| s.timer.sessions_per_long_break = value);
-        toast.show("Settings saved");
+        toast.show(t_string!(i18n, settings.toast_saved).to_string());
+    };
+
+    // Feature 005: locale switcher.
+    //
+    // The active-locale projection reads from the library's
+    // `I18nContext` (single source of truth at render time), falling
+    // back to `Locale::En` when no explicit choice has been made yet
+    // (the resolver / OS-detection path has already populated the
+    // context by this point on cold start).
+    let active_locale_value = move || match i18n.get_locale() {
+        I18nLocale::en => "en",
+        I18nLocale::de => "de",
+        I18nLocale::it => "it",
+        I18nLocale::tr => "tr",
+    };
+    let on_locale_change = move |ev: leptos::ev::Event| {
+        let value = event_target_value(&ev);
+        let parsed = match value.as_str() {
+            "en" => Locale::En,
+            "de" => Locale::De,
+            "it" => Locale::It,
+            "tr" => Locale::Tr,
+            // Defensive abort: the four `<option value="...">` literals
+            // are the only legal wire values; an unrecognised string
+            // here would mean the DOM was mutated externally or the
+            // option list drifted out of sync with this `match`. Abort
+            // the update rather than silently coercing to English —
+            // that would mask a real regression.
+            _ => return,
+        };
+        // Per Fix A: always wrap in `Some` so the resolver records an
+        // explicit choice — `None` would re-trigger OS detection on
+        // next cold start. Persistence flows through the existing
+        // debounced settings-autosave Effect at `src/src/app.rs:215+`.
+        settings.update(|s| s.appearance.locale = Some(parsed));
     };
 
     view! {
         <div class="category-header">
-            <h1>"General Settings"</h1>
-            <p class="category-description">
-                "Configure timer durations and basic behavior"
-            </p>
+            <h1>{t!(i18n, settings.general.title)}</h1>
+            <p class="category-description">{t!(i18n, settings.general.description)}</p>
         </div>
         <div class="settings-section base-section">
-            <h3 class="section-header">"Timer Durations"</h3>
+            // Feature 005: locale switcher row. Sits above the
+            // timer-durations section per FR-015 / Spec Story 1 AC 4.
+            // The four `<option>` labels are native self-names —
+            // hard-coded literals, NEVER re-translated when the active
+            // locale changes (FR-015). Section heading mirrors the
+            // Timer Durations pattern so the visual hierarchy stays
+            // consistent across the General tab.
+            <h3 class="section-header">{t!(i18n, settings.general.language_section_heading)}</h3>
+            <div class="setting-item language-setting-item">
+                <label for="locale-selector">{t!(i18n, settings.general.language_label)}</label>
+                <select
+                    id="locale-selector"
+                    prop:value=active_locale_value
+                    on:change=on_locale_change
+                >
+                    <option value="en">"English"</option>  // i18n-exempt: language self-name
+                    <option value="de">"Deutsch"</option>  // i18n-exempt: language self-name
+                    <option value="it">"Italiano"</option>  // i18n-exempt: language self-name
+                    <option value="tr">"Türkçe"</option>  // i18n-exempt: language self-name
+                </select>
+                <p class="setting-description">{t!(i18n, settings.general.language_help)}</p>
+            </div>
+            <h3 class="section-header">{t!(i18n, settings.general.timer_durations_header)}</h3>
             <div class="setting-item">
-                <label for="focus-duration">"Focus Duration (minutes):"</label>
+                <label for="focus-duration">{t!(i18n, settings.general.focus_duration_label)}</label>
                 <input
                     type="number"
                     id="focus-duration"
@@ -132,10 +194,10 @@ pub fn GeneralSettings(settings: RwSignal<Settings>, toast: SettingsToast) -> im
                     prop:value=move || focus_duration.get()
                     on:change=on_focus_change
                 />
-                <p class="setting-description">"How long should focus sessions last"</p>
+                <p class="setting-description">{t!(i18n, settings.general.focus_duration_help)}</p>
             </div>
             <div class="setting-item">
-                <label for="break-duration">"Short Break (minutes):"</label>
+                <label for="break-duration">{t!(i18n, settings.general.break_duration_label)}</label>
                 <input
                     type="number"
                     id="break-duration"
@@ -144,12 +206,10 @@ pub fn GeneralSettings(settings: RwSignal<Settings>, toast: SettingsToast) -> im
                     prop:value=move || break_duration.get()
                     on:change=on_break_change
                 />
-                <p class="setting-description">
-                    "Duration for short breaks between focus sessions"
-                </p>
+                <p class="setting-description">{t!(i18n, settings.general.break_duration_help)}</p>
             </div>
             <div class="setting-item">
-                <label for="long-break-duration">"Long Break (minutes):"</label>
+                <label for="long-break-duration">{t!(i18n, settings.general.long_break_duration_label)}</label>
                 <input
                     type="number"
                     id="long-break-duration"
@@ -158,12 +218,10 @@ pub fn GeneralSettings(settings: RwSignal<Settings>, toast: SettingsToast) -> im
                     prop:value=move || long_break_duration.get()
                     on:change=on_long_break_change
                 />
-                <p class="setting-description">
-                    "Duration for long breaks after completing a cycle"
-                </p>
+                <p class="setting-description">{t!(i18n, settings.general.long_break_duration_help)}</p>
             </div>
             <div class="setting-item">
-                <label for="total-sessions">"Daily Sessions:"</label>
+                <label for="total-sessions">{t!(i18n, settings.general.total_sessions_label)}</label>
                 <input
                     type="number"
                     id="total-sessions"
@@ -172,12 +230,10 @@ pub fn GeneralSettings(settings: RwSignal<Settings>, toast: SettingsToast) -> im
                     prop:value=move || total_sessions.get()
                     on:change=on_total_sessions_change
                 />
-                <p class="setting-description">
-                    "Number of focus sessions to complete each day"
-                </p>
+                <p class="setting-description">{t!(i18n, settings.general.total_sessions_help)}</p>
             </div>
             <div class="setting-item">
-                <label for="sessions-per-long-break">"Sessions per Long Break:"</label>
+                <label for="sessions-per-long-break">{t!(i18n, settings.general.sessions_per_long_break_label)}</label>
                 <input
                     type="number"
                     id="sessions-per-long-break"
@@ -186,12 +242,10 @@ pub fn GeneralSettings(settings: RwSignal<Settings>, toast: SettingsToast) -> im
                     prop:value=move || sessions_per_long_break.get()
                     on:change=on_sessions_per_long_break_change
                 />
-                <p class="setting-description">
-                    "How many focus sessions before a long break"
-                </p>
+                <p class="setting-description">{t!(i18n, settings.general.sessions_per_long_break_help)}</p>
             </div>
             <div class="setting-item">
-                <label for="max-session-time">"Max Session Time (minutes):"</label>
+                <label for="max-session-time">{t!(i18n, settings.general.max_session_time_label)}</label>
                 <input
                     type="number"
                     id="max-session-time"
@@ -200,9 +254,7 @@ pub fn GeneralSettings(settings: RwSignal<Settings>, toast: SettingsToast) -> im
                     prop:value=move || max_session_time.get()
                     on:change=on_max_session_change
                 />
-                <p class="setting-description">
-                    "Maximum time per session before auto-pause (default: 2 hours)"
-                </p>
+                <p class="setting-description">{t!(i18n, settings.general.max_session_time_help)}</p>
             </div>
         </div>
     }

@@ -36,6 +36,7 @@ pub mod tag_usage_pie;
 
 use chrono::{DateTime, Datelike, Days, TimeZone, Utc};
 use leptos::prelude::*;
+use leptos_i18n::{t, t_string};
 
 use self::bar_chart::{BarChart, BarChartConfig};
 use self::focus_trend::FocusTrend;
@@ -49,10 +50,7 @@ use super::utils::datetime::datetime_from_ms;
 use crate::bridge::types::{ManualSession, SessionType, Settings, Tag};
 use crate::engine::clock::Clock;
 use crate::engine::date_format::format_session_date;
-
-const MONTH_SHORT_NAMES: [&str; 12] = [
-    "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
-];
+use crate::i18n::i18n::use_i18n;
 
 /// Compute the Monday of the week containing `anchor`.
 fn start_of_week_monday(anchor: DateTime<Utc>) -> DateTime<Utc> {
@@ -384,55 +382,98 @@ pub fn aggregate_yearly_focus(sessions: &[ManualSession], anchor: DateTime<Utc>)
     buckets
 }
 
-fn month_short(month: u32) -> &'static str {
-    let idx = month.saturating_sub(1) as usize;
-    MONTH_SHORT_NAMES.get(idx).copied().unwrap_or("???")
+fn month_short(i18n: I18nCtx, month: u32) -> String {
+    match month {
+        1 => t_string!(i18n, calendar.month_jan).to_string(),
+        2 => t_string!(i18n, calendar.month_feb).to_string(),
+        3 => t_string!(i18n, calendar.month_mar).to_string(),
+        4 => t_string!(i18n, calendar.month_apr).to_string(),
+        5 => t_string!(i18n, calendar.month_may).to_string(),
+        6 => t_string!(i18n, calendar.month_jun).to_string(),
+        7 => t_string!(i18n, calendar.month_jul).to_string(),
+        8 => t_string!(i18n, calendar.month_aug).to_string(),
+        9 => t_string!(i18n, calendar.month_sep).to_string(),
+        10 => t_string!(i18n, calendar.month_oct).to_string(),
+        11 => t_string!(i18n, calendar.month_nov).to_string(),
+        _ => t_string!(i18n, calendar.month_dec).to_string(),
+    }
 }
 
-/// Period-specific labels for the focus-summary card. Returns the
-/// card-title plus the four metric-tile sublabels, in the order
-/// (Weekly focus time, Weekly average, Sessions this week,
-/// Weekly total time). Centralises the visual contract from the
-/// post-rework /quickreview that surfaced static "Weekly" copy
-/// across all four period tabs.
-const fn period_label_summary(period: Period) -> (&'static str, [&'static str; 4]) {
+fn weekday_short_labels(i18n: I18nCtx) -> [String; 7] {
+    [
+        t_string!(i18n, calendar.dow_mon).to_string(),
+        t_string!(i18n, calendar.dow_tue).to_string(),
+        t_string!(i18n, calendar.dow_wed).to_string(),
+        t_string!(i18n, calendar.dow_thu).to_string(),
+        t_string!(i18n, calendar.dow_fri).to_string(),
+        t_string!(i18n, calendar.dow_sat).to_string(),
+        t_string!(i18n, calendar.dow_sun).to_string(),
+    ]
+}
+
+type I18nCtx = leptos_i18n::I18nContext<crate::i18n::i18n::Locale>;
+
+/// Project the localised focus-summary card title for the active
+/// period. Centralises the per-period match so both the card header
+/// and the chart title stay in sync.
+fn summary_title(i18n: I18nCtx, period: Period) -> String {
     match period {
-        Period::Daily => (
-            "Focus Daily Summary",
-            [
-                "Daily focus time",
-                "Hourly average",
-                "Sessions today",
-                "Daily total time",
-            ],
-        ),
-        Period::Weekly => (
-            "Focus Weekly Summary",
-            [
-                "Weekly focus time",
-                "Daily average",
-                "Sessions this week",
-                "Weekly total time",
-            ],
-        ),
-        Period::Monthly => (
-            "Focus Monthly Summary",
-            [
-                "Monthly focus time",
-                "Daily average",
-                "Sessions this month",
-                "Monthly total time",
-            ],
-        ),
-        Period::Yearly => (
-            "Focus Yearly Summary",
-            [
-                "Yearly focus time",
-                "Monthly average",
-                "Sessions this year",
-                "Yearly total time",
-            ],
-        ),
+        Period::Daily => t_string!(i18n, stats.summary_title_daily).to_string(),
+        Period::Weekly => t_string!(i18n, stats.summary_title_weekly).to_string(),
+        Period::Monthly => t_string!(i18n, stats.summary_title_monthly).to_string(),
+        Period::Yearly => t_string!(i18n, stats.summary_title_yearly).to_string(),
+    }
+}
+
+/// Project the localised metric-tile labels for the active period.
+/// Order: focus-minutes, period-average, focus-session count, total-
+/// minutes — matches the tuple shape returned by `period_tile_metrics`.
+fn tile_labels(i18n: I18nCtx, period: Period) -> [String; 4] {
+    match period {
+        Period::Daily => [
+            t_string!(i18n, stats.tile_daily_focus_time).to_string(),
+            t_string!(i18n, stats.tile_daily_hourly_average).to_string(),
+            t_string!(i18n, stats.tile_daily_sessions).to_string(),
+            t_string!(i18n, stats.tile_daily_total_time).to_string(),
+        ],
+        Period::Weekly => [
+            t_string!(i18n, stats.tile_weekly_focus_time).to_string(),
+            t_string!(i18n, stats.tile_weekly_daily_average).to_string(),
+            t_string!(i18n, stats.tile_weekly_sessions).to_string(),
+            t_string!(i18n, stats.tile_weekly_total_time).to_string(),
+        ],
+        Period::Monthly => [
+            t_string!(i18n, stats.tile_monthly_focus_time).to_string(),
+            t_string!(i18n, stats.tile_monthly_daily_average).to_string(),
+            t_string!(i18n, stats.tile_monthly_sessions).to_string(),
+            t_string!(i18n, stats.tile_monthly_total_time).to_string(),
+        ],
+        Period::Yearly => [
+            t_string!(i18n, stats.tile_yearly_focus_time).to_string(),
+            t_string!(i18n, stats.tile_yearly_monthly_average).to_string(),
+            t_string!(i18n, stats.tile_yearly_sessions).to_string(),
+            t_string!(i18n, stats.tile_yearly_total_time).to_string(),
+        ],
+    }
+}
+
+/// Project the localised bar-chart title per period.
+fn chart_title(i18n: I18nCtx, period: Period) -> String {
+    match period {
+        Period::Daily => t_string!(i18n, stats.chart_title_daily).to_string(),
+        Period::Weekly => t_string!(i18n, stats.chart_title_weekly).to_string(),
+        Period::Monthly => t_string!(i18n, stats.chart_title_monthly).to_string(),
+        Period::Yearly => t_string!(i18n, stats.chart_title_yearly).to_string(),
+    }
+}
+
+/// Project the localised tag-usage-pie title per period.
+fn tag_usage_title(i18n: I18nCtx, period: Period) -> String {
+    match period {
+        Period::Daily => t_string!(i18n, stats.tag_usage_title_daily).to_string(),
+        Period::Weekly => t_string!(i18n, stats.tag_usage_title_weekly).to_string(),
+        Period::Monthly => t_string!(i18n, stats.tag_usage_title_monthly).to_string(),
+        Period::Yearly => t_string!(i18n, stats.tag_usage_title_yearly).to_string(),
     }
 }
 
@@ -457,14 +498,20 @@ fn anchor_to_period(period: Period, now: DateTime<Utc>) -> DateTime<Utc> {
 /// Build the per-period `BarChartProps` shape. The caller-applied
 /// per-period floor + rounding policy lives here so the `BarChart`
 /// component itself stays shape-agnostic.
+///
+/// `labels` is injected by the caller because the weekly / yearly
+/// variants source locale-sensitive day / month names from the i18n
+/// context. The numeric shape (`max_scale`, `bar_values.len()`) is
+/// independent of locale — tests pin that via a sentinel English
+/// label set.
 fn build_bar_props(
     period: Period,
     cursor: DateTime<Utc>,
     sessions: &[ManualSession],
+    labels: Vec<String>,
 ) -> BarChartConfig {
     match period {
         Period::Daily => {
-            let labels: Vec<String> = (0..24).map(|h| format!("{h:02}:00")).collect();
             let values = aggregate_hourly_focus(sessions, cursor);
             BarChartConfig {
                 max_scale: 60,
@@ -474,10 +521,6 @@ fn build_bar_props(
             }
         }
         Period::Weekly => {
-            let labels: Vec<String> = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
-                .iter()
-                .map(|s| (*s).to_string())
-                .collect();
             let values = aggregate_weekly_focus(sessions, cursor);
             let observed = values.iter().copied().max().unwrap_or(0);
             let rounded = round_up_to_nearest(observed, 10);
@@ -490,10 +533,6 @@ fn build_bar_props(
             }
         }
         Period::Monthly => {
-            let year = cursor.year();
-            let month = cursor.month();
-            let dim = days_in_month(year, month);
-            let labels: Vec<String> = (1..=dim).map(|d| d.to_string()).collect();
             let values = aggregate_monthly_focus(sessions, cursor);
             let observed = values.iter().copied().max().unwrap_or(0);
             let rounded = round_up_to_nearest(observed, 10);
@@ -506,7 +545,6 @@ fn build_bar_props(
             }
         }
         Period::Yearly => {
-            let labels: Vec<String> = (1..=12_u32).map(|m| month_short(m).to_string()).collect();
             let values = aggregate_yearly_focus(sessions, cursor);
             let observed = values.iter().copied().max().unwrap_or(0);
             let rounded = round_up_to_nearest(observed, 50);
@@ -521,12 +559,30 @@ fn build_bar_props(
     }
 }
 
+/// Build the per-period x-axis label vector. Daily / Monthly emit
+/// locale-stable numeric labels; Weekly / Yearly source weekday /
+/// month abbreviations from the i18n calendar catalogue.
+fn build_bar_labels(i18n: I18nCtx, period: Period, cursor: DateTime<Utc>) -> Vec<String> {
+    match period {
+        Period::Daily => (0..24).map(|h| format!("{h:02}:00")).collect(),
+        Period::Weekly => weekday_short_labels(i18n).to_vec(),
+        Period::Monthly => {
+            let year = cursor.year();
+            let month = cursor.month();
+            let dim = days_in_month(year, month);
+            (1..=dim).map(|d| d.to_string()).collect()
+        }
+        Period::Yearly => (1..=12_u32).map(|m| month_short(i18n, m)).collect(),
+    }
+}
+
 /// Statistics view. Holds the active `Period` + the per-period cursor,
 /// projects period-scoped session slices for the bar chart and the
 /// tag-usage pie, and renders the focus-summary metric tiles for the
 /// Weekly variant only (selector contract per FR-009).
 #[component]
 pub fn StatisticsView() -> impl IntoView {
+    let i18n = use_i18n();
     let now = datetime_from_ms(BrowserClock.now_ms());
 
     // Cold-load default per FR-003 / SC-001.
@@ -586,11 +642,13 @@ pub fn StatisticsView() -> impl IntoView {
         let c = cursor.get();
         sessions.with(|ss| period_tile_metrics(p, c, ss))
     });
-    let summary_labels = Signal::derive(move || period_label_summary(period.get()));
+    let summary_card_title = Signal::derive(move || summary_title(i18n, period.get()));
+    let summary_tile_labels = Signal::derive(move || tile_labels(i18n, period.get()));
+    let tag_usage_title_signal = Signal::derive(move || tag_usage_title(i18n, period.get()));
 
     view! {
         <div class="view-container view-section" id="calendar-view">
-            <h1>"Calendar & Statistics"</h1>
+            <h1>{t!(i18n, stats.view_title)}</h1>
 
             <PeriodSelector current=period on_select=on_select_period />
 
@@ -606,7 +664,7 @@ pub fn StatisticsView() -> impl IntoView {
             // same elements across all periods — e2e only asserts
             // them in Weekly state per FR-009.
             <div class="focus-summary-card" id="focus-summary-card">
-                <h3>{move || summary_labels.get().0}</h3>
+                <h3>{move || summary_card_title.get()}</h3>
                 <div class="focus-summary-grid">
                     <div class="focus-metric">
                         <div class="metric-change neutral">
@@ -616,7 +674,7 @@ pub fn StatisticsView() -> impl IntoView {
                         <div class="metric-value" id="total-focus-week">
                             {move || format!("{}m", tile_metrics.get().0)}
                         </div>
-                        <div class="metric-label">{move || summary_labels.get().1[0]}</div>
+                        <div class="metric-label">{move || summary_tile_labels.get()[0].clone()}</div>
                     </div>
                     <div class="focus-metric">
                         <div class="metric-change neutral">
@@ -626,7 +684,7 @@ pub fn StatisticsView() -> impl IntoView {
                         <div class="metric-value" id="avg-focus-day">
                             {move || format!("{}m", tile_metrics.get().1)}
                         </div>
-                        <div class="metric-label">{move || summary_labels.get().1[1]}</div>
+                        <div class="metric-label">{move || summary_tile_labels.get()[1].clone()}</div>
                     </div>
                     <div class="focus-metric">
                         <div class="metric-change neutral">
@@ -636,7 +694,7 @@ pub fn StatisticsView() -> impl IntoView {
                         <div class="metric-value" id="weekly-sessions">
                             {move || tile_metrics.get().2.to_string()}
                         </div>
-                        <div class="metric-label">{move || summary_labels.get().1[2]}</div>
+                        <div class="metric-label">{move || summary_tile_labels.get()[2].clone()}</div>
                     </div>
                     <div class="focus-metric">
                         <div class="metric-change neutral">
@@ -646,7 +704,7 @@ pub fn StatisticsView() -> impl IntoView {
                         <div class="metric-value" id="weekly-focus-time">
                             {move || format!("{}m", tile_metrics.get().3)}
                         </div>
-                        <div class="metric-label">{move || summary_labels.get().1[3]}</div>
+                        <div class="metric-label">{move || summary_tile_labels.get()[3].clone()}</div>
                     </div>
                 </div>
             </div>
@@ -654,14 +712,12 @@ pub fn StatisticsView() -> impl IntoView {
             // Bar chart — single reusable definition (SC-002); the
             // props are recomputed on every cursor or period change.
             {move || {
-                let props = build_bar_props(period.get(), cursor.get(), &sessions.get());
-                let chart_title = match period.get() {
-                    Period::Daily => "Hourly Focus Distribution",
-                    Period::Weekly => "Weekly Focus Distribution",
-                    Period::Monthly => "Monthly Focus Distribution",
-                    Period::Yearly => "Yearly Focus Distribution",
-                };
-                view! { <BarChart max_scale=props.max_scale x_axis_labels=props.x_axis_labels bar_values=props.bar_values min_bar_height_px=props.min_bar_height_px title=chart_title.to_string() /> }
+                let p = period.get();
+                let c = cursor.get();
+                let labels = build_bar_labels(i18n, p, c);
+                let props = build_bar_props(p, c, &sessions.get(), labels);
+                let title = chart_title(i18n, p);
+                view! { <BarChart max_scale=props.max_scale x_axis_labels=props.x_axis_labels bar_values=props.bar_values min_bar_height_px=props.min_bar_height_px title=title /> }
             }}
 
             // Period-specific extra widgets, ported from the
@@ -674,14 +730,17 @@ pub fn StatisticsView() -> impl IntoView {
             {move || match period.get() {
                 Period::Daily => {
                     let c = cursor.get();
+                    let today_label = t_string!(i18n, stats.focus_trend_today).to_string();
+                    let yesterday_label = t_string!(i18n, stats.focus_trend_yesterday).to_string();
+                    let day_before_label = t_string!(i18n, stats.focus_trend_day_before).to_string();
                     let rows = vec![
-                        ("Today".to_string(), format_session_date(c.timestamp_millis())),
+                        (today_label, format_session_date(c.timestamp_millis())),
                         (
-                            "Yesterday".to_string(),
+                            yesterday_label,
                             format_session_date((c - Days::new(1)).timestamp_millis()),
                         ),
                         (
-                            "Day before".to_string(),
+                            day_before_label,
                             format_session_date((c - Days::new(2)).timestamp_millis()),
                         ),
                     ];
@@ -737,12 +796,7 @@ pub fn StatisticsView() -> impl IntoView {
             <TagUsagePie
                 sessions=period_sessions
                 tags=tags_signal
-                title=Signal::derive(move || match period.get() {
-                    Period::Daily => "Tag Usage This Day".to_string(),
-                    Period::Weekly => "Tag Usage This Week".to_string(),
-                    Period::Monthly => "Tag Usage This Month".to_string(),
-                    Period::Yearly => "Tag Usage This Year".to_string(),
-                })
+                title=tag_usage_title_signal
             />
         </div>
     }
@@ -868,10 +922,18 @@ mod tests {
         assert_eq!(buckets.len(), 12);
     }
 
+    /// Sentinel English labels — `build_bar_props` is locale-agnostic
+    /// for its numeric outputs; the test only pins `max_scale` and the
+    /// per-period `bar_values.len()`. Locale-sourced labels are tested
+    /// via the e2e suite.
+    fn labels(n: usize) -> Vec<String> {
+        (0..n).map(|i| format!("L{i}")).collect()
+    }
+
     #[test]
     fn build_bar_props_daily_uses_fixed_60_ceiling() {
         let anchor = Utc.with_ymd_and_hms(2026, 5, 9, 12, 0, 0).unwrap();
-        let props = build_bar_props(Period::Daily, anchor, &[]);
+        let props = build_bar_props(Period::Daily, anchor, &[], labels(24));
         assert_eq!(props.max_scale, 60);
         assert_eq!(props.bar_values.len(), 24);
     }
@@ -879,7 +941,7 @@ mod tests {
     #[test]
     fn build_bar_props_weekly_floor_20_with_empty_data() {
         let anchor = Utc.with_ymd_and_hms(2026, 5, 9, 12, 0, 0).unwrap();
-        let props = build_bar_props(Period::Weekly, anchor, &[]);
+        let props = build_bar_props(Period::Weekly, anchor, &[], labels(7));
         assert_eq!(props.max_scale, 20);
         assert_eq!(props.bar_values.len(), 7);
     }
@@ -887,7 +949,7 @@ mod tests {
     #[test]
     fn build_bar_props_monthly_floor_50_with_empty_data() {
         let anchor = Utc.with_ymd_and_hms(2026, 5, 9, 12, 0, 0).unwrap();
-        let props = build_bar_props(Period::Monthly, anchor, &[]);
+        let props = build_bar_props(Period::Monthly, anchor, &[], labels(31));
         assert_eq!(props.max_scale, 50);
         assert!((28..=31).contains(&props.bar_values.len()));
     }
@@ -895,7 +957,7 @@ mod tests {
     #[test]
     fn build_bar_props_yearly_floor_100_with_empty_data() {
         let anchor = Utc.with_ymd_and_hms(2026, 5, 9, 12, 0, 0).unwrap();
-        let props = build_bar_props(Period::Yearly, anchor, &[]);
+        let props = build_bar_props(Period::Yearly, anchor, &[], labels(12));
         assert_eq!(props.max_scale, 100);
         assert_eq!(props.bar_values.len(), 12);
     }

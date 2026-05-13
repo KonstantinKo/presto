@@ -47,9 +47,11 @@ use crate::components::update_notification::UpdateNotification;
 use crate::engine::activity_signal::ActivitySignal;
 use crate::engine::durations::Durations;
 use crate::engine::timer::TimerState;
+use crate::i18n::i18n::{use_i18n, I18nContextProvider};
 use crate::managers::navigation::{NavView, NavigationManager, SettingsTab};
 use crate::managers::update::{UpdateInfo, UpdateManager};
 use crate::theme::loader;
+use leptos_i18n::{t, t_string};
 
 /// App-level toast notification queue.
 ///
@@ -108,6 +110,16 @@ pub fn App() -> impl IntoView {
     // transient messages (completion, warnings, smart-pause) here.
     let app_toast = AppToast::default();
     provide_context(app_toast);
+
+    // Feature 005: localised save-failure message. The settings
+    // persistence sink below lives in `App`'s body (outside the
+    // `I18nContextProvider` tree), so `use_i18n()` cannot resolve at
+    // its scope. A sibling sentinel component inside the provider
+    // (`SaveFailureMessageSync`) tracks the active locale and writes
+    // the resolved `t_string!(i18n, app.toast_save_failed)` into this
+    // signal on every locale change; the Effect reads the latest
+    // localised text without needing a live i18n context at fire-time.
+    let save_failure_message: RwSignal<String> = RwSignal::new(String::new());
 
     // Shared session log. TimerView pushes a `ManualSession` on
     // engine completion (focus session zero-cross OR a `skip()`
@@ -178,10 +190,12 @@ pub fn App() -> impl IntoView {
         })
     });
 
-    let on_timer_nav = move |_| nav.update(|n| n.transition_to(NavView::Timer));
-    let on_calendar_nav = move |_| nav.update(|n| n.transition_to(NavView::Calendar));
-    let on_daily_nav = move |_| nav.update(|n| n.transition_to(NavView::Daily));
-    let on_settings_nav = move |_| nav.update(NavigationManager::enter_settings);
+    // Feature 005: sidebar nav handlers moved inline at the
+    // `<Sidebar/>` call site below, since the Sidebar component now
+    // takes `Callback<()>` props (the conversion from a sidebar
+    // `MouseEvent` to `()` happens inside the Sidebar body so the
+    // i18n-aware tooltips can render from there). See the call site
+    // for the four nav transitions.
 
     let on_select_settings_tab = Callback::new(move |tab: SettingsTab| {
         nav.update(|n| n.select_settings_tab(tab));
@@ -272,7 +286,17 @@ pub fn App() -> impl IntoView {
                         match commands::save_settings(to_save).await {
                             Ok(()) | Err(crate::bridge::types::BridgeError::BridgeUnavailable) => {}
                             Err(_) => {
-                                app_toast.show("Failed to save settings");
+                                // The `SaveFailureMessageSync` sentinel
+                                // (inside the i18n provider) writes the
+                                // resolved `t_string!(...)` into this
+                                // signal on every locale change. By the
+                                // time a save can fail, the user has
+                                // already interacted post-mount, so the
+                                // signal is guaranteed populated.
+                                let msg = save_failure_message.get_untracked();
+                                if !msg.is_empty() {
+                                    app_toast.show(msg);
+                                }
                             }
                         }
                     });
@@ -574,6 +598,17 @@ pub fn App() -> impl IntoView {
     }
 
     view! {
+        // Feature 005: wrap the app tree in the leptos_i18n provider
+        // so every `t!(i18n, ...)` call site descends from a live
+        // I18nContext. `enable_cookie=false` because presto persists
+        // the locale through `settings.appearance.locale`, not via
+        // the library's `lf-lang` cookie. The forwarding Effect that
+        // mirrors `settings.appearance.locale` into `i18n.set_locale`
+        // lives in `LocaleSync` below — it must run inside the
+        // provider so `use_i18n()` resolves.
+        <I18nContextProvider enable_cookie=false>
+            <LocaleSync settings=settings/>
+            <SaveFailureMessageSync target=save_failure_message/>
         // The sidebar carries a per-mode theme class (`focus` /
         // `break` / `longBreak`) so `style/sidebar.css`'s
         // `.sidebar.focus .sidebar-icon.active { background:
@@ -582,69 +617,17 @@ pub fn App() -> impl IntoView {
         // with a saturated red background, which is gated on this
         // theme class. The class is driven by `engine.current_mode()`
         // so break/long-break states also flip the highlight color.
-        <nav
-            class="sidebar"
-            class:focus=move || matches!(engine.with(TimerState::current_mode), TimerMode::Focus)
-            class:break=move || matches!(engine.with(TimerState::current_mode), TimerMode::Break)
-            class:longBreak=move || matches!(engine.with(TimerState::current_mode), TimerMode::LongBreak)
-        >
-            <div class="sidebar-icons">
-                <button
-                    class="sidebar-icon"
-                    class:active=move || is_timer.get()
-                    id="timer-nav"
-                    data-view="timer"
-                    title="Timer"
-                    attr:aria-current=move || if is_timer.get() { "page" } else { "" }
-                    on:click=on_timer_nav
-                >
-                    <i class="ri-timer-line"></i>
-                </button>
-                <button
-                    class="sidebar-icon"
-                    class:active=move || is_calendar.get()
-                    id="calendar-nav"
-                    data-view="calendar"
-                    title="Statistics"
-                    attr:aria-current=move || if is_calendar.get() { "page" } else { "" }
-                    on:click=on_calendar_nav
-                >
-                    // Phosphor `ph-chart-line` matches the upstream
-                    // ramazanberkozbek/presto sidebar — single trend
-                    // line, no terminal arrow. `#calendar-nav` and
-                    // `data-view="calendar"` are preserved (e2e
-                    // contract).
-                    <i class="ph ph-chart-line"></i>
-                </button>
-                <button
-                    class="sidebar-icon"
-                    class:active=move || is_daily.get()
-                    id="daily-nav"
-                    data-view="daily"
-                    title="Daily"
-                    attr:aria-current=move || if is_daily.get() { "page" } else { "" }
-                    on:click=on_daily_nav
-                >
-                    // Feature 003 Bundle B: new Daily drill-down nav
-                    // entry (FR-012). Sits between Calendar (renamed
-                    // Statistics in intent) and Settings.
-                    <i class="ph ph-calendar-check"></i>
-                </button>
-            </div>
-            <div class="sidebar-bottom">
-                <button
-                    class="sidebar-icon-large"
-                    class:active=move || is_settings.get()
-                    id="settings-nav"
-                    data-view="settings"
-                    title="Settings"
-                    attr:aria-current=move || if is_settings.get() { "page" } else { "" }
-                    on:click=on_settings_nav
-                >
-                    <i class="ph ph-gear"></i>
-                </button>
-            </div>
-        </nav>
+        <Sidebar
+            engine=engine
+            is_timer=is_timer
+            is_calendar=is_calendar
+            is_daily=is_daily
+            is_settings=is_settings
+            on_timer_nav=Callback::new(move |()| nav.update(|n| n.transition_to(NavView::Timer)))
+            on_calendar_nav=Callback::new(move |()| nav.update(|n| n.transition_to(NavView::Calendar)))
+            on_daily_nav=Callback::new(move |()| nav.update(|n| n.transition_to(NavView::Daily)))
+            on_settings_nav=Callback::new(move |()| nav.update(NavigationManager::enter_settings))
+        />
 
         <main class="main-content">
             // Each view container carries `.hidden` when inactive —
@@ -715,10 +698,158 @@ pub fn App() -> impl IntoView {
         </div>
 
         {bridge_absent.then(|| view! {
-            <div class="degraded-mode-banner" role="status">
-                <strong>"Degraded mode."</strong>
-                " Tauri bridge unavailable — settings + sessions are in-memory only."
-            </div>
+            <DegradedModeBanner/>
         })}
+        </I18nContextProvider>
+    }
+}
+
+/// Locale-forwarding sentinel component.
+///
+/// Lives inside the `<I18nContextProvider>` so `use_i18n()` resolves to a
+/// live context. An Effect watches `settings.appearance.locale` and
+/// forwards every explicit choice into the library's `set_locale`. The
+/// dropdown writes ONE signal (the IPC settings signal); this Effect
+/// propagates to the library so every `t!(i18n, ...)` call site re-
+/// renders in the same Leptos reactive tick (FR-007 / FR-012 / SC-007
+/// "mixed-locale frame avoidance" honoured by Leptos signal batching).
+///
+/// Emits no DOM; the function-body return is an empty `()` view. The
+/// component exists solely to wire the reactive effect inside the
+/// provider's context.
+#[component]
+fn LocaleSync(settings: RwSignal<Settings>) -> impl IntoView {
+    let i18n = use_i18n();
+    Effect::new(move |_| {
+        let persisted = settings.with(|s| s.appearance.locale);
+        // Per FR-011 / Fix A: only an explicit `Some(_)` overrides the
+        // library's own OS-detection path. `None` (legacy / fresh
+        // install) leaves the library's locale alone — the provider's
+        // internal OS-detection has already populated it on mount.
+        if let Some(library_locale) = crate::i18n::compute_initial_library_locale(persisted) {
+            i18n.set_locale(library_locale);
+        }
+    });
+}
+
+/// Localised save-failure message bridge (feature 005).
+///
+/// Lives inside the `<I18nContextProvider>` so `use_i18n()` resolves to
+/// a live context. Tracks `i18n.get_locale()` and writes the resolved
+/// `t_string!(i18n, app.toast_save_failed)` into the shared signal on
+/// every reactive update. The settings-persistence Effect in `App` (set
+/// up outside the provider's owner tree) reads from that signal on
+/// failure — no hardcoded English literal at the toast call site.
+///
+/// Emits no DOM; the function-body return is an empty `()` view.
+#[component]
+fn SaveFailureMessageSync(target: RwSignal<String>) -> impl IntoView {
+    let i18n = use_i18n();
+    Effect::new(move |_| {
+        // Track the locale so the Effect re-runs on switch; resolve
+        // through `t_string!` and forward to the shared signal.
+        let _ = i18n.get_locale();
+        let msg = t_string!(i18n, app.toast_save_failed).to_string();
+        target.set(msg);
+    });
+}
+
+/// Degraded-mode banner. Shown when the Tauri JS bridge is absent
+/// (Trunk dev server / browser-only load).
+///
+/// Lives inside the `<I18nContextProvider>` so `use_i18n()` resolves;
+/// the two visible strings (`degraded_mode_title` / `degraded_mode_body`)
+/// are catalogue-driven so all four locales render the warning in the
+/// active UI language (feature 005). The DOM shape — `<div
+/// class="degraded-mode-banner" role="status">` wrapping `<strong>` +
+/// trailing text node — is preserved exactly so any external CSS or
+/// e2e selector keyed on the banner class continues to match.
+#[component]
+fn DegradedModeBanner() -> impl IntoView {
+    let i18n = use_i18n();
+    view! {
+        <div class="degraded-mode-banner" role="status">
+            <strong>{t!(i18n, app.degraded_mode_title)}</strong>
+            " "
+            {t!(i18n, app.degraded_mode_body)}
+        </div>
+    }
+}
+
+/// Sidebar nav component. Lives inside the `<I18nContextProvider>` so
+/// `use_i18n()` resolves; its tooltip / aria-label strings come from
+/// the i18n catalogue (FR-013 sidebar surface). The DOM shape and
+/// `id` / `data-view` / `class:active` contract are preserved exactly
+/// — only the visible tooltip strings (`title=` attributes) flip on
+/// locale change.
+#[component]
+fn Sidebar(
+    engine: RwSignal<TimerState>,
+    is_timer: Signal<bool>,
+    is_calendar: Signal<bool>,
+    is_daily: Signal<bool>,
+    is_settings: Signal<bool>,
+    on_timer_nav: Callback<()>,
+    on_calendar_nav: Callback<()>,
+    on_daily_nav: Callback<()>,
+    on_settings_nav: Callback<()>,
+) -> impl IntoView {
+    let i18n = use_i18n();
+    view! {
+        <nav
+            class="sidebar"
+            class:focus=move || matches!(engine.with(TimerState::current_mode), TimerMode::Focus)
+            class:break=move || matches!(engine.with(TimerState::current_mode), TimerMode::Break)
+            class:longBreak=move || matches!(engine.with(TimerState::current_mode), TimerMode::LongBreak)
+        >
+            <div class="sidebar-icons">
+                <button
+                    class="sidebar-icon"
+                    class:active=move || is_timer.get()
+                    id="timer-nav"
+                    data-view="timer"
+                    title=move || t_string!(i18n, sidebar.timer_tooltip)
+                    attr:aria-current=move || if is_timer.get() { "page" } else { "" }
+                    on:click=move |_| on_timer_nav.run(())
+                >
+                    <i class="ri-timer-line"></i>
+                </button>
+                <button
+                    class="sidebar-icon"
+                    class:active=move || is_calendar.get()
+                    id="calendar-nav"
+                    data-view="calendar"
+                    title=move || t_string!(i18n, sidebar.statistics_tooltip)
+                    attr:aria-current=move || if is_calendar.get() { "page" } else { "" }
+                    on:click=move |_| on_calendar_nav.run(())
+                >
+                    <i class="ph ph-chart-line"></i>
+                </button>
+                <button
+                    class="sidebar-icon"
+                    class:active=move || is_daily.get()
+                    id="daily-nav"
+                    data-view="daily"
+                    title=move || t_string!(i18n, sidebar.daily_tooltip)
+                    attr:aria-current=move || if is_daily.get() { "page" } else { "" }
+                    on:click=move |_| on_daily_nav.run(())
+                >
+                    <i class="ph ph-calendar-check"></i>
+                </button>
+            </div>
+            <div class="sidebar-bottom">
+                <button
+                    class="sidebar-icon-large"
+                    class:active=move || is_settings.get()
+                    id="settings-nav"
+                    data-view="settings"
+                    title=move || t_string!(i18n, sidebar.settings_tooltip)
+                    attr:aria-current=move || if is_settings.get() { "page" } else { "" }
+                    on:click=move |_| on_settings_nav.run(())
+                >
+                    <i class="ph ph-gear"></i>
+                </button>
+            </div>
+        </nav>
     }
 }

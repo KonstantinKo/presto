@@ -22,10 +22,12 @@
 
 use leptos::prelude::*;
 use leptos::task::spawn_local;
+use leptos_i18n::{t, t_string};
 
 use crate::bridge::commands;
 use crate::bridge::types::{Settings, StatusBarDisplay};
 use crate::components::settings::SettingsToast;
+use crate::i18n::i18n::use_i18n;
 
 /// Map a `<select>` option string to `StatusBarDisplay`. Mirrors the
 /// JS-era kebab-case wire shape (`"default"` / `"icon-only"`).
@@ -48,6 +50,7 @@ const fn status_bar_to_str(value: StatusBarDisplay) -> &'static str {
 /// Advanced settings tab.
 #[component]
 pub fn AdvancedSettings(settings: RwSignal<Settings>, toast: SettingsToast) -> impl IntoView {
+    let i18n = use_i18n();
     // Derived signals.
     let autostart = Signal::derive(move || settings.with(|s| s.autostart));
     let hide_icon = Signal::derive(move || settings.with(|s| s.hide_icon_on_close));
@@ -62,20 +65,20 @@ pub fn AdvancedSettings(settings: RwSignal<Settings>, toast: SettingsToast) -> i
     // the dev-server / e2e-mock branch silently no-ops.
     let on_autostart = move |_| {
         settings.update(|s| s.autostart = !s.autostart);
-        toast.show("Settings saved");
+        toast.show(t_string!(i18n, settings.toast_saved).to_string());
     };
     let on_hide_icon = move |_| {
         settings.update(|s| s.hide_icon_on_close = !s.hide_icon_on_close);
-        toast.show("Settings saved");
+        toast.show(t_string!(i18n, settings.toast_saved).to_string());
     };
     let on_status_bar = move |ev| {
         let value = parse_status_bar(&event_target_value(&ev));
         settings.update(|s| s.status_bar_display = value);
-        toast.show("Settings saved");
+        toast.show(t_string!(i18n, settings.toast_saved).to_string());
     };
     let on_debug = move |_| {
         settings.update(|s| s.advanced.debug_mode = !s.advanced.debug_mode);
-        toast.show("Settings saved");
+        toast.show(t_string!(i18n, settings.toast_saved).to_string());
     };
     let on_reset = move |_| {
         // Ask for confirmation via the Tauri dialog plugin before
@@ -85,13 +88,10 @@ pub fn AdvancedSettings(settings: RwSignal<Settings>, toast: SettingsToast) -> i
         // mock — no reset should occur") passes without mutation.
         // On a real Tauri build the native OS confirmation dialog
         // appears; `true` = confirmed → call `reset_all_data`.
+        let body = t_string!(i18n, settings.advanced.reset_dialog_body).to_string();
+        let title = t_string!(i18n, settings.advanced.reset_dialog_title).to_string();
         spawn_local(async move {
-            let confirmed = commands::dialog_ask(
-                "This will permanently delete all your sessions, tags, and settings.",
-                "Reset All Data?",
-            )
-            .await
-            .unwrap_or(false);
+            let confirmed = commands::dialog_ask(&body, &title).await.unwrap_or(false);
             if confirmed {
                 let _ = commands::reset_all_data().await;
                 // Clear in-memory settings back to default so the UI
@@ -103,13 +103,11 @@ pub fn AdvancedSettings(settings: RwSignal<Settings>, toast: SettingsToast) -> i
 
     view! {
         <div class="category-header">
-            <h1>"Advanced Settings"</h1>
-            <p class="category-description">
-                "Danger zone and advanced configuration options"
-            </p>
+            <h1>{t!(i18n, settings.advanced.title)}</h1>
+            <p class="category-description">{t!(i18n, settings.advanced.description)}</p>
         </div>
         <div class="settings-section">
-            <h3 class="section-header">"System Integration"</h3>
+            <h3 class="section-header">{t!(i18n, settings.advanced.system_section)}</h3>
             <div class="setting-item">
                 <label class="checkbox-label">
                     <input
@@ -119,11 +117,9 @@ pub fn AdvancedSettings(settings: RwSignal<Settings>, toast: SettingsToast) -> i
                         on:change=on_autostart
                     />
                     <span class="checkmark"></span>
-                    "Start with System"
+                    {t!(i18n, settings.advanced.autostart_label)}
                 </label>
-                <p class="setting-description">
-                    "Automatically start Presto when your computer boots up."
-                </p>
+                <p class="setting-description">{t!(i18n, settings.advanced.autostart_help)}</p>
             </div>
             <div class="setting-item">
                 <label class="checkbox-label">
@@ -134,30 +130,26 @@ pub fn AdvancedSettings(settings: RwSignal<Settings>, toast: SettingsToast) -> i
                         on:change=on_hide_icon
                     />
                     <span class="checkmark"></span>
-                    "Hide Icon on Close"
+                    {t!(i18n, settings.advanced.hide_icon_label)}
                 </label>
-                <p class="setting-description">
-                    "Hide the app icon from the dock when closing the window with X."
-                </p>
+                <p class="setting-description">{t!(i18n, settings.advanced.hide_icon_help)}</p>
             </div>
             <div class="setting-item">
-                <label class="setting-label">"Status Bar Display"</label>
+                <label class="setting-label">{t!(i18n, settings.advanced.status_bar_label)}</label>
                 <select
                     id="status-bar-display"
                     class="setting-select"
                     prop:value=move || status_bar.get()
                     on:change=on_status_bar
                 >
-                    <option value="default">"Default (mm:ss)"</option>
-                    <option value="icon-only">"None (icon only)"</option>
+                    <option value="default">{t!(i18n, settings.advanced.status_bar_default)}</option>
+                    <option value="icon-only">{t!(i18n, settings.advanced.status_bar_icon_only)}</option>
                 </select>
-                <p class="setting-description">
-                    "Choose how the timer information is displayed in the system status bar/tray."
-                </p>
+                <p class="setting-description">{t!(i18n, settings.advanced.status_bar_help)}</p>
             </div>
         </div>
         <div class="settings-section">
-            <h3 class="section-header">"Developer Tools"</h3>
+            <h3 class="section-header">{t!(i18n, settings.advanced.dev_section)}</h3>
             <div class="setting-item">
                 <label class="checkbox-label">
                     <input
@@ -167,25 +159,19 @@ pub fn AdvancedSettings(settings: RwSignal<Settings>, toast: SettingsToast) -> i
                         on:change=on_debug
                     />
                     <span class="checkmark"></span>
-                    "Debug Mode (3-second timers)"
+                    {t!(i18n, settings.advanced.debug_label)}
                 </label>
-                <p class="setting-description">
-                    "Enable debug mode where all timers are set to 3 seconds for rapid testing."
-                </p>
+                <p class="setting-description">{t!(i18n, settings.advanced.debug_help)}</p>
             </div>
         </div>
         <div class="settings-section danger-zone">
-            <h3 class="section-header">"Danger Zone"</h3>
-            <p class="settings-description">
-                "These actions are irreversible and will permanently delete your data."
-            </p>
+            <h3 class="section-header">{t!(i18n, settings.advanced.danger_section)}</h3>
+            <p class="settings-description">{t!(i18n, settings.advanced.danger_description)}</p>
             <div class="danger-actions">
                 <button class="btn-danger" id="reset-all-data-btn" on:click=on_reset>
-                    "Reset All Data"
+                    {t!(i18n, settings.advanced.reset_button)}
                 </button>
-                <p class="danger-description">
-                    "This will permanently delete all your Pomodoro sessions, tasks, statistics, and reset all settings to default. This action cannot be undone."
-                </p>
+                <p class="danger-description">{t!(i18n, settings.advanced.reset_help)}</p>
             </div>
         </div>
     }

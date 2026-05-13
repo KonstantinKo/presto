@@ -19,9 +19,11 @@
 )]
 
 use leptos::prelude::*;
+use leptos_i18n::{t, t_string};
 
 use crate::bridge::types::{ManualSession, Tag};
 use crate::components::icon::{self, IconClass};
+use crate::i18n::i18n::use_i18n;
 
 /// One aggregated tag-usage entry — the materialised input to the
 /// legend list and the pie's conic-gradient stop sequence.
@@ -108,12 +110,13 @@ pub fn TagUsagePie(
     tags: Signal<Vec<Tag>>,
     #[prop(into, optional)] title: Signal<String>,
 ) -> impl IntoView {
+    let i18n = use_i18n();
     let entries =
         Signal::derive(move || sessions.with(|ss| tags.with(|ts| aggregate_tag_usage(ss, ts))));
     let resolved_title = Signal::derive(move || {
         let raw = title.get();
         if raw.is_empty() {
-            "Tag Usage".to_string()
+            t_string!(i18n, stats.tag_usage_default_title).to_string()
         } else {
             raw
         }
@@ -129,7 +132,7 @@ pub fn TagUsagePie(
                         <div class="tag-usage-pie-row">
                             <div class="tag-usage-pie tag-usage-pie-empty"></div>
                             <div class="tag-usage-empty">
-                                "No tagged sessions in this period"
+                                {t!(i18n, stats.tag_usage_empty)}
                             </div>
                         </div>
                     }.into_any()

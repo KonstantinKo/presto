@@ -32,9 +32,11 @@
 
 use leptos::ev::KeyboardEvent;
 use leptos::prelude::*;
+use leptos_i18n::{t, t_string};
 
 use crate::bridge::types::Settings;
 use crate::components::settings::SettingsToast;
+use crate::i18n::i18n::use_i18n;
 
 /// Three keyboard-shortcut slots. Mirrors `ShortcutSettings` field
 /// names; the spec at `settings-shortcuts.spec.js:15` addresses the
@@ -58,6 +60,11 @@ impl ShortcutSlot {
     }
 
     /// Display label for the row.
+    ///
+    /// Feature 005: kept on the impl as the English source-of-truth
+    /// for any future audit; the rendered view dispatches via `t!`
+    /// over the slot variant in `shortcut_row`.
+    #[allow(dead_code)]
     const fn label(self) -> &'static str {
         match self {
             Self::StartStop => "Start/Stop Timer:",
@@ -74,6 +81,7 @@ impl ShortcutSlot {
         }
     }
 
+    #[allow(dead_code)]
     const fn description(self) -> &'static str {
         match self {
             Self::StartStop => "Start or pause the current Pomodoro session.",
@@ -105,12 +113,19 @@ fn format_shortcut(ev: &KeyboardEvent) -> String {
 
 /// Shortcut row builder. Returns the per-row view fragment with the
 /// shared recording-flag wiring.
+///
+/// Feature 005: each row's localised label / description is dispatched
+/// via a `match` over the slot variant so the `t!` macro can keep its
+/// compile-time-checked static key paths. The "Clear ... shortcut"
+/// aria-label is interpolated via `t_string!` with the slot's label
+/// as the `{{ name }}` argument.
 fn shortcut_row(
     slot: ShortcutSlot,
     settings: RwSignal<Settings>,
     recording: RwSignal<Option<ShortcutSlot>>,
     toast: SettingsToast,
 ) -> impl IntoView {
+    let i18n = use_i18n();
     let value = Signal::derive(move || {
         settings
             .with(|s| match slot {
@@ -142,7 +157,7 @@ fn shortcut_row(
             };
             *target = Some(captured);
         });
-        toast.show("Settings saved");
+        toast.show(t_string!(i18n, settings.toast_saved).to_string());
         // Auto-exit recording after 500ms (matches JS-era debounce
         // the spec waits for at lines 22-24). Best-effort: a host
         // build returns Err which we drop.
@@ -157,9 +172,30 @@ fn shortcut_row(
         let _ = handle;
     };
 
+    let label_view = move || match slot {
+        ShortcutSlot::StartStop => t!(i18n, settings.shortcuts.label_start_stop).into_any(),
+        ShortcutSlot::Reset => t!(i18n, settings.shortcuts.label_reset).into_any(),
+        ShortcutSlot::Skip => t!(i18n, settings.shortcuts.label_skip).into_any(),
+    };
+    let description_view = move || match slot {
+        ShortcutSlot::StartStop => t!(i18n, settings.shortcuts.desc_start_stop).into_any(),
+        ShortcutSlot::Reset => t!(i18n, settings.shortcuts.desc_reset).into_any(),
+        ShortcutSlot::Skip => t!(i18n, settings.shortcuts.desc_skip).into_any(),
+    };
+    let clear_aria = move || {
+        let label_text: String = match slot {
+            ShortcutSlot::StartStop => {
+                t_string!(i18n, settings.shortcuts.label_start_stop).to_string()
+            }
+            ShortcutSlot::Reset => t_string!(i18n, settings.shortcuts.label_reset).to_string(),
+            ShortcutSlot::Skip => t_string!(i18n, settings.shortcuts.label_skip).to_string(),
+        };
+        t_string!(i18n, settings.shortcuts.clear_aria, name = label_text)
+    };
+
     view! {
         <div class="shortcut-item">
-            <label for=slot.input_id()>{slot.label()}</label>
+            <label for=slot.input_id()>{label_view}</label>
             <div class="shortcut-input-container">
                 <input
                     type="text"
@@ -176,7 +212,7 @@ fn shortcut_row(
                     type="button"
                     class="shortcut-clear"
                     data-shortcut=slot.input_id()
-                    aria-label=format!("Clear {} shortcut", slot.label())
+                    aria-label=clear_aria
                     on:click=move |_| {
                         settings.update(|s| match slot {
                             ShortcutSlot::StartStop => s.shortcuts.start_stop = None,
@@ -184,11 +220,11 @@ fn shortcut_row(
                             ShortcutSlot::Skip => s.shortcuts.skip = None,
                         });
                         recording.set(None);
-                        toast.show("Settings saved");
+                        toast.show(t_string!(i18n, settings.toast_saved).to_string());
                     }
                 >"×"</button>
             </div>
-            <p class="setting-description">{slot.description()}</p>
+            <p class="setting-description">{description_view}</p>
         </div>
     }
 }
@@ -196,17 +232,16 @@ fn shortcut_row(
 /// Shortcuts settings tab.
 #[component]
 pub fn ShortcutsSettings(settings: RwSignal<Settings>, toast: SettingsToast) -> impl IntoView {
+    let i18n = use_i18n();
     let recording = RwSignal::new(None::<ShortcutSlot>);
 
     view! {
         <div class="category-header">
-            <h1>"Global Shortcuts"</h1>
-            <p class="category-description">
-                "Configure keyboard shortcuts that work even when the app is in the background"
-            </p>
+            <h1>{t!(i18n, settings.shortcuts.title)}</h1>
+            <p class="category-description">{t!(i18n, settings.shortcuts.description)}</p>
         </div>
         <div class="settings-section">
-            <h3 class="section-header">"Keyboard Shortcuts"</h3>
+            <h3 class="section-header">{t!(i18n, settings.shortcuts.section_header)}</h3>
             {shortcut_row(ShortcutSlot::StartStop, settings, recording, toast)}
             {shortcut_row(ShortcutSlot::Reset, settings, recording, toast)}
             {shortcut_row(ShortcutSlot::Skip, settings, recording, toast)}

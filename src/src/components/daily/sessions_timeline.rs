@@ -12,9 +12,11 @@
 
 use chrono::{DateTime, Datelike, Utc};
 use leptos::prelude::*;
+use leptos_i18n::{t, t_string};
 
 use crate::bridge::types::{ManualSession, SessionType};
 use crate::engine::date_format::format_session_date;
+use crate::i18n::i18n::use_i18n;
 
 fn parse_hhmm_to_minutes(s: &str) -> u32 {
     let Some((h_str, m_str)) = s.split_once(':') else {
@@ -35,52 +37,54 @@ fn parse_hhmm_to_minutes(s: &str) -> u32 {
     h * 60 + m
 }
 
-const WEEKDAY_NAMES: [&str; 7] = [
-    "Monday",
-    "Tuesday",
-    "Wednesday",
-    "Thursday",
-    "Friday",
-    "Saturday",
-    "Sunday",
-];
+type I18nCtx = leptos_i18n::I18nContext<crate::i18n::i18n::Locale>;
 
-const MONTH_FULL_NAMES: [&str; 12] = [
-    "January",
-    "February",
-    "March",
-    "April",
-    "May",
-    "June",
-    "July",
-    "August",
-    "September",
-    "October",
-    "November",
-    "December",
-];
-
-fn weekday_name(day: DateTime<Utc>) -> &'static str {
+fn weekday_name(i18n: I18nCtx, day: DateTime<Utc>) -> String {
     let idx = day.weekday().num_days_from_monday() as usize;
-    WEEKDAY_NAMES.get(idx).copied().unwrap_or("Unknown")
+    match idx {
+        0 => t_string!(i18n, calendar.weekday_monday).to_string(),
+        1 => t_string!(i18n, calendar.weekday_tuesday).to_string(),
+        2 => t_string!(i18n, calendar.weekday_wednesday).to_string(),
+        3 => t_string!(i18n, calendar.weekday_thursday).to_string(),
+        4 => t_string!(i18n, calendar.weekday_friday).to_string(),
+        5 => t_string!(i18n, calendar.weekday_saturday).to_string(),
+        _ => t_string!(i18n, calendar.weekday_sunday).to_string(),
+    }
 }
 
-fn month_full(month: u32) -> &'static str {
+fn month_full(i18n: I18nCtx, month: u32) -> String {
     let idx = month.saturating_sub(1) as usize;
-    MONTH_FULL_NAMES.get(idx).copied().unwrap_or("Unknown")
+    match idx {
+        0 => t_string!(i18n, calendar.month_january).to_string(),
+        1 => t_string!(i18n, calendar.month_february).to_string(),
+        2 => t_string!(i18n, calendar.month_march).to_string(),
+        3 => t_string!(i18n, calendar.month_april).to_string(),
+        4 => t_string!(i18n, calendar.month_may_long).to_string(),
+        5 => t_string!(i18n, calendar.month_june).to_string(),
+        6 => t_string!(i18n, calendar.month_july).to_string(),
+        7 => t_string!(i18n, calendar.month_august).to_string(),
+        8 => t_string!(i18n, calendar.month_september).to_string(),
+        9 => t_string!(i18n, calendar.month_october).to_string(),
+        10 => t_string!(i18n, calendar.month_november).to_string(),
+        _ => t_string!(i18n, calendar.month_december).to_string(),
+    }
 }
 
-// "Today's Sessions" matches pre-rework visual baseline.
-fn selected_day_title(selected: DateTime<Utc>, today: DateTime<Utc>) -> String {
+// Composes the timeline header. When the selected day matches today,
+// renders the localised "Today's Sessions" label; otherwise renders a
+// "{weekday}, {month} {day} {year}" template with localised month +
+// weekday names. The numeric `day` / `year` stay as raw digits per
+// FR-014 / FR-025 (chrono-formatted timestamps not extracted).
+fn selected_day_title(i18n: I18nCtx, selected: DateTime<Utc>, today: DateTime<Utc>) -> String {
     if format_session_date(selected.timestamp_millis())
         == format_session_date(today.timestamp_millis())
     {
-        "Today's Sessions".to_string()
+        t_string!(i18n, daily.todays_sessions).to_string()
     } else {
         format!(
             "{weekday}, {month} {day} {year}",
-            weekday = weekday_name(selected),
-            month = month_full(selected.month()),
+            weekday = weekday_name(i18n, selected),
+            month = month_full(i18n, selected.month()),
             day = selected.day(),
             year = selected.year(),
         )
@@ -92,6 +96,7 @@ pub fn SessionsTimeline(
     selected_day: RwSignal<DateTime<Utc>>,
     today: DateTime<Utc>,
 ) -> impl IntoView {
+    let i18n = use_i18n();
     let sessions =
         use_context::<RwSignal<Vec<ManualSession>>>().unwrap_or_else(|| RwSignal::new(Vec::new()));
 
@@ -106,7 +111,7 @@ pub fn SessionsTimeline(
         })
     });
 
-    let title = Signal::derive(move || selected_day_title(selected_day.get(), today));
+    let title = Signal::derive(move || selected_day_title(i18n, selected_day.get(), today));
 
     view! {
         <div class="selected-day-details" id="selected-day-details">
@@ -126,7 +131,7 @@ pub fn SessionsTimeline(
                     {move || {
                         if selected_sessions.with(Vec::is_empty) {
                             view! {
-                                <div class="timeline-empty">"No sessions completed"</div>
+                                <div class="timeline-empty">{t!(i18n, daily.empty_state)}</div>
                             }.into_any()
                         } else {
                             selected_sessions.with(|ss| {
@@ -183,10 +188,10 @@ pub fn SessionsTimeline(
                                         .clone()
                                         .filter(|t| !t.is_empty())
                                         .unwrap_or_else(|| match session.session_type {
-                                            SessionType::Focus => "Focus".to_string(),
-                                            SessionType::Break => "Break".to_string(),
-                                            SessionType::LongBreak => "Long Break".to_string(),
-                                            SessionType::Custom => "Custom".to_string(),
+                                            SessionType::Focus => t_string!(i18n, timer.mode_focus).to_string(),
+                                            SessionType::Break => t_string!(i18n, timer.mode_break).to_string(),
+                                            SessionType::LongBreak => t_string!(i18n, timer.mode_long_break).to_string(),
+                                            SessionType::Custom => t_string!(i18n, daily.session_type_custom).to_string(),
                                         });
                                     view! {
                                         <li class="sessions-list-item">

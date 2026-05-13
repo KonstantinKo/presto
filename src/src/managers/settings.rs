@@ -284,7 +284,7 @@ mod tests {
                               "ambient_sound_type": "none",
                               "ambient_sound_volume": 50},
             "advanced": {"debug_mode": false},
-            "appearance": {"theme": "auto", "timer_theme": "espresso"},
+            "appearance": {"theme": "auto", "timer_theme": "espresso", "locale": null},
             "autostart": false,
             "hide_icon_on_close": false,
             "status_bar_display": "default",

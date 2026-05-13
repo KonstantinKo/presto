@@ -21,5 +21,6 @@ pub mod app;
 pub mod bridge;
 pub mod components;
 pub mod engine;
+pub mod i18n;
 pub mod managers;
 pub mod theme;

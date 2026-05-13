@@ -10,9 +10,11 @@
 )]
 
 use leptos::prelude::*;
+use leptos_i18n::{t, t_string};
 
 use crate::bridge::types::{ManualSession, SessionType};
 use crate::components::stats::line_chart::{LineChart, LineChartConfig};
+use crate::i18n::i18n::use_i18n;
 
 /// 7-bucket weekday totals starting Monday=0..Sunday=6, in focus minutes.
 ///
@@ -72,15 +74,22 @@ pub fn argmax_weekday(buckets: &[f32; 7]) -> (u32, f32) {
     best
 }
 
-const WEEKDAY_LABELS: [&str; 7] = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-
 /// 7-point weekday-totals line chart.
 #[component]
 pub fn MonthlyPeakDay(sessions: Signal<Vec<ManualSession>>) -> impl IntoView {
+    let i18n = use_i18n();
     let cfg = Signal::derive(move || {
         let buckets = sessions.with(|ss| compute_weekday_totals(ss));
         let (peak_idx, _) = argmax_weekday(&buckets);
-        let labels: Vec<String> = WEEKDAY_LABELS.iter().map(|s| (*s).to_string()).collect();
+        let labels: Vec<String> = vec![
+            t_string!(i18n, calendar.dow_mon).to_string(),
+            t_string!(i18n, calendar.dow_tue).to_string(),
+            t_string!(i18n, calendar.dow_wed).to_string(),
+            t_string!(i18n, calendar.dow_thu).to_string(),
+            t_string!(i18n, calendar.dow_fri).to_string(),
+            t_string!(i18n, calendar.dow_sat).to_string(),
+            t_string!(i18n, calendar.dow_sun).to_string(),
+        ];
         LineChartConfig {
             points: buckets.to_vec(),
             x_labels: labels,
@@ -93,9 +102,9 @@ pub fn MonthlyPeakDay(sessions: Signal<Vec<ManualSession>>) -> impl IntoView {
 
     view! {
         <div class="line-chart-card">
-            <h3 class="section-header">"Peak Focus Day of Week"</h3>
+            <h3 class="section-header">{t!(i18n, stats.monthly_peak_day_title)}</h3>
             <p class="line-chart-subhead">
-                "Total focus minutes per weekday across the period."
+                {t!(i18n, stats.monthly_peak_day_subhead)}
             </p>
             <LineChart cfg=cfg.get() />
         </div>

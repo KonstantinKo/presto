@@ -1146,7 +1146,10 @@ mod tests {
 
         // A round-trip of the default `AppSettings` must include the new fields.
         let json = serde_json::to_string(&AppSettings::default()).expect("must serialise");
-        assert!(json.contains(r#""appearance":{"theme":"auto","timer_theme":"espresso"}"#));
+        let v: serde_json::Value = serde_json::from_str(&json).expect("must parse as JSON");
+        assert_eq!(v["appearance"]["theme"], "auto");
+        assert_eq!(v["appearance"]["timer_theme"], "espresso");
+        assert!(v["appearance"]["locale"].is_null());
         assert!(json.contains(r#""max_session_time":120"#));
         let decoded: AppSettings = serde_json::from_str(&json).expect("round-trip must succeed");
         assert_eq!(decoded.appearance.theme, "auto");
