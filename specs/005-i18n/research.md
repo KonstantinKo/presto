@@ -139,6 +139,42 @@ flag if needed, this is a soft loss.
    precedent (the project uses `[package.metadata.leptos]` in some configs);
    no novelty.
 
+### Known limitation: first-paint locale flash (ripple R-001)
+
+`<I18nContextProvider>` in `leptos_i18n` `0.5.11` does NOT accept an
+`initial_locale` prop — that API was added in the `0.6.x` series (which
+requires `leptos = "0.8"` and is therefore blocked by the same upgrade
+gate as item 1 above). With `settings.appearance.locale = Some(De)`
+persisted on an English-OS machine, the boot sequence is:
+
+1. `<I18nContextProvider>` mounts and runs its own OS-detection path
+   (`leptos-use::use_locales` → `navigator.languages`), populating the
+   library's locale signal with the OS default (English in the
+   example).
+2. First paint renders with English strings — `t!(i18n, …)` reads the
+   library's locale at that point.
+3. `LocaleSync`'s Effect fires on the next reactive tick, reads
+   `settings.appearance.locale = Some(De)`, and calls
+   `i18n.set_locale(De)`. The DOM re-renders into German.
+
+The visible result is a single-frame flash of English before German
+strings appear. The flash is bounded by the reactive tick budget
+(sub-50ms in CSR builds) but is a measurable UX regression for users
+whose persisted locale disagrees with their OS locale.
+
+**Mitigation path** (deferred): a sentinel-locale loader that
+withholds the provider mount until settings are loaded would
+eliminate the flash but adds boot-time complexity (a settings-ready
+gate above the entire view tree, currently absent — settings load
+inline alongside the rest of the app).
+
+**Disposition**: accept the flash for v1. The follow-up
+leptos-upgrade cycle that bumps the workspace to `leptos = "0.8" +
+leptos_i18n = "0.6.x"` unlocks the `initial_locale` prop, at which
+point `LocaleSync` collapses into a one-shot prop pass and the flash
+disappears at zero ongoing complexity cost. The fix is therefore
+upstream-blocked, not architecturally blocked.
+
 ## Decision 2 — Catalogue file format: JSON (library default)
 
 **Chosen**: JSON. One file per locale at `src/locales/<locale>.json`. Four files

@@ -38,6 +38,95 @@ test("locale switcher in general settings flips localised strings and persists a
   await expect(languageLabel).toHaveText("Language:");
 });
 
+// Feature 005 SC-007 — consecutive textContent snapshots straddling
+// a locale switch must NOT contain English-only catalogue values
+// after the switch lands (no mixed-locale frame). The snapshot is
+// taken on the same Playwright auto-wait tick that observes the
+// localised label flip, so any straggler English string in the DOM
+// at that point would fail the assertion. Pairs with FR-007 / FR-012
+// "single Leptos reactive tick" for locale propagation.
+test("locale switch produces no mixed-locale frame in document body", async ({ page }) => {
+  await gotoTimer(page);
+  await openSettings(page);
+  await selectSettingsCategory(page, "General");
+
+  // Establish baseline: app boots in English (default locale per
+  // Spec FR-009 / Locale::En) — confirm the language label reads in
+  // English so the rest of the test starts from a known state.
+  const languageLabel = page.locator('label[for="locale-selector"]');
+  await expect(languageLabel).toHaveText("Language:");
+
+  // Snapshot 1: English body text content.
+  const beforeBody = await page.locator("body").textContent();
+  expect(beforeBody).toContain("Language:");
+
+  // Switch to German via the dropdown.
+  await page.locator("#locale-selector").selectOption("de");
+  // Wait for the label to flip to its German rendering. Playwright's
+  // toHaveText auto-wait ensures the next textContent read happens on
+  // a tick that has observed the locale change in the DOM.
+  await expect(languageLabel).toHaveText("Sprache:");
+
+  // Snapshot 2: post-switch body text content. By FR-007 / FR-012,
+  // every `t!(i18n, ...)` call site re-renders in the same Leptos
+  // reactive tick — so a German-rendered "Sprache:" label implies the
+  // sibling "Timer Durations" / "Notifications" / etc. labels have
+  // ALSO flipped to German.
+  const afterBody = await page.locator("body").textContent();
+
+  // English-only catalogue values that MUST NOT appear in the German
+  // frame. Each is a string the German catalogue translates away from
+  // its English form, so survival here would be a mixed-locale leak.
+  const englishOnly = ["Language:", "Notifications", "Timer Durations"];
+  for (const needle of englishOnly) {
+    expect(afterBody, `English-only "${needle}" must not survive locale switch`).not.toContain(
+      needle,
+    );
+  }
+
+  // German-only strings that MUST appear in the German frame. At least
+  // one of each label confirms the catalogue swap landed; "Sprache:" is
+  // checked individually above via toHaveText for the auto-wait, and
+  // the other two prove the global re-render reached non-General sections.
+  const germanOnly = ["Sprache:", "Benachrichtigungen", "Timer-Dauern"];
+  for (const needle of germanOnly) {
+    expect(afterBody, `German "${needle}" must appear after locale switch`).toContain(needle);
+  }
+
+  // Restore English so the test env exits clean for sibling specs.
+  await page.locator("#locale-selector").selectOption("en");
+  await expect(languageLabel).toHaveText("Language:");
+});
+
+// Feature 005 SC-013 — parameterised locale-switch coverage. The
+// existing single-test for de leaves it / tr unverified; this loop
+// asserts that the "Language" label flips to its catalogue
+// translation for each of the three non-default locales. Catches
+// missing-key drift in any one catalogue file independent of the
+// others.
+const localeFixtures = [
+  { code: "de", label: "Sprache:" },
+  { code: "it", label: "Lingua:" },
+  { code: "tr", label: "Dil:" },
+];
+for (const { code, label } of localeFixtures) {
+  test(`locale switch to ${code} renders translated language label`, async ({ page }) => {
+    await gotoTimer(page);
+    await openSettings(page);
+    await selectSettingsCategory(page, "General");
+
+    const languageLabel = page.locator('label[for="locale-selector"]');
+    await expect(languageLabel).toHaveText("Language:");
+
+    await page.locator("#locale-selector").selectOption(code);
+    await expect(languageLabel).toHaveText(label);
+
+    // Restore English to exit the test env clean.
+    await page.locator("#locale-selector").selectOption("en");
+    await expect(languageLabel).toHaveText("Language:");
+  });
+}
+
 test("changing focus duration in general settings updates the timer display", async ({ page }) => {
   await gotoTimer(page);
   await expect(page.locator("#timer-minutes")).toHaveText("25");
