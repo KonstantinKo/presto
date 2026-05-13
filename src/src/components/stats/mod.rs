@@ -26,6 +26,10 @@
 )]
 
 pub mod bar_chart;
+pub mod focus_trend;
+pub mod line_chart;
+pub mod monthly_peak_day;
+pub mod peak_focus_time;
 pub mod period_nav;
 pub mod period_selector;
 pub mod tag_usage_pie;
@@ -34,6 +38,9 @@ use chrono::{DateTime, Datelike, Days, TimeZone, Utc};
 use leptos::prelude::*;
 
 use self::bar_chart::{BarChart, BarChartConfig};
+use self::focus_trend::FocusTrend;
+use self::monthly_peak_day::MonthlyPeakDay;
+use self::peak_focus_time::PeakFocusTime;
 use self::period_nav::PeriodNav;
 use self::period_selector::{Period, PeriodSelector};
 use self::tag_usage_pie::TagUsagePie;
@@ -76,6 +83,19 @@ fn days_in_month(year: i32, month: u32) -> u32 {
         .rev()
         .find(|d| chrono::NaiveDate::from_ymd_opt(year, month, *d).is_some())
         .unwrap_or(28)
+}
+
+/// Number of days in `year`. 365, or 366 in leap years.
+#[allow(
+    clippy::missing_const_for_fn,
+    reason = "chrono::NaiveDate::from_ymd_opt is not const."
+)]
+fn days_in_year(year: i32) -> u32 {
+    if chrono::NaiveDate::from_ymd_opt(year, 2, 29).is_some() {
+        366
+    } else {
+        365
+    }
 }
 
 /// Set of `format_session_date` strings for the 7-day Mon-Sun span
@@ -552,6 +572,7 @@ pub fn StatisticsView() -> impl IntoView {
     });
 
     let tags_signal: Signal<Vec<Tag>> = Signal::derive(move || tags.get());
+    let sessions_signal: Signal<Vec<ManualSession>> = Signal::derive(move || sessions.get());
 
     // Focus-summary metric signals — per-period now. The selector
     // contract IDs (`#total-focus-week`, `#avg-focus-day`,
@@ -569,7 +590,7 @@ pub fn StatisticsView() -> impl IntoView {
 
     view! {
         <div class="view-container view-section" id="calendar-view">
-            <h1>"Statistics"</h1>
+            <h1>"Calendar & Statistics"</h1>
 
             <PeriodSelector current=period on_select=on_select_period />
 
@@ -634,10 +655,95 @@ pub fn StatisticsView() -> impl IntoView {
             // props are recomputed on every cursor or period change.
             {move || {
                 let props = build_bar_props(period.get(), cursor.get(), &sessions.get());
-                view! { <BarChart max_scale=props.max_scale x_axis_labels=props.x_axis_labels bar_values=props.bar_values min_bar_height_px=props.min_bar_height_px /> }
+                let chart_title = match period.get() {
+                    Period::Daily => "Hourly Focus Distribution",
+                    Period::Weekly => "Weekly Focus Distribution",
+                    Period::Monthly => "Monthly Focus Distribution",
+                    Period::Yearly => "Yearly Focus Distribution",
+                };
+                view! { <BarChart max_scale=props.max_scale x_axis_labels=props.x_axis_labels bar_values=props.bar_values min_bar_height_px=props.min_bar_height_px title=chart_title.to_string() /> }
             }}
 
-            <TagUsagePie sessions=period_sessions tags=tags_signal />
+            // Period-specific extra widgets, ported from the
+            // ramazanberkozbek/presto fork (UI parity port).
+            // - Daily   → 3-row "Daily Focus Trend" comparison card.
+            // - Monthly → "Peak Focus Time of Day" + "Peak Day of Week"
+            //   line charts (24/7 points respectively).
+            // - Yearly  → "Peak Focus Time of Day" only (weekday peak
+            //   is monthly-anchored; not meaningful at year scale).
+            {move || match period.get() {
+                Period::Daily => {
+                    let c = cursor.get();
+                    let rows = vec![
+                        ("Today".to_string(), format_session_date(c.timestamp_millis())),
+                        (
+                            "Yesterday".to_string(),
+                            format_session_date((c - Days::new(1)).timestamp_millis()),
+                        ),
+                        (
+                            "Day before".to_string(),
+                            format_session_date((c - Days::new(2)).timestamp_millis()),
+                        ),
+                    ];
+                    let rows_signal: Signal<Vec<(String, String)>> = Signal::derive(move || rows.clone());
+                    view! { <FocusTrend sessions=sessions_signal rows=rows_signal /> }.into_any()
+                }
+                Period::Monthly => {
+                    let window_days: Signal<u32> = Signal::derive(move || {
+                        days_in_month(cursor.get().year(), cursor.get().month())
+                    });
+                    let anchor: Signal<String> = Signal::derive(move || {
+                        format_session_date(cursor.get().timestamp_millis())
+                    });
+                    view! {
+                        <PeakFocusTime
+                            sessions=period_sessions
+                            window_days=window_days
+                            anchor_yyyy_mm_dd=anchor
+                        />
+                        <MonthlyPeakDay sessions=period_sessions />
+                    }.into_any()
+                }
+                Period::Yearly => {
+                    let window_days: Signal<u32> = Signal::derive(move || {
+                        days_in_year(cursor.get().year())
+                    });
+                    let anchor: Signal<String> = Signal::derive(move || {
+                        format_session_date(cursor.get().timestamp_millis())
+                    });
+                    view! {
+                        <PeakFocusTime
+                            sessions=period_sessions
+                            window_days=window_days
+                            anchor_yyyy_mm_dd=anchor
+                        />
+                    }.into_any()
+                }
+                Period::Weekly => {
+                    let window_days: Signal<u32> = Signal::derive(move || 7_u32);
+                    let anchor: Signal<String> = Signal::derive(move || {
+                        format_session_date(cursor.get().timestamp_millis())
+                    });
+                    view! {
+                        <PeakFocusTime
+                            sessions=period_sessions
+                            window_days=window_days
+                            anchor_yyyy_mm_dd=anchor
+                        />
+                    }.into_any()
+                }
+            }}
+
+            <TagUsagePie
+                sessions=period_sessions
+                tags=tags_signal
+                title=Signal::derive(move || match period.get() {
+                    Period::Daily => "Tag Usage This Day".to_string(),
+                    Period::Weekly => "Tag Usage This Week".to_string(),
+                    Period::Monthly => "Tag Usage This Month".to_string(),
+                    Period::Yearly => "Tag Usage This Year".to_string(),
+                })
+            />
         </div>
     }
 }

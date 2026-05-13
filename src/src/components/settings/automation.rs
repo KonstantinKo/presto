@@ -106,7 +106,7 @@ pub fn AutomationSettings(settings: RwSignal<Settings>, toast: SettingsToast) ->
             </p>
         </div>
         <div class="settings-section">
-            <h3>"Timer Automation"</h3>
+            <h3 class="section-header">"Timer Automation"</h3>
             <div class="setting-item">
                 <label class="checkbox-label">
                     <input
@@ -139,7 +139,7 @@ pub fn AutomationSettings(settings: RwSignal<Settings>, toast: SettingsToast) ->
             </div>
         </div>
         <div class="settings-section">
-            <h3>"Smart Features"</h3>
+            <h3 class="section-header">"Smart Features"</h3>
             <div class="setting-item">
                 <label class="checkbox-label">
                     <input
@@ -186,7 +186,7 @@ pub fn AutomationSettings(settings: RwSignal<Settings>, toast: SettingsToast) ->
             </div>
         </div>
         <div class="settings-section">
-            <h3>"Session Management"</h3>
+            <h3 class="section-header">"Session Management"</h3>
             <div class="setting-item">
                 <label class="checkbox-label">
                     <input

@@ -140,17 +140,17 @@
 
 /* Tag Usage Pie Chart Styles */
 .tag-usage-card {
-  background: white;
-  border-radius: 12px;
-  padding: 24px;
-  margin-bottom: 24px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.05);
-  border: 1px solid #e5e7eb;
+  background: var(--card-bg);
+  border-radius: 15px;
+  padding: 1.5rem;
+  margin-bottom: 1rem;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+  border: 1px solid var(--shared-border);
 }
 
 .tag-usage-card h3 {
-  margin: 0 0 20px 0;
-  color: #374151;
+  margin: 0 0 1rem 0;
+  color: var(--accent-color);
   font-size: 1.1rem;
   font-weight: 600;
 }
@@ -317,4 +317,202 @@
   [data-theme="auto"] .tag-legend-percent {
     color: #64748b;
   }
+}
+
+/* ========================================
+   Period tab bar (lifted from ref fork)
+   ======================================== */
+
+.period-tabs {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  margin-bottom: 1.5rem;
+  padding: 0.5rem;
+  background: var(--card-bg);
+  border-radius: 16px;
+  box-shadow: 0 2px 8px var(--shared-border);
+  max-width: 600px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.period-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1.5rem;
+  border: 2px solid transparent;
+  background: transparent;
+  color: var(--text-light);
+  border-radius: 12px;
+  cursor: pointer;
+  font-size: 0.95rem;
+  font-weight: 500;
+  transition: background 0.2s ease, color 0.2s ease, transform 0.2s ease;
+}
+
+.period-btn i {
+  font-size: 1.2rem;
+  transition: transform 0.2s ease;
+}
+
+.period-btn:hover {
+  background: var(--setting-item-hover-bg, var(--card-bg-subtle));
+  color: var(--accent-color);
+}
+
+.period-btn:hover i {
+  transform: scale(1.1);
+}
+
+.period-btn.active {
+  background: var(--focus-color, var(--accent-color));
+  color: var(--text-on-focus, #ffffff);
+  border-color: transparent;
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--focus-color) 25%, transparent);
+}
+
+.period-btn.active:hover {
+  background: var(--focus-color, var(--accent-color));
+  color: var(--text-on-focus, #ffffff);
+  transform: translateY(-1px);
+}
+
+/* ========================================
+   Tag usage donut (shape + empty placeholder)
+   ======================================== */
+
+.tag-usage-pie-row {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  min-height: 200px;
+}
+
+.tag-usage-pie {
+  width: 180px;
+  height: 180px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  box-shadow: inset 0 0 0 8px var(--card-bg, #ffffff);
+}
+
+.tag-usage-pie-empty {
+  background: conic-gradient(var(--shared-border) 0% 100%);
+  opacity: 0.5;
+}
+
+.tag-usage-legend {
+  flex: 1;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.tag-usage-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.9rem;
+}
+
+.tag-usage-swatch {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+.tag-usage-name {
+  flex: 1;
+  color: var(--accent-color);
+  font-weight: 500;
+}
+
+.tag-usage-minutes {
+  color: var(--text-light);
+  font-variant-numeric: tabular-nums;
+}
+
+.tag-usage-empty {
+  color: var(--text-light);
+  font-style: italic;
+}
+
+/* ========================================
+   Line chart primitive (peak focus time + peak day)
+   ======================================== */
+
+.line-chart-card {
+  background: var(--card-bg);
+  border-radius: 15px;
+  padding: 1.5rem;
+  margin-bottom: 1rem;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+  border: 1px solid var(--shared-border);
+}
+
+.line-chart-card .section-header {
+  margin: 0 0 6px 0;
+  border-bottom: none;
+  padding-bottom: 0;
+  font-size: 1.1rem;
+}
+
+.line-chart-subhead {
+  margin: 0 0 16px 0;
+  color: var(--text-light);
+  font-size: 0.9rem;
+}
+
+.line-chart {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+
+.line-chart-gridline {
+  stroke: var(--shared-border);
+  stroke-width: 1;
+  opacity: 0.5;
+}
+
+.line-chart-tick-label {
+  fill: var(--text-light);
+  font-size: 11px;
+}
+
+.line-chart-x-label {
+  fill: var(--text-light);
+  font-size: 11px;
+}
+
+.line-chart-path {
+  stroke: var(--focus-color, #4A9B7F);
+  stroke-width: 2.5;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.line-chart-dot {
+  fill: var(--card-bg);
+  stroke: var(--focus-color, #4A9B7F);
+  stroke-width: 1.5;
+}
+
+.line-chart-dot-peak {
+  fill: var(--card-bg);
+  stroke-width: 3;
+}
+
+.line-chart-peak-guide {
+  stroke: var(--text-light);
+  stroke-width: 1.5;
+  opacity: 0.6;
 }

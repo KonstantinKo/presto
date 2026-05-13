@@ -206,7 +206,7 @@ pub fn ShortcutsSettings(settings: RwSignal<Settings>, toast: SettingsToast) -> 
             </p>
         </div>
         <div class="settings-section">
-            <h3>"Keyboard Shortcuts"</h3>
+            <h3 class="section-header">"Keyboard Shortcuts"</h3>
             {shortcut_row(ShortcutSlot::StartStop, settings, recording, toast)}
             {shortcut_row(ShortcutSlot::Reset, settings, recording, toast)}
             {shortcut_row(ShortcutSlot::Skip, settings, recording, toast)}

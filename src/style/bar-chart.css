@@ -1,61 +1,226 @@
 /* Bar chart + sessions timeline blocks — feature 003. */
 
 .bar-chart-card {
-  background: var(--card-bg, rgba(255, 255, 255, 0.04));
-  border: 1px solid var(--card-border, rgba(255, 255, 255, 0.08));
-  border-radius: 8px;
-  padding: 16px;
-  margin-top: 16px;
+  background: var(--card-bg);
+  border: 1px solid var(--shared-border);
+  border-radius: 15px;
+  padding: 1.5rem;
+  margin-bottom: 1rem;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
 }
 
-.bar-chart-container {
+/* Plot region: Y-axis labels | grid + bars. */
+.bar-chart-plot {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.5rem;
+  background: var(--card-bg-subtle);
+  border-radius: 10px;
+  padding: 1rem 0.75rem 0.5rem 0.5rem;
+}
+
+.bar-chart-y-axis {
   display: flex;
+  flex-direction: column;
+  justify-content: space-between;
   align-items: flex-end;
-  gap: 4px;
-  height: 200px;
-  padding: 12px 0;
-  border-bottom: 1px solid var(--axis-color, rgba(255, 255, 255, 0.12));
+  height: 220px;
+  padding-bottom: 22px; /* match space the x-axis labels take */
+  font-size: 11px;
+  color: var(--text-light);
+  font-variant-numeric: tabular-nums;
+}
+
+.bar-chart-y-tick {
+  line-height: 1;
+  transform: translateY(50%); /* center each tick on its gridline */
+}
+
+.bar-chart-y-tick:first-child {
+  transform: translateY(0);
+}
+
+.bar-chart-y-tick:last-child {
+  transform: translateY(-50%);
+}
+
+.bar-chart-grid {
+  position: relative;
+  height: 220px;
+}
+
+.bar-chart-gridline {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: var(--shared-border);
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+/* 6 gridlines distributed across the 198px tall bar area (220px minus 22px label band). */
+.bar-chart-grid .bar-chart-gridline:nth-child(1) { top: 0; }
+.bar-chart-grid .bar-chart-gridline:nth-child(2) { top: calc((100% - 22px) * 0.2); }
+.bar-chart-grid .bar-chart-gridline:nth-child(3) { top: calc((100% - 22px) * 0.4); }
+.bar-chart-grid .bar-chart-gridline:nth-child(4) { top: calc((100% - 22px) * 0.6); }
+.bar-chart-grid .bar-chart-gridline:nth-child(5) { top: calc((100% - 22px) * 0.8); }
+.bar-chart-grid .bar-chart-gridline:nth-child(6) { top: calc(100% - 22px); }
+
+.bar-chart-container {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-rows: 1fr 22px;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  column-gap: 6px;
 }
 
 .bar-column {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-  min-width: 0; /* allow flex shrink for monthly's 31 bars */
+  display: grid;
+  grid-template-rows: 1fr 22px;
+  grid-row: 1 / span 2;
+  justify-items: center;
+  align-items: end;
+  position: relative;
+  min-width: 0;
+}
+
+.bar-column::before {
+  content: "";
+  grid-row: 1;
+  grid-column: 1;
+  width: 60%;
+  max-width: 36px;
+  height: 100%;
+  background: color-mix(in srgb, var(--shared-border) 40%, transparent);
+  border-radius: 4px 4px 0 0;
+  pointer-events: none;
 }
 
 .bar {
-  width: 70%;
-  max-width: 32px;
+  grid-row: 1;
+  grid-column: 1;
+  align-self: end;
+  z-index: 1;
+  width: 60%;
+  max-width: 36px;
   background: var(--focus-color, #f56565);
-  border-radius: 2px 2px 0 0;
-  transition: background 150ms ease;
-  min-height: 1px; /* zero-value bars still render as a thin tick */
+  border-radius: 4px 4px 0 0;
+  transition: transform 150ms ease, background 150ms ease;
+  min-height: 0;
+}
+
+.bar-empty {
+  background: transparent;
 }
 
 .bar:hover {
-  background: var(--focus-color-hover, #ed5556);
+  background: var(--focus-color-hover, var(--focus-timer-color));
+  transform: scaleY(1.02);
+  transform-origin: bottom;
+}
+
+.bar-label {
+  grid-row: 2;
+  grid-column: 1;
+  align-self: center;
+  text-align: center;
 }
 
 .bar-label {
   font-size: 11px;
-  color: var(--text-light, rgba(255, 255, 255, 0.6));
+  color: var(--text-light);
   text-align: center;
   white-space: nowrap;
+  font-weight: 500;
 }
 
 .bar-chart-footer {
   display: flex;
   justify-content: flex-end;
   padding-top: 12px;
+  margin-top: 12px;
   font-size: 13px;
-  color: var(--text-secondary, rgba(255, 255, 255, 0.7));
+  color: var(--text-light);
+  border-top: 1px solid var(--shared-border);
 }
 
 .bar-chart-total {
   font-weight: 600;
+  color: var(--accent-color);
+}
+
+/* Distribution header (h3 + total) and legend below the bar chart. */
+.distribution-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+}
+
+.distribution-header .section-header {
+  margin: 0;
+  padding-bottom: 0;
+  border-bottom: none;
+  color: var(--accent-color);
+  font-size: 1.1rem;
+  font-weight: 600;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.total-focus-time {
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+  font-size: 0.9rem;
+}
+
+.total-focus-time .label {
+  color: var(--text-light);
+}
+
+.total-focus-time .value {
+  color: var(--focus-color);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.distribution-legend {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1.5rem;
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--shared-border);
+  font-size: 0.85rem;
+  color: var(--text-light);
+}
+
+.legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.legend-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+.legend-dot.focus {
+  background: var(--focus-color);
+}
+
+.legend-dot.break {
+  background: var(--break-color);
 }
 
 /* Sessions-timeline session blocks (Daily view). The track itself is

@@ -103,18 +103,35 @@ pub fn conic_gradient_style(entries: &[TagUsageEntry]) -> Option<String> {
 /// slice from the caller (already filtered to the active cursor's
 /// span) and the global `tags` context. Static-only per FR-050.
 #[component]
-pub fn TagUsagePie(sessions: Signal<Vec<ManualSession>>, tags: Signal<Vec<Tag>>) -> impl IntoView {
+pub fn TagUsagePie(
+    sessions: Signal<Vec<ManualSession>>,
+    tags: Signal<Vec<Tag>>,
+    #[prop(into, optional)] title: Signal<String>,
+) -> impl IntoView {
     let entries =
         Signal::derive(move || sessions.with(|ss| tags.with(|ts| aggregate_tag_usage(ss, ts))));
+    let resolved_title = Signal::derive(move || {
+        let raw = title.get();
+        if raw.is_empty() {
+            "Tag Usage".to_string()
+        } else {
+            raw
+        }
+    });
 
     view! {
         <div class="tag-usage-card">
-            <h3>"Tag Usage"</h3>
+            <h3>{move || resolved_title.get()}</h3>
             {move || {
                 let snapshot = entries.get();
                 if snapshot.is_empty() {
                     view! {
-                        <div class="tag-usage-empty">"No tagged sessions in this period"</div>
+                        <div class="tag-usage-pie-row">
+                            <div class="tag-usage-pie tag-usage-pie-empty"></div>
+                            <div class="tag-usage-empty">
+                                "No tagged sessions in this period"
+                            </div>
+                        </div>
                     }.into_any()
                 } else {
                     let pie_style = conic_gradient_style(&snapshot).unwrap_or_default();

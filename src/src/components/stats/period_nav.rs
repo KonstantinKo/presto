@@ -41,6 +41,16 @@ const MONTH_SHORT_NAMES: [&str; 12] = [
     "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
 ];
 
+const WEEKDAY_NAMES: [&str; 7] = [
+    "Monday",
+    "Tuesday",
+    "Wednesday",
+    "Thursday",
+    "Friday",
+    "Saturday",
+    "Sunday",
+];
+
 fn month_short(month: u32) -> &'static str {
     let idx = month.saturating_sub(1) as usize;
     MONTH_SHORT_NAMES.get(idx).copied().unwrap_or("???")
@@ -51,11 +61,17 @@ fn month_full(month: u32) -> &'static str {
     MONTH_FULL_NAMES.get(idx).copied().unwrap_or("Unknown")
 }
 
-/// Format the Daily range label: `"<Month> <Day> <Year>"`.
+fn weekday_full(anchor: DateTime<Utc>) -> &'static str {
+    let idx = anchor.weekday().num_days_from_monday() as usize;
+    WEEKDAY_NAMES.get(idx).copied().unwrap_or("Unknown")
+}
+
+/// Format the Daily range label: `"<Weekday>, <Month> <Day>, <Year>"`.
 #[must_use]
 pub fn format_day_range(anchor: DateTime<Utc>) -> String {
     format!(
-        "{month} {day} {year}",
+        "{weekday}, {month} {day}, {year}",
+        weekday = weekday_full(anchor),
         month = month_short(anchor.month()),
         day = anchor.day(),
         year = anchor.year(),
@@ -214,9 +230,9 @@ mod tests {
     use chrono::{TimeZone, Utc};
 
     #[test]
-    fn day_range_formats_as_month_day_year() {
+    fn day_range_formats_as_weekday_month_day_year() {
         let anchor = Utc.with_ymd_and_hms(2026, 5, 12, 12, 0, 0).unwrap();
-        assert_eq!(format_day_range(anchor), "May 12 2026");
+        assert_eq!(format_day_range(anchor), "Tuesday, May 12, 2026");
     }
 
     #[test]

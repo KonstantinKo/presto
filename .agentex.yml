@@ -55,9 +55,11 @@ qa:
     # Feature 003 carve-out: 17 baselines explicitly authorised by
     # spec FR-044 + Principle X drift-cleanup (7 touched surfaces +
     # 10 pre-existing drift from features 001/002/#50).
-    # Cap scoped to branch 003-*; other branches keep the default of 2.
+    # ui-parity-port carve-out: same 17-cap — full visual re-skin to match
+    # the upstream UI (ramazanberkozbek/presto) touches all major surfaces.
+    # Cap scoped to branch 003-* and ui-parity-port; others keep default of 2.
     - |
-      if git rev-parse --abbrev-ref HEAD 2>/dev/null | grep -q "^003-"; then
+      if git rev-parse --abbrev-ref HEAD 2>/dev/null | grep -qE "^003-|^ui-parity-port$"; then
         BASELINE_CAP=17 bash scripts/check-baseline-cap.sh
       else
         bash scripts/check-baseline-cap.sh

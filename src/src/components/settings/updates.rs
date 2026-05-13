@@ -122,7 +122,7 @@ pub fn UpdatesSettings(
             </p>
         </div>
         <div class="settings-section">
-            <h3>"Current Version"</h3>
+            <h3 class="section-header">"Current Version"</h3>
             <div class="setting-item">
                 <div class="version-info">
                     <div class="current-version">
@@ -142,7 +142,7 @@ pub fn UpdatesSettings(
             </div>
         </div>
         <div class="settings-section">
-            <h3>"Update Settings"</h3>
+            <h3 class="section-header">"Update Settings"</h3>
             <div class="setting-item">
                 <label class="checkbox-label">
                     <input
