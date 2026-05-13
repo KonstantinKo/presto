@@ -1,7 +1,8 @@
 {
   "app": {
     "degraded_mode_title": "Degraded mode.",
-    "degraded_mode_body": "Tauri bridge unavailable — settings + sessions are in-memory only."
+    "degraded_mode_body": "Tauri bridge unavailable — settings + sessions are in-memory only.",
+    "toast_save_failed": "Failed to save settings"
   },
   "settings": {
     "shell_header": "Settings",
@@ -21,8 +22,9 @@
     "general": {
       "title": "General Settings",
       "description": "Configure timer durations and basic behavior",
+      "language_section_heading": "Language",
       "language_label": "Language:",
-      "language_help": "Catalogue updates ship in future releases. Restart not required.",
+      "language_help": "Changes apply immediately — no restart needed.",
       "timer_durations_header": "Timer Durations",
       "focus_duration_label": "Focus Duration (minutes):",
       "focus_duration_help": "How long should focus sessions last",
@@ -180,7 +182,41 @@
     "indicator_auto_start": "Auto-start: Click to toggle automatic session start",
     "indicator_continuous": "Continuous Sessions: Click to toggle continuous mode",
     "adjust_minus_aria": "Subtract 5 minutes",
-    "adjust_plus_aria": "Add 5 minutes"
+    "adjust_plus_aria": "Add 5 minutes",
+    "messages": {
+      "pomodoro_completed_toast_short": "Pomodoro completed! Take a short break 😌",
+      "pomodoro_completed_toast_long": "Great work! Take a long break 🎉",
+      "pomodoro_completed_desktop_short": "Focus session complete — take a short break",
+      "pomodoro_completed_desktop_long": "Focus session complete — take a long break",
+      "break_completed_toast_break": "Break over! Ready to focus? 🍅",
+      "break_completed_toast_long_break": "Long break over! Time to get back to work 🚀",
+      "break_completed_toast_focus": "Session completed",
+      "break_completed_desktop_break": "Break finished — back to focus",
+      "break_completed_desktop_long_break": "Long break finished — back to focus",
+      "break_completed_desktop_focus": "Session completed",
+      "overtime_started_toast_focus": "Pomodoro completed! Continue working or take a break 🍅",
+      "overtime_started_toast_break": "Break time completed! Continue resting or ready to focus? ☕",
+      "overtime_started_toast_long_break": "Long break completed! Continue resting or ready to work? 🌙",
+      "overtime_started_desktop_focus": "Focus session complete — overtime started",
+      "overtime_started_desktop_break": "Break over — continue resting or get back to work",
+      "overtime_started_desktop_long_break": "Long break over — continue resting or get back to work",
+      "session_skipped_toast_focus": "Focus session skipped 😌",
+      "session_skipped_toast_break": "Break skipped — ready to focus? 🍅",
+      "session_skipped_toast_long_break": "Long break skipped — back to work 🚀",
+      "two_minutes_remaining": "2 minutes remaining! 🔥",
+      "thirty_seconds_remaining": "30 seconds left! ⏰"
+    },
+    "toast": {
+      "timer_started": "Timer started! 🍅",
+      "timer_paused": "Timer paused ⏸️",
+      "timer_resumed": "Timer resumed ▶️",
+      "smart_pause_activated": "Smart Pause: timer paused due to inactivity ⏸️",
+      "auto_resumed": "Welcome back! Timer resumed ▶️",
+      "manual_session_recorded": "Manual session recorded",
+      "session_deleted": "Session deleted ❌",
+      "minutes_added": "5 minutes added to timer ⏰",
+      "minutes_subtracted": "5 minutes subtracted from timer ⏰"
+    }
   },
   "tag": {
     "choose_header": "Choose tag",

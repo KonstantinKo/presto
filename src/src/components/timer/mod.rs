@@ -40,7 +40,6 @@
 // bridge) is the post-merge plan's larger refactor.
 #![allow(clippy::must_use_candidate, clippy::too_many_lines)]
 
-mod messages;
 mod tag_tracking;
 mod tray;
 
@@ -51,10 +50,6 @@ use leptos::task::spawn_local;
 use leptos_i18n::{t, t_string};
 use wasm_bindgen::JsCast;
 
-use self::messages::{
-    break_completed_desktop_body, break_completed_toast, overtime_started_messages,
-    pomodoro_completed_desktop_body, pomodoro_completed_toast, session_skipped_toast,
-};
 use self::tag_tracking::{
     apply_tag_tracking_events, tag_tracking_flush_all, tag_tracking_flush_one, tag_tracking_start,
 };
@@ -557,11 +552,18 @@ const fn random_uuid() -> String {
 // Tray-icon formatter + dispatch moved to the `tray` submodule.
 // `tag_tracking_*` helpers + dispatch moved to `tag_tracking`.
 
+/// Typed alias for the `leptos_i18n` context. Threaded into `handle_events`
+/// so every toast / desktop-notification body fires through the live
+/// `t_string!` catalogue lookup (feature 005). Copy semantics — pass by
+/// value at every call site.
+type I18nCtx = leptos_i18n::I18nContext<crate::i18n::i18n::Locale>;
+
 fn handle_events(
     events: &[TimerEvent],
     settings: &Settings,
     toast: AppToast,
     warning_signal: RwSignal<bool>,
+    i18n: I18nCtx,
 ) {
     let has_overtime = events
         .iter()
@@ -572,18 +574,23 @@ fn handle_events(
                 completed_pomodoros,
             } => {
                 if !has_overtime {
-                    toast.show(pomodoro_completed_toast(
-                        *completed_pomodoros,
-                        settings.timer.sessions_per_long_break,
-                    ));
+                    let is_long_break =
+                        completed_pomodoros.is_multiple_of(settings.timer.sessions_per_long_break);
+                    let toast_text = if is_long_break {
+                        t_string!(i18n, timer.messages.pomodoro_completed_toast_long)
+                    } else {
+                        t_string!(i18n, timer.messages.pomodoro_completed_toast_short)
+                    };
+                    toast.show(toast_text);
                     if settings.notifications.sound_notifications {
                         play_chime();
                     }
                     if settings.notifications.desktop_notifications {
-                        let desk_body = pomodoro_completed_desktop_body(
-                            *completed_pomodoros,
-                            settings.timer.sessions_per_long_break,
-                        );
+                        let desk_body = if is_long_break {
+                            t_string!(i18n, timer.messages.pomodoro_completed_desktop_long)
+                        } else {
+                            t_string!(i18n, timer.messages.pomodoro_completed_desktop_short)
+                        };
                         spawn_local(async move {
                             let _ =
                                 crate::bridge::notification::send_notification("Presto", desk_body)
@@ -594,12 +601,34 @@ fn handle_events(
                 warning_signal.set(false);
             }
             TimerEvent::BreakCompleted { mode } => {
-                toast.show(break_completed_toast(*mode));
+                let toast_text = match mode {
+                    TimerMode::Break => t_string!(i18n, timer.messages.break_completed_toast_break),
+                    TimerMode::LongBreak => {
+                        t_string!(i18n, timer.messages.break_completed_toast_long_break)
+                    }
+                    // Defensive default — `BreakCompleted` carries Break
+                    // or LongBreak only; `Focus` would be an engine
+                    // regression.
+                    TimerMode::Focus => {
+                        t_string!(i18n, timer.messages.break_completed_toast_focus)
+                    }
+                };
+                toast.show(toast_text);
                 if settings.notifications.sound_notifications {
                     play_chime();
                 }
                 if settings.notifications.desktop_notifications {
-                    let desk_body = break_completed_desktop_body(*mode);
+                    let desk_body = match mode {
+                        TimerMode::Break => {
+                            t_string!(i18n, timer.messages.break_completed_desktop_break)
+                        }
+                        TimerMode::LongBreak => {
+                            t_string!(i18n, timer.messages.break_completed_desktop_long_break)
+                        }
+                        TimerMode::Focus => {
+                            t_string!(i18n, timer.messages.break_completed_desktop_focus)
+                        }
+                    };
                     spawn_local(async move {
                         let _ = crate::bridge::notification::send_notification("Presto", desk_body)
                             .await;
@@ -607,37 +636,67 @@ fn handle_events(
                 }
             }
             TimerEvent::TwoMinutesRemaining => {
-                toast.show("2 minutes remaining! \u{1f525}");
+                toast.show(t_string!(i18n, timer.messages.two_minutes_remaining));
                 warning_signal.set(true);
             }
             TimerEvent::ThirtySecondsRemaining => {
-                toast.show("30 seconds left! \u{23f0}");
+                toast.show(t_string!(i18n, timer.messages.thirty_seconds_remaining));
                 warning_signal.set(true);
             }
             TimerEvent::SessionStarted => {
-                toast.show("Timer started! \u{1f345}");
+                toast.show(t_string!(i18n, timer.toast.timer_started));
                 if settings.notifications.sound_notifications {
                     play_chime();
                 }
             }
-            TimerEvent::SessionPaused => toast.show("Timer paused \u{23f8}\u{fe0f}"),
+            TimerEvent::SessionPaused => {
+                toast.show(t_string!(i18n, timer.toast.timer_paused));
+            }
             TimerEvent::SessionResumed => {
-                toast.show("Timer resumed \u{25b6}\u{fe0f}");
+                toast.show(t_string!(i18n, timer.toast.timer_resumed));
                 if settings.notifications.sound_notifications {
                     play_chime();
                 }
             }
             TimerEvent::SessionSkipped { skipped_mode, .. } => {
-                toast.show(session_skipped_toast(*skipped_mode));
+                let toast_text = match skipped_mode {
+                    TimerMode::Focus => {
+                        t_string!(i18n, timer.messages.session_skipped_toast_focus)
+                    }
+                    TimerMode::Break => {
+                        t_string!(i18n, timer.messages.session_skipped_toast_break)
+                    }
+                    TimerMode::LongBreak => {
+                        t_string!(i18n, timer.messages.session_skipped_toast_long_break)
+                    }
+                };
+                toast.show(toast_text);
                 warning_signal.set(false);
             }
             TimerEvent::AutoPaused => {
-                toast.show("Smart Pause: timer paused due to inactivity \u{23f8}\u{fe0f}");
+                toast.show(t_string!(i18n, timer.toast.smart_pause_activated));
             }
-            TimerEvent::AutoResumed => toast.show("Welcome back! Timer resumed \u{25b6}\u{fe0f}"),
-            TimerEvent::ManualSessionRecorded { .. } => toast.show("Manual session recorded"),
+            TimerEvent::AutoResumed => {
+                toast.show(t_string!(i18n, timer.toast.auto_resumed));
+            }
+            TimerEvent::ManualSessionRecorded { .. } => {
+                toast.show(t_string!(i18n, timer.toast.manual_session_recorded));
+            }
             TimerEvent::OvertimeStarted { mode } => {
-                let (toast_msg, desk_body) = overtime_started_messages(*mode);
+                let (toast_msg, desk_body) = match mode {
+                    TimerMode::Focus => (
+                        t_string!(i18n, timer.messages.overtime_started_toast_focus),
+                        t_string!(i18n, timer.messages.overtime_started_desktop_focus),
+                    ),
+                    TimerMode::Break => (
+                        t_string!(i18n, timer.messages.overtime_started_toast_break),
+                        t_string!(i18n, timer.messages.overtime_started_desktop_break),
+                    ),
+                    TimerMode::LongBreak => (
+                        t_string!(i18n, timer.messages.overtime_started_toast_long_break),
+                        t_string!(i18n, timer.messages.overtime_started_desktop_long_break),
+                    ),
+                };
                 toast.show(toast_msg);
                 if settings.notifications.sound_notifications {
                     play_chime();
@@ -909,6 +968,7 @@ pub fn TimerView() -> impl IntoView {
                         &settings.get_untracked(),
                         app_toast,
                         warning_signal,
+                        i18n,
                     );
                     apply_tag_tracking_events(&events, active_session_tags, selected_tag_ids);
                 }
@@ -1242,6 +1302,7 @@ pub fn TimerView() -> impl IntoView {
             &settings.get_untracked(),
             app_toast,
             warning_signal,
+            i18n,
         );
         apply_tag_tracking_events(&events, active_session_tags, selected_tag_ids);
         dispatch_tray_update(engine, settings, true);
@@ -1263,7 +1324,7 @@ pub fn TimerView() -> impl IntoView {
         // the session resets.
         tag_tracking_flush_all(active_session_tags, BrowserClock.now_ms());
         // Toast mirrors `pomodoro-timer.js:871` ("Session deleted ❌").
-        app_toast.show("Session deleted \u{274c}");
+        app_toast.show(t_string!(i18n, timer.toast.session_deleted));
         dispatch_tray_update(engine, settings, true);
     };
     let on_skip = move |_| {
@@ -1273,6 +1334,7 @@ pub fn TimerView() -> impl IntoView {
             &settings.get_untracked(),
             app_toast,
             warning_signal,
+            i18n,
         );
         apply_tag_tracking_events(&events, active_session_tags, selected_tag_ids);
         // Clear the per-session title on skip — mirrors the zero-cross clear at
@@ -1287,6 +1349,7 @@ pub fn TimerView() -> impl IntoView {
                 &settings.get_untracked(),
                 app_toast,
                 warning_signal,
+                i18n,
             );
             apply_tag_tracking_events(&start_events, active_session_tags, selected_tag_ids);
         }
@@ -1305,7 +1368,7 @@ pub fn TimerView() -> impl IntoView {
         });
         // Toast mirrors `pomodoro-timer.js:902-904` ("5 minutes
         // subtracted from timer ⏰").
-        app_toast.show("5 minutes subtracted from timer \u{23f0}");
+        app_toast.show(t_string!(i18n, timer.toast.minutes_subtracted));
     };
     let on_adjust_plus = move |_| {
         engine.update(|state| {
@@ -1314,7 +1377,7 @@ pub fn TimerView() -> impl IntoView {
         if engine.with(|s| s.time_remaining_secs() > 120) {
             warning_signal.set(false);
         }
-        app_toast.show("5 minutes added to timer \u{23f0}");
+        app_toast.show(t_string!(i18n, timer.toast.minutes_added));
     };
 
     // 1 Hz tick loop. Ticking unconditionally (not gated on
@@ -1465,6 +1528,7 @@ pub fn TimerView() -> impl IntoView {
                     &settings.get_untracked(),
                     app_toast,
                     warning_signal,
+                    i18n,
                 );
                 apply_tag_tracking_events(&events, active_session_tags, selected_tag_ids);
 

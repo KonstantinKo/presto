@@ -1,7 +1,8 @@
 {
   "app": {
     "degraded_mode_title": "Modalità degradata.",
-    "degraded_mode_body": "Bridge Tauri non disponibile — impostazioni + sessioni sono solo in memoria."
+    "degraded_mode_body": "Bridge Tauri non disponibile — impostazioni + sessioni sono solo in memoria.",
+    "toast_save_failed": "Impossibile salvare le impostazioni"
   },
   "settings": {
     "shell_header": "Impostazioni",
@@ -21,8 +22,9 @@
     "general": {
       "title": "Impostazioni generali",
       "description": "Configura le durate del timer e i comportamenti di base",
+      "language_section_heading": "Lingua",
       "language_label": "Lingua:",
-      "language_help": "Gli aggiornamenti del catalogo arriveranno nelle prossime versioni. Riavvio non necessario.",
+      "language_help": "Le modifiche si applicano immediatamente — riavvio non necessario.",
       "timer_durations_header": "Durate del timer",
       "focus_duration_label": "Durata del focus (minuti):",
       "focus_duration_help": "Quanto devono durare le sessioni di focus",
@@ -180,7 +182,41 @@
     "indicator_auto_start": "Avvio automatico: clicca per attivare l'avvio automatico delle sessioni",
     "indicator_continuous": "Sessioni continue: clicca per attivare la modalità continua",
     "adjust_minus_aria": "Sottrai 5 minuti",
-    "adjust_plus_aria": "Aggiungi 5 minuti"
+    "adjust_plus_aria": "Aggiungi 5 minuti",
+    "messages": {
+      "pomodoro_completed_toast_short": "Pomodoro completato! Fai una pausa breve 😌",
+      "pomodoro_completed_toast_long": "Ottimo lavoro! Fai una pausa lunga 🎉",
+      "pomodoro_completed_desktop_short": "Sessione di focus completata — fai una pausa breve",
+      "pomodoro_completed_desktop_long": "Sessione di focus completata — fai una pausa lunga",
+      "break_completed_toast_break": "Pausa finita! Pronto per il focus? 🍅",
+      "break_completed_toast_long_break": "Pausa lunga finita! Tornare al lavoro 🚀",
+      "break_completed_toast_focus": "Sessione completata",
+      "break_completed_desktop_break": "Pausa terminata — torna al focus",
+      "break_completed_desktop_long_break": "Pausa lunga terminata — torna al focus",
+      "break_completed_desktop_focus": "Sessione completata",
+      "overtime_started_toast_focus": "Pomodoro completato! Continua a lavorare o fai una pausa 🍅",
+      "overtime_started_toast_break": "Pausa finita! Continua a riposare o pronto per il focus? ☕",
+      "overtime_started_toast_long_break": "Pausa lunga finita! Continua a riposare o pronto per il lavoro? 🌙",
+      "overtime_started_desktop_focus": "Sessione di focus completata — straordinario iniziato",
+      "overtime_started_desktop_break": "Pausa finita — continua a riposare o torna al lavoro",
+      "overtime_started_desktop_long_break": "Pausa lunga finita — continua a riposare o torna al lavoro",
+      "session_skipped_toast_focus": "Sessione di focus saltata 😌",
+      "session_skipped_toast_break": "Pausa saltata — pronto per il focus? 🍅",
+      "session_skipped_toast_long_break": "Pausa lunga saltata — torna al lavoro 🚀",
+      "two_minutes_remaining": "2 minuti rimanenti! 🔥",
+      "thirty_seconds_remaining": "30 secondi rimasti! ⏰"
+    },
+    "toast": {
+      "timer_started": "Timer avviato! 🍅",
+      "timer_paused": "Timer in pausa ⏸️",
+      "timer_resumed": "Timer ripreso ▶️",
+      "smart_pause_activated": "Smart Pause: timer in pausa per inattività ⏸️",
+      "auto_resumed": "Bentornato! Timer ripreso ▶️",
+      "manual_session_recorded": "Sessione manuale registrata",
+      "session_deleted": "Sessione eliminata ❌",
+      "minutes_added": "5 minuti aggiunti al timer ⏰",
+      "minutes_subtracted": "5 minuti sottratti dal timer ⏰"
+    }
   },
   "tag": {
     "choose_header": "Scegli tag",

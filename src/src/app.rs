@@ -111,6 +111,16 @@ pub fn App() -> impl IntoView {
     let app_toast = AppToast::default();
     provide_context(app_toast);
 
+    // Feature 005: localised save-failure message. The settings
+    // persistence sink below lives in `App`'s body (outside the
+    // `I18nContextProvider` tree), so `use_i18n()` cannot resolve at
+    // its scope. A sibling sentinel component inside the provider
+    // (`SaveFailureMessageSync`) tracks the active locale and writes
+    // the resolved `t_string!(i18n, app.toast_save_failed)` into this
+    // signal on every locale change; the Effect reads the latest
+    // localised text without needing a live i18n context at fire-time.
+    let save_failure_message: RwSignal<String> = RwSignal::new(String::new());
+
     // Shared session log. TimerView pushes a `ManualSession` on
     // engine completion (focus session zero-cross OR a `skip()`
     // mid-focus that was over the JS-era 1-minute floor).
@@ -276,7 +286,17 @@ pub fn App() -> impl IntoView {
                         match commands::save_settings(to_save).await {
                             Ok(()) | Err(crate::bridge::types::BridgeError::BridgeUnavailable) => {}
                             Err(_) => {
-                                app_toast.show("Failed to save settings");
+                                // The `SaveFailureMessageSync` sentinel
+                                // (inside the i18n provider) writes the
+                                // resolved `t_string!(...)` into this
+                                // signal on every locale change. By the
+                                // time a save can fail, the user has
+                                // already interacted post-mount, so the
+                                // signal is guaranteed populated.
+                                let msg = save_failure_message.get_untracked();
+                                if !msg.is_empty() {
+                                    app_toast.show(msg);
+                                }
                             }
                         }
                     });
@@ -588,6 +608,7 @@ pub fn App() -> impl IntoView {
         // provider so `use_i18n()` resolves.
         <I18nContextProvider enable_cookie=false>
             <LocaleSync settings=settings/>
+            <SaveFailureMessageSync target=save_failure_message/>
         // The sidebar carries a per-mode theme class (`focus` /
         // `break` / `longBreak`) so `style/sidebar.css`'s
         // `.sidebar.focus .sidebar-icon.active { background:
@@ -708,6 +729,28 @@ fn LocaleSync(settings: RwSignal<Settings>) -> impl IntoView {
         if let Some(library_locale) = crate::i18n::compute_initial_library_locale(persisted) {
             i18n.set_locale(library_locale);
         }
+    });
+}
+
+/// Localised save-failure message bridge (feature 005).
+///
+/// Lives inside the `<I18nContextProvider>` so `use_i18n()` resolves to
+/// a live context. Tracks `i18n.get_locale()` and writes the resolved
+/// `t_string!(i18n, app.toast_save_failed)` into the shared signal on
+/// every reactive update. The settings-persistence Effect in `App` (set
+/// up outside the provider's owner tree) reads from that signal on
+/// failure — no hardcoded English literal at the toast call site.
+///
+/// Emits no DOM; the function-body return is an empty `()` view.
+#[component]
+fn SaveFailureMessageSync(target: RwSignal<String>) -> impl IntoView {
+    let i18n = use_i18n();
+    Effect::new(move |_| {
+        // Track the locale so the Effect re-runs on switch; resolve
+        // through `t_string!` and forward to the shared signal.
+        let _ = i18n.get_locale();
+        let msg = t_string!(i18n, app.toast_save_failed).to_string();
+        target.set(msg);
     });
 }
 

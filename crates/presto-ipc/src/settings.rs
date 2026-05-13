@@ -184,6 +184,16 @@ pub struct AppearanceSettings {
 /// `#[serde(default)]` attribute handles the missing-field case before
 /// this function is even called; this function handles the
 /// present-but-invalid case).
+///
+/// **Accepted limitation (FR-026):** an invalid wire value (`"fr"`, `42`,
+/// etc.) coerces SILENTLY to `None` rather than logging or surfacing
+/// the rejection. The resolver then falls back to OS-language
+/// detection per FR-009 step 2 — which lands the user in a usable
+/// state without bricking the settings load. Telemetry on this branch
+/// is deliberately omitted in v1 (presto is single-user, fully local,
+/// no analytics surface — see VISION.md). A future surface (an
+/// "advanced diagnostics" toggle) could route through `tracing` if
+/// debugging hand-edited settings files becomes a recurring need.
 fn deserialize_locale_lenient<'de, D>(deserializer: D) -> Result<Option<Locale>, D::Error>
 where
     D: serde::Deserializer<'de>,

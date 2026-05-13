@@ -136,10 +136,17 @@ pub fn GeneralSettings(settings: RwSignal<Settings>, toast: SettingsToast) -> im
     let on_locale_change = move |ev: leptos::ev::Event| {
         let value = event_target_value(&ev);
         let parsed = match value.as_str() {
+            "en" => Locale::En,
             "de" => Locale::De,
             "it" => Locale::It,
             "tr" => Locale::Tr,
-            _ => Locale::En,
+            // Defensive abort: the four `<option value="...">` literals
+            // are the only legal wire values; an unrecognised string
+            // here would mean the DOM was mutated externally or the
+            // option list drifted out of sync with this `match`. Abort
+            // the update rather than silently coercing to English —
+            // that would mask a real regression.
+            _ => return,
         };
         // Per Fix A: always wrap in `Some` so the resolver records an
         // explicit choice — `None` would re-trigger OS detection on
@@ -158,8 +165,11 @@ pub fn GeneralSettings(settings: RwSignal<Settings>, toast: SettingsToast) -> im
             // timer-durations section per FR-015 / Spec Story 1 AC 4.
             // The four `<option>` labels are native self-names —
             // hard-coded literals, NEVER re-translated when the active
-            // locale changes (FR-015).
-            <div class="setting-item">
+            // locale changes (FR-015). Section heading mirrors the
+            // Timer Durations pattern so the visual hierarchy stays
+            // consistent across the General tab.
+            <h3 class="section-header">{t!(i18n, settings.general.language_section_heading)}</h3>
+            <div class="setting-item language-setting-item">
                 <label for="locale-selector">{t!(i18n, settings.general.language_label)}</label>
                 <select
                     id="locale-selector"

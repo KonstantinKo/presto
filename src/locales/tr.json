@@ -1,7 +1,8 @@
 {
   "app": {
     "degraded_mode_title": "Sınırlı mod.",
-    "degraded_mode_body": "Tauri köprüsü kullanılamıyor — ayarlar + oturumlar yalnızca bellekte."
+    "degraded_mode_body": "Tauri köprüsü kullanılamıyor — ayarlar + oturumlar yalnızca bellekte.",
+    "toast_save_failed": "Ayarlar kaydedilemedi"
   },
   "settings": {
     "shell_header": "Ayarlar",
@@ -21,8 +22,9 @@
     "general": {
       "title": "Genel Ayarlar",
       "description": "Zamanlayıcı sürelerini ve temel davranışları yapılandırın",
+      "language_section_heading": "Dil",
       "language_label": "Dil:",
-      "language_help": "Katalog güncellemeleri ileriki sürümlerde gelecek. Yeniden başlatma gerekmiyor.",
+      "language_help": "Değişiklikler hemen uygulanır — yeniden başlatma gerekmiyor.",
       "timer_durations_header": "Zamanlayıcı süreleri",
       "focus_duration_label": "Odak süresi (dakika):",
       "focus_duration_help": "Odak oturumları ne kadar sürmeli",
@@ -180,7 +182,41 @@
     "indicator_auto_start": "Otomatik başlat: Otomatik oturum başlatmayı açıp kapatmak için tıklayın",
     "indicator_continuous": "Sürekli oturumlar: Sürekli modu açıp kapatmak için tıklayın",
     "adjust_minus_aria": "5 dakika çıkar",
-    "adjust_plus_aria": "5 dakika ekle"
+    "adjust_plus_aria": "5 dakika ekle",
+    "messages": {
+      "pomodoro_completed_toast_short": "Pomodoro tamamlandı! Kısa bir mola ver 😌",
+      "pomodoro_completed_toast_long": "Harika iş! Uzun bir mola ver 🎉",
+      "pomodoro_completed_desktop_short": "Odak oturumu tamamlandı — kısa mola ver",
+      "pomodoro_completed_desktop_long": "Odak oturumu tamamlandı — uzun mola ver",
+      "break_completed_toast_break": "Mola bitti! Odaklanmaya hazır mısın? 🍅",
+      "break_completed_toast_long_break": "Uzun mola bitti! İşe geri dön 🚀",
+      "break_completed_toast_focus": "Oturum tamamlandı",
+      "break_completed_desktop_break": "Mola bitti — odağa dön",
+      "break_completed_desktop_long_break": "Uzun mola bitti — odağa dön",
+      "break_completed_desktop_focus": "Oturum tamamlandı",
+      "overtime_started_toast_focus": "Pomodoro tamamlandı! Çalışmaya devam et ya da mola ver 🍅",
+      "overtime_started_toast_break": "Mola bitti! Dinlenmeye devam et ya da odaklanmaya hazır mısın? ☕",
+      "overtime_started_toast_long_break": "Uzun mola bitti! Dinlenmeye devam et ya da çalışmaya hazır mısın? 🌙",
+      "overtime_started_desktop_focus": "Odak oturumu tamamlandı — fazla mesai başladı",
+      "overtime_started_desktop_break": "Mola bitti — dinlenmeye devam et ya da işe dön",
+      "overtime_started_desktop_long_break": "Uzun mola bitti — dinlenmeye devam et ya da işe dön",
+      "session_skipped_toast_focus": "Odak oturumu atlandı 😌",
+      "session_skipped_toast_break": "Mola atlandı — odaklanmaya hazır mısın? 🍅",
+      "session_skipped_toast_long_break": "Uzun mola atlandı — işe geri dön 🚀",
+      "two_minutes_remaining": "2 dakika kaldı! 🔥",
+      "thirty_seconds_remaining": "30 saniye kaldı! ⏰"
+    },
+    "toast": {
+      "timer_started": "Zamanlayıcı başladı! 🍅",
+      "timer_paused": "Zamanlayıcı duraklatıldı ⏸️",
+      "timer_resumed": "Zamanlayıcı devam ediyor ▶️",
+      "smart_pause_activated": "Smart Pause: hareketsizlik nedeniyle zamanlayıcı duraklatıldı ⏸️",
+      "auto_resumed": "Tekrar hoş geldin! Zamanlayıcı devam ediyor ▶️",
+      "manual_session_recorded": "Manuel oturum kaydedildi",
+      "session_deleted": "Oturum silindi ❌",
+      "minutes_added": "Zamanlayıcıya 5 dakika eklendi ⏰",
+      "minutes_subtracted": "Zamanlayıcıdan 5 dakika çıkarıldı ⏰"
+    }
   },
   "tag": {
     "choose_header": "Etiket seç",
