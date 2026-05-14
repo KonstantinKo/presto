@@ -224,13 +224,14 @@ export type AdvancedSettings = { debug_mode?: boolean }
 /**
  * Ambient-sound track selection (feature 004).
  * 
- * Closed sum type: eight variants, one per vendored ambient track
+ * Closed sum type: eleven variants, one per vendored ambient track
  * plus `None` ("no track selected"). `None` is a first-class
  * variant — not `Option<AmbientSoundType>` and not a string sentinel
  * — so the type system encodes the absence case directly
  * (Principle III). Wire shape is kebab-case strings (`"none"`,
- * `"rain"`, ..., `"white-noise"`, `"wind"`), mirroring the
- * `StatusBarDisplay` precedent at `:27`.
+ * `"rain"`, ..., `"white-noise"`, `"wind"`, `"pink-noise"`,
+ * `"brown-noise"`, `"binaural"`), mirroring the `StatusBarDisplay`
+ * precedent at `:27`.
  */
 export type AmbientSoundType = 
 /**
@@ -240,35 +241,35 @@ export type AmbientSoundType =
  */
 "none" | 
 /**
- * Rain loop — vendored at `assets/audio/ambient/rain.mp3`.
+ * Rain loop — vendored at `assets/audio/ambient/rain.wav`.
  */
 "rain" | 
 /**
- * Fire / crackle loop — vendored at `assets/audio/ambient/fire.mp3`.
+ * Fire / crackle loop — vendored at `assets/audio/ambient/fire.wav`.
  */
 "fire" | 
 /**
  * Library / café ambience — vendored at
- * `assets/audio/ambient/library.mp3`.
+ * `assets/audio/ambient/library.wav`.
  */
 "library" | 
 /**
- * Fan hum — vendored at `assets/audio/ambient/fan.mp3`.
+ * Fan hum — vendored at `assets/audio/ambient/fan.wav`.
  */
 "fan" | 
 /**
- * Storm — vendored at `assets/audio/ambient/storm.mp3`.
+ * Storm — vendored at `assets/audio/ambient/storm.wav`.
  */
 "storm" | 
 /**
  * White noise — vendored at
- * `assets/audio/ambient/white-noise.mp3`. CRITICAL: the
+ * `assets/audio/ambient/white-noise.wav`. CRITICAL: the
  * multi-word variant — `#[serde(rename_all = "kebab-case")]`
  * emits it as `"white-noise"`, not `"whitenoise"`.
  */
 "white-noise" | 
 /**
- * Wind — vendored at `assets/audio/ambient/wind.mp3`.
+ * Wind — vendored at `assets/audio/ambient/wind.wav`.
  */
 "wind" | 
 /**
