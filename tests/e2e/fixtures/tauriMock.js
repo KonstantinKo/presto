@@ -25,8 +25,8 @@ const TAURI_MOCK_INIT_SCRIPT = `
   var _state = {
     tags: null, // lazy init; see _getTags()
     manualSessions: [],
-    quickLogs: [],
-    distractions: [],
+    quickLogs: null, // lazy init; see _getQuickLogs()
+    distractions: null, // lazy init; see _getDistractions()
     settings: {},
     sessionData: {
       completed_pomodoros: 0,
@@ -61,6 +61,22 @@ const TAURI_MOCK_INIT_SCRIPT = `
           ];
     }
     return _state.tags;
+  }
+
+  function _getQuickLogs() {
+    if (_state.quickLogs === null) {
+      var cfg = window.__E2E_CONFIG__ || {};
+      _state.quickLogs = cfg.initialQuickLogs ? cfg.initialQuickLogs.slice() : [];
+    }
+    return _state.quickLogs;
+  }
+
+  function _getDistractions() {
+    if (_state.distractions === null) {
+      var cfg = window.__E2E_CONFIG__ || {};
+      _state.distractions = cfg.initialDistractions ? cfg.initialDistractions.slice() : [];
+    }
+    return _state.distractions;
   }
 
   // --- Tauri event bus ---
@@ -133,7 +149,7 @@ const TAURI_MOCK_INIT_SCRIPT = `
           }
 
           case "load_quick_logs":
-            return _state.quickLogs.slice();
+            return _getQuickLogs().slice();
 
           case "save_quick_logs": {
             _state.saveQuickLogsCallCount++;
@@ -154,7 +170,7 @@ const TAURI_MOCK_INIT_SCRIPT = `
           }
 
           case "load_distractions":
-            return _state.distractions.slice();
+            return _getDistractions().slice();
 
           case "save_distractions": {
             _state.saveDistractionsCallCount++;

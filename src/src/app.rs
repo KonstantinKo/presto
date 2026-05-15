@@ -164,6 +164,18 @@ pub fn App() -> impl IntoView {
     provide_context(tags);
     provide_context(session_data);
 
+    // Feature 006 (T044/T045): shared QuickLog + Distraction manager
+    // signals. The two managers own bulk-list state; mutations go
+    // through `manager.update(...)` and best-effort persistence sinks
+    // below. Defaults to empty managers; the cold-start hydration
+    // (further down) overwrites them from disk.
+    let quick_logs_mgr =
+        RwSignal::new(crate::managers::quick_log::QuickLogManager::new());
+    let distractions_mgr =
+        RwSignal::new(crate::managers::distraction::DistractionManager::new());
+    provide_context(quick_logs_mgr);
+    provide_context(distractions_mgr);
+
     // Derived view-active flags. Each per-view container reads its
     // own flag to decide whether to apply `.hidden` — matching the
     // JS-era pattern at `screens.js:26-35`
@@ -462,6 +474,23 @@ pub fn App() -> impl IntoView {
         spawn_local(async move {
             if let Ok(loaded) = commands::load_tags().await {
                 tags.set(loaded);
+            }
+        });
+
+        // Feature 006 R-007: cold-start hydration for the quick-log +
+        // distraction managers. Both managers are pure side channels
+        // (FR-035) so a load failure is silent (the manager stays
+        // empty). Per-mutation persistence is handled at the
+        // call-site (timer/inventory modals each spawn a save after
+        // the in-memory `update(...)` lands).
+        spawn_local(async move {
+            if let Ok(loaded) = crate::managers::quick_log::QuickLogManager::load().await {
+                quick_logs_mgr.set(loaded);
+            }
+        });
+        spawn_local(async move {
+            if let Ok(loaded) = crate::managers::distraction::DistractionManager::load().await {
+                distractions_mgr.set(loaded);
             }
         });
 
