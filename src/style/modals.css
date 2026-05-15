@@ -203,6 +203,20 @@
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--focus-color) 20%, transparent);
 }
 
+/* Derived duration read-out — visually mirrors the inputs above so
+   the user reads it as a value on the same form, but its appearance
+   (no focus ring, muted text, no cursor) signals that it is not
+   user-editable. The single source of truth is the start/end pair. */
+.session-modal-body .session-duration-readout {
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--shared-border);
+  border-radius: 8px;
+  background: var(--card-bg-subtle);
+  color: var(--text-light);
+  font-variant-numeric: tabular-nums;
+  user-select: none;
+}
+
 .session-modal .modal-actions {
   display: flex;
   justify-content: flex-end;
@@ -213,6 +227,18 @@
 }
 
 .session-modal .modal-actions button {
+  /* Neutralise inherited per-variant overrides from layout.css /
+     settings.css. The global `.btn-danger` rule sets
+     `margin-bottom: 1rem` for the settings-page Danger Zone — in
+     this flex row that bottom margin grows the flex line to 56px
+     and the other buttons stretch to match while `.btn-danger`
+     itself stays at its 40px content box, producing the
+     "Delete looks too thin" bug. Force `margin: 0` here. */
+  appearance: none;
+  -webkit-appearance: none;
+  box-sizing: border-box;
+  margin: 0;
+  min-height: 2.5rem;
   padding: 0.5rem 1rem;
   border-radius: 8px;
   font-size: 0.9rem;
@@ -220,9 +246,19 @@
   cursor: pointer;
   transition: background 0.15s ease, transform 0.1s ease;
   border: 1px solid transparent;
+  font-family: inherit;
+  line-height: 1.2;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .session-modal .modal-actions .btn-secondary {
+  /* Cancel anchors to the left of the action row while Delete + Save
+     keep their default right-end grouping (the row's
+     `justify-content: flex-end` still does the work for the
+     remaining items). */
+  margin-right: auto;
   background: transparent;
   border-color: var(--shared-border);
   color: var(--text-color);
@@ -234,12 +270,13 @@
 
 .session-modal .modal-actions .btn-danger {
   background: transparent;
-  border-color: var(--focus-color);
+  border-color: var(--shared-border);
   color: var(--focus-color);
 }
 
 .session-modal .modal-actions .btn-danger:hover {
-  background: color-mix(in srgb, var(--focus-color) 12%, transparent);
+  background: color-mix(in srgb, var(--focus-color) 10%, transparent);
+  border-color: var(--focus-color);
 }
 
 .session-modal .modal-actions .btn-primary {
