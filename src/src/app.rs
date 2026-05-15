@@ -612,7 +612,7 @@ pub fn App() -> impl IntoView {
         // this level so the registration is one-shot.
         spawn_local(async move {
             let listener = events::listen::<String>(GLOBAL_SHORTCUT, |_name| {
-                // Phase 4c routes `_name` ("start_stop", "reset",
+                // Phase 4c routes `_name` ("start-stop", "reset",
                 // "skip") into the engine. Today we acknowledge
                 // the emit so the JS bridge sees a live listener
                 // and doesn't drop subsequent events.
