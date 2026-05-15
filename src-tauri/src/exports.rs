@@ -25,6 +25,26 @@ use rust_xlsxwriter::Workbook;
 
 use crate::{BridgeError, ManualSession};
 
+const fn session_type_to_str(session_type: super::SessionType) -> &'static str {
+    match session_type {
+        super::SessionType::Focus => "focus",
+        super::SessionType::Break => "break",
+        super::SessionType::LongBreak => "longBreak",
+        super::SessionType::Custom => "custom",
+    }
+}
+
+fn joined_tag_names(tags: Option<&Vec<serde_json::Value>>) -> String {
+    tags.map(|values| {
+        values
+            .iter()
+            .filter_map(|v| v.get("name").and_then(serde_json::Value::as_str))
+            .collect::<Vec<_>>()
+            .join("; ")
+    })
+    .unwrap_or_default()
+}
+
 /// Build an XLSX workbook from `sessions` and write it to `path`.
 ///
 /// Schema (one row per session, header in row 0):
@@ -73,23 +93,8 @@ pub(super) fn export(path: &Path, sessions: &[ManualSession]) -> Result<(), Brid
         let row = u32::try_from(i + 1).map_err(|e| BridgeError::Internal {
             msg: format!("xlsx row index overflow: {e}"),
         })?;
-        let session_type_str = match session.session_type {
-            super::SessionType::Focus => "focus",
-            super::SessionType::Break => "break",
-            super::SessionType::LongBreak => "longBreak",
-            super::SessionType::Custom => "custom",
-        };
-        let tags_joined = session
-            .tags
-            .as_ref()
-            .map(|values| {
-                values
-                    .iter()
-                    .filter_map(|v| v.get("name").and_then(serde_json::Value::as_str))
-                    .collect::<Vec<_>>()
-                    .join("; ")
-            })
-            .unwrap_or_default();
+        let session_type_str = session_type_to_str(session.session_type);
+        let tags_joined = joined_tag_names(session.tags.as_ref());
         sheet
             .write_string(row, 0, &session.id)
             .and_then(|s| s.write_string(row, 1, session_type_str))
@@ -123,23 +128,8 @@ pub(super) fn export_csv(path: &Path, sessions: &[ManualSession]) -> Result<(), 
         "id,session_type,duration,start_time,end_time,date,created_at,title,tags,notes\r\n",
     );
     for session in sessions {
-        let session_type_str = match session.session_type {
-            super::SessionType::Focus => "focus",
-            super::SessionType::Break => "break",
-            super::SessionType::LongBreak => "longBreak",
-            super::SessionType::Custom => "custom",
-        };
-        let tags_joined = session
-            .tags
-            .as_ref()
-            .map(|values| {
-                values
-                    .iter()
-                    .filter_map(|v| v.get("name").and_then(serde_json::Value::as_str))
-                    .collect::<Vec<_>>()
-                    .join("; ")
-            })
-            .unwrap_or_default();
+        let session_type_str = session_type_to_str(session.session_type);
+        let tags_joined = joined_tag_names(session.tags.as_ref());
         let title = session.title.as_deref().unwrap_or("");
         let notes = session.notes.as_deref().unwrap_or("");
         let row = [
@@ -255,11 +245,16 @@ mod tests {
         session.notes = Some("includes \"quoted\" word".to_string());
         export_csv(&out, &[session]).unwrap();
         let contents = std::fs::read_to_string(&out).unwrap();
-        let lines: Vec<&str> = contents.lines().collect();
+        let lines: Vec<&str> = contents.split_terminator("\r\n").collect();
         assert_eq!(lines.len(), 2, "header + 1 row");
-        assert!(lines[0].starts_with("id,session_type,duration,"));
-        assert!(lines[1].contains("\"Spec, draft\""));
-        assert!(lines[1].contains("\"includes \"\"quoted\"\" word\""));
+        assert_eq!(
+            lines[0],
+            "id,session_type,duration,start_time,end_time,date,created_at,title,tags,notes"
+        );
+        assert_eq!(
+            lines[1],
+            r#"ms-1,focus,25,09:00,09:25,Sat May 10 2026,2026-05-10T09:00:00Z,"Spec, draft",,"includes ""quoted"" word""#
+        );
     }
 
     #[test]
@@ -268,7 +263,11 @@ mod tests {
         let out = dir.path().join("empty.csv");
         export_csv(&out, &[]).unwrap();
         let contents = std::fs::read_to_string(&out).unwrap();
-        assert!(contents.starts_with("id,session_type,"));
-        assert_eq!(contents.lines().count(), 1);
+        let lines: Vec<&str> = contents.split_terminator("\r\n").collect();
+        assert_eq!(lines.len(), 1, "header only");
+        assert_eq!(
+            lines[0],
+            "id,session_type,duration,start_time,end_time,date,created_at,title,tags,notes"
+        );
     }
 }
