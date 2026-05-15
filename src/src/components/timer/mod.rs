@@ -1362,8 +1362,7 @@ pub fn TimerView() -> impl IntoView {
     // new `#center-complete-icon` takes over as the visible glyph
     // (FR-003, ✓ Complete on the center slot).
     let play_icon_style = Signal::derive(move || {
-        let overtime_active =
-            matches!(run_state.get(), RunState::Running) && is_overtime.get();
+        let overtime_active = matches!(run_state.get(), RunState::Running) && is_overtime.get();
         if is_running.get() || overtime_active {
             "display: none"
         } else {
@@ -1371,8 +1370,7 @@ pub fn TimerView() -> impl IntoView {
         }
     });
     let pause_icon_style = Signal::derive(move || {
-        let overtime_active =
-            matches!(run_state.get(), RunState::Running) && is_overtime.get();
+        let overtime_active = matches!(run_state.get(), RunState::Running) && is_overtime.get();
         if is_running.get() && !overtime_active {
             ""
         } else {
@@ -1512,8 +1510,24 @@ pub fn TimerView() -> impl IntoView {
     // natural-completion path).
     let on_complete = move |_| {
         let total_focus_before = engine.with_untracked(TimerState::total_focus_secs);
+        // Feature 007: overtime Complete (FR-007, FR-008). The engine's
+        // `complete(clock)` requires a paused state (line 983 — early-
+        // return otherwise). In overtime-Running, fold a synthetic pause
+        // into the same try_update so `complete()` sees Paused and the
+        // branch-B.2 path runs in one transaction. Pre-007 callers
+        // (Paused right-slot Complete) skip the pause-prelude.
         let events = engine
-            .try_update(|state| state.complete(&BrowserClock))
+            .try_update(|state| {
+                if state.is_running() && !state.is_paused() && !state.is_auto_paused() {
+                    // Drop the pause events: the user clicked Complete,
+                    // not Pause — surfacing a "SessionPaused" toast
+                    // would be misleading. The complete() call below
+                    // will emit the post-overtime
+                    // `SessionCompletedEarly` we care about.
+                    let _ = state.pause(&BrowserClock);
+                }
+                state.complete(&BrowserClock)
+            })
             .unwrap_or_default();
         let counted = events
             .iter()
@@ -1540,9 +1554,7 @@ pub fn TimerView() -> impl IntoView {
     // (rather than spreading it across JSX) anchors the 2D matrix to a
     // single inspection point (Constitutional Anchor III).
     let on_center_click = move |ev| {
-        if is_overtime.get_untracked()
-            && matches!(run_state.get_untracked(), RunState::Running)
-        {
+        if is_overtime.get_untracked() && matches!(run_state.get_untracked(), RunState::Running) {
             on_complete(ev);
         } else {
             on_play_pause(ev);
@@ -2437,7 +2449,7 @@ pub fn TimerView() -> impl IntoView {
                 <button id="stop-btn" class="control-btn"
                     class:filled-action=move || false
                     class:overtime=move || matches!(run_state.get(), RunState::Running) && is_overtime.get()
-                    aria-hidden=move || matches!(run_state.get(), RunState::Running) && is_overtime.get()
+                    aria-hidden=move || (matches!(run_state.get(), RunState::Running) && is_overtime.get()).to_string()
                     tabindex=move || if matches!(run_state.get(), RunState::Running) && is_overtime.get() { -1 } else { 0 }
                     aria-label=move || verbose_label_left.get()
                     title=move || verbose_label_left.get()
@@ -2524,7 +2536,7 @@ pub fn TimerView() -> impl IntoView {
                 <button id="skip-btn" class="control-btn"
                     class:primary=move || matches!(run_state.get(), RunState::Paused)
                     class:overtime=move || matches!(run_state.get(), RunState::Running) && is_overtime.get()
-                    aria-hidden=move || matches!(run_state.get(), RunState::Running) && is_overtime.get()
+                    aria-hidden=move || (matches!(run_state.get(), RunState::Running) && is_overtime.get()).to_string()
                     tabindex=move || if matches!(run_state.get(), RunState::Running) && is_overtime.get() { -1 } else { 0 }
                     aria-label=move || verbose_label_right.get()
                     title=move || verbose_label_right.get()

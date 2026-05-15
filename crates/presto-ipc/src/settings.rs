@@ -535,7 +535,10 @@ mod tests {
         };
         let json = serde_json::to_string(&s).expect("serialise");
         let back: ShortcutSettings = serde_json::from_str(&json).expect("deserialise");
-        assert_eq!(back.start_stop.as_deref(), Some("CommandOrControl+Alt+Space"));
+        assert_eq!(
+            back.start_stop.as_deref(),
+            Some("CommandOrControl+Alt+Space")
+        );
         assert_eq!(back.reset.as_deref(), Some("CommandOrControl+Alt+R"));
         assert_eq!(back.skip.as_deref(), Some("CommandOrControl+Alt+S"));
         assert_eq!(back.abort.as_deref(), Some("CommandOrControl+Alt+W"));
