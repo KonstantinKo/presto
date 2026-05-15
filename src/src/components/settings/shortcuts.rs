@@ -38,14 +38,19 @@ use crate::bridge::types::Settings;
 use crate::components::settings::SettingsToast;
 use crate::i18n::i18n::use_i18n;
 
-/// Three keyboard-shortcut slots. Mirrors `ShortcutSettings` field
-/// names; the spec at `settings-shortcuts.spec.js:15` addresses the
+/// Keyboard-shortcut slots. Mirrors `ShortcutSettings` field names;
+/// the spec at `settings-shortcuts.spec.js:15` addresses the
 /// start-stop slot via `#start-stop-shortcut`.
+///
+/// Feature 007: `Abort` slot added as the fourth row (FR-018).
+/// Default binding is unbound per FR-019 — the slot ships with an
+/// empty input, the user opts in.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum ShortcutSlot {
     StartStop,
     Reset,
     Skip,
+    Abort,
 }
 
 impl ShortcutSlot {
@@ -56,6 +61,7 @@ impl ShortcutSlot {
             Self::StartStop => "start-stop-shortcut",
             Self::Reset => "reset-shortcut",
             Self::Skip => "skip-shortcut",
+            Self::Abort => "abort-shortcut",
         }
     }
 
@@ -70,6 +76,7 @@ impl ShortcutSlot {
             Self::StartStop => "Start/Stop Timer:",
             Self::Reset => "Delete Session / Undo:",
             Self::Skip => "Save Session:",
+            Self::Abort => "Abort Session:",
         }
     }
 
@@ -78,6 +85,9 @@ impl ShortcutSlot {
             Self::StartStop => "CommandOrControl+Alt+Space",
             Self::Reset => "CommandOrControl+Alt+R",
             Self::Skip => "CommandOrControl+Alt+S",
+            // Feature 007: no canonical default — abort is opt-in. The
+            // placeholder hints at the shape the user would type.
+            Self::Abort => "CommandOrControl+Alt+W",
         }
     }
 
@@ -87,6 +97,7 @@ impl ShortcutSlot {
             Self::StartStop => "Start or pause the current Pomodoro session.",
             Self::Reset => "Delete the current session or undo the last completed Pomodoro.",
             Self::Skip => "Save the current session and start the next one.",
+            Self::Abort => "Discard the current focus session without logging it.",
         }
     }
 }
@@ -132,6 +143,7 @@ fn shortcut_row(
                 ShortcutSlot::StartStop => s.shortcuts.start_stop.clone(),
                 ShortcutSlot::Reset => s.shortcuts.reset.clone(),
                 ShortcutSlot::Skip => s.shortcuts.skip.clone(),
+                ShortcutSlot::Abort => s.shortcuts.abort.clone(),
             })
             .unwrap_or_default()
     });
@@ -154,6 +166,7 @@ fn shortcut_row(
                 ShortcutSlot::StartStop => &mut s.shortcuts.start_stop,
                 ShortcutSlot::Reset => &mut s.shortcuts.reset,
                 ShortcutSlot::Skip => &mut s.shortcuts.skip,
+                ShortcutSlot::Abort => &mut s.shortcuts.abort,
             };
             *target = Some(captured);
         });
@@ -176,11 +189,13 @@ fn shortcut_row(
         ShortcutSlot::StartStop => t!(i18n, settings.shortcuts.label_start_stop).into_any(),
         ShortcutSlot::Reset => t!(i18n, settings.shortcuts.label_reset).into_any(),
         ShortcutSlot::Skip => t!(i18n, settings.shortcuts.label_skip).into_any(),
+        ShortcutSlot::Abort => t!(i18n, settings.shortcuts.label_abort).into_any(),
     };
     let description_view = move || match slot {
         ShortcutSlot::StartStop => t!(i18n, settings.shortcuts.desc_start_stop).into_any(),
         ShortcutSlot::Reset => t!(i18n, settings.shortcuts.desc_reset).into_any(),
         ShortcutSlot::Skip => t!(i18n, settings.shortcuts.desc_skip).into_any(),
+        ShortcutSlot::Abort => t!(i18n, settings.shortcuts.desc_abort).into_any(),
     };
     let clear_aria = move || {
         let label_text: String = match slot {
@@ -189,6 +204,7 @@ fn shortcut_row(
             }
             ShortcutSlot::Reset => t_string!(i18n, settings.shortcuts.label_reset).to_string(),
             ShortcutSlot::Skip => t_string!(i18n, settings.shortcuts.label_skip).to_string(),
+            ShortcutSlot::Abort => t_string!(i18n, settings.shortcuts.label_abort).to_string(),
         };
         t_string!(i18n, settings.shortcuts.clear_aria, name = label_text)
     };
@@ -218,6 +234,7 @@ fn shortcut_row(
                             ShortcutSlot::StartStop => s.shortcuts.start_stop = None,
                             ShortcutSlot::Reset => s.shortcuts.reset = None,
                             ShortcutSlot::Skip => s.shortcuts.skip = None,
+                            ShortcutSlot::Abort => s.shortcuts.abort = None,
                         });
                         recording.set(None);
                         toast.show(t_string!(i18n, settings.toast_saved).to_string());
@@ -245,6 +262,9 @@ pub fn ShortcutsSettings(settings: RwSignal<Settings>, toast: SettingsToast) -> 
             {shortcut_row(ShortcutSlot::StartStop, settings, recording, toast)}
             {shortcut_row(ShortcutSlot::Reset, settings, recording, toast)}
             {shortcut_row(ShortcutSlot::Skip, settings, recording, toast)}
+            // Feature 007 (T025, FR-018): fourth row — Abort. Default
+            // binding is unbound (FR-019); the user opts in.
+            {shortcut_row(ShortcutSlot::Abort, settings, recording, toast)}
         </div>
     }
 }
@@ -255,9 +275,15 @@ mod tests {
 
     /// T208 — selector contract pin. Sourced from
     /// `tests/e2e/settings-shortcuts.spec.js`.
+    /// Feature 007 (T025): extended to include `#abort-shortcut`.
     #[test]
     fn shortcuts_selector_contract_documented() {
-        const REQUIRED_IDS: &[&str] = &["start-stop-shortcut", "reset-shortcut", "skip-shortcut"];
+        const REQUIRED_IDS: &[&str] = &[
+            "start-stop-shortcut",
+            "reset-shortcut",
+            "skip-shortcut",
+            "abort-shortcut",
+        ];
         let mut seen: Vec<&str> = Vec::with_capacity(REQUIRED_IDS.len());
         for id in REQUIRED_IDS {
             assert!(!seen.contains(id), "duplicate selector ID: {id}");
@@ -266,5 +292,6 @@ mod tests {
         assert_eq!(ShortcutSlot::StartStop.input_id(), "start-stop-shortcut");
         assert_eq!(ShortcutSlot::Reset.input_id(), "reset-shortcut");
         assert_eq!(ShortcutSlot::Skip.input_id(), "skip-shortcut");
+        assert_eq!(ShortcutSlot::Abort.input_id(), "abort-shortcut");
     }
 }

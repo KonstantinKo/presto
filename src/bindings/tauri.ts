@@ -686,7 +686,18 @@ skipped_versions?: string[] }
  * `"CommandOrControl+Alt+Space"`; parsing happens Rust-side at
  * `register_global_shortcuts` time.
  */
-export type ShortcutSettings = { start_stop: string | null; reset: string | null; skip: string | null }
+export type ShortcutSettings = { start_stop: string | null; reset: string | null; skip: string | null; 
+/**
+ * Feature 007. Optional binding for the Abort action (used as a
+ * keyboard-accessible discard during overtime; usable from any
+ * running state). `None` = unbound. Default is `None`.
+ * 
+ * Backwards-compatible at the JSON layer: pre-feature-007
+ * settings.json files lack this key and deserialise to `None`
+ * via `serde`'s `Option<T>` missing-field default — mirroring
+ * the precedent of the three sibling fields above.
+ */
+abort?: string | null }
 /**
  * Status-bar visibility mode.
  * 

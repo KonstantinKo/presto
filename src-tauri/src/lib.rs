@@ -427,6 +427,36 @@ async fn load_settings(app: AppHandle) -> Result<AppSettings, BridgeError> {
     })
 }
 
+/// Project a `ShortcutSettings` into the (action, parsed-Shortcut) pairs
+/// the registration loop installs. Pure helper extracted so the
+/// 2-tuple iteration order + `Option::None` skip + parse-error shape
+/// (`BridgeError::Internal { msg }` mentioning the action name) is unit
+/// testable without an `AppHandle`. Iteration order is the canonical
+/// wire-name order: `start-stop`, `reset`, `skip`, `abort` (feature 007).
+fn parse_shortcut_bindings(
+    shortcuts: &ShortcutSettings,
+) -> Result<Vec<(&'static str, Shortcut)>, BridgeError> {
+    let bindings: [(&'static str, &Option<String>); 4] = [
+        ("start-stop", &shortcuts.start_stop),
+        ("reset", &shortcuts.reset),
+        ("skip", &shortcuts.skip),
+        // Feature 007 (T023, FR-018): abort joins the registration loop.
+        // Wire name is kebab-case to match the existing sibling slots
+        // and the frontend listener at `src/src/app.rs:613-624`.
+        ("abort", &shortcuts.abort),
+    ];
+    let mut out: Vec<(&'static str, Shortcut)> = Vec::with_capacity(4);
+    for (action, shortcut_str) in bindings {
+        if let Some(ref shortcut_str) = *shortcut_str {
+            let shortcut: Shortcut = shortcut_str.parse().map_err(|e| BridgeError::Internal {
+                msg: format!("Invalid {action} shortcut '{shortcut_str}': {e}"),
+            })?;
+            out.push((action, shortcut));
+        }
+    }
+    Ok(out)
+}
+
 #[tauri::command]
 #[specta::specta]
 async fn register_global_shortcuts(
@@ -439,28 +469,19 @@ async fn register_global_shortcuts(
             msg: format!("Failed to unregister shortcuts: {e}"),
         })?;
 
-    for (action, shortcut_str) in [
-        ("start-stop", &shortcuts.start_stop),
-        ("reset", &shortcuts.reset),
-        ("skip", &shortcuts.skip),
-    ] {
-        if let Some(ref shortcut_str) = shortcut_str {
-            let shortcut: Shortcut = shortcut_str.parse().map_err(|e| BridgeError::Internal {
-                msg: format!("Invalid {action} shortcut '{shortcut_str}': {e}"),
+    let bindings = parse_shortcut_bindings(&shortcuts)?;
+    for (action, shortcut) in bindings {
+        let app_handle = app.clone();
+        let action_owned = action.to_string();
+        app.global_shortcut()
+            .on_shortcut(shortcut, move |_app, _shortcut, _event| {
+                if !should_debounce_shortcut(&action_owned) {
+                    let _ = app_handle.emit("global-shortcut", action_owned.as_str());
+                }
+            })
+            .map_err(|e| BridgeError::Internal {
+                msg: format!("Failed to register {action} shortcut: {e}"),
             })?;
-
-            let app_handle = app.clone();
-            let action_owned = action.to_string();
-            app.global_shortcut()
-                .on_shortcut(shortcut, move |_app, _shortcut, _event| {
-                    if !should_debounce_shortcut(&action_owned) {
-                        let _ = app_handle.emit("global-shortcut", action_owned.as_str());
-                    }
-                })
-                .map_err(|e| BridgeError::Internal {
-                    msg: format!("Failed to register {action} shortcut: {e}"),
-                })?;
-        }
     }
 
     // Emit an event to the frontend to update local shortcuts as well

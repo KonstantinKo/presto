@@ -55,7 +55,7 @@ use self::tag_tracking::{
 };
 use self::tray::{build_tray_text, dispatch_tray_update};
 use super::browser_clock::BrowserClock;
-use crate::app::AppToast;
+use crate::app::{AppToast, ShortcutBus};
 use crate::bridge::commands;
 use crate::bridge::types::AmbientSoundType;
 use crate::bridge::types::SessionType;
@@ -1627,6 +1627,76 @@ pub fn TimerView() -> impl IntoView {
         }
         dispatch_tray_update(engine, settings, true);
     };
+
+    // Feature 007 (T024): global-shortcut bus wiring.
+    //
+    // The Tauri-side `global-shortcut` event listener (in `app.rs`)
+    // increments one of the four counters on `ShortcutBus` per emit.
+    // We mount an Effect per counter so each binding fires its UI
+    // handler's full side-effect pipeline — engine call +
+    // `handle_events` + `apply_tag_tracking_events` + the per-handler
+    // tail (tray update, toast, persistence) — keeping the keyboard
+    // and pointer paths byte-equivalent (FR-021, SC-005).
+    //
+    // First-run guard: the counters start at 0 and are read once
+    // during Effect setup. We skip that initial fire so the listeners
+    // are armed without dispatching a phantom shortcut on mount.
+    let shortcut_bus = use_context::<ShortcutBus>().unwrap_or_default();
+    let start_stop_first = std::rc::Rc::new(std::cell::Cell::new(true));
+    Effect::new(move |_| {
+        let _ = shortcut_bus.start_stop.get();
+        if start_stop_first.get() {
+            start_stop_first.set(false);
+            return;
+        }
+        // Mirrors the on-screen center button's keyboard equivalent:
+        // tracks Start/Pause/Resume per the engine's run-state. The
+        // overtime gate is NOT applied here — the shortcut is the
+        // documented "toggle the timer" affordance, not "complete during
+        // overtime". Users who want the keyboard discard path during
+        // overtime bind the Abort shortcut instead (FR-017, FR-021).
+        let synth = leptos::ev::MouseEvent::new("click").unwrap();
+        on_play_pause(synth);
+    });
+    let reset_first = std::rc::Rc::new(std::cell::Cell::new(true));
+    Effect::new(move |_| {
+        let _ = shortcut_bus.reset.get();
+        if reset_first.get() {
+            reset_first.set(false);
+            return;
+        }
+        // "reset" wire name maps to the user-facing "Delete Session /
+        // Undo" affordance — same engine path as the on-screen Abort
+        // button (left slot in Running / Paused). Mirrors `on_abort`'s
+        // full pipeline including the toast.
+        let synth = leptos::ev::MouseEvent::new("click").unwrap();
+        on_abort(synth);
+    });
+    let skip_first = std::rc::Rc::new(std::cell::Cell::new(true));
+    Effect::new(move |_| {
+        let _ = shortcut_bus.skip.get();
+        if skip_first.get() {
+            skip_first.set(false);
+            return;
+        }
+        let synth = leptos::ev::MouseEvent::new("click").unwrap();
+        on_skip(synth);
+    });
+    let abort_first = std::rc::Rc::new(std::cell::Cell::new(true));
+    Effect::new(move |_| {
+        let _ = shortcut_bus.abort.get();
+        if abort_first.get() {
+            abort_first.set(false);
+            return;
+        }
+        // Feature 007 FR-021: the Abort shortcut MUST discard the
+        // session and return to idle, including from overtime. Routes
+        // through `on_abort` so the full pipeline (engine.abort,
+        // tag-tracking flush, toast, tray update) runs identically to
+        // the on-screen Abort button click.
+        let synth = leptos::ev::MouseEvent::new("click").unwrap();
+        on_abort(synth);
+    });
 
     // Right-rail timer-adjust handlers. Per the JS-era
     // `pomodoro-timer.js:adjustTimer` (+/- 5 minutes), the buttons

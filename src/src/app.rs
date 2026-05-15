@@ -92,6 +92,48 @@ impl AppToast {
     }
 }
 
+/// Feature 006/007: shortcut dispatch bus.
+///
+/// The Tauri-side `global-shortcut` event channel emits the bound
+/// action name as a primitive `String` payload. The listener at
+/// `src/src/app.rs` lifts each emit into a counter increment on the
+/// matching field below; the `TimerView` mounts an `Effect` per
+/// counter that funnels the signal through the same handler closures
+/// the on-screen buttons call. This keeps the (large) per-action
+/// side-effect pipeline — `handle_events`, `apply_tag_tracking_events`,
+/// `dispatch_tray_update`, the `app_toast` and persistence hooks —
+/// single-sourced inside `TimerView` where the captured state lives.
+///
+/// Counters wrap at `u64::MAX` (the `wrapping_add(1)` discipline).
+/// Equality between successive values is sufficient as a change signal
+/// for Leptos's reactivity; the absolute value carries no meaning.
+#[derive(Clone, Copy, Default)]
+pub struct ShortcutBus {
+    pub start_stop: RwSignal<u64>,
+    pub reset: RwSignal<u64>,
+    pub skip: RwSignal<u64>,
+    /// Feature 007 (FR-021): keyboard-accessible discard during overtime.
+    pub abort: RwSignal<u64>,
+}
+
+impl ShortcutBus {
+    /// Increment the counter for `action`. Wire names use kebab-case
+    /// (`"start-stop"`, `"reset"`, `"skip"`, `"abort"`) to match the
+    /// Tauri emitter at `src-tauri/src/lib.rs:442-446`. Unknown
+    /// names are dropped silently for forward compatibility per the
+    /// shortcut-registration contract.
+    pub fn dispatch(self, action: &str) {
+        let counter = match action {
+            "start-stop" => self.start_stop,
+            "reset" => self.reset,
+            "skip" => self.skip,
+            "abort" => self.abort,
+            _ => return,
+        };
+        counter.update(|n| *n = n.wrapping_add(1));
+    }
+}
+
 /// Top-level App component. Mounts the sidebar nav, the active
 /// view, and the global update banner.
 #[component]
@@ -110,6 +152,16 @@ pub fn App() -> impl IntoView {
     // transient messages (completion, warnings, smart-pause) here.
     let app_toast = AppToast::default();
     provide_context(app_toast);
+
+    // Feature 007 (T024): shortcut dispatch bus. The `global-shortcut`
+    // event listener (below) increments the matching counter on each
+    // emit; TimerView reads the counters via context and mounts an
+    // Effect per action so the same handler closures the on-screen
+    // buttons call run for keyboard-bound dispatches (FR-021 — Abort
+    // shortcut routes through the full side-effect pipeline of
+    // `on_abort`; start-stop / reset / skip mirror their UI handlers).
+    let shortcut_bus = ShortcutBus::default();
+    provide_context(shortcut_bus);
 
     // Feature 005: localised save-failure message. The settings
     // persistence sink below lives in `App`'s body (outside the
@@ -602,20 +654,25 @@ pub fn App() -> impl IntoView {
             }
         });
 
-        // Subscribe to global-shortcut emits. Each emit carries
-        // the binding name as a primitive `String` payload (per
-        // contracts/tauri-bridge.md §"Tauri events"); the
-        // listener routes it through the timer's start/stop
-        // surface. T217 today wires the listener; routing the
-        // shortcut into `engine::TimerState` is owned by the
-        // TimerView's effect (Phase 4a). The listener exists at
-        // this level so the registration is one-shot.
+        // Feature 007 (T024): subscribe to `global-shortcut` emits and
+        // dispatch through the shortcut bus. Each emit carries the
+        // bound action name as a primitive `String` payload (per
+        // contracts/shortcut-registration.md); the listener increments
+        // the matching counter on the `ShortcutBus`, and TimerView's
+        // per-action Effects fan that out into the engine call + the
+        // full side-effect pipeline (`handle_events`,
+        // `apply_tag_tracking_events`, `dispatch_tray_update`,
+        // `app_toast.show` for Abort) of the corresponding UI handler.
+        //
+        // Wire names are kebab-case throughout — `"start-stop"`,
+        // `"reset"`, `"skip"`, `"abort"` — matching the Tauri emitter
+        // at `src-tauri/src/lib.rs:442-446`. Unknown payloads are
+        // silently ignored by `ShortcutBus::dispatch` for forward
+        // compatibility (a future fifth name doesn't break this
+        // listener).
         spawn_local(async move {
-            let listener = events::listen::<String>(GLOBAL_SHORTCUT, |_name| {
-                // Phase 4c routes `_name` ("start-stop", "reset",
-                // "skip") into the engine. Today we acknowledge
-                // the emit so the JS bridge sees a live listener
-                // and doesn't drop subsequent events.
+            let listener = events::listen::<String>(GLOBAL_SHORTCUT, move |name| {
+                shortcut_bus.dispatch(&name);
             })
             .await;
             if let Ok(guard) = listener {
