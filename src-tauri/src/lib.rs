@@ -427,6 +427,36 @@ async fn load_settings(app: AppHandle) -> Result<AppSettings, BridgeError> {
     })
 }
 
+/// Project a `ShortcutSettings` into the (action, parsed-Shortcut) pairs
+/// the registration loop installs. Pure helper extracted so the
+/// 2-tuple iteration order + `Option::None` skip + parse-error shape
+/// (`BridgeError::Internal { msg }` mentioning the action name) is unit
+/// testable without an `AppHandle`. Iteration order is the canonical
+/// wire-name order: `start-stop`, `reset`, `skip`, `abort` (feature 007).
+fn parse_shortcut_bindings(
+    shortcuts: &ShortcutSettings,
+) -> Result<Vec<(&'static str, Shortcut)>, BridgeError> {
+    let bindings: [(&'static str, &Option<String>); 4] = [
+        ("start-stop", &shortcuts.start_stop),
+        ("reset", &shortcuts.reset),
+        ("skip", &shortcuts.skip),
+        // Feature 007 (T023, FR-018): abort joins the registration loop.
+        // Wire name is kebab-case to match the existing sibling slots
+        // and the frontend listener at `src/src/app.rs:613-624`.
+        ("abort", &shortcuts.abort),
+    ];
+    let mut out: Vec<(&'static str, Shortcut)> = Vec::with_capacity(4);
+    for (action, shortcut_str) in bindings {
+        if let Some(ref shortcut_str) = *shortcut_str {
+            let shortcut: Shortcut = shortcut_str.parse().map_err(|e| BridgeError::Internal {
+                msg: format!("Invalid {action} shortcut '{shortcut_str}': {e}"),
+            })?;
+            out.push((action, shortcut));
+        }
+    }
+    Ok(out)
+}
+
 #[tauri::command]
 #[specta::specta]
 async fn register_global_shortcuts(
@@ -439,28 +469,19 @@ async fn register_global_shortcuts(
             msg: format!("Failed to unregister shortcuts: {e}"),
         })?;
 
-    for (action, shortcut_str) in [
-        ("start-stop", &shortcuts.start_stop),
-        ("reset", &shortcuts.reset),
-        ("skip", &shortcuts.skip),
-    ] {
-        if let Some(ref shortcut_str) = shortcut_str {
-            let shortcut: Shortcut = shortcut_str.parse().map_err(|e| BridgeError::Internal {
-                msg: format!("Invalid {action} shortcut '{shortcut_str}': {e}"),
+    let bindings = parse_shortcut_bindings(&shortcuts)?;
+    for (action, shortcut) in bindings {
+        let app_handle = app.clone();
+        let action_owned = action.to_string();
+        app.global_shortcut()
+            .on_shortcut(shortcut, move |_app, _shortcut, _event| {
+                if !should_debounce_shortcut(&action_owned) {
+                    let _ = app_handle.emit("global-shortcut", action_owned.as_str());
+                }
+            })
+            .map_err(|e| BridgeError::Internal {
+                msg: format!("Failed to register {action} shortcut: {e}"),
             })?;
-
-            let app_handle = app.clone();
-            let action_owned = action.to_string();
-            app.global_shortcut()
-                .on_shortcut(shortcut, move |_app, _shortcut, _event| {
-                    if !should_debounce_shortcut(&action_owned) {
-                        let _ = app_handle.emit("global-shortcut", action_owned.as_str());
-                    }
-                })
-                .map_err(|e| BridgeError::Internal {
-                    msg: format!("Failed to register {action} shortcut: {e}"),
-                })?;
-        }
     }
 
     // Emit an event to the frontend to update local shortcuts as well
@@ -1227,7 +1248,7 @@ mod tests {
         let make_json = |status_bar_fragment: &str| {
             format!(
                 r#"{{
-                    "shortcuts": {{"start_stop": null, "reset": null, "skip": null}},
+                    "shortcuts": {{"start_stop": null, "reset": null, "skip": null, "abort": null}},
                     "timer": {{"focus_duration": 25, "break_duration": 5,
                               "long_break_duration": 20, "total_sessions": 10}},
                     "notifications": {{"desktop_notifications": true,
@@ -1313,7 +1334,7 @@ mod tests {
         // A legacy 0.4.x JSON without `appearance` or `max_session_time` must
         // deserialise to the defaults.
         let legacy = r#"{
-            "shortcuts": {"start_stop": null, "reset": null, "skip": null},
+            "shortcuts": {"start_stop": null, "reset": null, "skip": null, "abort": null},
             "timer": {"focus_duration": 25, "break_duration": 5,
                       "long_break_duration": 20, "total_sessions": 10},
             "notifications": {"desktop_notifications": true,
@@ -1878,5 +1899,78 @@ mod tests {
         assert!(matches!(lifted, super::BridgeError::Internal { .. }));
 
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    // Feature 007 T013b: Tauri-bridge contract for the widened
+    // `register_global_shortcuts` argument. Tests exercise the pure
+    // `parse_shortcut_bindings` helper which mirrors the loop in
+    // `register_global_shortcuts` 1:1 — same iteration order, same
+    // parsing call, same error shape. The helper is the testable
+    // surface; the live registration loop wraps it with the
+    // `AppHandle`-bound side effects (unregister_all, on_shortcut
+    // closure install, shortcuts-updated emit).
+
+    /// Feature 007 T013b (RED → T023 GREEN): a fully bound
+    /// `ShortcutSettings` with `abort = Some(_)` parses successfully
+    /// and the resulting bindings slice contains exactly four entries
+    /// in the canonical order: start-stop, reset, skip, abort.
+    #[test]
+    fn register_global_shortcuts_widened_arg_accepts_abort() {
+        let shortcuts = super::ShortcutSettings {
+            start_stop: Some("CommandOrControl+Alt+Space".to_string()),
+            reset: Some("CommandOrControl+Alt+R".to_string()),
+            skip: Some("CommandOrControl+Alt+S".to_string()),
+            abort: Some("CommandOrControl+Alt+W".to_string()),
+        };
+        let parsed =
+            super::parse_shortcut_bindings(&shortcuts).expect("all four bindings must parse");
+        let actions: Vec<&str> = parsed.iter().map(|(a, _)| *a).collect();
+        assert_eq!(actions, vec!["start-stop", "reset", "skip", "abort"]);
+    }
+
+    /// Feature 007 T013b (RED → T023 GREEN): `abort = None` is skipped
+    /// by the iteration — no binding is emitted for the `"abort"`
+    /// action. Mirrors the existing `if let Some(ref s) = …` gate the
+    /// three sibling fields already enjoy.
+    #[test]
+    fn register_global_shortcuts_widened_arg_skips_unbound_abort() {
+        let shortcuts = super::ShortcutSettings {
+            start_stop: Some("CommandOrControl+Alt+Space".to_string()),
+            reset: None,
+            skip: None,
+            abort: None,
+        };
+        let parsed = super::parse_shortcut_bindings(&shortcuts).expect("must parse");
+        let actions: Vec<&str> = parsed.iter().map(|(a, _)| *a).collect();
+        assert_eq!(actions, vec!["start-stop"]);
+        assert!(
+            !actions.contains(&"abort"),
+            "abort: None must not yield a binding entry"
+        );
+    }
+
+    /// Feature 007 T013b (RED → T023 GREEN): an unparseable abort
+    /// shortcut spec returns `BridgeError::Internal { msg }` carrying
+    /// the action name `"abort"` for diagnosability. The action name
+    /// appears in the error message so the user can identify which
+    /// binding failed.
+    #[test]
+    fn register_global_shortcuts_widened_arg_invalid_abort_returns_internal_error() {
+        let shortcuts = super::ShortcutSettings {
+            start_stop: None,
+            reset: None,
+            skip: None,
+            abort: Some("not-a-shortcut".to_string()),
+        };
+        match super::parse_shortcut_bindings(&shortcuts) {
+            Err(super::BridgeError::Internal { msg }) => {
+                assert!(
+                    msg.contains("abort"),
+                    "error msg must mention the action name 'abort': got {msg}"
+                );
+            }
+            Err(other) => panic!("expected BridgeError::Internal, got {other:?}"),
+            Ok(_) => panic!("invalid shortcut spec must not parse"),
+        }
     }
 }

@@ -117,11 +117,13 @@
       "description": "Configura scorciatoie da tastiera che funzionano anche quando l'app è in background",
       "section_header": "Scorciatoie da tastiera",
       "label_start_stop": "Avvia/Ferma timer:",
-      "label_reset": "Elimina sessione / Annulla:",
+      "label_reset": "Reimposta sessione:",
       "label_skip": "Salva sessione:",
+      "label_abort": "Annulla sessione:",
       "desc_start_stop": "Avvia o metti in pausa la sessione Pomodoro corrente.",
-      "desc_reset": "Elimina la sessione corrente o annulla l'ultimo Pomodoro completato.",
+      "desc_reset": "Scarta la sessione corrente senza conteggiarla.",
       "desc_skip": "Salva la sessione corrente e avvia la successiva.",
+      "desc_abort": "Scarta la sessione di focus corrente senza registrarla.",
       "clear_aria": "Cancella scorciatoia {{ name }}"
     },
     "advanced": {
@@ -170,6 +172,7 @@
     "status_paused": "(In pausa)",
     "status_auto_paused": "(Auto-pausa)",
     "status_overtime": "(Tempo extra)",
+    "overtime_cta": "Concludi!",
     "ctrl_start": "Avvia",
     "ctrl_pause": "Pausa",
     "ctrl_resume": "Riprendi",

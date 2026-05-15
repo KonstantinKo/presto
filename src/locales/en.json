@@ -117,11 +117,13 @@
       "description": "Configure keyboard shortcuts that work even when the app is in the background",
       "section_header": "Keyboard Shortcuts",
       "label_start_stop": "Start/Stop Timer:",
-      "label_reset": "Delete Session / Undo:",
+      "label_reset": "Reset session:",
       "label_skip": "Save Session:",
+      "label_abort": "Abort Session:",
       "desc_start_stop": "Start or pause the current Pomodoro session.",
-      "desc_reset": "Delete the current session or undo the last completed Pomodoro.",
+      "desc_reset": "Discard the current session without counting it.",
       "desc_skip": "Save the current session and start the next one.",
+      "desc_abort": "Discard the current focus session without logging it.",
       "clear_aria": "Clear {{ name }} shortcut"
     },
     "advanced": {
@@ -170,6 +172,7 @@
     "status_paused": "(Paused)",
     "status_auto_paused": "(Auto-paused)",
     "status_overtime": "(Overtime)",
+    "overtime_cta": "Wrap it up!",
     "ctrl_start": "Start",
     "ctrl_pause": "Pause",
     "ctrl_resume": "Resume",
