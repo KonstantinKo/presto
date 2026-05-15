@@ -22,12 +22,15 @@
     reason = "Leptos `#[component]` returning `impl IntoView`; body is a single `view!` macro expansion (table + modal). Matches `calendar.rs:32` precedent."
 )]
 
+use chrono::DateTime;
+use chrono::Utc;
 use leptos::prelude::*;
 use leptos::task::spawn_local;
 use leptos_i18n::{t, t_string};
 
 use crate::bridge::commands;
 use crate::bridge::types::{ManualSession, SessionType};
+use crate::engine::date_format::format_session_date;
 use crate::i18n::i18n::use_i18n;
 
 const TITLE_DISPLAY_CAP: usize = 40;
@@ -106,10 +109,26 @@ fn end_time_from_start_duration(start: &str, duration: u32) -> (String, u32) {
 }
 
 #[component]
-pub fn SessionsHistoryTable() -> impl IntoView {
+pub fn SessionsHistoryTable(selected_day: RwSignal<DateTime<Utc>>) -> impl IntoView {
     let i18n = use_i18n();
     let sessions =
         use_context::<RwSignal<Vec<ManualSession>>>().unwrap_or_else(|| RwSignal::new(Vec::new()));
+
+    // Match the timeline's scoping: only sessions whose `date` field
+    // equals the JS-era `toDateString()` projection of `selected_day`
+    // are shown. Sessions store local-time dates (see
+    // `engine::date_format`), so we compare label-equal rather than
+    // by chrono components.
+    let scoped_sessions = Signal::derive(move || {
+        let selected_label =
+            format_session_date(selected_day.with(chrono::DateTime::timestamp_millis));
+        sessions.with(|all| {
+            all.iter()
+                .filter(|s| s.date == selected_label)
+                .cloned()
+                .collect::<Vec<_>>()
+        })
+    });
 
     let session_modal_open = RwSignal::new(false);
     let modal_duration = RwSignal::new(0_u32);
@@ -149,7 +168,9 @@ pub fn SessionsHistoryTable() -> impl IntoView {
                         class="export-btn"
                         title=move || t_string!(i18n, daily.history_export_title).to_string()
                         on:click=move |_| {
-                            let snapshot = sessions.get_untracked();
+                            // Export only the visible (selected-day) scope so the
+                            // user gets what's on screen, matching the table.
+                            let snapshot = scoped_sessions.get_untracked();
                             spawn_local(async move {
                                 let path = commands::dialog_save(
                                     Some("sessions.csv".to_string()),
@@ -188,7 +209,7 @@ pub fn SessionsHistoryTable() -> impl IntoView {
                                 // matches chronological order for the
                                 // RFC 3339 / ISO 8601 strings written by the
                                 // engine, so a string compare is sufficient.
-                                let mut rows = sessions.get();
+                                let mut rows = scoped_sessions.get();
                                 rows.sort_by(|a, b| b.created_at.cmp(&a.created_at));
                                 rows
                             }
