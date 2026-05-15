@@ -169,10 +169,8 @@ pub fn App() -> impl IntoView {
     // through `manager.update(...)` and best-effort persistence sinks
     // below. Defaults to empty managers; the cold-start hydration
     // (further down) overwrites them from disk.
-    let quick_logs_mgr =
-        RwSignal::new(crate::managers::quick_log::QuickLogManager::new());
-    let distractions_mgr =
-        RwSignal::new(crate::managers::distraction::DistractionManager::new());
+    let quick_logs_mgr = RwSignal::new(crate::managers::quick_log::QuickLogManager::new());
+    let distractions_mgr = RwSignal::new(crate::managers::distraction::DistractionManager::new());
     provide_context(quick_logs_mgr);
     provide_context(distractions_mgr);
 
