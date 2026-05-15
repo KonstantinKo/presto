@@ -105,7 +105,9 @@ pub(super) fn export(path: &Path, sessions: &[ManualSession]) -> Result<(), Brid
 /// in double quotes with embedded `"` doubled per RFC 4180.
 pub(super) fn export_csv(path: &Path, sessions: &[ManualSession]) -> Result<(), BridgeError> {
     let mut out = String::new();
-    out.push_str("id,session_type,duration,start_time,end_time,date,created_at,title,tags,notes\n");
+    out.push_str(
+        "id,session_type,duration,start_time,end_time,date,created_at,title,tags,notes\r\n",
+    );
     for session in sessions {
         let session_type_str = match session.session_type {
             super::SessionType::Focus => "focus",
@@ -139,7 +141,7 @@ pub(super) fn export_csv(path: &Path, sessions: &[ManualSession]) -> Result<(), 
             csv_field(notes),
         ];
         out.push_str(&row.join(","));
-        out.push('\n');
+        out.push_str("\r\n");
     }
     std::fs::write(path, out).map_err(|e| BridgeError::Internal {
         msg: format!("Failed to save csv to {}: {e}", path.display()),

@@ -29,6 +29,7 @@
 
 use leptos::prelude::*;
 use leptos::task::spawn_local;
+use wasm_bindgen::JsValue;
 
 use crate::bridge::availability::{bridge_available, BridgeAvailable};
 use crate::bridge::commands;
@@ -624,6 +625,16 @@ pub fn App() -> impl IntoView {
         });
     }
 
+    // `titleBarStyle: Overlay` (tauri.conf.json) is a macOS-only setting;
+    // on other platforms the native titlebar remains and the drag strip
+    // is dead DOM. Gate it on a runtime platform check so the element is
+    // absent on Windows / Linux.
+    let is_mac_overlay = js_sys::Reflect::get(&js_sys::global(), &JsValue::from_str("navigator"))
+        .ok()
+        .and_then(|nav| js_sys::Reflect::get(&nav, &JsValue::from_str("platform")).ok())
+        .and_then(|p| p.as_string())
+        .is_some_and(|p| p.starts_with("Mac"));
+
     view! {
         // Feature 005: wrap the app tree in the leptos_i18n provider
         // so every `t!(i18n, ...)` call site descends from a live
@@ -636,11 +647,9 @@ pub fn App() -> impl IntoView {
         <I18nContextProvider enable_cookie=false>
             <LocaleSync settings=settings/>
             <SaveFailureMessageSync target=save_failure_message/>
-            // macOS titleBarStyle: Overlay hides the system titlebar
-            // chrome but keeps the traffic-light controls floating over
-            // the window content. This invisible strip restores the
-            // native window-drag affordance over that top band.
-            <div class="window-drag-region" data-tauri-drag-region="true"></div>
+            // Restores native window-drag affordance under the macOS
+            // traffic-light controls when titleBarStyle: Overlay is active.
+            {is_mac_overlay.then(|| view! { <div class="window-drag-region" data-tauri-drag-region="true"></div> })}
         // The sidebar carries a per-mode theme class (`focus` /
         // `break` / `longBreak`) so `style/sidebar.css`'s
         // `.sidebar.focus .sidebar-icon.active { background:

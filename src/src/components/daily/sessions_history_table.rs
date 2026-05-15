@@ -108,6 +108,17 @@ fn end_time_from_start_duration(start: &str, duration: u32) -> (String, u32) {
     )
 }
 
+fn parse_time_minutes(value: &str) -> Option<u32> {
+    let mut p = value.splitn(2, ':');
+    let h = p.next()?.parse::<u32>().ok()?;
+    let m = p.next()?.parse::<u32>().ok()?;
+    if h < 24 && m < 60 {
+        Some(h * 60 + m)
+    } else {
+        None
+    }
+}
+
 #[component]
 pub fn SessionsHistoryTable(selected_day: RwSignal<DateTime<Utc>>) -> impl IntoView {
     let i18n = use_i18n();
@@ -355,6 +366,11 @@ pub fn SessionsHistoryTable(selected_day: RwSignal<DateTime<Utc>>) -> impl IntoV
                                     // outside the 24h timeline track.
                                     let start = modal_start.get_untracked();
                                     let end = modal_end.get_untracked();
+                                    if parse_time_minutes(&start).is_none()
+                                        || parse_time_minutes(&end).is_none()
+                                    {
+                                        return;
+                                    }
                                     let raw_dur =
                                         duration_from_start_end_minutes(&start, &end);
                                     let clamped_dur = raw_dur.clamp(1, 180);
