@@ -4,6 +4,8 @@ import {
   tapTab,
   selectSettingsCategory,
   dismissWelcomePing,
+  enableDebugTimers,
+  openSettings,
 } from "./fixtures/screens.js";
 
 test("visual baseline: timer, tags, statistics (4 periods), daily, all settings tabs, update banner", async ({
@@ -142,5 +144,59 @@ test("visual baseline: timer, tags, statistics (4 periods), daily, all settings 
   await expect(page).toHaveScreenshot(
     ["visual-regression", "timer-focus-paused-with-complete.png"],
     sidebarMask
+  );
+});
+
+// Feature 007 (T034): timer-focus-continuous-overtime VR baseline.
+// Lives in its own test() block because the headline screenshot
+// requires the engine to cross zero — which means wall-clock time
+// must advance. The neighbouring `visual baseline:` test freezes
+// `Date.now()` (so the calendar baselines render deterministically),
+// and frozen time prevents the focus session from ever ticking down.
+// Splitting the overtime capture out keeps both contracts honest.
+test("visual baseline: timer-focus-continuous-overtime", async ({ page }) => {
+  test.setTimeout(60_000);
+  await page.goto("/index.html");
+  await dismissWelcomePing(page);
+
+  // Configure: auto-start off so post-overtime auto-restart doesn't
+  // fire during the capture; allow-continuous-sessions on so the
+  // engine enters overtime instead of advancing to Break at zero;
+  // debug-3s so the cross-zero happens in a few wall-clock seconds.
+  await openSettings(page);
+  await selectSettingsCategory(page, "Automation");
+  if (await page.locator("#auto-start-timer").isChecked()) {
+    await page.locator("#auto-start-timer").click();
+  }
+  await expect(page.locator("#auto-start-timer")).not.toBeChecked();
+  if (!(await page.locator("#allow-continuous-sessions").isChecked())) {
+    await page.locator("#allow-continuous-sessions").click();
+  }
+  await expect(page.locator("#allow-continuous-sessions")).toBeChecked();
+  await enableDebugTimers(page);
+  await tapTab(page, "Timer");
+  // Idle Focus shows 00:03 with debug timers.
+  await expect(page.locator("#timer-minutes")).toHaveText("00");
+  await expect(page.locator("#timer-seconds")).toHaveText("03");
+  await page.locator("#play-pause-btn").click();
+  // Wait for overtime — CTA visibility is the wire signal that the
+  // matrix has crossed into overtime mode.
+  await expect(page.locator(".overtime-cta.visible")).toBeVisible({
+    timeout: 10_000,
+  });
+
+  // Mask the running countdown digits — their absolute value drifts
+  // between runs but the layout (three orange Complete slots + CTA +
+  // pulsating warning-tinted countdown) is the contract under test.
+  // The sidebar mask matches the rest of the suite's pattern.
+  await expect(page).toHaveScreenshot(
+    ["visual-regression", "timer-focus-continuous-overtime.png"],
+    {
+      mask: [
+        page.locator("nav.sidebar"),
+        page.locator("#timer-minutes"),
+        page.locator("#timer-seconds"),
+      ],
+    }
   );
 });

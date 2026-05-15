@@ -320,10 +320,16 @@ mod tests {
         // added as the headline new visual for the state-aware button
         // matrix — the Paused right slot reveals as ✓ Complete.
         // Net: 16 + 1 = 17.
+        //
+        // Spec 007 Phase 5 (T034): `timer-focus-continuous-overtime.png`
+        // added as the headline new visual for the overtime button
+        // treatment — three orange ✓ Complete slots + "Wrap it up!" CTA
+        // + pulsating-orange countdown.
+        // Net: 17 + 1 = 18.
         assert_eq!(
             pngs.len(),
-            17,
-            "expected 17 visual-regression baselines per specs 003+006; \
+            18,
+            "expected 18 visual-regression baselines per specs 003+006+007; \
              found {} (re-captures > 2 escalate per Principle IV)",
             pngs.len(),
         );
