@@ -236,6 +236,30 @@ async exportSessionsXlsx(path: string, sessions: ManualSession[]) : Promise<Resu
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
 }
+},
+async exportSessionsCsv(path: string, sessions: ManualSession[]) : Promise<Result<null, BridgeError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("export_sessions_csv", { path, sessions }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async dialogSave(defaultPath: string | null, filters: DialogFilter[]) : Promise<Result<string | null, BridgeError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("dialog_save", { defaultPath, filters }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async dialogAsk(message: string, title: string) : Promise<Result<boolean, BridgeError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("dialog_ask", { message, title }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
 }
 }
 
@@ -409,6 +433,7 @@ export type BridgeError =
  * strategy).
  */
 { kind: "internal"; msg: string }
+export type DialogFilter = { name: string; extensions: string[] }
 /**
  * User-entered distraction note, optionally tied to the parent
  * session that was running when the note was captured.

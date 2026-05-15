@@ -18,6 +18,7 @@
         "height": 600,
         "closable": true,
         "hiddenTitle": true,
+        "titleBarStyle": "Overlay",
         "minimizable": true,
         "resizable": true
       }

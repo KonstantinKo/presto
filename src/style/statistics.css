@@ -368,15 +368,15 @@
 }
 
 .period-btn.active {
-  background: var(--focus-color, var(--accent-color));
-  color: var(--text-on-focus, #ffffff);
+  background: var(--mode-marker-bg, var(--focus-color, var(--accent-color)));
+  color: var(--mode-marker-text, var(--text-on-focus, #ffffff));
   border-color: transparent;
-  box-shadow: 0 4px 12px color-mix(in srgb, var(--focus-color) 25%, transparent);
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--mode-marker-bg, var(--focus-color)) 25%, transparent);
 }
 
 .period-btn.active:hover {
-  background: var(--focus-color, var(--accent-color));
-  color: var(--text-on-focus, #ffffff);
+  background: var(--mode-marker-bg, var(--focus-color, var(--accent-color)));
+  color: var(--mode-marker-text, var(--text-on-focus, #ffffff));
   transform: translateY(-1px);
 }
 

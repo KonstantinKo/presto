@@ -1185,7 +1185,13 @@ pub fn TimerView() -> impl IntoView {
                 tags.with(|all| {
                     all.iter()
                         .filter(|t| sel.contains(&t.id))
-                        .map(|t| t.name.clone())
+                        .map(|t| {
+                            if t.id == "default-focus" && t.name == "Focus" {
+                                t_string!(i18n, tag.default_name).to_string()
+                            } else {
+                                t.name.clone()
+                            }
+                        })
                         .collect()
                 })
             });
@@ -1994,8 +2000,18 @@ pub fn TimerView() -> impl IntoView {
                                     let tag_id_for_delete = tag.id.clone();
                                     let tag_id_for_select = tag.id.clone();
                                     let tag_id_for_match = tag.id.clone();
-                                    let aria_row = tag.name.clone();
-                                    let display_name = tag.name.clone();
+                                    // The `default-focus` seed keeps a stable
+                                    // English `name` ("Focus") on disk so the
+                                    // identifier survives locale switches and
+                                    // re-renames; the display string is
+                                    // re-translated here at render time.
+                                    let localized_name = if tag.id == "default-focus" && tag.name == "Focus" {
+                                        t_string!(i18n, tag.default_name).to_string()
+                                    } else {
+                                        tag.name.clone()
+                                    };
+                                    let aria_row = localized_name.clone();
+                                    let display_name = localized_name.clone();
                                     // Feature 003 (FR-023): typed dispatch via
                                     // `IconClass::from_icon_name` — supports
                                     // remixicon, Phosphor, and raw-glyph fall-
@@ -2010,7 +2026,7 @@ pub fn TimerView() -> impl IntoView {
                                     // never localised — only the surrounding
                                     // "Delete ... tag" template is translated.
                                     let delete_label =
-                                        t_string!(i18n, tag.delete_aria, name = tag.name.as_str());
+                                        t_string!(i18n, tag.delete_aria, name = localized_name.as_str());
                                     // Multi-select highlight: a row is
                                     // `selected` whenever its id is in
                                     // `selected_tag_ids`. Clicking the
@@ -2471,6 +2487,7 @@ pub fn TimerView() -> impl IntoView {
                     title=move || t_string!(i18n, timer.adjust_minus_aria)
                     aria-label=move || t_string!(i18n, timer.adjust_minus_aria)
                     on:click=on_adjust_minus
+                    prop:disabled=move || is_overtime.get()
                 >
                     <span>"-5"</span>
                 </button>
@@ -2480,6 +2497,7 @@ pub fn TimerView() -> impl IntoView {
                     title=move || t_string!(i18n, timer.adjust_plus_aria)
                     aria-label=move || t_string!(i18n, timer.adjust_plus_aria)
                     on:click=on_adjust_plus
+                    prop:disabled=move || is_overtime.get()
                 >
                     <span>"+5"</span>
                 </button>

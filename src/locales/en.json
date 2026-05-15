@@ -251,7 +251,8 @@
     "new_placeholder": "New tag...",
     "new_aria_label": "New tag name",
     "delete_aria": "Delete {{ name }} tag",
-    "tags_plural": "Tags"
+    "tags_plural": "Tags",
+    "default_name": "Focus"
   },
   "sidebar": {
     "timer_tooltip": "Timer",
@@ -277,7 +278,8 @@
     "history_col_duration": "Duration",
     "history_col_actions": "Actions",
     "history_export_label": "Export",
-    "history_export_title": "Export to Excel",
+    "history_export_title": "Export to CSV",
+    "history_empty": "No sessions on this day",
     "history_edit_button": "Edit",
     "history_edit_aria": "Edit session",
     "modal_title": "Edit session",

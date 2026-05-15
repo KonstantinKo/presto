@@ -251,7 +251,8 @@
     "new_placeholder": "Yeni etiket...",
     "new_aria_label": "Yeni etiket adı",
     "delete_aria": "{{ name }} etiketini sil",
-    "tags_plural": "Etiketler"
+    "tags_plural": "Etiketler",
+    "default_name": "Odak"
   },
   "sidebar": {
     "timer_tooltip": "Zamanlayıcı",
@@ -277,7 +278,8 @@
     "history_col_duration": "Süre",
     "history_col_actions": "İşlemler",
     "history_export_label": "Dışa aktar",
-    "history_export_title": "Excel'e aktar",
+    "history_export_title": "CSV olarak aktar",
+    "history_empty": "Bu güne ait oturum yok",
     "history_edit_button": "Düzenle",
     "history_edit_aria": "Oturumu düzenle",
     "modal_title": "Oturumu düzenle",
