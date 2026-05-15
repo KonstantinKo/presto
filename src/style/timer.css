@@ -674,3 +674,49 @@
     transform: scale(1.02);
   }
 }
+
+/* Feature 007: overtime button treatment.
+   Layered on top of the per-mode .control-btn rules in controls.css.
+   Ghost (outer) slots use a transparent fill with a warning-coloured
+   border + foreground; the filled center slot uses the warning colour
+   as its background. The same `--warning-color` token drives the
+   countdown pulse above, so the matrix and the countdown read as a
+   single visual unit (FR-006). Light + dark variants both inherit
+   automatically from the variable redefinitions in variables.css. */
+.control-btn.overtime {
+  background-color: transparent;
+  color: var(--warning-color);
+  border: 2px solid var(--warning-color);
+}
+
+.control-btn.overtime.primary {
+  background-color: var(--warning-color);
+  color: #ffffff;
+  border-color: var(--warning-color);
+}
+
+.control-btn.overtime.primary:hover:not(:disabled) {
+  opacity: 0.9;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px color-mix(in srgb, var(--warning-color) 30%, transparent);
+}
+
+/* Feature 007: "Wrap it up!" call-to-action (FR-010, FR-011).
+   Sits between the countdown and the button row; visibility is gated
+   by `class:visible` driven by `(Running, is_overtime)`. Inline-form
+   default (display:none) keeps it out of the layout when hidden so
+   the controls row's vertical position doesn't shift on overtime
+   entry/exit (SC-001, SC-009). */
+.overtime-cta {
+  display: none;
+  text-align: center;
+  color: var(--warning-color);
+  font-size: 0.95rem;
+  font-weight: 500;
+  margin: 0 0 1rem 0;
+  letter-spacing: 0.01em;
+}
+
+.overtime-cta.visible {
+  display: block;
+}

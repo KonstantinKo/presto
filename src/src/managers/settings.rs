@@ -267,7 +267,7 @@ mod tests {
         // Case C: full canonical shape with every field present —
         // must NOT flag writeback.
         let canonical = r#"{
-            "shortcuts": {"start_stop": null, "reset": null, "skip": null},
+            "shortcuts": {"start_stop": null, "reset": null, "skip": null, "abort": null},
             "timer": {"focus_duration": 25, "break_duration": 5,
                       "long_break_duration": 20, "total_sessions": 10,
                       "weekly_goal_minutes": 125, "max_session_time": 120,

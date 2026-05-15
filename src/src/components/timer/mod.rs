@@ -1258,39 +1258,87 @@ pub fn TimerView() -> impl IntoView {
             PlayPauseButtonState::from_run_state(s.is_running(), s.is_paused(), s.is_auto_paused())
         })
     });
-    let verbose_label_play =
-        Signal::derive(move || t_string!(i18n, timer.ctrl_play_pause_aria).to_string());
-    let terse_tooltip_play = Signal::derive(move || match play_pause_btn_state.get() {
-        PlayPauseButtonState::Start => t_string!(i18n, timer.ctrl_start).to_string(),
-        PlayPauseButtonState::Pause => t_string!(i18n, timer.ctrl_pause).to_string(),
-        PlayPauseButtonState::Resume => t_string!(i18n, timer.ctrl_resume).to_string(),
+    // Feature 007 (T020): in overtime-Running the center slot speaks
+    // Complete; aria-label flips to `timer.ctrl_complete_aria` so
+    // screen readers announce the wrap-up affordance (FR-016, SC-003).
+    let verbose_label_play = Signal::derive(move || {
+        if matches!(run_state.get(), RunState::Running) && is_overtime.get() {
+            t_string!(i18n, timer.ctrl_complete_aria).to_string()
+        } else {
+            t_string!(i18n, timer.ctrl_play_pause_aria).to_string()
+        }
+    });
+    let terse_tooltip_play = Signal::derive(move || {
+        if matches!(run_state.get(), RunState::Running) && is_overtime.get() {
+            t_string!(i18n, timer.ctrl_complete).to_string()
+        } else {
+            match play_pause_btn_state.get() {
+                PlayPauseButtonState::Start => t_string!(i18n, timer.ctrl_start).to_string(),
+                PlayPauseButtonState::Pause => t_string!(i18n, timer.ctrl_pause).to_string(),
+                PlayPauseButtonState::Resume => t_string!(i18n, timer.ctrl_resume).to_string(),
+            }
+        }
     });
 
     // Feature 006 (T049): state-aware left-slot button.
     //   Idle           → "+ Quick Log"        (opens Quick Log modal)
     //   Running/Paused → "✕ Abort"            (engine.abort)
-    let verbose_label_left = Signal::derive(move || match run_state.get() {
-        RunState::Idle => t_string!(i18n, timer.ctrl_quick_log_aria).to_string(),
-        RunState::Running | RunState::Paused => t_string!(i18n, timer.ctrl_abort_aria).to_string(),
+    // Feature 007 (T020): overtime-Running collapses left slot to
+    //   "✓ Complete" (FR-003, FR-016 — but `aria-hidden=true` keeps it
+    //   silent for screen readers per FR-014; the label is still set
+    //   so visible content matches when assistive tech overrides).
+    let verbose_label_left = Signal::derive(move || {
+        if matches!(run_state.get(), RunState::Running) && is_overtime.get() {
+            t_string!(i18n, timer.ctrl_complete_aria).to_string()
+        } else {
+            match run_state.get() {
+                RunState::Idle => t_string!(i18n, timer.ctrl_quick_log_aria).to_string(),
+                RunState::Running | RunState::Paused => {
+                    t_string!(i18n, timer.ctrl_abort_aria).to_string()
+                }
+            }
+        }
     });
-    let terse_tooltip_left = Signal::derive(move || match run_state.get() {
-        RunState::Idle => t_string!(i18n, timer.ctrl_quick_log).to_string(),
-        RunState::Running | RunState::Paused => t_string!(i18n, timer.ctrl_abort).to_string(),
+    let terse_tooltip_left = Signal::derive(move || {
+        if matches!(run_state.get(), RunState::Running) && is_overtime.get() {
+            t_string!(i18n, timer.ctrl_complete).to_string()
+        } else {
+            match run_state.get() {
+                RunState::Idle => t_string!(i18n, timer.ctrl_quick_log).to_string(),
+                RunState::Running | RunState::Paused => {
+                    t_string!(i18n, timer.ctrl_abort).to_string()
+                }
+            }
+        }
     });
 
     // Feature 006 (T049): state-aware right-slot button.
     //   Idle    → "→ Skip Mode"        (engine.skip)
     //   Running → "! Note Distraction" (opens Distraction modal)
     //   Paused  → "✓ Complete"         (engine.complete)
-    let verbose_label_right = Signal::derive(move || match run_state.get() {
-        RunState::Idle => t_string!(i18n, timer.ctrl_skip_mode_aria).to_string(),
-        RunState::Running => t_string!(i18n, timer.ctrl_note_distraction_aria).to_string(),
-        RunState::Paused => t_string!(i18n, timer.ctrl_complete_aria).to_string(),
+    // Feature 007 (T020): overtime-Running collapses right slot to
+    //   "✓ Complete" — same label as left, same aria-hidden gate.
+    let verbose_label_right = Signal::derive(move || {
+        if matches!(run_state.get(), RunState::Running) && is_overtime.get() {
+            t_string!(i18n, timer.ctrl_complete_aria).to_string()
+        } else {
+            match run_state.get() {
+                RunState::Idle => t_string!(i18n, timer.ctrl_skip_mode_aria).to_string(),
+                RunState::Running => t_string!(i18n, timer.ctrl_note_distraction_aria).to_string(),
+                RunState::Paused => t_string!(i18n, timer.ctrl_complete_aria).to_string(),
+            }
+        }
     });
-    let terse_tooltip_right = Signal::derive(move || match run_state.get() {
-        RunState::Idle => t_string!(i18n, timer.ctrl_skip_mode).to_string(),
-        RunState::Running => t_string!(i18n, timer.ctrl_note_distraction).to_string(),
-        RunState::Paused => t_string!(i18n, timer.ctrl_complete).to_string(),
+    let terse_tooltip_right = Signal::derive(move || {
+        if matches!(run_state.get(), RunState::Running) && is_overtime.get() {
+            t_string!(i18n, timer.ctrl_complete).to_string()
+        } else {
+            match run_state.get() {
+                RunState::Idle => t_string!(i18n, timer.ctrl_skip_mode).to_string(),
+                RunState::Running => t_string!(i18n, timer.ctrl_note_distraction).to_string(),
+                RunState::Paused => t_string!(i18n, timer.ctrl_complete).to_string(),
+            }
+        }
     });
 
     // Update document title with overtime prefix when running in overtime.
@@ -1310,15 +1358,22 @@ pub fn TimerView() -> impl IntoView {
     // selector contract says `#play-icon` is visible when idle and
     // `#pause-icon` is visible when running; the e2e suite asserts
     // both `toBeVisible()` and `toBeHidden()` on these.
+    // Feature 007 (T020): overtime-Running hides both glyphs; the
+    // new `#center-complete-icon` takes over as the visible glyph
+    // (FR-003, ✓ Complete on the center slot).
     let play_icon_style = Signal::derive(move || {
-        if is_running.get() {
+        let overtime_active =
+            matches!(run_state.get(), RunState::Running) && is_overtime.get();
+        if is_running.get() || overtime_active {
             "display: none"
         } else {
             ""
         }
     });
     let pause_icon_style = Signal::derive(move || {
-        if is_running.get() {
+        let overtime_active =
+            matches!(run_state.get(), RunState::Running) && is_overtime.get();
+        if is_running.get() && !overtime_active {
             ""
         } else {
             "display: none"
@@ -1475,6 +1530,23 @@ pub fn TimerView() -> impl IntoView {
         );
         apply_tag_tracking_events(&events, active_session_tags, selected_tag_ids);
         dispatch_tray_update(engine, settings, true);
+    };
+
+    // Feature 007 (T015): center-slot 2D gate. In overtime-Running the
+    // center slot dispatches to `on_complete` (the wrap-up nudge —
+    // FR-007, FR-008, SC-002); in every other state it falls through
+    // to the existing `on_play_pause` Start/Pause/Resume routing.
+    // Keeping the (RunState, is_overtime) match in one named closure
+    // (rather than spreading it across JSX) anchors the 2D matrix to a
+    // single inspection point (Constitutional Anchor III).
+    let on_center_click = move |ev| {
+        if is_overtime.get_untracked()
+            && matches!(run_state.get_untracked(), RunState::Running)
+        {
+            on_complete(ev);
+        } else {
+            on_play_pause(ev);
+        }
     };
 
     // Feature 006 (T051): Quick Log modal open. Idle-state left-slot
@@ -2254,6 +2326,19 @@ pub fn TimerView() -> impl IntoView {
                 <div class="timer-seconds" id="timer-seconds">{move || seconds_text.get()}</div>
             </div>
 
+            // Feature 007 (T022): "Wrap it up!" CTA — visible only in
+            // overtime-Running per FR-010, FR-011. Visibility gate is the
+            // same `(Running, is_overtime)` predicate as the button
+            // overtime class so CTA and buttons appear / disappear
+            // synchronously (SC-001, SC-006, SC-009). Sits between the
+            // countdown and the .controls row per spec assumption.
+            <p
+                class="overtime-cta"
+                class:visible=move || matches!(run_state.get(), RunState::Running) && is_overtime.get()
+            >
+                {move || t_string!(i18n, timer.overtime_cta)}
+            </p>
+
             // Control buttons. The icon visibility toggles match the
             // JS-era `style="display: none"` flips — the e2e suite
             // asserts on `toBeVisible()` / `toBeHidden()` of the
@@ -2281,13 +2366,21 @@ pub fn TimerView() -> impl IntoView {
             <div class="controls">
                 <button id="stop-btn" class="control-btn"
                     class:filled-action=move || false
+                    class:overtime=move || matches!(run_state.get(), RunState::Running) && is_overtime.get()
+                    aria-hidden=move || matches!(run_state.get(), RunState::Running) && is_overtime.get()
+                    tabindex=move || if matches!(run_state.get(), RunState::Running) && is_overtime.get() { -1 } else { 0 }
                     aria-label=move || verbose_label_left.get()
                     title=move || verbose_label_left.get()
                     data-tooltip=move || terse_tooltip_left.get()
                     on:click=move |ev| {
-                        match run_state.get() {
-                            RunState::Idle => on_open_quick_log(ev),
-                            RunState::Running | RunState::Paused => on_abort(ev),
+                        // Feature 007 (T016): 2D (RunState, is_overtime)
+                        // dispatch. Overtime-Running collapses left-slot to
+                        // Complete (FR-007, FR-008); Paused-during-overtime
+                        // falls back to the normal Paused matrix per FR-022.
+                        match (run_state.get(), is_overtime.get_untracked()) {
+                            (RunState::Running, true) => on_complete(ev),
+                            (RunState::Idle, _) => on_open_quick_log(ev),
+                            (RunState::Running, false) | (RunState::Paused, _) => on_abort(ev),
                         }
                     }>
                     // Idle: plus icon (Quick Log).
@@ -2304,22 +2397,38 @@ pub fn TimerView() -> impl IntoView {
                     // Running / Paused: X icon (Abort). Selector
                     // `#undo-icon` kept for VR-baseline continuity —
                     // the icon glyph itself is the abort × glyph.
+                    // Feature 007 (T020): hidden in overtime-Running; the
+                    // sibling `#stop-complete-icon` (check) takes over.
                     <svg
                         id="undo-icon"
                         viewBox="0 0 24 24"
                         fill="none"
                         stroke="currentColor"
                         stroke-width="2.5"
-                        style=move || if matches!(run_state.get(), RunState::Running | RunState::Paused) { "" } else { "display: none" }
+                        style=move || if matches!(run_state.get(), RunState::Running | RunState::Paused)
+                                       && !(matches!(run_state.get(), RunState::Running) && is_overtime.get()) { "" } else { "display: none" }
                     >
                         <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
                     </svg>
+                    // Feature 007 (T020): overtime-Running check glyph for
+                    // the left (ghost) slot. Mirrors the right slot's
+                    // existing #complete-icon glyph in the Paused matrix.
+                    <i
+                        id="stop-complete-icon"
+                        class="ri-check-line"
+                        style=move || if matches!(run_state.get(), RunState::Running) && is_overtime.get() {
+                            "font-size: 24px"
+                        } else {
+                            "display: none; font-size: 24px"
+                        }
+                    ></i>
                 </button>
                 <button id="play-pause-btn" class="control-btn primary"
+                    class:overtime=move || matches!(run_state.get(), RunState::Running) && is_overtime.get()
                     aria-label=move || verbose_label_play.get()
                     title=move || verbose_label_play.get()
                     data-tooltip=move || terse_tooltip_play.get()
-                    on:click=on_play_pause>
+                    on:click=on_center_click>
                     <svg id="play-icon" viewBox="0 0 24 24" fill="currentColor" style=move || play_icon_style.get()>
                         <path fill-rule="evenodd" clip-rule="evenodd"
                             d="M4.5 5.653c0-1.427 1.529-2.33 2.779-1.643l11.54 6.347c1.295.712 1.295 2.573 0 3.286L7.28 19.99c-1.25.687-2.779-.217-2.779-1.643V5.653Z" />
@@ -2328,17 +2437,40 @@ pub fn TimerView() -> impl IntoView {
                         <path fill-rule="evenodd" clip-rule="evenodd"
                             d="M6.75 5.25a.75.75 0 0 1 .75-.75H9a.75.75 0 0 1 .75.75v13.5a.75.75 0 0 1-.75.75H7.5a.75.75 0 0 1-.75-.75V5.25Zm7.5 0A.75.75 0 0 1 15 4.5h1.5a.75.75 0 0 1 .75.75v13.5a.75.75 0 0 1-.75.75H15a.75.75 0 0 1-.75-.75V5.25Z" />
                     </svg>
+                    // Feature 007 (T020): overtime-Running check glyph for
+                    // the center (filled) slot. The visible label flips to
+                    // ✓ Complete (FR-003); play/pause SVGs are hidden by
+                    // their respective style signals' overtime-aware gates.
+                    <i
+                        id="center-complete-icon"
+                        class="ri-check-line"
+                        style=move || if matches!(run_state.get(), RunState::Running) && is_overtime.get() {
+                            "font-size: 30px"
+                        } else {
+                            "display: none; font-size: 30px"
+                        }
+                    ></i>
                 </button>
                 <button id="skip-btn" class="control-btn"
                     class:primary=move || matches!(run_state.get(), RunState::Paused)
+                    class:overtime=move || matches!(run_state.get(), RunState::Running) && is_overtime.get()
+                    aria-hidden=move || matches!(run_state.get(), RunState::Running) && is_overtime.get()
+                    tabindex=move || if matches!(run_state.get(), RunState::Running) && is_overtime.get() { -1 } else { 0 }
                     aria-label=move || verbose_label_right.get()
                     title=move || verbose_label_right.get()
                     data-tooltip=move || terse_tooltip_right.get()
                     on:click=move |ev| {
-                        match run_state.get() {
-                            RunState::Idle => on_skip(ev),
-                            RunState::Running => on_open_distraction(ev),
-                            RunState::Paused => on_complete(ev),
+                        // Feature 007 (T017): 2D (RunState, is_overtime)
+                        // dispatch — right slot collapses to Complete in
+                        // overtime-Running (FR-007, FR-008, SC-002). The
+                        // Paused-* row falls back to the feature-006
+                        // Paused matrix; overtime gating off Running per
+                        // FR-022 means (Paused, true) acts like (Paused,
+                        // false) → Complete.
+                        match (run_state.get(), is_overtime.get_untracked()) {
+                            (RunState::Idle, _) => on_skip(ev),
+                            (RunState::Running, false) => on_open_distraction(ev),
+                            (RunState::Running, true) | (RunState::Paused, _) => on_complete(ev),
                         }
                     }>
                     // Idle: per-mode skip icon (coffee / moon /
@@ -2388,20 +2520,27 @@ pub fn TimerView() -> impl IntoView {
                         }
                     ></i>
                     // Running: alert-circle (Distraction note).
+                    // Feature 007 (T020): hidden in overtime-Running so
+                    // the right slot reads `✓ Complete` instead of the
+                    // Distraction glyph.
                     <i
                         id="distraction-icon"
                         class="ri-alert-line"
-                        style=move || if matches!(run_state.get(), RunState::Running) {
+                        style=move || if matches!(run_state.get(), RunState::Running) && !is_overtime.get() {
                             "font-size: 24px"
                         } else {
                             "display: none; font-size: 24px"
                         }
                     ></i>
                     // Paused: check (Complete).
+                    // Feature 007 (T020): also shown in overtime-Running —
+                    // the right slot collapses to ✓ Complete (FR-003).
                     <i
                         id="complete-icon"
                         class="ri-check-line"
-                        style=move || if matches!(run_state.get(), RunState::Paused) {
+                        style=move || if matches!(run_state.get(), RunState::Paused)
+                            || (matches!(run_state.get(), RunState::Running) && is_overtime.get())
+                        {
                             "font-size: 24px"
                         } else {
                             "display: none; font-size: 24px"
