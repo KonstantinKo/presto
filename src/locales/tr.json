@@ -171,14 +171,12 @@
     "status_auto_paused": "(Otomatik duraklatıldı)",
     "status_overtime": "(Ek süre)",
     "ctrl_reset": "Sıfırla",
-    "ctrl_undo": "Geri al",
     "ctrl_start": "Başlat",
     "ctrl_pause": "Duraklat",
     "ctrl_resume": "Devam et",
     "ctrl_skip_session": "Oturumu atla",
     "ctrl_skip_session_aria": "Mevcut oturumu atla ve sonraki aşamaya geç",
     "ctrl_reset_aria": "Zamanlayıcıyı sıfırla",
-    "ctrl_undo_aria": "Son oturumu geri al",
     "ctrl_play_pause_aria": "Zamanlayıcıyı başlat veya duraklat",
     "ctrl_quick_log": "Hızlı kayıt",
     "ctrl_quick_log_aria": "Hızlı kayıt formunu aç",
@@ -242,6 +240,15 @@
     "note_distraction_label": "Ne oldu?",
     "note_distraction_submit": "Kaydet",
     "note_distraction_cancel": "İptal"
+  },
+  "inventory": {
+    "section_header": "Envanter",
+    "subsection_quicklogs": "Hızlı kayıtlar",
+    "subsection_distractions": "Dikkat dağınıklıkları",
+    "empty_quicklogs": "Bugün hızlı kayıt yok.",
+    "empty_distractions": "Bugün dikkat dağınıklığı yok.",
+    "deleted_tag_placeholder": "(silinmiş etiket)",
+    "btn_add_quicklog": "+ Hızlı kayıt"
   },
   "tag": {
     "choose_header": "Etiket seç",
@@ -394,6 +401,18 @@
     "tag_usage_title_monthly": "Bu ayki etiket kullanımı",
     "tag_usage_title_yearly": "Bu yılki etiket kullanımı",
     "tag_usage_empty": "Bu dönemde etiketli oturum yok",
-    "minutes_unit": "dk"
+    "minutes_unit": "dk",
+    "tile_daily_quicklogs_singular": "hızlı kayıt",
+    "tile_daily_quicklogs_plural": "hızlı kayıt",
+    "tile_daily_distractions_singular": "dikkat dağınıklığı",
+    "tile_daily_distractions_plural": "dikkat dağınıklığı",
+    "tile_weekly_quicklogs_singular": "hızlı kayıt",
+    "tile_weekly_quicklogs_plural": "hızlı kayıt",
+    "tile_weekly_distractions_singular": "dikkat dağınıklığı",
+    "tile_weekly_distractions_plural": "dikkat dağınıklığı",
+    "tile_monthly_quicklogs_singular": "hızlı kayıt",
+    "tile_monthly_quicklogs_plural": "hızlı kayıt",
+    "tile_monthly_distractions_singular": "dikkat dağınıklığı",
+    "tile_monthly_distractions_plural": "dikkat dağınıklığı"
   }
 }

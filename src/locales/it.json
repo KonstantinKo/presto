@@ -171,14 +171,12 @@
     "status_auto_paused": "(Auto-pausa)",
     "status_overtime": "(Tempo extra)",
     "ctrl_reset": "Reimposta",
-    "ctrl_undo": "Annulla",
     "ctrl_start": "Avvia",
     "ctrl_pause": "Pausa",
     "ctrl_resume": "Riprendi",
     "ctrl_skip_session": "Salta sessione",
     "ctrl_skip_session_aria": "Salta la sessione corrente e passa alla fase successiva",
     "ctrl_reset_aria": "Reimposta timer",
-    "ctrl_undo_aria": "Annulla ultima sessione",
     "ctrl_play_pause_aria": "Avvia o metti in pausa il timer",
     "ctrl_quick_log": "Voce rapida",
     "ctrl_quick_log_aria": "Apri il modulo per inserire una voce rapida",
@@ -242,6 +240,15 @@
     "note_distraction_label": "Cosa è successo?",
     "note_distraction_submit": "Salva",
     "note_distraction_cancel": "Annulla"
+  },
+  "inventory": {
+    "section_header": "Inventario",
+    "subsection_quicklogs": "Voci rapide",
+    "subsection_distractions": "Distrazioni",
+    "empty_quicklogs": "Nessuna voce rapida oggi.",
+    "empty_distractions": "Nessuna distrazione oggi.",
+    "deleted_tag_placeholder": "(tag eliminato)",
+    "btn_add_quicklog": "+ Voce rapida"
   },
   "tag": {
     "choose_header": "Scegli tag",
@@ -394,6 +401,18 @@
     "tag_usage_title_monthly": "Utilizzo tag questo mese",
     "tag_usage_title_yearly": "Utilizzo tag quest'anno",
     "tag_usage_empty": "Nessuna sessione taggata in questo periodo",
-    "minutes_unit": "min"
+    "minutes_unit": "min",
+    "tile_daily_quicklogs_singular": "voce rapida",
+    "tile_daily_quicklogs_plural": "voci rapide",
+    "tile_daily_distractions_singular": "distrazione",
+    "tile_daily_distractions_plural": "distrazioni",
+    "tile_weekly_quicklogs_singular": "voce rapida",
+    "tile_weekly_quicklogs_plural": "voci rapide",
+    "tile_weekly_distractions_singular": "distrazione",
+    "tile_weekly_distractions_plural": "distrazioni",
+    "tile_monthly_quicklogs_singular": "voce rapida",
+    "tile_monthly_quicklogs_plural": "voci rapide",
+    "tile_monthly_distractions_singular": "distrazione",
+    "tile_monthly_distractions_plural": "distrazioni"
   }
 }

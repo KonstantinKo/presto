@@ -171,14 +171,12 @@
     "status_auto_paused": "(Auto-paused)",
     "status_overtime": "(Overtime)",
     "ctrl_reset": "Reset",
-    "ctrl_undo": "Undo",
     "ctrl_start": "Start",
     "ctrl_pause": "Pause",
     "ctrl_resume": "Resume",
     "ctrl_skip_session": "Skip session",
     "ctrl_skip_session_aria": "Skip current session and advance to the next phase",
     "ctrl_reset_aria": "Reset timer",
-    "ctrl_undo_aria": "Undo last session",
     "ctrl_play_pause_aria": "Start or pause timer",
     "ctrl_quick_log": "Quick Log",
     "ctrl_quick_log_aria": "Open quick log entry form",
@@ -242,6 +240,15 @@
     "note_distraction_label": "What happened?",
     "note_distraction_submit": "Save",
     "note_distraction_cancel": "Cancel"
+  },
+  "inventory": {
+    "section_header": "Inventory",
+    "subsection_quicklogs": "Quick logs",
+    "subsection_distractions": "Distractions",
+    "empty_quicklogs": "No quick logs today.",
+    "empty_distractions": "No distractions today.",
+    "deleted_tag_placeholder": "(deleted tag)",
+    "btn_add_quicklog": "+ Quick Log"
   },
   "tag": {
     "choose_header": "Choose tag",
@@ -394,6 +401,18 @@
     "tag_usage_title_monthly": "Tag Usage This Month",
     "tag_usage_title_yearly": "Tag Usage This Year",
     "tag_usage_empty": "No tagged sessions in this period",
-    "minutes_unit": "min"
+    "minutes_unit": "min",
+    "tile_daily_quicklogs_singular": "quicklog",
+    "tile_daily_quicklogs_plural": "quicklogs",
+    "tile_daily_distractions_singular": "distraction",
+    "tile_daily_distractions_plural": "distractions",
+    "tile_weekly_quicklogs_singular": "quicklog",
+    "tile_weekly_quicklogs_plural": "quicklogs",
+    "tile_weekly_distractions_singular": "distraction",
+    "tile_weekly_distractions_plural": "distractions",
+    "tile_monthly_quicklogs_singular": "quicklog",
+    "tile_monthly_quicklogs_plural": "quicklogs",
+    "tile_monthly_distractions_singular": "distraction",
+    "tile_monthly_distractions_plural": "distractions"
   }
 }
