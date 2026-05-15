@@ -238,7 +238,13 @@ pub fn Inventory(selected_day: RwSignal<DateTime<Utc>>) -> impl IntoView {
                             children=move |q| {
                                 let q_for_edit = q.clone();
                                 let id_for_delete = q.id.clone();
-                                let mins_label = format!("{} {}", q.elapsed_minutes, t_string!(i18n, stats.minutes_unit));
+                                // Reactive closure so `minutes_unit` re-
+                                // resolves on locale change — `<For>`'s
+                                // children fn runs once per row at mount.
+                                let mins = q.elapsed_minutes;
+                                let mins_label = move || {
+                                    format!("{} {}", mins, t_string!(i18n, stats.minutes_unit))
+                                };
                                 view! {
                                     <li class="inventory-row" data-quicklog-id=q.id>
                                         <span class="inventory-row-title">{q.title}</span>
