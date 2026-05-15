@@ -45,6 +45,11 @@ use crate::i18n::i18n::use_i18n;
 /// Feature 007: `Abort` slot added as the fourth row (FR-018).
 /// Default binding is unbound per FR-019 — the slot ships with an
 /// empty input, the user opts in.
+///
+/// R-003 note: `Reset` is the legacy alias for `Abort` — same engine
+/// action, different binding row + default. The Undo-last-Pomodoro
+/// affordance was removed by feature 006 (FR-028); the variant name
+/// stays for backwards-compat with the `settings.json` field name.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum ShortcutSlot {
     StartStop,
@@ -74,7 +79,10 @@ impl ShortcutSlot {
     const fn label(self) -> &'static str {
         match self {
             Self::StartStop => "Start/Stop Timer:",
-            Self::Reset => "Delete Session / Undo:",
+            // R-003 fix: Reset is the legacy alias for Abort. Label
+            // updated to match actual behaviour (the engine has no
+            // `reset()` method since feature 006 removed it).
+            Self::Reset => "Reset session:",
             Self::Skip => "Save Session:",
             Self::Abort => "Abort Session:",
         }
@@ -95,7 +103,11 @@ impl ShortcutSlot {
     const fn description(self) -> &'static str {
         match self {
             Self::StartStop => "Start or pause the current Pomodoro session.",
-            Self::Reset => "Delete the current session or undo the last completed Pomodoro.",
+            // R-003 fix: matches the actual engine behaviour. Reset
+            // dispatches through `on_abort` — the engine has no
+            // `reset()` since feature 006; the "undo last Pomodoro"
+            // affordance was removed by FR-028.
+            Self::Reset => "Discard the current session without counting it.",
             Self::Skip => "Save the current session and start the next one.",
             Self::Abort => "Discard the current focus session without logging it.",
         }

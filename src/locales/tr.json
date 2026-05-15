@@ -117,11 +117,11 @@
       "description": "Uygulama arka planda olsa bile çalışan klavye kısayollarını yapılandırın",
       "section_header": "Klavye kısayolları",
       "label_start_stop": "Zamanlayıcı başlat/durdur:",
-      "label_reset": "Oturumu sil / Geri al:",
+      "label_reset": "Oturumu sıfırla:",
       "label_skip": "Oturumu kaydet:",
       "label_abort": "Oturumu iptal et:",
       "desc_start_stop": "Mevcut Pomodoro oturumunu başlat veya duraklat.",
-      "desc_reset": "Mevcut oturumu sil veya son tamamlanan Pomodoro'yu geri al.",
+      "desc_reset": "Mevcut oturumu saymadan iptal et.",
       "desc_skip": "Mevcut oturumu kaydet ve sonrakini başlat.",
       "desc_abort": "Mevcut odak oturumunu kayıt etmeden iptal et.",
       "clear_aria": "{{ name }} kısayolunu temizle"

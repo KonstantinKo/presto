@@ -1756,10 +1756,12 @@ pub fn TimerView() -> impl IntoView {
             reset_first.set(false);
             return;
         }
-        // "reset" wire name maps to the user-facing "Delete Session /
-        // Undo" affordance — same engine path as the on-screen Abort
-        // button (left slot in Running / Paused). Mirrors `on_abort`'s
-        // full pipeline including the toast.
+        // "reset" wire name is the legacy alias for the user-facing
+        // "Reset session" affordance — same engine path as Abort (the
+        // engine has no `reset()` method since feature 006). The
+        // settings field name stays `reset` for backwards-compat with
+        // the on-disk `settings.json`. Mirrors `on_abort`'s full
+        // pipeline including the toast.
         let synth = leptos::ev::MouseEvent::new("click").unwrap();
         on_abort(synth);
     });
