@@ -676,6 +676,8 @@ pub fn build_specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         add_session_tag,
         export_sessions_xlsx,
         export_sessions_csv,
+        dialog_save,
+        dialog_ask,
     ])
 }
 
@@ -1034,6 +1036,69 @@ async fn export_sessions_csv(
     sessions: Vec<ManualSession>,
 ) -> Result<(), BridgeError> {
     exports::export_csv(std::path::Path::new(&path), &sessions)
+}
+
+// Dialog plugin wrappers.
+//
+// The frontend used to call `plugin:dialog|save` / `plugin:dialog|ask`
+// directly through the raw `invoke` bridge, hand-rolling the JSON
+// envelope. That had no compile-time contract against the plugin's
+// signature — the dialog plugin expects `{ options: SaveDialogOptions }`
+// but our wrapper sent the fields flat, and Serde silently bound
+// nothing into the missing field. Result: the save dialog never
+// opened.
+//
+// Wrapping the plugin calls in our own typed commands moves the wire
+// contract under the `tauri-specta` bindings-drift test
+// (`tests/bindings_export.rs`), so any future signature change between
+// the frontend's `commands::dialog_*` wrappers and these handlers
+// fails CI loud instead of silently dropping calls.
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct DialogFilter {
+    pub name: String,
+    pub extensions: Vec<String>,
+}
+
+#[tauri::command]
+#[specta::specta]
+async fn dialog_save(
+    window: tauri::Window,
+    default_path: Option<String>,
+    filters: Vec<DialogFilter>,
+) -> Result<Option<String>, BridgeError> {
+    use tauri_plugin_dialog::DialogExt;
+    let mut builder = window.dialog().file().set_parent(&window);
+    if let Some(p) = default_path {
+        builder = builder.set_file_name(p);
+    }
+    for filter in &filters {
+        let exts: Vec<&str> = filter.extensions.iter().map(String::as_str).collect();
+        builder = builder.add_filter(&filter.name, &exts);
+    }
+    // `blocking_save_file` is safe inside a `#[tauri::command]` because
+    // Tauri runs commands on a dedicated worker thread — same pattern
+    // the dialog plugin's own `save` command uses (commands.rs:231).
+    let path = builder.blocking_save_file();
+    Ok(path.map(|p| p.to_string()))
+}
+
+#[tauri::command]
+#[specta::specta]
+async fn dialog_ask(
+    window: tauri::Window,
+    message: String,
+    title: String,
+) -> Result<bool, BridgeError> {
+    use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
+    let confirmed = window
+        .dialog()
+        .message(message)
+        .title(title)
+        .kind(MessageDialogKind::Warning)
+        .buttons(MessageDialogButtons::YesNo)
+        .blocking_show();
+    Ok(confirmed)
 }
 
 #[cfg(target_os = "macos")]

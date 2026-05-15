@@ -811,17 +811,14 @@ pub async fn dialog_ask(message: &str, title: &str) -> Result<bool, BridgeError>
     struct Args<'a> {
         message: &'a str,
         title: &'a str,
-        kind: &'static str,
     }
-    invoke_serde(
-        "plugin:dialog|ask",
-        &Args {
-            message,
-            title,
-            kind: "warning",
-        },
-    )
-    .await
+    // Routed through our own `dialog_ask` Tauri command (defined in
+    // `src-tauri/src/lib.rs`) instead of `plugin:dialog|ask` directly.
+    // The wire shape is pinned by `tests/bindings_export.rs`, so any
+    // drift between the wrapper and the handler signature fails CI
+    // — eliminating the silent-bind-nothing class of bug that
+    // previously broke the dialog_save call.
+    invoke_serde("dialog_ask", &Args { message, title }).await
 }
 
 /// Ask the user for a save path via the native file-save dialog.
@@ -844,30 +841,25 @@ pub async fn dialog_save(
     }
     #[derive(Serialize)]
     #[serde(rename_all = "camelCase")]
-    struct SaveDialogOptions {
+    struct Args {
         default_path: Option<String>,
         filters: Vec<FilterArg>,
     }
-    #[derive(Serialize)]
-    struct Args {
-        // The dialog plugin's `save` command takes a single
-        // `options: SaveDialogOptions` parameter — passing the
-        // fields flat at the top level (the shape this wrapper
-        // shipped with originally) silently no-ops because the
-        // plugin's Serde deserialisation can't bind them.
-        options: SaveDialogOptions,
-    }
+    // Routed through our own `dialog_save` Tauri command instead of
+    // `plugin:dialog|save` directly. The plugin's command expects
+    // `{ options: SaveDialogOptions }` — sending flat args at this
+    // boundary silently bound nothing and the file picker never
+    // appeared. The wrapper command owns the envelope shape and
+    // pins it via `tests/bindings_export.rs`.
     let filters = filters
         .into_iter()
         .map(|(name, extensions)| FilterArg { name, extensions })
         .collect();
     invoke_serde(
-        "plugin:dialog|save",
+        "dialog_save",
         &Args {
-            options: SaveDialogOptions {
-                default_path,
-                filters,
-            },
+            default_path,
+            filters,
         },
     )
     .await

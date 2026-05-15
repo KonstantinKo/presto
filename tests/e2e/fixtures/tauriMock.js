@@ -293,9 +293,11 @@ const TAURI_MOCK_INIT_SCRIPT = `
             return;
 
           case "plugin:dialog|ask":
+          case "dialog_ask":
             return false;
 
-          case "plugin:dialog|save": {
+          case "plugin:dialog|save":
+          case "dialog_save": {
             var scfg = window.__E2E_CONFIG__ || {};
             return scfg.dialogSaveResult !== undefined ? scfg.dialogSaveResult : null;
           }
