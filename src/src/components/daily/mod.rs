@@ -18,6 +18,7 @@
 )]
 
 pub mod day_clamp;
+pub mod inventory;
 pub mod month_grid;
 pub mod sessions_history_table;
 pub mod sessions_timeline;
@@ -27,6 +28,7 @@ use leptos::prelude::*;
 use leptos_i18n::t;
 
 use self::day_clamp::clamp_day_to_month;
+use self::inventory::Inventory;
 use self::month_grid::{next_month, prev_month, MonthGrid};
 use self::sessions_history_table::SessionsHistoryTable;
 use self::sessions_timeline::SessionsTimeline;
@@ -112,6 +114,11 @@ pub fn DailyView() -> impl IntoView {
             // (`.sessions-history-card { ... off-viewport positioning ... }`)
             // still applies.
             <SessionsHistoryTable />
+
+            // Feature 006 (T055-T057): Inventory subsection — quick
+            // logs + distractions for the selected day. Rendered
+            // below the sessions-history-card per the spec.
+            <Inventory selected_day=selected_day />
         </div>
     }
 }
