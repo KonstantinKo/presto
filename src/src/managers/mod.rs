@@ -25,7 +25,9 @@
 //                 `update-manager-global.js:219`). Consumes the E10
 //                 `tauri://update-available` event payload.
 
+pub mod distraction;
 pub mod navigation;
+pub mod quick_log;
 pub mod session;
 pub mod settings;
 pub mod tag;
