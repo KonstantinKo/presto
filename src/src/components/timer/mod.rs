@@ -488,6 +488,60 @@ fn prime_audio_context() {
 #[cfg(not(target_arch = "wasm32"))]
 const fn prime_audio_context() {}
 
+/// R-001 fix: install a one-shot document-level `pointerdown` listener at
+/// app startup that primes both audio contexts (chime + ambient) the first
+/// time the user touches the surface. Self-removes after the first fire.
+///
+/// Audio context unlock per WKWebView gesture-stack requirement; must run
+/// inside a real user-gesture call frame, so synthetic Leptos events from
+/// ShortcutBus do not satisfy the gesture rule. The first pointerdown
+/// anywhere in the document is sufficient — the user must have clicked,
+/// tapped, or pressed at least once before any keyboard-only flow could
+/// have produced inaudible chimes, so this listener wins the race against
+/// the global-shortcut path.
+#[cfg(target_arch = "wasm32")]
+pub(crate) fn install_audio_priming_listener() {
+    use std::cell::RefCell;
+    use std::rc::Rc;
+
+    let Some(window) = web_sys::window() else {
+        return;
+    };
+    let Some(document) = window.document() else {
+        return;
+    };
+
+    // Closure holds a slot pointing back at itself so the handler body
+    // can `removeEventListener` after firing once. The slot is filled
+    // post-construction; before fill, the closure refuses to run (slot
+    // is None on the first pointerdown only in the impossible "fires
+    // before the slot fill below executes synchronously" race).
+    let slot: Rc<RefCell<Option<wasm_bindgen::closure::Closure<dyn FnMut(web_sys::Event)>>>> =
+        Rc::new(RefCell::new(None));
+    let slot_for_cb = slot.clone();
+    let document_for_cb = document.clone();
+    let closure = wasm_bindgen::closure::Closure::<dyn FnMut(web_sys::Event)>::new(
+        move |_ev: web_sys::Event| {
+            chime::ensure_context();
+            ambient_audio::prime_ambient_audio();
+            if let Some(c) = slot_for_cb.borrow_mut().take() {
+                let _ = document_for_cb.remove_event_listener_with_callback(
+                    "pointerdown",
+                    c.as_ref().unchecked_ref(),
+                );
+                // Closure is dropped here when the Rc<RefCell> slot
+                // releases its Some(...) on scope exit.
+            }
+        },
+    );
+    let _ = document
+        .add_event_listener_with_callback("pointerdown", closure.as_ref().unchecked_ref());
+    *slot.borrow_mut() = Some(closure);
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) const fn install_audio_priming_listener() {}
+
 /// One-shot ticking sound, fired once per second from the 1 Hz tick
 /// Effect during focus sessions. Soft kitchen-timer "tick" — very
 /// short percussive transient, low harmonic content, no audible
@@ -1392,8 +1446,12 @@ pub fn TimerView() -> impl IntoView {
     // the in-memory state machine is correct even though
     // persistence is a no-op on the dev server.
     let on_play_pause = move |_| {
-        prime_audio_context();
-        ambient_audio::prime_ambient_audio();
+        // R-001 fix: audio priming has migrated to a one-shot
+        // pointerdown listener installed at app startup
+        // (`install_audio_priming_listener`). Calling `prime_audio_context`
+        // here was redundant once the listener handles every real gesture,
+        // and broken for ShortcutBus dispatches whose synthetic MouseEvent
+        // never enters a real WKWebView gesture-stack frame.
         let events = engine
             .try_update(|state| {
                 if state.is_running() {

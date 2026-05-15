@@ -163,6 +163,16 @@ pub fn App() -> impl IntoView {
     let shortcut_bus = ShortcutBus::default();
     provide_context(shortcut_bus);
 
+    // R-001 fix: install the one-shot pointerdown listener that primes
+    // the chime + ambient AudioContexts on the user's first real
+    // gesture. WKWebView only unlocks AudioContext inside a live DOM-
+    // gesture call frame; ShortcutBus dispatches synthesise events from
+    // the Leptos reactive scheduler, which do NOT count as a gesture.
+    // Without this listener, a user whose first interaction is the
+    // start-stop keyboard binding gets silent chimes for the whole
+    // session.
+    crate::components::timer::install_audio_priming_listener();
+
     // Feature 005: localised save-failure message. The settings
     // persistence sink below lives in `App`'s body (outside the
     // `I18nContextProvider` tree), so `use_i18n()` cannot resolve at
