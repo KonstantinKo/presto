@@ -311,19 +311,19 @@ pub enum SkipButtonState {
 impl SkipButtonState {
     /// Verbose accessible label — distinct from the terse tooltip per
     /// Spec A11 / SC-004 / contracts §3. The catalogue is the
-    /// runtime source of truth (`timer.ctrl_skip_session_aria`); this
+    /// runtime source of truth (`timer.ctrl_skip_mode_aria`); this
     /// const fn is the host-side test fixture that pins the English
     /// form for the cargo-test matrix.
     #[must_use]
     pub const fn verbose_label(self) -> &'static str {
-        "Skip current session and advance to the next phase"
+        "Skip current mode and advance to the next phase"
     }
 
     /// Terse tooltip — short form shown in `data-tooltip`. Catalogue
-    /// key `timer.ctrl_skip_session`.
+    /// key `timer.ctrl_skip_mode`.
     #[must_use]
     pub const fn terse_tooltip(self) -> &'static str {
-        "Skip session"
+        "Skip Mode"
     }
 }
 
@@ -3081,16 +3081,19 @@ mod tests {
     /// are DISTINCT (Spec A11 / SC-004 / contracts §3 + CHK041
     /// drift-impossibility): the verbose form describes the action
     /// ("advance to the next phase"); the terse form is the short
-    /// tooltip ("Skip session"). The catalogue is the runtime source
+    /// tooltip ("Skip Mode"). The catalogue is the runtime source
     /// of truth — these const fixtures pin the English wording.
+    /// R-006: the legacy `ctrl_skip_session*` keys were pruned in
+    /// favour of `ctrl_skip_mode*` (feature 006 rename); the host-
+    /// side fixtures now mirror those.
     #[test]
     fn skip_btn_verbose_and_terse_are_distinct() {
         let state = SkipButtonState::Skip;
         assert_eq!(
             state.verbose_label(),
-            "Skip current session and advance to the next phase",
+            "Skip current mode and advance to the next phase",
         );
-        assert_eq!(state.terse_tooltip(), "Skip session");
+        assert_eq!(state.terse_tooltip(), "Skip Mode");
         assert_ne!(
             state.verbose_label(),
             state.terse_tooltip(),
@@ -3120,10 +3123,10 @@ mod tests {
         }
         // Skip is mode-invariant per FR-029.
         let skip = SkipButtonState::Skip;
-        assert_eq!(skip.terse_tooltip(), "Skip session");
+        assert_eq!(skip.terse_tooltip(), "Skip Mode");
         assert_eq!(
             skip.verbose_label(),
-            "Skip current session and advance to the next phase",
+            "Skip current mode and advance to the next phase",
         );
     }
 }
