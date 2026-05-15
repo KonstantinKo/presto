@@ -1574,17 +1574,29 @@ pub fn TimerView() -> impl IntoView {
         // into the same try_update so `complete()` sees Paused and the
         // branch-B.2 path runs in one transaction. Pre-007 callers
         // (Paused right-slot Complete) skip the pause-prelude.
+        //
+        // R-002 fix: collect the pause-prelude events alongside the
+        // complete events. `SessionPaused` maps to `FlushAll` in
+        // tag_tracking; dropping it silently was safe today (the
+        // zero-cross had already flushed trackers) but any future change
+        // that started trackers during overtime would silently leak.
+        // The combined vec routes through `apply_tag_tracking_events`
+        // so the FlushAll contract fires; `handle_events` filters
+        // `SessionPaused` out separately to avoid the misleading
+        // "timer paused" toast on a user-driven Complete.
         let events = engine
             .try_update(|state| {
+                let mut all_events = Vec::new();
                 if state.is_running() && !state.is_paused() && !state.is_auto_paused() {
-                    // Drop the pause events: the user clicked Complete,
-                    // not Pause — surfacing a "SessionPaused" toast
-                    // would be misleading. The complete() call below
-                    // will emit the post-overtime
-                    // `SessionCompletedEarly` we care about.
-                    let _ = state.pause(&BrowserClock);
+                    // SAFETY: pause is a precondition for complete() in
+                    // non-paused states (engine returns empty otherwise).
+                    // Collect the SessionPaused event so tag-tracking
+                    // FlushAll fires per its contract even though the
+                    // user clicked Complete, not Pause.
+                    all_events.extend(state.pause(&BrowserClock).unwrap_or_default());
                 }
-                state.complete(&BrowserClock)
+                all_events.extend(state.complete(&BrowserClock));
+                all_events
             })
             .unwrap_or_default();
         let counted = events
@@ -1593,8 +1605,17 @@ pub fn TimerView() -> impl IntoView {
         if counted {
             persist_focus_completion(total_focus_before);
         }
+        // R-002 fix: skip `SessionPaused` for the toast/chime side of
+        // `handle_events` — the user clicked Complete, not Pause, so a
+        // "Timer paused" toast would be misleading. Every other event in
+        // the vec still flows through.
+        let display_events: Vec<TimerEvent> = events
+            .iter()
+            .filter(|e| !matches!(e, TimerEvent::SessionPaused))
+            .cloned()
+            .collect();
         handle_events(
-            &events,
+            &display_events,
             &settings.get_untracked(),
             app_toast,
             warning_signal,

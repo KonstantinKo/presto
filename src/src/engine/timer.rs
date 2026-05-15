@@ -3032,6 +3032,82 @@ mod tests {
     /// Natural focus completion (via `complete`) clears the anchor.
     /// Together with the analogous tick / break-completion / skip /
     /// reset coverage in the wider test matrix, this pins the
+    /// AR-R1: pause-then-complete from Running-overtime emits
+    /// `SessionPaused` followed by `SessionCompletedEarly` and leaves
+    /// the engine in a clean post-complete state. Mirrors the
+    /// transactional sequence the UI's `on_complete` handler runs in a
+    /// single `try_update` when the user clicks Complete while the
+    /// continuous-mode focus session is in overtime: synth-pause to
+    /// satisfy `complete()`'s precondition, then complete via branch B.2.
+    ///
+    /// The combined event vec must surface BOTH events in the right
+    /// order so the UI's `apply_tag_tracking_events` sees the
+    /// `SessionPaused` → `FlushAll` action even though the user
+    /// clicked Complete, not Pause.
+    #[test]
+    fn pause_then_complete_from_running_overtime_emits_paused_then_completed_early() {
+        let clock = MockClock::new(0);
+        let mut state = TimerState::new(Durations {
+            focus: 60,
+            short_break: 300,
+            long_break: 1200,
+        });
+        state.set_allow_continuous_sessions(true);
+        state.start(&clock).expect("start");
+
+        // Cross into overtime: 61 s of wall-clock so the zero-cross fires
+        // and the engine re-anchors for negative-countdown overtime.
+        clock.advance(61 * 1000);
+        let _ = state.tick(&clock);
+        assert_eq!(state.completed_pomodoros(), 1);
+        assert!(state.is_running());
+        assert!(!state.is_paused());
+        assert!(!state.is_auto_paused());
+
+        // 30 s of overtime so the elapsed read at complete is non-zero.
+        clock.advance(30 * 1000);
+        let _ = state.tick(&clock);
+
+        // Mirror the UI's on_complete pause-prelude transactional
+        // sequence: pause then complete in one go.
+        let pause_events = state.pause(&clock).expect("synth pause precondition");
+        let complete_events = state.complete(&clock);
+        let all_events: Vec<_> = pause_events
+            .into_iter()
+            .chain(complete_events)
+            .collect();
+
+        // Order: SessionPaused first (drives FlushAll in tag_tracking),
+        // SessionCompletedEarly second (branch B.2's only emission).
+        assert!(
+            matches!(all_events.first(), Some(super::TimerEvent::SessionPaused)),
+            "first event must be SessionPaused; got {all_events:?}"
+        );
+        assert!(
+            all_events
+                .iter()
+                .any(|e| matches!(e, super::TimerEvent::SessionCompletedEarly { .. })),
+            "expected SessionCompletedEarly in {all_events:?}"
+        );
+        // Branch B.2: zero-cross already incremented the count;
+        // complete must NOT re-emit PomodoroCompleted.
+        assert!(
+            !all_events
+                .iter()
+                .any(|e| matches!(e, super::TimerEvent::PomodoroCompleted { .. })),
+            "branch B.2 must NOT re-emit PomodoroCompleted; got {all_events:?}"
+        );
+
+        // Post-state: count unchanged (already incremented at zero-cross),
+        // overtime sealed, engine clean and mode advanced per cadence.
+        assert_eq!(state.completed_pomodoros(), 1);
+        assert!(!state.is_running());
+        assert!(!state.is_paused());
+        assert!(!state.is_auto_paused());
+        assert_eq!(state.current_mode(), TimerMode::Break);
+        assert_eq!(state.current_session_elapsed_secs(), 0);
+    }
+
     /// invariant that the field is cleared on every logical session
     /// end.
     #[test]
