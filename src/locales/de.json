@@ -119,9 +119,11 @@
       "label_start_stop": "Timer Start/Stopp:",
       "label_reset": "Sitzung löschen / Rückgängig:",
       "label_skip": "Sitzung speichern:",
+      "label_abort": "Sitzung abbrechen:",
       "desc_start_stop": "Aktuelle Pomodoro-Sitzung starten oder pausieren.",
       "desc_reset": "Aktuelle Sitzung löschen oder die letzte abgeschlossene Pomodoro rückgängig machen.",
       "desc_skip": "Aktuelle Sitzung speichern und die nächste starten.",
+      "desc_abort": "Aktuelle Fokus-Sitzung verwerfen, ohne sie zu protokollieren.",
       "clear_aria": "Tastenkürzel {{ name }} löschen"
     },
     "advanced": {
@@ -170,6 +172,7 @@
     "status_paused": "(Pausiert)",
     "status_auto_paused": "(Auto-pausiert)",
     "status_overtime": "(Überzeit)",
+    "overtime_cta": "Mach Schluss!",
     "ctrl_start": "Start",
     "ctrl_pause": "Pause",
     "ctrl_resume": "Fortsetzen",

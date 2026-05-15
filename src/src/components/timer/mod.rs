@@ -145,13 +145,27 @@ fn mode_label_with_status(
     is_auto_paused: bool,
     is_overtime: bool,
 ) -> String {
+    use leptos_i18n::td_string;
     let base = mode_label(mode);
+    // Feature 007 (FR-013): resolve the overtime suffix from the catalogue
+    // so the test helper does not silently desync if the localised string is
+    // re-worded. Paused / Auto-paused stay on the same catalogue path for
+    // symmetry. Default locale (EN) substitution proves end-to-end resolution.
     if is_paused {
-        format!("{base} (Paused)")
+        format!(
+            "{base} {}",
+            td_string!(crate::i18n::i18n::Locale::en, timer.status_paused)
+        )
     } else if is_auto_paused {
-        format!("{base} (Auto-paused)")
+        format!(
+            "{base} {}",
+            td_string!(crate::i18n::i18n::Locale::en, timer.status_auto_paused)
+        )
     } else if is_running && is_overtime {
-        format!("{base} (Overtime)")
+        format!(
+            "{base} {}",
+            td_string!(crate::i18n::i18n::Locale::en, timer.status_overtime)
+        )
     } else {
         base.to_string()
     }
