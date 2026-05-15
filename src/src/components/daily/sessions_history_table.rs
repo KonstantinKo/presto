@@ -192,7 +192,20 @@ pub fn SessionsHistoryTable(selected_day: RwSignal<DateTime<Utc>>) -> impl IntoV
                     </button>
                 </div>
             </div>
-            <div class="sessions-table-container">
+            // Empty-state placeholder — matches the timeline's
+            // `--card-bg-subtle` track look. The table (with its column
+            // header row) is only useful when there's data to label.
+            <div
+                class="sessions-history-empty"
+                id="sessions-history-empty"
+                style:display=move || if scoped_sessions.with(Vec::is_empty) { "" } else { "none" }
+            >
+                {t!(i18n, daily.history_empty)}
+            </div>
+            <div
+                class="sessions-table-container"
+                style:display=move || if scoped_sessions.with(Vec::is_empty) { "none" } else { "" }
+            >
                 <table class="sessions-table" id="sessions-table">
                     <thead>
                         <tr>
@@ -203,14 +216,6 @@ pub fn SessionsHistoryTable(selected_day: RwSignal<DateTime<Utc>>) -> impl IntoV
                         </tr>
                     </thead>
                     <tbody id="sessions-table-body">
-                        <tr
-                            class="sessions-table-empty-row"
-                            style:display=move || if scoped_sessions.with(Vec::is_empty) { "" } else { "none" }
-                        >
-                            <td colspan="4" class="sessions-table-empty">
-                                {t!(i18n, daily.history_empty)}
-                            </td>
-                        </tr>
                         <For
                             each=move || {
                                 // Most-recent first: sort by `created_at` ISO

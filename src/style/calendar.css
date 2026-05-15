@@ -852,4 +852,18 @@
   font-style: italic;
 }
 
+/* Empty-state placeholder shown when the selected day has no
+   sessions — mirrors `.timeline-track` so both daily-view cards
+   present the same greyed-out box. */
+.sessions-history-empty {
+  background: var(--card-bg-subtle);
+  border: 1px solid var(--shared-border);
+  border-radius: 8px;
+  padding: 1.5rem;
+  text-align: center;
+  color: var(--text-light);
+  font-style: italic;
+  font-size: 0.9rem;
+}
+
 /* Theme support is now handled through CSS variables in individual theme files */
