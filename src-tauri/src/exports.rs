@@ -28,13 +28,12 @@ use crate::{BridgeError, ManualSession};
 /// Build an XLSX workbook from `sessions` and write it to `path`.
 ///
 /// Schema (one row per session, header in row 0):
-/// `id` | `session_type` | `duration` | `start_time` | `end_time` | `date` | `created_at` | `notes`
+/// `id` | `session_type` | `duration` | `start_time` | `end_time` | `date` | `created_at` | `title` | `tags` | `notes`
 ///
+/// Schema mirrors `export_csv` so both formats expose identical column sets.
 /// `session_type` is serialised via the closed-domain enum's `Display`
 /// equivalent (camelCase string), matching what the JS-era export wrote.
-/// `notes` falls back to an empty string when `None` (xlsx cells are
-/// always strings; `None` is not a distinct empty-vs-blank discriminator
-/// in the user-visible spreadsheet).
+/// `notes`, `title`, and `tags` fall back to empty strings when `None`.
 pub(super) fn export(path: &Path, sessions: &[ManualSession]) -> Result<(), BridgeError> {
     let mut workbook = Workbook::new();
     let sheet = workbook
@@ -52,6 +51,8 @@ pub(super) fn export(path: &Path, sessions: &[ManualSession]) -> Result<(), Brid
         "end_time",
         "date",
         "created_at",
+        "title",
+        "tags",
         "notes",
     ];
     for (col, header) in headers.iter().enumerate() {
@@ -78,6 +79,17 @@ pub(super) fn export(path: &Path, sessions: &[ManualSession]) -> Result<(), Brid
             super::SessionType::LongBreak => "longBreak",
             super::SessionType::Custom => "custom",
         };
+        let tags_joined = session
+            .tags
+            .as_ref()
+            .map(|values| {
+                values
+                    .iter()
+                    .filter_map(|v| v.get("name").and_then(serde_json::Value::as_str))
+                    .collect::<Vec<_>>()
+                    .join("; ")
+            })
+            .unwrap_or_default();
         sheet
             .write_string(row, 0, &session.id)
             .and_then(|s| s.write_string(row, 1, session_type_str))
@@ -86,7 +98,9 @@ pub(super) fn export(path: &Path, sessions: &[ManualSession]) -> Result<(), Brid
             .and_then(|s| s.write_string(row, 4, &session.end_time))
             .and_then(|s| s.write_string(row, 5, &session.date))
             .and_then(|s| s.write_string(row, 6, &session.created_at))
-            .and_then(|s| s.write_string(row, 7, session.notes.as_deref().unwrap_or("")))
+            .and_then(|s| s.write_string(row, 7, session.title.as_deref().unwrap_or("")))
+            .and_then(|s| s.write_string(row, 8, &tags_joined))
+            .and_then(|s| s.write_string(row, 9, session.notes.as_deref().unwrap_or("")))
             .map_err(|e| BridgeError::Internal {
                 msg: format!("Failed to write session row: {e}"),
             })?;
