@@ -111,14 +111,26 @@ test("Complete affordance + FR-007 natural-completion title clear regression", a
   // The engine's 30-second threshold (FR-014) lives on wall-clock
   // elapsed, not on the configured focus duration — debug mode's
   // 3-second focus can't satisfy it (it auto-completes naturally
-  // before 30s). Turn debug mode OFF so the 25-minute focus is
-  // active, start the timer, wait ≥ 31s, pause, click Complete, and
-  // assert a session row appears in #sessions-table-body.
+  // before 30s). Plan:
+  //   1. From the current Paused state (debug-3s focus), click the
+  //      left-slot Abort button to return the engine to Idle on
+  //      Focus mode.
+  //   2. Disable debug mode so the next start uses the configured
+  //      25-min focus duration. set_durations rebases the displayed
+  //      remaining only when fully Idle — the abort above is the
+  //      precondition.
+  //   3. Start a fresh focus, wait > 30 s, pause, Complete, assert.
+  await page.locator("#stop-btn").click(); // left-slot = Abort in Paused
+  await expect(page.locator("#play-icon")).toBeVisible();
+  await expect(page.locator("#status-text")).toContainText(/focus/i);
+
   await openSettings(page);
   await selectSettingsCategory(page, "Advanced");
   await page.locator("#debug-mode").click();
   await expect(page.locator("#debug-mode")).not.toBeChecked();
   await tapTab(page, "Timer");
+  // Confirm the displayed remaining rebased to the 25-min default.
+  await expect(page.locator("#timer-minutes")).toHaveText("25");
 
   // Start a fresh 25-min focus.
   await page.locator("#play-pause-btn").click();
@@ -128,11 +140,12 @@ test("Complete affordance + FR-007 natural-completion title clear regression", a
   // doesn't bless explicit waits — but the engine's 30-second gate is
   // wall-clock-bound, and the only way to test the Complete branch
   // without mid-flow state injection (forbidden by E2E Rule 1.2) is
-  // to actually wait. Lock the wait on a DOM-observable proxy: at
-  // 25:00 focus the minutes digit drops to "24" at 60s elapsed.
-  // Waiting for that is the cleanest DOM-observable proof we've
-  // crossed the engine's 30-second threshold.
-  await expect(page.locator("#timer-minutes")).toHaveText("24", { timeout: 70_000 });
+  // to actually wait. Lock the wait on the document title (the title
+  // Effect re-renders on every engine tick from time_remaining_secs)
+  // until the displayed remaining is between 24:00 and 24:29, i.e.
+  // ≥ 31 s elapsed. The minutes digit alone is too coarse — 24:59
+  // satisfies `expect minutes="24"` after just one tick.
+  await expect(page).toHaveTitle(/^24:[0-2]\d — Presto$/, { timeout: 60_000 });
 
   // Pause and Complete.
   await page.locator("#play-pause-btn").click();
