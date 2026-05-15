@@ -843,10 +843,19 @@ pub async fn dialog_save(
         extensions: Vec<String>,
     }
     #[derive(Serialize)]
-    struct Args {
-        #[serde(rename = "defaultPath")]
+    #[serde(rename_all = "camelCase")]
+    struct SaveDialogOptions {
         default_path: Option<String>,
         filters: Vec<FilterArg>,
+    }
+    #[derive(Serialize)]
+    struct Args {
+        // The dialog plugin's `save` command takes a single
+        // `options: SaveDialogOptions` parameter — passing the
+        // fields flat at the top level (the shape this wrapper
+        // shipped with originally) silently no-ops because the
+        // plugin's Serde deserialisation can't bind them.
+        options: SaveDialogOptions,
     }
     let filters = filters
         .into_iter()
@@ -855,8 +864,10 @@ pub async fn dialog_save(
     invoke_serde(
         "plugin:dialog|save",
         &Args {
-            default_path,
-            filters,
+            options: SaveDialogOptions {
+                default_path,
+                filters,
+            },
         },
     )
     .await
