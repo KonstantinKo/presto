@@ -125,4 +125,21 @@ test("visual baseline: timer, tags, statistics (4 periods), daily, all settings 
   await selectSettingsCategory(page, "Updates");
   await expect(page.locator("#current-version")).toContainText("0.4.4");
   await expect(page).toHaveScreenshot(["visual-regression", "settings-updates.png"], sidebarMask);
+
+  // --- 5g. Timer Focus Paused with ✓ Complete button (feature 006 T070).
+  // Captured AFTER all other baselines so the toast notifications it
+  // produces don't leak into earlier captures. The Paused right-slot
+  // reveals as ✓ Complete (FR-013); the combined pill becomes read-
+  // only (chevron hidden, title input readonly) per FR-005. This is
+  // the headline new visual for feature 006.
+  await tapTab(page, "Timer");
+  await page.locator("#play-pause-btn").click();
+  await expect(page.locator("#pause-icon")).toBeVisible();
+  await page.locator("#play-pause-btn").click();
+  await expect(page.locator("#play-icon")).toBeVisible();
+  await expect(page.locator("#skip-btn")).toHaveAttribute("aria-label", /complete/i);
+  await expect(page).toHaveScreenshot(
+    ["visual-regression", "timer-focus-paused-with-complete.png"],
+    sidebarMask
+  );
 });
