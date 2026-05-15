@@ -1375,6 +1375,52 @@ pub fn TimerView() -> impl IntoView {
         dispatch_tray_update(engine, settings, true);
     };
 
+    // R-001 fix: persistence closure for a focus-completion event.
+    // Called by BOTH the natural-zero-cross tick branch AND the UI-
+    // triggered `on_complete` handler so an early Complete from
+    // Paused leaves the same daily-history row + stats hop a natural
+    // completion would. Caller passes `total_focus_before` captured
+    // BEFORE the engine.complete()/tick() call so `elapsed_secs` is
+    // the wall-clock duration of the just-sealed session (the engine
+    // folds `current_session_elapsed_secs` into `total_focus_secs`
+    // during completion). The closure also clears the in-flight
+    // title and pushes the synthesised `ManualSession` into the
+    // shared sessions log so the CalendarView re-renders.
+    let persist_focus_completion = move |total_focus_before: u32| {
+        let now_ms = BrowserClock.now_ms();
+        let (total_focus_after, completed) =
+            engine.with_untracked(|s| (s.total_focus_secs(), s.completed_pomodoros()));
+        let elapsed_secs = total_focus_after.saturating_sub(total_focus_before);
+        // Harvest the in-flight title ONCE at the boundary, normalise
+        // empty-string to None (Principle III), and clear the signal
+        // so the next focus starts blank — mirrors FR-007.
+        let title_at_completion = {
+            let raw = session_title.get_untracked();
+            let trimmed = raw.trim();
+            if trimmed.is_empty() {
+                None
+            } else {
+                Some(trimmed.to_string())
+            }
+        };
+        session_title.set(String::new());
+        let session = synth_completed_session(now_ms, elapsed_secs, title_at_completion.clone());
+        sessions.update(|list| list.push(session));
+        let date_str = crate::engine::date_format::format_session_date(now_ms);
+        let session_data = Session {
+            completed_pomodoros: completed,
+            total_focus_time: total_focus_after,
+            current_session: completed.saturating_add(1),
+            date: date_str,
+            title: title_at_completion,
+        };
+        let sd_for_stats = session_data.clone();
+        spawn_local(async move {
+            let _ = commands::save_session_data(session_data).await;
+            let _ = commands::save_daily_stats(sd_for_stats).await;
+        });
+    };
+
     // Feature 006 (T054): Complete handler. Called from the
     // right-slot button in Paused (or AutoPaused — folded into
     // RunState::Paused). Routes through `engine.complete(clock)`
@@ -1384,9 +1430,19 @@ pub fn TimerView() -> impl IntoView {
     // `total_focus_secs`, advances mode per cadence, emits
     // `PomodoroCompleted` + `SessionCompletedEarly`. The downstream
     // tick-loop hooks (session-save, auto-restart) read the events
-    // and act per FR-013/FR-014/FR-016. Title is cleared on
-    // count-with-advance (mirrors the natural-completion path).
+    // and act per FR-013/FR-014/FR-016.
+    //
+    // R-001 fix: persistence used to live exclusively inside the
+    // tick branch. Since `complete()` flips `is_running = false`,
+    // no further tick runs the save path — so a UI Complete left
+    // no daily-history row and no stats update. We now snapshot
+    // `total_focus_before` BEFORE the engine call (complete folds
+    // elapsed into total_focus_secs), then invoke the shared
+    // `persist_focus_completion` closure when a `PomodoroCompleted`
+    // event fires (which also clears the title — mirrors the
+    // natural-completion path).
     let on_complete = move |_| {
+        let total_focus_before = engine.with_untracked(TimerState::total_focus_secs);
         let events = engine
             .try_update(|state| state.complete(&BrowserClock))
             .unwrap_or_default();
@@ -1394,7 +1450,7 @@ pub fn TimerView() -> impl IntoView {
             .iter()
             .any(|e| matches!(e, TimerEvent::PomodoroCompleted { .. }));
         if counted {
-            session_title.set(String::new());
+            persist_focus_completion(total_focus_before);
         }
         handle_events(
             &events,
@@ -1528,62 +1584,24 @@ pub fn TimerView() -> impl IntoView {
         let handle = set_interval_with_handle(
             move || {
                 let remaining_before = engine.with_untracked(TimerState::time_remaining_secs);
+                // R-001 fix: capture `total_focus_before` outside the
+                // try_update so the shared `persist_focus_completion`
+                // closure (called below) can compute the just-sealed
+                // session's wall-clock elapsed against the pre-tick
+                // snapshot. The engine folds `current_session_elapsed_secs`
+                // into `total_focus_secs` on `PomodoroCompleted`, so the
+                // diff between after-tick and pre-tick is the duration.
+                let (was_focus_pre, total_focus_before) = engine.with_untracked(|s| {
+                    (
+                        matches!(s.current_mode(), TimerMode::Focus),
+                        s.total_focus_secs(),
+                    )
+                });
                 let events = engine
                     .try_update(|state| {
-                        let was_focus = matches!(state.current_mode(), TimerMode::Focus);
                         let was_running = state.is_running();
                         let mode_before = state.current_mode();
-                        // Capture before tick: on PomodoroCompleted the engine adds
-                        // current_session_elapsed_secs to total_focus_secs and resets
-                        // it to 0, so the diff gives the actual wall-clock duration
-                        // of the session rather than the currently-configured setting.
-                        let total_focus_before = state.total_focus_secs();
                         let mut events = state.tick(&BrowserClock);
-                        let completed_focus = was_focus
-                            && events
-                                .iter()
-                                .any(|e| matches!(e, TimerEvent::PomodoroCompleted { .. }));
-                        if completed_focus {
-                            let now_ms = BrowserClock.now_ms();
-                            let elapsed_secs =
-                                state.total_focus_secs().saturating_sub(total_focus_before);
-                            // Feature 002 Bundle A: harvest the
-                            // in-flight title ONCE at zero-cross,
-                            // normalise empty-string to None at the
-                            // boundary (Principle III), and clear the
-                            // signal so the next focus starts blank.
-                            let title_at_completion = {
-                                let raw = session_title.get_untracked();
-                                let trimmed = raw.trim();
-                                if trimmed.is_empty() {
-                                    None
-                                } else {
-                                    Some(trimmed.to_string())
-                                }
-                            };
-                            session_title.set(String::new());
-                            let session = synth_completed_session(
-                                now_ms,
-                                elapsed_secs,
-                                title_at_completion.clone(),
-                            );
-                            sessions.update(|list| list.push(session));
-                            let completed = state.completed_pomodoros();
-                            let total_focus = state.total_focus_secs();
-                            let date_str = crate::engine::date_format::format_session_date(now_ms);
-                            let session_data = Session {
-                                completed_pomodoros: completed,
-                                total_focus_time: total_focus,
-                                current_session: completed.saturating_add(1),
-                                date: date_str,
-                                title: title_at_completion,
-                            };
-                            let sd_for_stats = session_data.clone();
-                            spawn_local(async move {
-                                let _ = commands::save_session_data(session_data).await;
-                                let _ = commands::save_daily_stats(sd_for_stats).await;
-                            });
-                        }
                         // Feature 006 (T050 / AG-2): auto-restart UI
                         // gate. Previously this fired on the bare
                         // `running → !running` transition; with the
@@ -1656,6 +1674,18 @@ pub fn TimerView() -> impl IntoView {
                         events
                     })
                     .unwrap_or_default();
+                // R-001 fix: persist on natural focus zero-cross.
+                // Mirrors `on_complete`. Gated on `was_focus_pre` so
+                // a Break → Focus auto-restart roll (which may emit
+                // SessionStarted in the same event vec) doesn't fire
+                // the persistence path for the new focus session.
+                let completed_focus = was_focus_pre
+                    && events
+                        .iter()
+                        .any(|e| matches!(e, TimerEvent::PomodoroCompleted { .. }));
+                if completed_focus {
+                    persist_focus_completion(total_focus_before);
+                }
                 handle_events(
                     &events,
                     &settings.get_untracked(),

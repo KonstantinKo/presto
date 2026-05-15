@@ -23,6 +23,11 @@ import {
 test("Complete affordance + FR-007 natural-completion title clear regression", async ({
   page,
 }) => {
+  // R-001 regression adds a > 30-second wall-clock wait so a UI-
+  // triggered Complete from Paused crosses the engine's elapsed
+  // threshold. Bump the default test timeout to allow that plus
+  // the upstream debug-mode flow.
+  test.setTimeout(180_000);
   await page.goto("/index.html");
 
   // ── 0. Enable debug mode so the focus duration is 3 s wall-clock —
@@ -96,4 +101,52 @@ test("Complete affordance + FR-007 natural-completion title clear regression", a
     "aria-label",
     /complete/i
   );
+
+  // ── 4. R-001 regression: a UI-triggered Complete from Paused with
+  // elapsed ≥ 30 s persists the session into the sessions-history
+  // table. Before R-001 the persistence block was tick-only, so the
+  // engine.complete() event vector never reached `save_session_data`
+  // and the daily-history view stayed empty.
+  //
+  // The engine's 30-second threshold (FR-014) lives on wall-clock
+  // elapsed, not on the configured focus duration — debug mode's
+  // 3-second focus can't satisfy it (it auto-completes naturally
+  // before 30s). Turn debug mode OFF so the 25-minute focus is
+  // active, start the timer, wait ≥ 31s, pause, click Complete, and
+  // assert a session row appears in #sessions-table-body.
+  await openSettings(page);
+  await selectSettingsCategory(page, "Advanced");
+  await page.locator("#debug-mode").click();
+  await expect(page.locator("#debug-mode")).not.toBeChecked();
+  await tapTab(page, "Timer");
+
+  // Start a fresh 25-min focus.
+  await page.locator("#play-pause-btn").click();
+  await expect(page.locator("#pause-icon")).toBeVisible();
+
+  // Wait > 30 s wall-clock so elapsed crosses the threshold. Playwright
+  // doesn't bless explicit waits — but the engine's 30-second gate is
+  // wall-clock-bound, and the only way to test the Complete branch
+  // without mid-flow state injection (forbidden by E2E Rule 1.2) is
+  // to actually wait. Lock the wait on a DOM-observable proxy: at
+  // 25:00 focus the minutes digit drops to "24" at 60s elapsed.
+  // Waiting for that is the cleanest DOM-observable proof we've
+  // crossed the engine's 30-second threshold.
+  await expect(page.locator("#timer-minutes")).toHaveText("24", { timeout: 70_000 });
+
+  // Pause and Complete.
+  await page.locator("#play-pause-btn").click();
+  await expect(page.locator("#play-icon")).toBeVisible();
+  await page.locator("#skip-btn").click(); // right-slot = Complete in Paused
+
+  // Mode should advance to Break (focus completion → break).
+  await expect(page.locator("#status-text")).toContainText(/break/i, { timeout: 5_000 });
+
+  // R-001 contract: the session is persisted to the in-memory log
+  // and rendered into the sessions history table. Navigate to the
+  // Daily view (which hosts the sessions table — off-viewport via
+  // CSS positioning so `attached` rather than `visible` is the right
+  // assertion shape) and verify one row exists.
+  await tapTab(page, "Daily");
+  await expect(page.locator("#sessions-table-body tr").first()).toBeAttached({ timeout: 5_000 });
 });
