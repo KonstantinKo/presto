@@ -167,6 +167,7 @@ pub fn SessionsHistoryTable(selected_day: RwSignal<DateTime<Utc>>) -> impl IntoV
                         id="export-sessions-btn"
                         class="export-btn"
                         title=move || t_string!(i18n, daily.history_export_title).to_string()
+                        style:display=move || if scoped_sessions.with(Vec::is_empty) { "none" } else { "" }
                         on:click=move |_| {
                             // Export only the visible (selected-day) scope so the
                             // user gets what's on screen, matching the table.
@@ -202,6 +203,14 @@ pub fn SessionsHistoryTable(selected_day: RwSignal<DateTime<Utc>>) -> impl IntoV
                         </tr>
                     </thead>
                     <tbody id="sessions-table-body">
+                        <tr
+                            class="sessions-table-empty-row"
+                            style:display=move || if scoped_sessions.with(Vec::is_empty) { "" } else { "none" }
+                        >
+                            <td colspan="4" class="sessions-table-empty">
+                                {t!(i18n, daily.history_empty)}
+                            </td>
+                        </tr>
                         <For
                             each=move || {
                                 // Most-recent first: sort by `created_at` ISO
