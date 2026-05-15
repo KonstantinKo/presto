@@ -180,6 +180,17 @@
     "ctrl_reset_aria": "Timer zurücksetzen",
     "ctrl_undo_aria": "Letzte Sitzung rückgängig machen",
     "ctrl_play_pause_aria": "Timer starten oder pausieren",
+    "ctrl_quick_log": "Schnelleintrag",
+    "ctrl_quick_log_aria": "Formular für Schnelleintrag öffnen",
+    "ctrl_skip_mode": "Modus überspringen",
+    "ctrl_skip_mode_aria": "Aktuellen Modus überspringen und zur nächsten Phase wechseln",
+    "ctrl_abort": "Abbrechen",
+    "ctrl_abort_aria": "Aktuelle Sitzung abbrechen, ohne sie zu zählen",
+    "ctrl_note_distraction": "Ablenkung",
+    "ctrl_note_distraction_aria": "Ablenkungsnotiz für aktuelle Sitzung erfassen",
+    "ctrl_complete": "Abschließen",
+    "ctrl_complete_aria": "Aktuelle Sitzung abschließen und fortfahren",
+    "pill_title_placeholder": "Sitzungstitel…",
     "session_title_placeholder": "Wofür ist diese Sitzung?",
     "indicator_smart_pause": "Smart-Pause: Klicken, um automatische Pause bei Inaktivität umzuschalten",
     "indicator_auto_start": "Auto-Start: Klicken, um automatischen Sitzungsstart umzuschalten",
@@ -220,6 +231,17 @@
       "minutes_added": "5 Minuten zum Timer hinzugefügt ⏰",
       "minutes_subtracted": "5 Minuten vom Timer abgezogen ⏰"
     }
+  },
+  "modal": {
+    "quick_log_title": "Schnelleintrag",
+    "quick_log_title_label": "Titel",
+    "quick_log_minutes_label": "Minuten",
+    "quick_log_submit": "Hinzufügen",
+    "quick_log_cancel": "Abbrechen",
+    "note_distraction_title": "Ablenkung notieren",
+    "note_distraction_label": "Was ist passiert?",
+    "note_distraction_submit": "Speichern",
+    "note_distraction_cancel": "Abbrechen"
   },
   "tag": {
     "choose_header": "Tag wählen",

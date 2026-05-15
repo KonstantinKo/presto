@@ -180,6 +180,17 @@
     "ctrl_reset_aria": "Reset timer",
     "ctrl_undo_aria": "Undo last session",
     "ctrl_play_pause_aria": "Start or pause timer",
+    "ctrl_quick_log": "Quick Log",
+    "ctrl_quick_log_aria": "Open quick log entry form",
+    "ctrl_skip_mode": "Skip Mode",
+    "ctrl_skip_mode_aria": "Skip current mode and advance to the next phase",
+    "ctrl_abort": "Abort",
+    "ctrl_abort_aria": "Abort the current session without counting it",
+    "ctrl_note_distraction": "Distraction",
+    "ctrl_note_distraction_aria": "Capture a distraction note for the current session",
+    "ctrl_complete": "Complete",
+    "ctrl_complete_aria": "Complete the current session and advance",
+    "pill_title_placeholder": "session title…",
     "session_title_placeholder": "What is this session for?",
     "indicator_smart_pause": "Smart Pause: Click to toggle automatic pause when inactive",
     "indicator_auto_start": "Auto-start: Click to toggle automatic session start",
@@ -220,6 +231,17 @@
       "minutes_added": "5 minutes added to timer ⏰",
       "minutes_subtracted": "5 minutes subtracted from timer ⏰"
     }
+  },
+  "modal": {
+    "quick_log_title": "Quick Log",
+    "quick_log_title_label": "Title",
+    "quick_log_minutes_label": "Minutes",
+    "quick_log_submit": "Add",
+    "quick_log_cancel": "Cancel",
+    "note_distraction_title": "Note Distraction",
+    "note_distraction_label": "What happened?",
+    "note_distraction_submit": "Save",
+    "note_distraction_cancel": "Cancel"
   },
   "tag": {
     "choose_header": "Choose tag",
