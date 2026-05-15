@@ -2471,6 +2471,7 @@ pub fn TimerView() -> impl IntoView {
                     title=move || t_string!(i18n, timer.adjust_minus_aria)
                     aria-label=move || t_string!(i18n, timer.adjust_minus_aria)
                     on:click=on_adjust_minus
+                    prop:disabled=move || is_overtime.get()
                 >
                     <span>"-5"</span>
                 </button>
@@ -2480,6 +2481,7 @@ pub fn TimerView() -> impl IntoView {
                     title=move || t_string!(i18n, timer.adjust_plus_aria)
                     aria-label=move || t_string!(i18n, timer.adjust_plus_aria)
                     on:click=on_adjust_plus
+                    prop:disabled=move || is_overtime.get()
                 >
                     <span>"+5"</span>
                 </button>
