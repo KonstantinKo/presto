@@ -165,6 +165,38 @@ async loadManualSessions() : Promise<Result<ManualSession[], BridgeError>> {
     else return { status: "error", error: e  as any };
 }
 },
+async saveQuickLogs(quickLogs: QuickLog[]) : Promise<Result<null, BridgeError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("save_quick_logs", { quickLogs }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async loadQuickLogs() : Promise<Result<QuickLog[], BridgeError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("load_quick_logs") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async saveDistractions(distractions: Distraction[]) : Promise<Result<null, BridgeError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("save_distractions", { distractions }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async loadDistractions() : Promise<Result<Distraction[], BridgeError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("load_distractions") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
 async loadTags() : Promise<Result<Tag[], BridgeError>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("load_tags") };
@@ -377,6 +409,58 @@ export type BridgeError =
  * strategy).
  */
 { kind: "internal"; msg: string }
+/**
+ * User-entered distraction note, optionally tied to the parent
+ * session that was running when the note was captured.
+ */
+export type Distraction = { 
+/**
+ * UUID v4 string.
+ */
+id: string; 
+/**
+ * User-provided. 1..=120 UTF-8 chars. PII — never log in plain.
+ */
+note: string; 
+/**
+ * ISO-8601 UTC. Modal-submit time for in-session captures;
+ * user-set or `now()` for retroactive entries.
+ */
+createdAt: string; 
+/**
+ * chrono `%a %b %d %Y`. Matches the `ManualSession.date`
+ * precedent.
+ */
+date: string; 
+/**
+ * Snapshotted at modal-open time (per spec Clarifications +
+ * Edge Cases). `None` for retroactive entries from Inventory.
+ */
+parentRef?: DistractionParentRef | null }
+/**
+ * Snapshot of the parent session at the moment the Distraction modal was opened.
+ * 
+ * Title is rendered as-snapshotted (never re-resolved); tag is
+ * re-resolved against the current tag table at render time
+ * (FR-024a).
+ */
+export type DistractionParentRef = { 
+/**
+ * ISO-8601 — when the parent session started.
+ */
+parentSessionStartTs: string; 
+/**
+ * The running mode at modal-open.
+ */
+parentMode: TimerMode; 
+/**
+ * The selected tag id at modal-open. `None` if no tag was set.
+ */
+parentTagId: string | null; 
+/**
+ * The session title at modal-open. `None` if not set.
+ */
+parentTitle: string | null }
 export type JsonValue = null | boolean | number | string | JsonValue[] | Partial<{ [key in string]: JsonValue }>
 /**
  * User-selectable UI locale (feature 005).
@@ -501,6 +585,33 @@ ambient_sound_type?: AmbientSoundType;
  * Default `50` per FR-003 / A9.
  */
 ambient_sound_volume?: number }
+/**
+ * User-entered quick-log entry. Counted by a per-period metric
+ * distinct from `completed_pomodoros`; never affects
+ * `pomodoros_until_long_break` (FR-027 + SC-005).
+ */
+export type QuickLog = { 
+/**
+ * UUID v4 string.
+ */
+id: string; 
+/**
+ * User-provided. 1..=120 UTF-8 chars. PII — never log in plain.
+ */
+title: string; 
+/**
+ * 1..=720 (1 min to 12 h).
+ */
+elapsedMinutes: number; 
+/**
+ * ISO-8601 UTC.
+ */
+createdAt: string; 
+/**
+ * chrono `%a %b %d %Y` (e.g. `"Fri May 15 2026"`). Matches the
+ * `ManualSession.date` precedent.
+ */
+date: string }
 /**
  * Pomodoro session record persisted in the user's app-data
  * directory. Backend type alias: `PomodoroSession`.

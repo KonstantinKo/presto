@@ -534,6 +534,103 @@ async fn load_manual_sessions(app: AppHandle) -> Result<Vec<ManualSession>, Brid
     helpers::read_manual_sessions_from(&app_data_dir).map_err(BridgeError::from)
 }
 
+// ── Feature 006: Quick logs + Distractions ──────────────────────────────────
+//
+// Tauri boundary-validation per FR-022 lives in two pure helpers
+// (`validate_quick_logs`, `validate_distractions`) so the contract is
+// directly unit-testable without a Tauri runtime. The command bodies
+// are thin glue over validator + helpers IO.
+
+/// Validates a `Vec<QuickLog>` at the Tauri boundary per
+/// `specs/006-timer-controls-quicklog-distractions/contracts/persistence-commands.md`.
+///
+/// Title length (chars) ∈ 1..=120; `elapsed_minutes` ∈ 1..=720. First
+/// failure short-circuits with `BridgeError::InvalidArgument`. Field
+/// names use the camelCase wire shape so the frontend's `match`
+/// against the wire bytes lands cleanly.
+fn validate_quick_logs(logs: &[QuickLog]) -> Result<(), BridgeError> {
+    for log in logs {
+        let title_len = log.title.chars().count();
+        if !(1..=120).contains(&title_len) {
+            return Err(BridgeError::InvalidArgument {
+                field: "title".to_string(),
+                reason: format!("title length {title_len} not in 1..=120"),
+            });
+        }
+        if !(1..=720).contains(&log.elapsed_minutes) {
+            return Err(BridgeError::InvalidArgument {
+                field: "elapsedMinutes".to_string(),
+                reason: format!("elapsedMinutes {} not in 1..=720", log.elapsed_minutes),
+            });
+        }
+    }
+    Ok(())
+}
+
+/// Validates a `Vec<Distraction>` at the Tauri boundary per
+/// `specs/006-timer-controls-quicklog-distractions/contracts/persistence-commands.md`.
+///
+/// `note` length ∈ 1..=120; if `parent_ref.parent_title.is_some()`,
+/// the title must also fit in 1..=120 chars.
+fn validate_distractions(entries: &[Distraction]) -> Result<(), BridgeError> {
+    for entry in entries {
+        let note_len = entry.note.chars().count();
+        if !(1..=120).contains(&note_len) {
+            return Err(BridgeError::InvalidArgument {
+                field: "note".to_string(),
+                reason: format!("note length {note_len} not in 1..=120"),
+            });
+        }
+        if let Some(parent) = entry.parent_ref.as_ref() {
+            if let Some(parent_title) = parent.parent_title.as_ref() {
+                let len = parent_title.chars().count();
+                if !(1..=120).contains(&len) {
+                    return Err(BridgeError::InvalidArgument {
+                        field: "parentRef.parentTitle".to_string(),
+                        reason: format!("parent_title length {len} not in 1..=120"),
+                    });
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+#[tauri::command]
+#[specta::specta]
+async fn save_quick_logs(quick_logs: Vec<QuickLog>, app: AppHandle) -> Result<(), BridgeError> {
+    validate_quick_logs(&quick_logs)?;
+    let app_data_dir = get_app_data_dir(&app)?;
+    helpers::write_quick_logs_to(&app_data_dir, &quick_logs)?;
+    Ok(())
+}
+
+#[tauri::command]
+#[specta::specta]
+async fn load_quick_logs(app: AppHandle) -> Result<Vec<QuickLog>, BridgeError> {
+    let app_data_dir = get_app_data_dir(&app)?;
+    helpers::read_quick_logs_from(&app_data_dir).map_err(BridgeError::from)
+}
+
+#[tauri::command]
+#[specta::specta]
+async fn save_distractions(
+    distractions: Vec<Distraction>,
+    app: AppHandle,
+) -> Result<(), BridgeError> {
+    validate_distractions(&distractions)?;
+    let app_data_dir = get_app_data_dir(&app)?;
+    helpers::write_distractions_to(&app_data_dir, &distractions)?;
+    Ok(())
+}
+
+#[tauri::command]
+#[specta::specta]
+async fn load_distractions(app: AppHandle) -> Result<Vec<Distraction>, BridgeError> {
+    let app_data_dir = get_app_data_dir(&app)?;
+    helpers::read_distractions_from(&app_data_dir).map_err(BridgeError::from)
+}
+
 /// Builds and runs the Tauri application.
 ///
 /// # Panics
@@ -569,6 +666,10 @@ pub fn build_specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         is_autostart_enabled,
         save_manual_sessions,
         load_manual_sessions,
+        save_quick_logs,
+        load_quick_logs,
+        save_distractions,
+        load_distractions,
         load_tags,
         save_tag,
         delete_tag,
@@ -1553,7 +1654,7 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
     }
 
-    /// T031: elapsed_minutes range 1..=720, both boundaries rejected.
+    /// T031: `elapsed_minutes` range 1..=720, both boundaries rejected.
     /// Field name is camelCase per the wire shape.
     #[test]
     fn save_quick_logs_rejects_out_of_range_minutes() {
@@ -1600,7 +1701,7 @@ mod tests {
     }
 
     /// T034: save → load round-trip preserves the vec verbatim, including
-    /// the parent_ref payload.
+    /// the `parent_ref` payload.
     #[test]
     fn save_distractions_round_trip() {
         let dir = std::env::temp_dir().join(format!(
@@ -1619,8 +1720,7 @@ mod tests {
     #[test]
     fn save_distractions_rejects_overlong_note() {
         let entry = sample_distraction(&"a".repeat(121));
-        let err =
-            super::validate_distractions(&[entry]).expect_err("must reject overlong note");
+        let err = super::validate_distractions(&[entry]).expect_err("must reject overlong note");
         match err {
             super::BridgeError::InvalidArgument { field, .. } => {
                 assert_eq!(field, "note");
@@ -1629,7 +1729,7 @@ mod tests {
         }
     }
 
-    /// T036: parent_ref.parent_title overlength rejected with field
+    /// T036: `parent_ref.parent_title` overlength rejected with field
     /// `parentRef.parentTitle`.
     #[test]
     fn save_distractions_rejects_overlong_parent_title() {
@@ -1637,8 +1737,8 @@ mod tests {
         if let Some(parent) = entry.parent_ref.as_mut() {
             parent.parent_title = Some("a".repeat(121));
         }
-        let err = super::validate_distractions(&[entry])
-            .expect_err("must reject overlong parent title");
+        let err =
+            super::validate_distractions(&[entry]).expect_err("must reject overlong parent title");
         match err {
             super::BridgeError::InvalidArgument { field, .. } => {
                 assert_eq!(field, "parentRef.parentTitle");
@@ -1650,10 +1750,8 @@ mod tests {
     /// T037: missing files yield Ok(empty vec) for both load paths.
     #[test]
     fn load_returns_empty_when_file_missing() {
-        let dir = std::env::temp_dir().join(format!(
-            "presto_test_missing_files_{}",
-            std::process::id()
-        ));
+        let dir =
+            std::env::temp_dir().join(format!("presto_test_missing_files_{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         // Note: directory itself is absent — read helpers should still
         // return Ok([]) (mirrors `read_manual_sessions_from` semantics).
@@ -1668,10 +1766,8 @@ mod tests {
     /// the human-readable reason). Mirrors AG-10 finding.
     #[test]
     fn load_handles_corrupt_file_with_bridge_error_internal() {
-        let dir = std::env::temp_dir().join(format!(
-            "presto_test_corrupt_files_{}",
-            std::process::id()
-        ));
+        let dir =
+            std::env::temp_dir().join(format!("presto_test_corrupt_files_{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).expect("mkdir");
         // Distinctive PII-style bytes the test asserts are NOT echoed.

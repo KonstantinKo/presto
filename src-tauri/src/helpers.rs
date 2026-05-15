@@ -271,6 +271,57 @@ pub(super) fn write_manual_sessions_to(
     write_json_atomic(&dir.join("manual_sessions.json"), sessions)
 }
 
+// ── Quick logs ────────────────────────────────────────────────────────────────
+
+/// Reads `quick_logs.json` from `dir`, returning an empty vec when absent.
+///
+/// On corrupt JSON, returns an error string scrubbed of payload bytes
+/// (the formatter receives only the `serde_json::Error` text, never the
+/// raw content) — feeds AG-10's PII-safety contract.
+#[allow(clippy::redundant_pub_crate)]
+pub(super) fn read_quick_logs_from(dir: &Path) -> Result<Vec<super::QuickLog>, String> {
+    let file_path = dir.join("quick_logs.json");
+    if !file_path.exists() {
+        return Ok(Vec::new());
+    }
+    let content = fs::read_to_string(file_path)
+        .map_err(|e| format!("Failed to read quick logs file: {e}"))?;
+    serde_json::from_str(&content).map_err(|e| format!("Failed to parse quick logs: {e}"))
+}
+
+/// Creates `dir` if necessary, then atomically writes `logs` to
+/// `quick_logs.json`.
+#[allow(clippy::redundant_pub_crate)]
+pub(super) fn write_quick_logs_to(dir: &Path, logs: &[super::QuickLog]) -> Result<(), String> {
+    fs::create_dir_all(dir).map_err(|e| format!("Failed to create directory: {e}"))?;
+    write_json_atomic(&dir.join("quick_logs.json"), logs)
+}
+
+// ── Distractions ──────────────────────────────────────────────────────────────
+
+/// Reads `distractions.json` from `dir`, returning an empty vec when absent.
+#[allow(clippy::redundant_pub_crate)]
+pub(super) fn read_distractions_from(dir: &Path) -> Result<Vec<super::Distraction>, String> {
+    let file_path = dir.join("distractions.json");
+    if !file_path.exists() {
+        return Ok(Vec::new());
+    }
+    let content = fs::read_to_string(file_path)
+        .map_err(|e| format!("Failed to read distractions file: {e}"))?;
+    serde_json::from_str(&content).map_err(|e| format!("Failed to parse distractions: {e}"))
+}
+
+/// Creates `dir` if necessary, then atomically writes `entries` to
+/// `distractions.json`.
+#[allow(clippy::redundant_pub_crate)]
+pub(super) fn write_distractions_to(
+    dir: &Path,
+    entries: &[super::Distraction],
+) -> Result<(), String> {
+    fs::create_dir_all(dir).map_err(|e| format!("Failed to create directory: {e}"))?;
+    write_json_atomic(&dir.join("distractions.json"), entries)
+}
+
 // ── Tags ──────────────────────────────────────────────────────────────────────
 
 /// Reads `tags.json` from `dir`.
