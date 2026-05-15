@@ -1607,17 +1607,32 @@ pub fn TimerView() -> impl IntoView {
                         // `running → !running` transition; with the
                         // arrival of `engine.abort` (which also flips
                         // the bool but emits only `SessionAborted`),
-                        // we now also require a `PomodoroCompleted`
-                        // event in the same tick. Natural completion
-                        // and `engine.complete` both emit it; abort
-                        // does not — so abort no longer triggers an
-                        // accidental auto-restart countdown. Matches
-                        // the existing event-check pattern at the
-                        // session-save gate above.
-                        let saw_pomodoro_completed = events
-                            .iter()
-                            .any(|e| matches!(e, TimerEvent::PomodoroCompleted { .. }));
-                        if was_running && !state.is_running() && saw_pomodoro_completed {
+                        // we now also require a session-end event in
+                        // the same tick.
+                        //
+                        // R-002 fix: widened from PomodoroCompleted-
+                        // only to PomodoroCompleted OR BreakCompleted.
+                        // The natural break zero-cross at
+                        // `engine/timer.rs:1090-1103` emits ONLY
+                        // BreakCompleted (focus completion emits
+                        // PomodoroCompleted via complete_focus_session
+                        // — break completion does not). Before this
+                        // widening, `auto_start_timer = true` failed to
+                        // auto-roll Break → Focus on a natural break
+                        // end, regressing
+                        // `tests/e2e/settings-automation.spec.js`.
+                        // SessionAborted and SessionSkipped
+                        // intentionally do NOT appear in the gate
+                        // pattern — abort and skip must not trigger
+                        // an auto-restart countdown.
+                        let saw_session_end = events.iter().any(|e| {
+                            matches!(
+                                e,
+                                TimerEvent::PomodoroCompleted { .. }
+                                    | TimerEvent::BreakCompleted { .. }
+                            )
+                        });
+                        if was_running && !state.is_running() && saw_session_end {
                             let auto_start =
                                 settings.with_untracked(|s| s.notifications.auto_start_timer);
                             if auto_start {
