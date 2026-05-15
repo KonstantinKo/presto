@@ -182,7 +182,16 @@ pub fn SessionsHistoryTable() -> impl IntoView {
                     </thead>
                     <tbody id="sessions-table-body">
                         <For
-                            each=move || sessions.get()
+                            each=move || {
+                                // Most-recent first: sort by `created_at` ISO
+                                // timestamp descending. Lexicographic order
+                                // matches chronological order for the
+                                // RFC 3339 / ISO 8601 strings written by the
+                                // engine, so a string compare is sufficient.
+                                let mut rows = sessions.get();
+                                rows.sort_by(|a, b| b.created_at.cmp(&a.created_at));
+                                rows
+                            }
                             key=|row| row.id.clone()
                             children=move |row| {
                                 let session_for_modal = row.clone();
