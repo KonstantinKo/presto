@@ -126,7 +126,18 @@ pub fn TagUsagePie(
         <div class="tag-usage-card">
             <h3>{move || resolved_title.get()}</h3>
             {move || {
-                let snapshot = entries.get();
+                let mut snapshot = entries.get();
+                // The persisted seed for the `default-focus` tag carries a
+                // green hex (#4CAF50) inherited from the JS-era data —
+                // semantically misleading here, where the pie shows focus
+                // time and green is the break colour. Swap to the live
+                // `--focus-color` token so the segment + swatch follow the
+                // active theme's focus tint.
+                for entry in &mut snapshot {
+                    if entry.tag_id == "default-focus" && entry.tag_color.eq_ignore_ascii_case("#4CAF50") {
+                        entry.tag_color = "var(--focus-color)".to_string();
+                    }
+                }
                 if snapshot.is_empty() {
                     view! {
                         <div class="tag-usage-pie-row">

@@ -121,10 +121,10 @@
 }
 
 .calendar-day.selected {
-  background: var(--focus-color);
-  color: #ffffff;
+  background: var(--mode-marker-bg, var(--focus-color));
+  color: var(--mode-marker-text, #ffffff);
   font-weight: 600;
-  border-color: var(--focus-timer-color);
+  border-color: var(--mode-marker-bg, var(--focus-timer-color));
 }
 
 .calendar-day.selected .calendar-dot {
