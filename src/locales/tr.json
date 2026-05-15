@@ -251,7 +251,8 @@
     "new_placeholder": "Yeni etiket...",
     "new_aria_label": "Yeni etiket adı",
     "delete_aria": "{{ name }} etiketini sil",
-    "tags_plural": "Etiketler"
+    "tags_plural": "Etiketler",
+    "default_name": "Odak"
   },
   "sidebar": {
     "timer_tooltip": "Zamanlayıcı",

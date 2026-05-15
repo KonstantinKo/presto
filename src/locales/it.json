@@ -251,7 +251,8 @@
     "new_placeholder": "Nuovo tag...",
     "new_aria_label": "Nome del nuovo tag",
     "delete_aria": "Elimina tag {{ name }}",
-    "tags_plural": "Tag"
+    "tags_plural": "Tag",
+    "default_name": "Concentrazione"
   },
   "sidebar": {
     "timer_tooltip": "Timer",

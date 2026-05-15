@@ -251,7 +251,8 @@
     "new_placeholder": "New tag...",
     "new_aria_label": "New tag name",
     "delete_aria": "Delete {{ name }} tag",
-    "tags_plural": "Tags"
+    "tags_plural": "Tags",
+    "default_name": "Focus"
   },
   "sidebar": {
     "timer_tooltip": "Timer",

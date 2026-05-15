@@ -142,11 +142,16 @@ pub fn TagUsagePie(
                         let icon_class = IconClass::from_icon_name(&entry.tag_icon);
                         let swatch_style = format!("background: {};", entry.tag_color);
                         let minutes_text = format!("{} min", entry.minutes);
+                        let display_name = if entry.tag_id == "default-focus" && entry.tag_name == "Focus" {
+                            t_string!(i18n, tag.default_name).to_string()
+                        } else {
+                            entry.tag_name
+                        };
                         view! {
                             <li class="tag-usage-legend-item">
                                 <span class="tag-usage-swatch" style=swatch_style></span>
                                 {icon::render(&icon_class)}
-                                <span class="tag-usage-name">{entry.tag_name}</span>
+                                <span class="tag-usage-name">{display_name}</span>
                                 <span class="tag-usage-minutes">{minutes_text}</span>
                             </li>
                         }
