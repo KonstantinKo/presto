@@ -114,6 +114,16 @@ pub struct ShortcutSettings {
     pub start_stop: Option<String>,
     pub reset: Option<String>,
     pub skip: Option<String>,
+    /// Feature 007. Optional binding for the Abort action (used as a
+    /// keyboard-accessible discard during overtime; usable from any
+    /// running state). `None` = unbound. Default is `None`.
+    ///
+    /// Backwards-compatible at the JSON layer: pre-feature-007
+    /// settings.json files lack this key and deserialise to `None`
+    /// via `serde`'s `Option<T>` missing-field default — mirroring
+    /// the precedent of the three sibling fields above.
+    #[serde(default)]
+    pub abort: Option<String>,
 }
 
 impl Default for ShortcutSettings {
@@ -122,6 +132,14 @@ impl Default for ShortcutSettings {
             start_stop: Some("CommandOrControl+Alt+Space".to_string()),
             reset: Some("CommandOrControl+Alt+R".to_string()),
             skip: Some("CommandOrControl+Alt+S".to_string()),
+            // Intentional asymmetry (FR-019): `abort` defaults to `None`
+            // (unbound) while the three sibling fields above are
+            // pre-bound as a convenience for users who never open
+            // Settings. Abort is opt-in — it is primarily a power-user
+            // escape hatch during overtime. The user binds it from
+            // Settings > Shortcuts when they want a keyboard discard
+            // path. Do NOT "fix" this asymmetry without a spec revision.
+            abort: None,
         }
     }
 }
