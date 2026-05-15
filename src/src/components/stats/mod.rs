@@ -773,7 +773,17 @@ pub fn StatisticsView() -> impl IntoView {
 
     // Period-scoped session slice. The bar chart and tag-usage pie
     // both consume the same projection.
-    let period_sessions = Signal::derive(move || {
+    //
+    // Memo (not Signal::derive) so the closure runs inside its own
+    // owner-bound tracking context — consumers that read the value
+    // outside an explicit reactive scope (component bodies that
+    // accept a `Signal<T>` prop and read via `sessions.with(|all|
+    // …)` at mount time) don't trigger the "access outside a
+    // reactive tracking context" warning Leptos emits in debug
+    // builds. Memo also caches the projection, skipping the
+    // `sessions_for_*` reduction when neither `period` nor `cursor`
+    // changed.
+    let period_sessions: Signal<Vec<ManualSession>> = Memo::new(move |_| {
         let p = period.get();
         let c = cursor.get();
         sessions.with(|all| match p {
@@ -782,7 +792,8 @@ pub fn StatisticsView() -> impl IntoView {
             Period::Monthly => sessions_for_month(all, c),
             Period::Yearly => sessions_for_year(all, c),
         })
-    });
+    })
+    .into();
 
     let tags_signal: Signal<Vec<Tag>> = Signal::derive(move || tags.get());
     let sessions_signal: Signal<Vec<ManualSession>> = Signal::derive(move || sessions.get());
@@ -916,12 +927,14 @@ pub fn StatisticsView() -> impl IntoView {
                     view! { <FocusTrend sessions=sessions_signal rows=rows_signal /> }.into_any()
                 }
                 Period::Monthly => {
-                    let window_days: Signal<u32> = Signal::derive(move || {
+                    let window_days: Signal<u32> = Memo::new(move |_| {
                         days_in_month(cursor.get().year(), cursor.get().month())
-                    });
-                    let anchor: Signal<String> = Signal::derive(move || {
+                    })
+                    .into();
+                    let anchor: Signal<String> = Memo::new(move |_| {
                         format_session_date(cursor.get().timestamp_millis())
-                    });
+                    })
+                    .into();
                     view! {
                         <PeakFocusTime
                             sessions=period_sessions
@@ -932,12 +945,14 @@ pub fn StatisticsView() -> impl IntoView {
                     }.into_any()
                 }
                 Period::Yearly => {
-                    let window_days: Signal<u32> = Signal::derive(move || {
+                    let window_days: Signal<u32> = Memo::new(move |_| {
                         days_in_year(cursor.get().year())
-                    });
-                    let anchor: Signal<String> = Signal::derive(move || {
+                    })
+                    .into();
+                    let anchor: Signal<String> = Memo::new(move |_| {
                         format_session_date(cursor.get().timestamp_millis())
-                    });
+                    })
+                    .into();
                     view! {
                         <PeakFocusTime
                             sessions=period_sessions
@@ -948,9 +963,10 @@ pub fn StatisticsView() -> impl IntoView {
                 }
                 Period::Weekly => {
                     let window_days: Signal<u32> = Signal::derive(move || 7_u32);
-                    let anchor: Signal<String> = Signal::derive(move || {
+                    let anchor: Signal<String> = Memo::new(move |_| {
                         format_session_date(cursor.get().timestamp_millis())
-                    });
+                    })
+                    .into();
                     view! {
                         <PeakFocusTime
                             sessions=period_sessions
