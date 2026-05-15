@@ -2530,7 +2530,13 @@ pub fn TimerView() -> impl IntoView {
                 <button id="stop-btn" class="control-btn"
                     class:filled-action=move || false
                     class:overtime=move || matches!(run_state.get(), RunState::Running) && is_overtime.get()
-                    aria-hidden=move || (matches!(run_state.get(), RunState::Running) && is_overtime.get()).to_string()
+                    // R-005 fix: emit `aria-hidden` only when truly hidden.
+                    // The literal `aria-hidden="false"` is semantically
+                    // identical to absent per the ARIA spec, but it
+                    // generates pointless DOM-diff noise and style
+                    // inconsistency vs. the rest of the codebase
+                    // (`.then_some("true")` is the project pattern).
+                    aria-hidden=move || (matches!(run_state.get(), RunState::Running) && is_overtime.get()).then_some("true")
                     tabindex=move || if matches!(run_state.get(), RunState::Running) && is_overtime.get() { -1 } else { 0 }
                     aria-label=move || verbose_label_left.get()
                     title=move || verbose_label_left.get()
@@ -2617,7 +2623,9 @@ pub fn TimerView() -> impl IntoView {
                 <button id="skip-btn" class="control-btn"
                     class:primary=move || matches!(run_state.get(), RunState::Paused)
                     class:overtime=move || matches!(run_state.get(), RunState::Running) && is_overtime.get()
-                    aria-hidden=move || (matches!(run_state.get(), RunState::Running) && is_overtime.get()).to_string()
+                    // R-005 fix: see #stop-btn for rationale — `aria-hidden`
+                    // is only emitted when actually hidden.
+                    aria-hidden=move || (matches!(run_state.get(), RunState::Running) && is_overtime.get()).then_some("true")
                     tabindex=move || if matches!(run_state.get(), RunState::Running) && is_overtime.get() { -1 } else { 0 }
                     aria-label=move || verbose_label_right.get()
                     title=move || verbose_label_right.get()
