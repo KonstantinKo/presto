@@ -499,9 +499,66 @@ impl From<SettingsOnDisk> for Settings {
 #[cfg(test)]
 mod tests {
     use super::{
-        AmbientSoundType, AppearanceSettings, Locale, NotificationSettings, StatusBarDisplay,
-        TimerSettings,
+        AmbientSoundType, AppearanceSettings, Locale, NotificationSettings, ShortcutSettings,
+        StatusBarDisplay, TimerSettings,
     };
+
+    /// Feature 007 T010 (RED → T013 GREEN): `ShortcutSettings.abort = Some(_)`
+    /// round-trips byte-stable through serde. Critical wire-format invariant:
+    /// the new field serialises alongside the existing three nullable fields
+    /// without altering their wire shape.
+    #[test]
+    fn shortcut_settings_with_abort_roundtrips() {
+        let s = ShortcutSettings {
+            start_stop: Some("CommandOrControl+Alt+Space".to_string()),
+            reset: Some("CommandOrControl+Alt+R".to_string()),
+            skip: Some("CommandOrControl+Alt+S".to_string()),
+            abort: Some("CommandOrControl+Alt+W".to_string()),
+        };
+        let json = serde_json::to_string(&s).expect("serialise");
+        let back: ShortcutSettings = serde_json::from_str(&json).expect("deserialise");
+        assert_eq!(back.start_stop.as_deref(), Some("CommandOrControl+Alt+Space"));
+        assert_eq!(back.reset.as_deref(), Some("CommandOrControl+Alt+R"));
+        assert_eq!(back.skip.as_deref(), Some("CommandOrControl+Alt+S"));
+        assert_eq!(back.abort.as_deref(), Some("CommandOrControl+Alt+W"));
+    }
+
+    /// Feature 007 T011 (RED → T013 GREEN): `ShortcutSettings.abort = None`
+    /// serialises to JSON `null` and deserialises back to `None`. Mirrors the
+    /// `Option<String>` precedent of the three sibling fields.
+    #[test]
+    fn shortcut_settings_with_unbound_abort_roundtrips() {
+        let s = ShortcutSettings {
+            start_stop: Some("CommandOrControl+Alt+Space".to_string()),
+            reset: None,
+            skip: None,
+            abort: None,
+        };
+        let json = serde_json::to_string(&s).expect("serialise");
+        assert!(
+            json.contains(r#""abort":null"#),
+            "abort: None must serialise to `null`: got {json}"
+        );
+        let back: ShortcutSettings = serde_json::from_str(&json).expect("deserialise");
+        assert_eq!(back.abort, None);
+    }
+
+    /// Feature 007 T012 (RED → T013 GREEN): a pre-feature settings JSON
+    /// (no `abort` key) deserialises with `abort: None` via serde's default
+    /// behaviour on a missing `Option<T>` field. Backwards compatibility for
+    /// existing users' settings.json files.
+    #[test]
+    fn shortcut_settings_missing_abort_field_defaults_to_none() {
+        let legacy = r#"{
+            "start_stop": "CommandOrControl+Alt+Space",
+            "reset": "CommandOrControl+Alt+R",
+            "skip": "CommandOrControl+Alt+S"
+        }"#;
+        let s: ShortcutSettings =
+            serde_json::from_str(legacy).expect("legacy shortcuts JSON must deserialise");
+        assert_eq!(s.abort, None);
+        assert_eq!(s.start_stop.as_deref(), Some("CommandOrControl+Alt+Space"));
+    }
 
     /// Feature 005 T004 (RED → T007 GREEN): pre-feature-005
     /// `AppearanceSettings` JSON (feature 002/003/004 baseline shape)
