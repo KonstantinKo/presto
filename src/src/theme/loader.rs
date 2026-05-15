@@ -315,10 +315,15 @@ mod tests {
         // CHK040. Net: 12 - 1 + 5 = 16. The `tag-manager.png` baseline
         // is regenerated in place (12 icons; 3 remix + 9 Phosphor; 5
         // emoji entries removed) per amended FR-044 — count unchanged.
+        //
+        // Spec 006 Phase 9 (T070): `timer-focus-paused-with-complete.png`
+        // added as the headline new visual for the state-aware button
+        // matrix — the Paused right slot reveals as ✓ Complete.
+        // Net: 16 + 1 = 17.
         assert_eq!(
             pngs.len(),
-            16,
-            "expected 16 visual-regression baselines per spec 003 FR-043; \
+            17,
+            "expected 17 visual-regression baselines per specs 003+006; \
              found {} (re-captures > 2 escalate per Principle IV)",
             pngs.len(),
         );

@@ -52,11 +52,13 @@ pub(super) const fn tag_tracking_action_for_event(event: &TimerEvent) -> TagTrac
         | TimerEvent::AutoPaused
         | TimerEvent::PomodoroCompleted { .. }
         | TimerEvent::BreakCompleted { .. }
-        | TimerEvent::SessionSkipped { .. } => TagTrackingAction::FlushAll,
+        | TimerEvent::SessionSkipped { .. }
+        | TimerEvent::SessionAborted { .. } => TagTrackingAction::FlushAll,
         TimerEvent::OvertimeStarted { .. }
         | TimerEvent::TwoMinutesRemaining
         | TimerEvent::ThirtySecondsRemaining
-        | TimerEvent::ManualSessionRecorded { .. } => TagTrackingAction::NoOp,
+        | TimerEvent::ManualSessionRecorded { .. }
+        | TimerEvent::SessionCompletedEarly { .. } => TagTrackingAction::NoOp,
     }
 }
 
@@ -264,6 +266,25 @@ mod tests {
     fn no_op_on_manual_session_recorded() {
         assert_eq!(
             tag_tracking_action_for_event(&TimerEvent::ManualSessionRecorded { duration_secs: 60 }),
+            TagTrackingAction::NoOp,
+        );
+    }
+
+    #[test]
+    fn flushes_on_session_aborted() {
+        assert_eq!(
+            tag_tracking_action_for_event(&TimerEvent::SessionAborted {
+                aborted_mode: TimerMode::Focus,
+                elapsed_secs: 0,
+            }),
+            TagTrackingAction::FlushAll,
+        );
+    }
+
+    #[test]
+    fn no_op_on_session_completed_early() {
+        assert_eq!(
+            tag_tracking_action_for_event(&TimerEvent::SessionCompletedEarly { elapsed_secs: 30 }),
             TagTrackingAction::NoOp,
         );
     }

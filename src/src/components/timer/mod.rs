@@ -195,16 +195,50 @@ fn pad_two(value: u32) -> String {
     format!("{value:02}")
 }
 
-/// Project the stop-button icon name for the current mode.
-///
-/// In Focus mode the stop button resets the timer (× close icon).
-/// In Break/LongBreak mode it undoes the last completed pomodoro
-/// (back-arrow undo icon) so the user can restart focus without
-/// counting the session.
-const fn stop_icon_for_mode(mode: TimerMode) -> &'static str {
-    match mode {
-        TimerMode::Focus => "close",
-        TimerMode::Break | TimerMode::LongBreak => "undo",
+// -------- Feature 006: closed-sum UI run-state --------
+//
+// The engine carries three orthogonal bools (`is_running`,
+// `is_paused`, `is_auto_paused`) — see `engine::timer.rs:119-173` for
+// why the engine keeps them as bools (1:1 JS-era parity). At the UI
+// layer we want an exhaustive `match` (Principle III) driving the
+// state-aware button matrix, so we fold the bools into a closed sum
+// at the boundary. AutoPaused folds into `Paused` per FR-012 ¶3 +
+// Story 1 AC 3 — the UI matrix treats both pause variants identically.
+//
+// Engine-wide refactor (switch the engine itself to a `State` enum)
+// is explicitly out of scope; the boundary fold below is feature
+// 006's UI-only contract.
+
+/// Closed sum that drives the state-aware button matrix per FR-012.
+/// Derived from the engine's three orthogonal bools at the UI layer
+/// — engine bools stay as-is.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum RunState {
+    Idle,
+    Running,
+    Paused,
+}
+
+impl RunState {
+    /// Project the engine's run-state predicates to the closed sum.
+    ///
+    /// The `is_paused || is_auto_paused` branch fires **first** —
+    /// otherwise `(false, true, false)` (engine-Paused) would fall
+    /// through to `is_running == false ⇒ Idle` and the matrix would
+    /// render Idle controls over a paused session (AG-1 finding,
+    /// `data-model.md` §`RunState` lines 132-157).
+    pub(super) fn from_engine(is_running: bool, is_paused: bool, is_auto_paused: bool) -> Self {
+        debug_assert!(
+            !(is_running && (is_paused || is_auto_paused)),
+            "engine illegal state: cannot be both running and paused"
+        );
+        if is_paused || is_auto_paused {
+            Self::Paused
+        } else if is_running {
+            Self::Running
+        } else {
+            Self::Idle
+        }
     }
 }
 
@@ -215,47 +249,12 @@ const fn stop_icon_for_mode(mode: TimerMode) -> &'static str {
 // verbose `aria-label` / `title` pair and the terse `data-tooltip`
 // never drift (CHK041). The state enums below are the upstream side;
 // the downstream string projections live in `TimerView`'s body.
-
-/// Closed-sum state for the Stop/Reset/Undo button.
-///
-/// In `Focus` mode the button resets the timer; in `Break`/`LongBreak`
-/// it undoes the last completed pomodoro (see the existing handler at
-/// the `on_stop` closure).
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
-pub enum StopButtonState {
-    Reset,
-    Undo,
-}
-
-impl StopButtonState {
-    /// Derive the state from the engine's current mode.
-    #[must_use]
-    pub const fn from_mode(mode: TimerMode) -> Self {
-        match mode {
-            TimerMode::Focus => Self::Reset,
-            TimerMode::Break | TimerMode::LongBreak => Self::Undo,
-        }
-    }
-
-    /// Verbose `aria-label` / `title` string. Preserves the
-    /// pre-rework values at `mod.rs:1573-1574` (CHK041 / WCAG 4.1.2).
-    #[must_use]
-    pub const fn verbose_label(self) -> &'static str {
-        match self {
-            Self::Reset => "Reset timer",
-            Self::Undo => "Undo last session",
-        }
-    }
-
-    /// Terse `data-tooltip` string for the visible CSS tooltip.
-    #[must_use]
-    pub const fn terse_tooltip(self) -> &'static str {
-        match self {
-            Self::Reset => "Reset",
-            Self::Undo => "Undo",
-        }
-    }
-}
+//
+// Feature 006 (T049): the legacy `StopButtonState` (Reset/Undo)
+// is gone — the left-slot button is now a state-aware control whose
+// label/icon/handler flip on `(RunState, TimerMode)`. See the
+// `left_slot_*` / `right_slot_*` signals inside `TimerView` for the
+// new wiring.
 
 /// Closed-sum state for the Play/Pause button across the timer's
 /// run-state machine. Idle (not running, not paused, not auto-paused)
@@ -312,19 +311,19 @@ pub enum SkipButtonState {
 impl SkipButtonState {
     /// Verbose accessible label — distinct from the terse tooltip per
     /// Spec A11 / SC-004 / contracts §3. The catalogue is the
-    /// runtime source of truth (`timer.ctrl_skip_session_aria`); this
+    /// runtime source of truth (`timer.ctrl_skip_mode_aria`); this
     /// const fn is the host-side test fixture that pins the English
     /// form for the cargo-test matrix.
     #[must_use]
     pub const fn verbose_label(self) -> &'static str {
-        "Skip current session and advance to the next phase"
+        "Skip current mode and advance to the next phase"
     }
 
     /// Terse tooltip — short form shown in `data-tooltip`. Catalogue
-    /// key `timer.ctrl_skip_session`.
+    /// key `timer.ctrl_skip_mode`.
     #[must_use]
     pub const fn terse_tooltip(self) -> &'static str {
-        "Skip session"
+        "Skip Mode"
     }
 }
 
@@ -708,6 +707,16 @@ fn handle_events(
                     });
                 }
             }
+            // Feature 006: no toast / chime / desktop notification for
+            // either new variant. `SessionAborted` is a discard — the
+            // user already saw the button press; UI side-effect
+            // bookkeeping (clearing pending auto-restart countdown) is
+            // handled in the auto-restart effect, not here.
+            // `SessionCompletedEarly` is engine-internal observability
+            // only (paired with `PomodoroCompleted` in branch B or
+            // `SessionAborted` in branch A — the paired event drives
+            // the toast/chime).
+            TimerEvent::SessionAborted { .. } | TimerEvent::SessionCompletedEarly { .. } => {}
         }
     }
 }
@@ -896,6 +905,30 @@ pub fn TimerView() -> impl IntoView {
     // post-completion write.
     let session_title = RwSignal::new(String::new());
 
+    // Feature 006 (T051/T052): modal-open state for Quick Log +
+    // Distraction. Snapshot of the parent-session ref is captured at
+    // modal-open time (per spec Clarifications + Edge Cases) so a
+    // mid-modal mode transition (e.g. natural pomodoro completion)
+    // doesn't reshape the recorded parent ref.
+    let quick_log_modal_open = RwSignal::new(false);
+    let distraction_modal_open = RwSignal::new(false);
+    let distraction_parent_ref_snapshot: RwSignal<
+        Option<crate::bridge::types::DistractionParentRef>,
+    > = RwSignal::new(None);
+
+    // Feature 006 (T044/T045): in-memory manager state. Production
+    // path: cold-start `load()`, mutate-then-`save()` round-trip per
+    // mutation. Today the load+save hops are spawned best-effort;
+    // failures are logged but don't block the UI (mirrors the JS-era
+    // optimistic-update behaviour for tags + sessions).
+    let quick_logs: RwSignal<crate::managers::quick_log::QuickLogManager> =
+        use_context::<RwSignal<crate::managers::quick_log::QuickLogManager>>()
+            .unwrap_or_else(|| RwSignal::new(crate::managers::quick_log::QuickLogManager::new()));
+    let distractions: RwSignal<crate::managers::distraction::DistractionManager> = use_context::<
+        RwSignal<crate::managers::distraction::DistractionManager>,
+    >()
+    .unwrap_or_else(|| RwSignal::new(crate::managers::distraction::DistractionManager::new()));
+
     let on_status_click = move |ev: leptos::ev::MouseEvent| {
         // Stop propagation so the document-level click-outside
         // listener (registered below) doesn't immediately close the
@@ -904,6 +937,16 @@ pub fn TimerView() -> impl IntoView {
         // outside handler that gates close on
         // `!timerStatus.contains(target)`.
         ev.stop_propagation();
+        // Feature 006 (T048): combined pill is read-only outside
+        // Idle. The chevron is hidden via CSS / inline-style; this
+        // handler is the second line of defence (synthetic clicks,
+        // accessibility-tree activation) so the dropdown cannot open
+        // while the timer is Running/Paused.
+        let is_idle =
+            engine.with_untracked(|s| !s.is_running() && !s.is_paused() && !s.is_auto_paused());
+        if !is_idle {
+            return;
+        }
         tag_dropdown_open.update(|v| *v = !*v);
     };
 
@@ -1190,29 +1233,10 @@ pub fn TimerView() -> impl IntoView {
     });
     let is_running = Signal::derive(move || engine.with(TimerState::is_running));
 
-    // Feature 003 Bundle D: control-button tooltip state signals.
-    //
-    // Per `data-model.md §Tooltip-text signals`, each button has ONE
-    // upstream `Signal<ButtonState>` and TWO downstream `Signal<String>`s
-    // (`verbose_label` + `terse_tooltip`). Both downstream signals
-    // close over the same upstream state so the verbose pair
-    // (`aria-label` == `title`) and the terse `data-tooltip` update
-    // atomically on engine state changes — no second copy to keep in
-    // sync (CHK041 / FR-026).
-    let stop_btn_state =
-        Signal::derive(move || StopButtonState::from_mode(engine.with(TimerState::current_mode)));
-    // Feature 005: localised verbose / terse tooltip strings per
-    // button state. The state enums (`StopButtonState`, etc.) keep
-    // their `verbose_label`/`terse_tooltip` const-fn projections as
-    // the English source-of-truth for tests; the rendered strings
-    // come from the i18n catalogue via the `t_string!` macro.
-    let verbose_label_stop = Signal::derive(move || match stop_btn_state.get() {
-        StopButtonState::Reset => t_string!(i18n, timer.ctrl_reset_aria).to_string(),
-        StopButtonState::Undo => t_string!(i18n, timer.ctrl_undo_aria).to_string(),
-    });
-    let terse_tooltip_stop = Signal::derive(move || match stop_btn_state.get() {
-        StopButtonState::Reset => t_string!(i18n, timer.ctrl_reset).to_string(),
-        StopButtonState::Undo => t_string!(i18n, timer.ctrl_undo).to_string(),
+    // Feature 006 (T049): closed-sum UI run-state. The button matrix
+    // dispatches on this via an exhaustive `match` (Principle III).
+    let run_state = Signal::derive(move || {
+        engine.with(|s| RunState::from_engine(s.is_running(), s.is_paused(), s.is_auto_paused()))
     });
 
     let play_pause_btn_state = Signal::derive(move || {
@@ -1228,17 +1252,32 @@ pub fn TimerView() -> impl IntoView {
         PlayPauseButtonState::Resume => t_string!(i18n, timer.ctrl_resume).to_string(),
     });
 
-    // Skip button has no state variants (FR-029); only its rendered
-    // string is reactive, driven by the locale signal. The verbose
-    // form (aria-label / title) is intentionally a distinct catalogue
-    // key from the terse tooltip — Spec A11 + SC-004 + contracts §3
-    // forbid value-equality between the two so a future copy edit on
-    // one cannot accidentally collapse them (CHK041
-    // drift-impossibility).
-    let verbose_label_skip =
-        Signal::derive(move || t_string!(i18n, timer.ctrl_skip_session_aria).to_string());
-    let terse_tooltip_skip =
-        Signal::derive(move || t_string!(i18n, timer.ctrl_skip_session).to_string());
+    // Feature 006 (T049): state-aware left-slot button.
+    //   Idle           → "+ Quick Log"        (opens Quick Log modal)
+    //   Running/Paused → "✕ Abort"            (engine.abort)
+    let verbose_label_left = Signal::derive(move || match run_state.get() {
+        RunState::Idle => t_string!(i18n, timer.ctrl_quick_log_aria).to_string(),
+        RunState::Running | RunState::Paused => t_string!(i18n, timer.ctrl_abort_aria).to_string(),
+    });
+    let terse_tooltip_left = Signal::derive(move || match run_state.get() {
+        RunState::Idle => t_string!(i18n, timer.ctrl_quick_log).to_string(),
+        RunState::Running | RunState::Paused => t_string!(i18n, timer.ctrl_abort).to_string(),
+    });
+
+    // Feature 006 (T049): state-aware right-slot button.
+    //   Idle    → "→ Skip Mode"        (engine.skip)
+    //   Running → "! Note Distraction" (opens Distraction modal)
+    //   Paused  → "✓ Complete"         (engine.complete)
+    let verbose_label_right = Signal::derive(move || match run_state.get() {
+        RunState::Idle => t_string!(i18n, timer.ctrl_skip_mode_aria).to_string(),
+        RunState::Running => t_string!(i18n, timer.ctrl_note_distraction_aria).to_string(),
+        RunState::Paused => t_string!(i18n, timer.ctrl_complete_aria).to_string(),
+    });
+    let terse_tooltip_right = Signal::derive(move || match run_state.get() {
+        RunState::Idle => t_string!(i18n, timer.ctrl_skip_mode).to_string(),
+        RunState::Running => t_string!(i18n, timer.ctrl_note_distraction).to_string(),
+        RunState::Paused => t_string!(i18n, timer.ctrl_complete).to_string(),
+    });
 
     // Update document title with overtime prefix when running in overtime.
     Effect::new(move |_| {
@@ -1309,25 +1348,170 @@ pub fn TimerView() -> impl IntoView {
         apply_tag_tracking_events(&events, active_session_tags, selected_tag_ids);
         dispatch_tray_update(engine, settings, true);
     };
-    let on_stop = move |_| {
-        // In break/long-break mode, undo the last completed pomodoro so the
-        // user can restart focus without counting the session. In focus mode,
-        // full reset back to the start of the focus period.
-        if matches!(
-            engine.with(TimerState::current_mode),
-            TimerMode::Break | TimerMode::LongBreak
-        ) {
-            engine.update(TimerState::decrement_completed_pomodoros);
-        }
-        engine.update(TimerState::reset);
+    // Feature 006 (T053): Abort handler. Called from the left-slot
+    // button in Running or Paused state. Routes through
+    // `engine.abort(clock)` which clears the run-state bools +
+    // `current_session_elapsed_secs` without advancing mode or
+    // touching `completed_pomodoros`. Per FR-017 the per-session
+    // title is preserved (user intent: resume-after-abort with the
+    // same context); the engine does not surface a
+    // `PomodoroCompleted` event so the auto-restart UI gate at
+    // line 1471-1483 (now event-checked per T050) does not fire.
+    let on_abort = move |_| {
+        let events = engine
+            .try_update(|state| state.abort(&BrowserClock))
+            .unwrap_or_default();
         warning_signal.set(false);
-        // Mirrors `tag-manager.js:onTimerStop` — flush every active
-        // tag tracker so the partial duration is persisted before
-        // the session resets.
         tag_tracking_flush_all(active_session_tags, BrowserClock.now_ms());
-        // Toast mirrors `pomodoro-timer.js:871` ("Session deleted ❌").
+        handle_events(
+            &events,
+            &settings.get_untracked(),
+            app_toast,
+            warning_signal,
+            i18n,
+        );
+        apply_tag_tracking_events(&events, active_session_tags, selected_tag_ids);
         app_toast.show(t_string!(i18n, timer.toast.session_deleted));
         dispatch_tray_update(engine, settings, true);
+    };
+
+    // R-001 fix: persistence closure for a focus-completion event.
+    // Called by BOTH the natural-zero-cross tick branch AND the UI-
+    // triggered `on_complete` handler so an early Complete from
+    // Paused leaves the same daily-history row + stats hop a natural
+    // completion would. Caller passes `total_focus_before` captured
+    // BEFORE the engine.complete()/tick() call so `elapsed_secs` is
+    // the wall-clock duration of the just-sealed session (the engine
+    // folds `current_session_elapsed_secs` into `total_focus_secs`
+    // during completion). The closure also clears the in-flight
+    // title and pushes the synthesised `ManualSession` into the
+    // shared sessions log so the CalendarView re-renders.
+    let persist_focus_completion = move |total_focus_before: u32| {
+        let now_ms = BrowserClock.now_ms();
+        let (total_focus_after, completed) =
+            engine.with_untracked(|s| (s.total_focus_secs(), s.completed_pomodoros()));
+        let elapsed_secs = total_focus_after.saturating_sub(total_focus_before);
+        // Harvest the in-flight title ONCE at the boundary, normalise
+        // empty-string to None (Principle III), and clear the signal
+        // so the next focus starts blank — mirrors FR-007.
+        let title_at_completion = {
+            let raw = session_title.get_untracked();
+            let trimmed = raw.trim();
+            if trimmed.is_empty() {
+                None
+            } else {
+                Some(trimmed.to_string())
+            }
+        };
+        session_title.set(String::new());
+        let session = synth_completed_session(now_ms, elapsed_secs, title_at_completion.clone());
+        sessions.update(|list| list.push(session));
+        let date_str = crate::engine::date_format::format_session_date(now_ms);
+        let session_data = Session {
+            completed_pomodoros: completed,
+            total_focus_time: total_focus_after,
+            current_session: completed.saturating_add(1),
+            date: date_str,
+            title: title_at_completion,
+        };
+        let sd_for_stats = session_data.clone();
+        spawn_local(async move {
+            let _ = commands::save_session_data(session_data).await;
+            let _ = commands::save_daily_stats(sd_for_stats).await;
+        });
+    };
+
+    // Feature 006 (T054): Complete handler. Called from the
+    // right-slot button in Paused (or AutoPaused — folded into
+    // RunState::Paused). Routes through `engine.complete(clock)`
+    // which: (a) if elapsed < 30 s, internally delegates to
+    // `abort()` (FR-015 — discard as Abort, no count); (b) else
+    // increments `completed_pomodoros`, integrates elapsed into
+    // `total_focus_secs`, advances mode per cadence, emits
+    // `PomodoroCompleted` + `SessionCompletedEarly`. The downstream
+    // tick-loop hooks (session-save, auto-restart) read the events
+    // and act per FR-013/FR-014/FR-016.
+    //
+    // R-001 fix: persistence used to live exclusively inside the
+    // tick branch. Since `complete()` flips `is_running = false`,
+    // no further tick runs the save path — so a UI Complete left
+    // no daily-history row and no stats update. We now snapshot
+    // `total_focus_before` BEFORE the engine call (complete folds
+    // elapsed into total_focus_secs), then invoke the shared
+    // `persist_focus_completion` closure when a `PomodoroCompleted`
+    // event fires (which also clears the title — mirrors the
+    // natural-completion path).
+    let on_complete = move |_| {
+        let total_focus_before = engine.with_untracked(TimerState::total_focus_secs);
+        let events = engine
+            .try_update(|state| state.complete(&BrowserClock))
+            .unwrap_or_default();
+        let counted = events
+            .iter()
+            .any(|e| matches!(e, TimerEvent::PomodoroCompleted { .. }));
+        if counted {
+            persist_focus_completion(total_focus_before);
+        }
+        handle_events(
+            &events,
+            &settings.get_untracked(),
+            app_toast,
+            warning_signal,
+            i18n,
+        );
+        apply_tag_tracking_events(&events, active_session_tags, selected_tag_ids);
+        dispatch_tray_update(engine, settings, true);
+    };
+
+    // Feature 006 (T051): Quick Log modal open. Idle-state left-slot
+    // button. Snapshots no session context — quick logs are
+    // session-independent.
+    let on_open_quick_log = move |_| {
+        quick_log_modal_open.set(true);
+    };
+
+    // Feature 006 (T052): Distraction modal open. Running-state
+    // right-slot button. Snapshots the current session context at
+    // modal-open time per FR-035 + Edge Cases (race-free against
+    // mid-modal mode transitions).
+    //
+    // R-003 fix: read the engine's session-start anchor instead of
+    // deriving `start_ms = now - elapsed_secs * 1000`.
+    // `current_session_elapsed_secs` is focus-only accumulated time
+    // (paused gaps excluded), so the derived form drifted across
+    // pause cycles — two distractions captured from the same logical
+    // session got different `parent_session_start_ts` values. The
+    // engine's anchor is stamped on Idle → Running and survives
+    // pause/resume, so it's the wall-clock truth here. Fallback to
+    // `now` for the impossible case where the engine is Idle when
+    // the modal opens (matrix gates Distraction to Running-only).
+    let on_open_distraction = move |_| {
+        let snapshot = engine.with_untracked(|s| {
+            let mode = s.current_mode();
+            let start_ms = s
+                .current_session_started_at_ms()
+                .unwrap_or_else(|| BrowserClock.now_ms());
+            crate::bridge::types::DistractionParentRef {
+                parent_session_start_ts: chrono::DateTime::<chrono::Utc>::from_timestamp_millis(
+                    start_ms,
+                )
+                .unwrap_or_default()
+                .to_rfc3339(),
+                parent_mode: mode,
+                parent_tag_id: selected_tag_ids.with_untracked(|sel| sel.first().cloned()),
+                parent_title: {
+                    let raw = session_title.get_untracked();
+                    let trimmed = raw.trim();
+                    if trimmed.is_empty() {
+                        None
+                    } else {
+                        Some(trimmed.to_string())
+                    }
+                },
+            }
+        });
+        distraction_parent_ref_snapshot.set(Some(snapshot));
+        distraction_modal_open.set(true);
     };
     let on_skip = move |_| {
         let events = engine.try_update(TimerState::skip).unwrap_or_default();
@@ -1412,63 +1596,55 @@ pub fn TimerView() -> impl IntoView {
         let handle = set_interval_with_handle(
             move || {
                 let remaining_before = engine.with_untracked(TimerState::time_remaining_secs);
+                // R-001 fix: capture `total_focus_before` outside the
+                // try_update so the shared `persist_focus_completion`
+                // closure (called below) can compute the just-sealed
+                // session's wall-clock elapsed against the pre-tick
+                // snapshot. The engine folds `current_session_elapsed_secs`
+                // into `total_focus_secs` on `PomodoroCompleted`, so the
+                // diff between after-tick and pre-tick is the duration.
+                let (was_focus_pre, total_focus_before) = engine.with_untracked(|s| {
+                    (
+                        matches!(s.current_mode(), TimerMode::Focus),
+                        s.total_focus_secs(),
+                    )
+                });
                 let events = engine
                     .try_update(|state| {
-                        let was_focus = matches!(state.current_mode(), TimerMode::Focus);
                         let was_running = state.is_running();
                         let mode_before = state.current_mode();
-                        // Capture before tick: on PomodoroCompleted the engine adds
-                        // current_session_elapsed_secs to total_focus_secs and resets
-                        // it to 0, so the diff gives the actual wall-clock duration
-                        // of the session rather than the currently-configured setting.
-                        let total_focus_before = state.total_focus_secs();
                         let mut events = state.tick(&BrowserClock);
-                        let completed_focus = was_focus
-                            && events
-                                .iter()
-                                .any(|e| matches!(e, TimerEvent::PomodoroCompleted { .. }));
-                        if completed_focus {
-                            let now_ms = BrowserClock.now_ms();
-                            let elapsed_secs =
-                                state.total_focus_secs().saturating_sub(total_focus_before);
-                            // Feature 002 Bundle A: harvest the
-                            // in-flight title ONCE at zero-cross,
-                            // normalise empty-string to None at the
-                            // boundary (Principle III), and clear the
-                            // signal so the next focus starts blank.
-                            let title_at_completion = {
-                                let raw = session_title.get_untracked();
-                                let trimmed = raw.trim();
-                                if trimmed.is_empty() {
-                                    None
-                                } else {
-                                    Some(trimmed.to_string())
-                                }
-                            };
-                            session_title.set(String::new());
-                            let session = synth_completed_session(
-                                now_ms,
-                                elapsed_secs,
-                                title_at_completion.clone(),
-                            );
-                            sessions.update(|list| list.push(session));
-                            let completed = state.completed_pomodoros();
-                            let total_focus = state.total_focus_secs();
-                            let date_str = crate::engine::date_format::format_session_date(now_ms);
-                            let session_data = Session {
-                                completed_pomodoros: completed,
-                                total_focus_time: total_focus,
-                                current_session: completed.saturating_add(1),
-                                date: date_str,
-                                title: title_at_completion,
-                            };
-                            let sd_for_stats = session_data.clone();
-                            spawn_local(async move {
-                                let _ = commands::save_session_data(session_data).await;
-                                let _ = commands::save_daily_stats(sd_for_stats).await;
-                            });
-                        }
-                        if was_running && !state.is_running() {
+                        // Feature 006 (T050 / AG-2): auto-restart UI
+                        // gate. Previously this fired on the bare
+                        // `running → !running` transition; with the
+                        // arrival of `engine.abort` (which also flips
+                        // the bool but emits only `SessionAborted`),
+                        // we now also require a session-end event in
+                        // the same tick.
+                        //
+                        // R-002 fix: widened from PomodoroCompleted-
+                        // only to PomodoroCompleted OR BreakCompleted.
+                        // The natural break zero-cross at
+                        // `engine/timer.rs:1090-1103` emits ONLY
+                        // BreakCompleted (focus completion emits
+                        // PomodoroCompleted via complete_focus_session
+                        // — break completion does not). Before this
+                        // widening, `auto_start_timer = true` failed to
+                        // auto-roll Break → Focus on a natural break
+                        // end, regressing
+                        // `tests/e2e/settings-automation.spec.js`.
+                        // SessionAborted and SessionSkipped
+                        // intentionally do NOT appear in the gate
+                        // pattern — abort and skip must not trigger
+                        // an auto-restart countdown.
+                        let saw_session_end = events.iter().any(|e| {
+                            matches!(
+                                e,
+                                TimerEvent::PomodoroCompleted { .. }
+                                    | TimerEvent::BreakCompleted { .. }
+                            )
+                        });
+                        if was_running && !state.is_running() && saw_session_end {
                             let auto_start =
                                 settings.with_untracked(|s| s.notifications.auto_start_timer);
                             if auto_start {
@@ -1525,6 +1701,18 @@ pub fn TimerView() -> impl IntoView {
                         events
                     })
                     .unwrap_or_default();
+                // R-001 fix: persist on natural focus zero-cross.
+                // Mirrors `on_complete`. Gated on `was_focus_pre` so
+                // a Break → Focus auto-restart roll (which may emit
+                // SessionStarted in the same event vec) doesn't fire
+                // the persistence path for the new focus session.
+                let completed_focus = was_focus_pre
+                    && events
+                        .iter()
+                        .any(|e| matches!(e, TimerEvent::PomodoroCompleted { .. }));
+                if completed_focus {
+                    persist_focus_completion(total_focus_before);
+                }
                 handle_events(
                     &events,
                     &settings.get_untracked(),
@@ -1725,11 +1913,27 @@ pub fn TimerView() -> impl IntoView {
             </div>
 
             // Status / mode label + tag-dropdown trigger.
+            //
+            // Feature 006 (T048): combined `#timer-status-pill`
+            // wraps the existing `#timer-status` (chip + mode label
+            // + chevron) and `#session-title-input` so the two read
+            // as a unified pill. In Focus Idle the pill is
+            // interactive (chevron visible, title editable). In
+            // Focus Running / Paused / AutoPaused the pill collapses
+            // read-only — chevron hidden via inline-style + tag
+            // click no-op via `on_status_click` gate, title input
+            // gets `readonly` via `prop:readonly`. Break / LongBreak
+            // modes don't render the title region — the `<Show>`
+            // guard below keeps the JS-era status-quo intact.
             <div style="text-align: center;">
+                <div class="timer-status-pill" id="timer-status-pill"
+                    class:running=move || matches!(run_state.get(), RunState::Running)
+                    class:paused=move || matches!(run_state.get(), RunState::Paused)>
                 <div class="timer-status-container">
                     <div
                         class="timer-status clickable"
                         class:active=move || tag_dropdown_open.get()
+                        class:locked=move || !matches!(run_state.get(), RunState::Idle)
                         id="timer-status"
                         on:click=on_status_click
                     >
@@ -1756,7 +1960,14 @@ pub fn TimerView() -> impl IntoView {
                             }
                         }}
                         <span id="status-text">{move || status_label.get()}</span>
-                        <i class="ri-arrow-down-s-line tag-dropdown-arrow" id="tag-dropdown-arrow"></i>
+                        // Feature 006 (T048): chevron hidden outside
+                        // Idle — pill is read-only while a session
+                        // is in flight.
+                        <i
+                            class="ri-arrow-down-s-line tag-dropdown-arrow"
+                            id="tag-dropdown-arrow"
+                            style=move || if matches!(run_state.get(), RunState::Idle) { "" } else { "display: none" }
+                        ></i>
                     </div>
 
                     // Tag-dropdown popover. Anchored as a sibling of
@@ -1976,27 +2187,34 @@ pub fn TimerView() -> impl IntoView {
                         </div>
                     </div>
                 </div>
-                // Feature 002 Bundle A: per-session title input,
-                // rendered below the tag pill so the dropdown popover
-                // doesn't have to negotiate around it. Only shown
-                // during Focus — breaks don't carry titles. Style
-                // mirrors `.timer-status` (font, padding, radius, bg
-                // tint) so the two pills read as a matched pair.
+                // Feature 002 Bundle A + Feature 006 (T048):
+                // per-session title input, rendered below the tag
+                // pill inside `#timer-status-pill` so the combined
+                // pill reads as a single unit. Only shown during
+                // Focus — breaks don't carry titles. The input
+                // becomes `readonly` outside Focus-Idle so the user
+                // can't edit mid-session; the displayed placeholder
+                // also flips to the lighter `pill_title_placeholder`
+                // copy when Idle (FR-003: faint placeholder).
                 <Show when=move || engine.with(|s| matches!(s.current_mode(), TimerMode::Focus))>
-                    <div class="session-title-row">
+                    <div class="session-title-row"
+                        class:pill-readonly=move || !matches!(run_state.get(), RunState::Idle)
+                        class:pill-placeholder=move || session_title.with(|t| t.trim().is_empty())>
                         <input
                             type="text"
                             id="session-title-input"
                             class="session-title-input"
                             maxlength="120"
-                            placeholder=move || t_string!(i18n, timer.session_title_placeholder)
+                            placeholder=move || t_string!(i18n, timer.pill_title_placeholder)
                             prop:value=move || session_title.get()
+                            prop:readonly=move || !matches!(run_state.get(), RunState::Idle)
                             on:input=move |ev| {
                                 session_title.set(event_target_value(&ev));
                             }
                         />
                     </div>
                 </Show>
+                </div>
             </div>
 
             // Countdown display. The `.timer-container` carries a
@@ -2030,33 +2248,57 @@ pub fn TimerView() -> impl IntoView {
             // style play / pause glyphs at viewBox 0 0 24 24); empty
             // <span> stand-ins would be zero-size boxes that
             // `toBeVisible()` rejects.
+            // Feature 006 (T049): state-aware button matrix. The
+            // three slots keep their JS-era selector IDs (`stop-btn`,
+            // `play-pause-btn`, `skip-btn`) so the e2e contract +
+            // visual-regression baseline don't drift; the icons +
+            // labels + handlers dispatch on `(RunState, TimerMode)`.
+            //
+            //   Slot         Idle            Running                 Paused
+            //   left-slot    + Quick Log     ✕ Abort                 ✕ Abort
+            //   center-slot  ▶ Play          ⏸ Pause                 ▶ Resume
+            //   right-slot   → Skip Mode     ! Note Distraction      ✓ Complete
+            //
+            // The play/pause center slot keeps its existing wiring
+            // (same handler covers Start / Pause / Resume per
+            // `PlayPauseButtonState`). Filled vs ghost is gated via
+            // the `.primary` class — only the center slot is filled
+            // and (in Paused state) the right slot (Complete).
             <div class="controls">
                 <button id="stop-btn" class="control-btn"
-                    aria-label=move || verbose_label_stop.get()
-                    title=move || verbose_label_stop.get()
-                    data-tooltip=move || terse_tooltip_stop.get()
-                    on:click=on_stop>
-                    // X icon — visible in Focus mode (full reset).
+                    class:filled-action=move || false
+                    aria-label=move || verbose_label_left.get()
+                    title=move || verbose_label_left.get()
+                    data-tooltip=move || terse_tooltip_left.get()
+                    on:click=move |ev| {
+                        match run_state.get() {
+                            RunState::Idle => on_open_quick_log(ev),
+                            RunState::Running | RunState::Paused => on_abort(ev),
+                        }
+                    }>
+                    // Idle: plus icon (Quick Log).
                     <svg
                         id="stop-icon"
                         viewBox="0 0 24 24"
                         fill="none"
                         stroke="currentColor"
                         stroke-width="2.5"
-                        style=move || if stop_icon_for_mode(engine.with(TimerState::current_mode)) == "close" { "" } else { "display: none" }
+                        style=move || if matches!(run_state.get(), RunState::Idle) { "" } else { "display: none" }
                     >
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 5v14M5 12h14" />
                     </svg>
-                    // Back-arrow icon — visible in Break/LongBreak mode (undo last session).
+                    // Running / Paused: X icon (Abort). Selector
+                    // `#undo-icon` kept for VR-baseline continuity —
+                    // the icon glyph itself is the abort × glyph.
                     <svg
                         id="undo-icon"
                         viewBox="0 0 24 24"
                         fill="none"
                         stroke="currentColor"
                         stroke-width="2.5"
-                        style=move || if stop_icon_for_mode(engine.with(TimerState::current_mode)) == "undo" { "" } else { "display: none" }
+                        style=move || if matches!(run_state.get(), RunState::Running | RunState::Paused) { "" } else { "display: none" }
                     >
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l-2-2m0 0l2-2m-2 2h10.5a4.5 4.5 0 110 9h-4" />
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
                     </svg>
                 </button>
                 <button id="play-pause-btn" class="control-btn primary"
@@ -2073,25 +2315,30 @@ pub fn TimerView() -> impl IntoView {
                             d="M6.75 5.25a.75.75 0 0 1 .75-.75H9a.75.75 0 0 1 .75.75v13.5a.75.75 0 0 1-.75.75H7.5a.75.75 0 0 1-.75-.75V5.25Zm7.5 0A.75.75 0 0 1 15 4.5h1.5a.75.75 0 0 1 .75.75v13.5a.75.75 0 0 1-.75.75H15a.75.75 0 0 1-.75-.75V5.25Z" />
                     </svg>
                 </button>
-                // Skip button — four icon variants gated by upcoming mode:
-                // coffee for short break, moon for long break, brain for
-                // focus (next mode after a break), and a defensive
-                // forward-arrow fallback for any future mode addition.
-                // `skip_icon_for_mode` drives the per-icon visibility.
-                // The visual-regression baseline is Focus mode (next =
-                // short break) → coffee icon.
                 <button id="skip-btn" class="control-btn"
-                    aria-label=move || verbose_label_skip.get()
-                    title=move || verbose_label_skip.get()
-                    data-tooltip=move || terse_tooltip_skip.get()
-                    on:click=on_skip>
+                    class:primary=move || matches!(run_state.get(), RunState::Paused)
+                    aria-label=move || verbose_label_right.get()
+                    title=move || verbose_label_right.get()
+                    data-tooltip=move || terse_tooltip_right.get()
+                    on:click=move |ev| {
+                        match run_state.get() {
+                            RunState::Idle => on_skip(ev),
+                            RunState::Running => on_open_distraction(ev),
+                            RunState::Paused => on_complete(ev),
+                        }
+                    }>
+                    // Idle: per-mode skip icon (coffee / moon /
+                    // brain). The visibility logic still considers
+                    // the upcoming mode (cadence-aware via
+                    // `next_is_long_break`).
                     <i
                         id="skip-coffee-icon"
                         class="ri-cup-line"
                         style=move || {
                             let mode = engine.with(TimerState::current_mode);
                             let next_long = next_is_long_break.get();
-                            if skip_icon_for_mode(mode, next_long) == "coffee" {
+                            if matches!(run_state.get(), RunState::Idle)
+                                && skip_icon_for_mode(mode, next_long) == "coffee" {
                                 "font-size: 24px"
                             } else {
                                 "display: none; font-size: 24px"
@@ -2104,7 +2351,8 @@ pub fn TimerView() -> impl IntoView {
                         style=move || {
                             let mode = engine.with(TimerState::current_mode);
                             let next_long = next_is_long_break.get();
-                            if skip_icon_for_mode(mode, next_long) == "moon" {
+                            if matches!(run_state.get(), RunState::Idle)
+                                && skip_icon_for_mode(mode, next_long) == "moon" {
                                 "font-size: 24px"
                             } else {
                                 "display: none; font-size: 24px"
@@ -2117,15 +2365,34 @@ pub fn TimerView() -> impl IntoView {
                         style=move || {
                             let mode = engine.with(TimerState::current_mode);
                             let next_long = next_is_long_break.get();
-                            if skip_icon_for_mode(mode, next_long) == "brain" {
+                            if matches!(run_state.get(), RunState::Idle)
+                                && skip_icon_for_mode(mode, next_long) == "brain" {
                                 "font-size: 24px"
                             } else {
                                 "display: none; font-size: 24px"
                             }
                         }
                     ></i>
-                    // Defensive forward-arrow fallback — display: none for all currently-
-                    // defined modes; present for future-proofing against new mode variants.
+                    // Running: alert-circle (Distraction note).
+                    <i
+                        id="distraction-icon"
+                        class="ri-alert-line"
+                        style=move || if matches!(run_state.get(), RunState::Running) {
+                            "font-size: 24px"
+                        } else {
+                            "display: none; font-size: 24px"
+                        }
+                    ></i>
+                    // Paused: check (Complete).
+                    <i
+                        id="complete-icon"
+                        class="ri-check-line"
+                        style=move || if matches!(run_state.get(), RunState::Paused) {
+                            "font-size: 24px"
+                        } else {
+                            "display: none; font-size: 24px"
+                        }
+                    ></i>
                     <svg
                         id="skip-default-icon"
                         viewBox="0 0 24 24"
@@ -2217,6 +2484,227 @@ pub fn TimerView() -> impl IntoView {
                     <span>"+5"</span>
                 </button>
             </div>
+
+            // Feature 006 (T051): Quick Log modal.
+            <QuickLogModal
+                open=quick_log_modal_open
+                quick_logs=quick_logs
+            />
+            // Feature 006 (T052): Distraction modal.
+            <DistractionModal
+                open=distraction_modal_open
+                parent_ref_snapshot=distraction_parent_ref_snapshot
+                distractions=distractions
+            />
+        </div>
+    }
+}
+
+/// Feature 006 (T051): Quick Log modal. Title (required, maxlength=120)
+/// + elapsed minutes (1..=720, default 5). Submit calls
+/// `QuickLogManager::add` with a UUID v4 id and the current
+/// wall-clock; the modal closes immediately. Bridge save is best-
+/// effort (failures logged; the in-memory mutation already
+/// happened).
+#[component]
+fn QuickLogModal(
+    open: RwSignal<bool>,
+    quick_logs: RwSignal<crate::managers::quick_log::QuickLogManager>,
+) -> impl IntoView {
+    let i18n = use_i18n();
+    let title = RwSignal::new(String::new());
+    let minutes = RwSignal::new(5u32);
+
+    let on_close = move |_| {
+        open.set(false);
+        title.set(String::new());
+        minutes.set(5);
+    };
+    let on_submit = move |_| {
+        let raw_title = title.with_untracked(|t| t.trim().to_string());
+        let mins = minutes.get_untracked();
+        if raw_title.is_empty() || !(1..=720).contains(&mins) {
+            return;
+        }
+        let now_ms = BrowserClock.now_ms();
+        let id = format!("quicklog-{}", random_uuid());
+        quick_logs.update(|mgr| mgr.add(raw_title, mins, now_ms, id));
+        let snapshot =
+            quick_logs.with_untracked(crate::managers::quick_log::QuickLogManager::save_payload);
+        spawn_local(async move {
+            if let Err(e) = crate::bridge::commands::save_quick_logs(snapshot).await {
+                leptos::logging::warn!("save_quick_logs failed: {:?}", e);
+            }
+        });
+        open.set(false);
+        title.set(String::new());
+        minutes.set(5);
+    };
+
+    view! {
+        <div
+            class="session-modal-overlay"
+            id="quick-log-modal-overlay"
+            style=move || if open.get() { "" } else { "display: none" }
+        >
+            <form class="session-modal"
+                id="quick-log-form"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="quick-log-modal-title"
+                on:submit=move |ev| {
+                    ev.prevent_default();
+                    on_submit(ev);
+                }>
+                <div class="session-modal-header">
+                    <h3 id="quick-log-modal-title">{t!(i18n, modal.quick_log_title)}</h3>
+                    <button
+                        type="button"
+                        id="close-quick-log-modal"
+                        class="close-btn"
+                        on:click=on_close
+                    >"\u{00d7}"</button>
+                </div>
+                <div class="session-modal-body">
+                    <label for="quick-log-title">{t!(i18n, modal.quick_log_title_label)}</label>
+                    <input
+                        type="text"
+                        id="quick-log-title"
+                        maxlength="120"
+                        autofocus
+                        required
+                        prop:value=move || title.get()
+                        on:input=move |ev| title.set(event_target_value(&ev))
+                    />
+                    <label for="quick-log-minutes">{t!(i18n, modal.quick_log_minutes_label)}</label>
+                    <input
+                        type="number"
+                        id="quick-log-minutes"
+                        min="1"
+                        max="720"
+                        prop:value=move || minutes.get().to_string()
+                        on:input=move |ev| {
+                            let raw: u32 = event_target_value(&ev).parse().unwrap_or(5);
+                            minutes.set(raw.clamp(1, 720));
+                        }
+                    />
+                </div>
+                <div class="modal-actions">
+                    <button
+                        type="button"
+                        id="cancel-quick-log-btn"
+                        class="btn-secondary"
+                        on:click=on_close
+                    >{t!(i18n, modal.quick_log_cancel)}</button>
+                    <button
+                        type="submit"
+                        id="save-quick-log-btn"
+                        class="btn-primary"
+                    >{t!(i18n, modal.quick_log_submit)}</button>
+                </div>
+            </form>
+        </div>
+    }
+}
+
+/// Feature 006 (T052): Distraction modal. Single note field
+/// (required, maxlength=120). Enter submits; Escape cancels.
+/// `parent_ref_snapshot` is the snapshotted parent-session ref at
+/// modal-open time (race-free per Edge Cases). Submission calls
+/// `DistractionManager::add` and never touches the engine
+/// (FR-035 — pure side channel: timer keeps ticking, smart-pause
+/// untouched).
+#[component]
+fn DistractionModal(
+    open: RwSignal<bool>,
+    parent_ref_snapshot: RwSignal<Option<crate::bridge::types::DistractionParentRef>>,
+    distractions: RwSignal<crate::managers::distraction::DistractionManager>,
+) -> impl IntoView {
+    let i18n = use_i18n();
+    let note = RwSignal::new(String::new());
+
+    let do_close = move || {
+        open.set(false);
+        note.set(String::new());
+        parent_ref_snapshot.set(None);
+    };
+    let do_submit = move || {
+        let raw_note = note.with_untracked(|n| n.trim().to_string());
+        if raw_note.is_empty() {
+            return;
+        }
+        let pref = parent_ref_snapshot.get_untracked();
+        let now_ms = BrowserClock.now_ms();
+        let id = format!("distraction-{}", random_uuid());
+        distractions.update(|mgr| mgr.add(raw_note, pref, now_ms, id));
+        let snapshot = distractions
+            .with_untracked(crate::managers::distraction::DistractionManager::save_payload);
+        spawn_local(async move {
+            if let Err(e) = crate::bridge::commands::save_distractions(snapshot).await {
+                leptos::logging::warn!("save_distractions failed: {:?}", e);
+            }
+        });
+        open.set(false);
+        note.set(String::new());
+        parent_ref_snapshot.set(None);
+    };
+
+    view! {
+        <div
+            class="session-modal-overlay"
+            id="distraction-modal-overlay"
+            style=move || if open.get() { "" } else { "display: none" }
+        >
+            <form class="session-modal"
+                id="distraction-form"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="distraction-modal-title"
+                on:submit=move |ev| {
+                    ev.prevent_default();
+                    do_submit();
+                }
+                on:keydown=move |ev: leptos::ev::KeyboardEvent| {
+                    if ev.key() == "Escape" {
+                        ev.prevent_default();
+                        do_close();
+                    }
+                }>
+                <div class="session-modal-header">
+                    <h3 id="distraction-modal-title">{t!(i18n, modal.note_distraction_title)}</h3>
+                    <button
+                        type="button"
+                        id="close-distraction-modal"
+                        class="close-btn"
+                        on:click=move |_| do_close()
+                    >"\u{00d7}"</button>
+                </div>
+                <div class="session-modal-body">
+                    <label for="distraction-note">{t!(i18n, modal.note_distraction_label)}</label>
+                    <input
+                        type="text"
+                        id="distraction-note"
+                        maxlength="120"
+                        autofocus
+                        required
+                        prop:value=move || note.get()
+                        on:input=move |ev| note.set(event_target_value(&ev))
+                    />
+                </div>
+                <div class="modal-actions">
+                    <button
+                        type="button"
+                        id="cancel-distraction-btn"
+                        class="btn-secondary"
+                        on:click=move |_| do_close()
+                    >{t!(i18n, modal.note_distraction_cancel)}</button>
+                    <button
+                        type="submit"
+                        id="save-distraction-btn"
+                        class="btn-primary"
+                    >{t!(i18n, modal.note_distraction_submit)}</button>
+                </div>
+            </form>
         </div>
     }
 }
@@ -2231,8 +2719,7 @@ fn dot_count(total: u32) -> u32 {
 mod tests {
     use super::{
         dot_count, indicator_icon_class, mode_label, mode_label_with_status, pad_two,
-        skip_icon_for_mode, stop_icon_for_mode, PlayPauseButtonState, SkipButtonState,
-        StopButtonState, ICON_OPTIONS,
+        skip_icon_for_mode, PlayPauseButtonState, SkipButtonState, ICON_OPTIONS,
     };
     use crate::bridge::types::TimerMode;
 
@@ -2465,13 +2952,6 @@ mod tests {
     }
 
     #[test]
-    fn stop_icon_for_mode_covers_all_variants() {
-        assert_eq!(stop_icon_for_mode(TimerMode::Focus), "close");
-        assert_eq!(stop_icon_for_mode(TimerMode::Break), "undo");
-        assert_eq!(stop_icon_for_mode(TimerMode::LongBreak), "undo");
-    }
-
-    #[test]
     fn skip_icon_for_mode_covers_all_variants() {
         assert_eq!(skip_icon_for_mode(TimerMode::Focus, false), "coffee");
         assert_eq!(skip_icon_for_mode(TimerMode::Focus, true), "moon");
@@ -2538,54 +3018,14 @@ mod tests {
     // the test pins the typed dispatch without mounting a Leptos
     // view (matches the `IconClass::render_spec` pattern from T005).
 
-    /// FR-027 — `#stop-btn` verbose strings remain "Reset timer" /
-    /// "Undo last session" per CHK041.
-    #[test]
-    fn stop_btn_verbose_label_per_mode() {
-        assert_eq!(
-            StopButtonState::from_mode(TimerMode::Focus).verbose_label(),
-            "Reset timer",
-        );
-        assert_eq!(
-            StopButtonState::from_mode(TimerMode::Break).verbose_label(),
-            "Undo last session",
-        );
-        assert_eq!(
-            StopButtonState::from_mode(TimerMode::LongBreak).verbose_label(),
-            "Undo last session",
-        );
-    }
-
-    /// FR-027 — `#stop-btn` terse strings are "Reset" / "Undo".
-    #[test]
-    fn stop_btn_terse_tooltip_per_mode() {
-        assert_eq!(
-            StopButtonState::from_mode(TimerMode::Focus).terse_tooltip(),
-            "Reset",
-        );
-        assert_eq!(
-            StopButtonState::from_mode(TimerMode::Break).terse_tooltip(),
-            "Undo",
-        );
-        assert_eq!(
-            StopButtonState::from_mode(TimerMode::LongBreak).terse_tooltip(),
-            "Undo",
-        );
-    }
-
-    /// CHK041 — verbose and terse strings for `#stop-btn` are
-    /// intentionally decoupled (per-state pairs differ).
-    #[test]
-    fn stop_btn_verbose_and_terse_are_decoupled() {
-        for mode in [TimerMode::Focus, TimerMode::Break, TimerMode::LongBreak] {
-            let state = StopButtonState::from_mode(mode);
-            assert_ne!(
-                state.verbose_label(),
-                state.terse_tooltip(),
-                "verbose and terse strings must remain decoupled per CHK041 (mode {mode:?})",
-            );
-        }
-    }
+    // Feature 006 (T049): the legacy `StopButtonState` enum is
+    // gone — its verbose-label / terse-tooltip tests with it. The
+    // left-slot button label is now driven by `(RunState, TimerMode)`
+    // via the i18n catalogue keys (`timer.ctrl_quick_log` /
+    // `timer.ctrl_abort` + their aria variants), and the matrix
+    // wiring lives directly inside `TimerView`'s `view!` body.
+    // Coverage moves to the Phase 9 e2e specs (`timer-quick-log`,
+    // `timer-abort`, `timer-complete`).
 
     /// FR-028 — `#play-pause-btn` verbose label is the same
     /// "Start or pause timer" string across every run-state.
@@ -2641,16 +3081,19 @@ mod tests {
     /// are DISTINCT (Spec A11 / SC-004 / contracts §3 + CHK041
     /// drift-impossibility): the verbose form describes the action
     /// ("advance to the next phase"); the terse form is the short
-    /// tooltip ("Skip session"). The catalogue is the runtime source
+    /// tooltip ("Skip Mode"). The catalogue is the runtime source
     /// of truth — these const fixtures pin the English wording.
+    /// R-006: the legacy `ctrl_skip_session*` keys were pruned in
+    /// favour of `ctrl_skip_mode*` (feature 006 rename); the host-
+    /// side fixtures now mirror those.
     #[test]
     fn skip_btn_verbose_and_terse_are_distinct() {
         let state = SkipButtonState::Skip;
         assert_eq!(
             state.verbose_label(),
-            "Skip current session and advance to the next phase",
+            "Skip current mode and advance to the next phase",
         );
-        assert_eq!(state.terse_tooltip(), "Skip session");
+        assert_eq!(state.terse_tooltip(), "Skip Mode");
         assert_ne!(
             state.verbose_label(),
             state.terse_tooltip(),
@@ -2658,51 +3101,32 @@ mod tests {
         );
     }
 
-    /// SC-012 — full state-matrix sweep. For each
-    /// (`#stop-btn` mode) × (`#play-pause-btn` run-state) combination,
-    /// confirm the verbose strings are stable (used by `aria-label`
-    /// and `title` together) and the terse strings match the
-    /// FR-027/028/029 mapping. The matrix is the same surface the
-    /// data-model.md §Tooltip-text signals invariant guards.
+    /// SC-012 — feature-006 reshaped this matrix: the legacy
+    /// `#stop-btn` per-mode mapping is gone (state-aware buttons
+    /// now drive labels via the `(RunState, TimerMode)` match
+    /// directly inside `view!`). What remains stable here is the
+    /// play/pause-button + skip-button text mapping; downstream
+    /// e2e specs (Phase 9) cover the abort / complete / quick-log /
+    /// distraction labels via DOM-level assertions.
     #[test]
-    fn tooltip_text_matrix_covers_focus_break_longbreak_x_run_states() {
-        let modes = [TimerMode::Focus, TimerMode::Break, TimerMode::LongBreak];
+    fn play_pause_and_skip_text_matrix_still_holds() {
         let run_states = [
             (false, false, false, "Start"),
             (true, false, false, "Pause"),
             (false, true, false, "Resume"),
             (false, false, true, "Resume"),
         ];
-        for mode in modes {
-            let stop = StopButtonState::from_mode(mode);
-            // The verbose pair (`aria-label` == `title`) is verbose_label()
-            // applied uniformly; verify the const projection is stable.
-            assert_eq!(stop.verbose_label(), stop.verbose_label());
-            // (a) verbose pair stays paired — pinned by uniform usage.
-            // (b) terse mapping per FR-027.
-            assert_eq!(
-                stop.terse_tooltip(),
-                match mode {
-                    TimerMode::Focus => "Reset",
-                    TimerMode::Break | TimerMode::LongBreak => "Undo",
-                },
-            );
-            for (is_running, is_paused, is_auto_paused, expected_terse) in run_states {
-                let play =
-                    PlayPauseButtonState::from_run_state(is_running, is_paused, is_auto_paused);
-                assert_eq!(play.terse_tooltip(), expected_terse);
-                // Verbose `aria-label` does not vary per state
-                // (FR-028) — pin it.
-                assert_eq!(play.verbose_label(), "Start or pause timer");
-            }
+        for (is_running, is_paused, is_auto_paused, expected_terse) in run_states {
+            let play = PlayPauseButtonState::from_run_state(is_running, is_paused, is_auto_paused);
+            assert_eq!(play.terse_tooltip(), expected_terse);
+            assert_eq!(play.verbose_label(), "Start or pause timer");
         }
-        // Skip is mode-invariant per FR-029. Verbose and terse are
-        // distinct (Spec A11 / SC-004 + CHK041 drift-impossibility).
+        // Skip is mode-invariant per FR-029.
         let skip = SkipButtonState::Skip;
-        assert_eq!(skip.terse_tooltip(), "Skip session");
+        assert_eq!(skip.terse_tooltip(), "Skip Mode");
         assert_eq!(
             skip.verbose_label(),
-            "Skip current session and advance to the next phase",
+            "Skip current mode and advance to the next phase",
         );
     }
 }

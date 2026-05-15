@@ -33,8 +33,8 @@ use super::availability::bridge_available;
 use super::types::BridgeError;
 use super::types::TimerMode;
 use super::types::{
-    AddSessionTagArgs, DeleteTagArgs, ManualSession, Session, SessionTag, Settings,
-    ShortcutSettings, StartActivityMonitoringArgs, Tag, Task, UpdateActivityTimeoutArgs,
+    AddSessionTagArgs, DeleteTagArgs, Distraction, ManualSession, QuickLog, Session, SessionTag,
+    Settings, ShortcutSettings, StartActivityMonitoringArgs, Tag, Task, UpdateActivityTimeoutArgs,
     UpdateTrayIconArgs, UpdateTrayMenuArgs,
 };
 
@@ -272,6 +272,67 @@ pub async fn save_manual_sessions(sessions: Vec<ManualSession>) -> Result<(), Br
 /// unknown `session_type` variant.
 pub async fn load_manual_sessions() -> Result<Vec<ManualSession>, BridgeError> {
     invoke_serde("load_manual_sessions", &serde_json::Value::Null).await
+}
+
+// ---------------------------------------------------------------------------
+// Persistence — quick logs & distractions (feature 006)
+//
+// Wire-shape stubs land here in Phase 1. The Tauri-side handlers,
+// validation, and JSON IO helpers arrive in Phase 4 (T039-T040). The
+// shape mirrors `save_manual_sessions` / `load_manual_sessions`
+// exactly — bulk re-save per mutation, empty-vec on missing file.
+// ---------------------------------------------------------------------------
+
+/// Persist the user's quick-log entries to disk. Tauri-side handler:
+/// `save_quick_logs(quickLogs: Vec<QuickLog>) -> Result<(), BridgeError>`
+/// (Phase 4, T040).
+///
+/// # Errors
+/// Returns `BridgeError::BridgeUnavailable` when the Tauri JS bridge is
+/// not present. Otherwise returns whatever variant the Tauri-side
+/// handler maps boundary-validation or IO failure to (typically
+/// `BridgeError::InvalidArgument` or `BridgeError::Internal`).
+pub async fn save_quick_logs(quick_logs: Vec<QuickLog>) -> Result<(), BridgeError> {
+    invoke_named_arg("save_quick_logs", "quickLogs", quick_logs).await
+}
+
+/// Read the persisted quick-log entries. Tauri-side handler:
+/// `load_quick_logs() -> Result<Vec<QuickLog>, BridgeError>` (Phase 4,
+/// T040). Missing file ⇒ empty vec (cold-start convention).
+///
+/// # Errors
+/// Returns `BridgeError::BridgeUnavailable` when the Tauri JS bridge is
+/// not present. Otherwise returns whatever variant the Tauri-side
+/// handler maps its filesystem failure to (typically
+/// `BridgeError::Internal`).
+pub async fn load_quick_logs() -> Result<Vec<QuickLog>, BridgeError> {
+    invoke_serde("load_quick_logs", &serde_json::Value::Null).await
+}
+
+/// Persist the user's distraction entries to disk. Tauri-side handler:
+/// `save_distractions(distractions: Vec<Distraction>) -> Result<(), BridgeError>`
+/// (Phase 4, T040).
+///
+/// # Errors
+/// Returns `BridgeError::BridgeUnavailable` when the Tauri JS bridge is
+/// not present. Otherwise returns whatever variant the Tauri-side
+/// handler maps boundary-validation or IO failure to (typically
+/// `BridgeError::InvalidArgument` or `BridgeError::Internal`).
+pub async fn save_distractions(distractions: Vec<Distraction>) -> Result<(), BridgeError> {
+    invoke_named_arg("save_distractions", "distractions", distractions).await
+}
+
+/// Read the persisted distraction entries. Tauri-side handler:
+/// `load_distractions() -> Result<Vec<Distraction>, BridgeError>`
+/// (Phase 4, T040). Missing file ⇒ empty vec (cold-start convention).
+///
+/// # Errors
+/// Returns `BridgeError::BridgeUnavailable` when the Tauri JS bridge is
+/// not present. Otherwise returns whatever variant the Tauri-side
+/// handler maps its filesystem failure to (typically
+/// `BridgeError::Internal`).
+pub async fn load_distractions() -> Result<Vec<Distraction>, BridgeError> {
+    invoke_serde("load_distractions", &serde_json::Value::Null).await
 }
 
 // ---------------------------------------------------------------------------
@@ -793,18 +854,19 @@ pub async fn dialog_save(
 mod tests {
     use super::{
         add_session_tag, delete_tag, dialog_save, disable_autostart, enable_autostart,
-        export_sessions_xlsx, get_stats_history, is_autostart_enabled, load_manual_sessions,
-        load_session_data, load_settings, load_tags, load_tasks, register_global_shortcuts,
-        reset_all_data, save_daily_stats, save_manual_sessions, save_session_data, save_settings,
-        save_tag, save_tasks, start_activity_monitoring, stop_activity_monitoring,
-        update_activity_timeout, update_tray_icon, update_tray_menu,
+        export_sessions_xlsx, get_stats_history, is_autostart_enabled, load_distractions,
+        load_manual_sessions, load_quick_logs, load_session_data, load_settings, load_tags,
+        load_tasks, register_global_shortcuts, reset_all_data, save_daily_stats, save_distractions,
+        save_manual_sessions, save_quick_logs, save_session_data, save_settings, save_tag,
+        save_tasks, start_activity_monitoring, stop_activity_monitoring, update_activity_timeout,
+        update_tray_icon, update_tray_menu,
     };
     use crate::bridge::types::BridgeError;
     use crate::bridge::types::SessionType;
     use crate::bridge::types::TimerMode;
     use crate::bridge::types::{
-        ManualSession, Session, SessionTag, Settings, ShortcutSettings, Tag, Task,
-        UpdateTrayIconArgs,
+        Distraction, ManualSession, QuickLog, Session, SessionTag, Settings, ShortcutSettings, Tag,
+        Task, UpdateTrayIconArgs,
     };
     use wasm_bindgen_test::wasm_bindgen_test;
 
@@ -1536,5 +1598,73 @@ mod tests {
             vec![("Excel".to_string(), vec!["xlsx".to_string()])],
         )
         .await;
+    }
+
+    #[wasm_bindgen_test]
+    async fn save_quick_logs_short_circuits_when_bridge_absent() {
+        let result = save_quick_logs(vec![]).await;
+        match result {
+            Err(BridgeError::BridgeUnavailable) => {}
+            other => panic!("expected BridgeUnavailable, got {other:?}"),
+        }
+    }
+
+    #[wasm_bindgen_test]
+    async fn save_quick_logs_signature_pinned() {
+        async fn assert_signature(ql: Vec<QuickLog>) -> Result<(), BridgeError> {
+            save_quick_logs(ql).await
+        }
+        let _ = assert_signature(vec![]).await;
+    }
+
+    #[wasm_bindgen_test]
+    async fn load_quick_logs_short_circuits_when_bridge_absent() {
+        let result = load_quick_logs().await;
+        match result {
+            Err(BridgeError::BridgeUnavailable) => {}
+            other => panic!("expected BridgeUnavailable, got {other:?}"),
+        }
+    }
+
+    #[wasm_bindgen_test]
+    async fn load_quick_logs_signature_pinned() {
+        async fn assert_signature() -> Result<Vec<QuickLog>, BridgeError> {
+            load_quick_logs().await
+        }
+        let _ = assert_signature().await;
+    }
+
+    #[wasm_bindgen_test]
+    async fn save_distractions_short_circuits_when_bridge_absent() {
+        let result = save_distractions(vec![]).await;
+        match result {
+            Err(BridgeError::BridgeUnavailable) => {}
+            other => panic!("expected BridgeUnavailable, got {other:?}"),
+        }
+    }
+
+    #[wasm_bindgen_test]
+    async fn save_distractions_signature_pinned() {
+        async fn assert_signature(d: Vec<Distraction>) -> Result<(), BridgeError> {
+            save_distractions(d).await
+        }
+        let _ = assert_signature(vec![]).await;
+    }
+
+    #[wasm_bindgen_test]
+    async fn load_distractions_short_circuits_when_bridge_absent() {
+        let result = load_distractions().await;
+        match result {
+            Err(BridgeError::BridgeUnavailable) => {}
+            other => panic!("expected BridgeUnavailable, got {other:?}"),
+        }
+    }
+
+    #[wasm_bindgen_test]
+    async fn load_distractions_signature_pinned() {
+        async fn assert_signature() -> Result<Vec<Distraction>, BridgeError> {
+            load_distractions().await
+        }
+        let _ = assert_signature().await;
     }
 }

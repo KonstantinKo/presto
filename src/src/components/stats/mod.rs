@@ -34,6 +34,8 @@ pub mod period_nav;
 pub mod period_selector;
 pub mod tag_usage_pie;
 
+use std::fmt::Write as _;
+
 use chrono::{DateTime, Datelike, Days, TimeZone, Utc};
 use leptos::prelude::*;
 use leptos_i18n::{t, t_string};
@@ -51,6 +53,8 @@ use crate::bridge::types::{ManualSession, SessionType, Settings, Tag};
 use crate::engine::clock::Clock;
 use crate::engine::date_format::format_session_date;
 use crate::i18n::i18n::use_i18n;
+use crate::managers::distraction::DistractionManager;
+use crate::managers::quick_log::QuickLogManager;
 
 /// Compute the Monday of the week containing `anchor`.
 fn start_of_week_monday(anchor: DateTime<Utc>) -> DateTime<Utc> {
@@ -428,8 +432,22 @@ fn summary_title(i18n: I18nCtx, period: Period) -> String {
 /// Project the localised metric-tile labels for the active period.
 /// Order: focus-minutes, period-average, focus-session count, total-
 /// minutes — matches the tuple shape returned by `period_tile_metrics`.
-fn tile_labels(i18n: I18nCtx, period: Period) -> [String; 4] {
-    match period {
+///
+/// Feature 006 (T058): the session-count tile (index 2) widens with
+/// `· N quicklogs · M distractions` when the counts are non-zero
+/// (FR-027, FR-031). The plural-aware `_one` / `_other` key pair is
+/// selected at the call site based on `count == 1`. We don't enable
+/// the `leptos_i18n` `plurals` feature (see `i18n.rs`
+/// `PLURALIZATION_AUDIT` comment) — instead the two key variants are
+/// flat string keys we manually pick between.
+fn tile_labels(
+    i18n: I18nCtx,
+    period: Period,
+    quicklog_count: u32,
+    distraction_count: u32,
+) -> [String; 4] {
+    let count_suffix = session_count_suffix(i18n, period, quicklog_count, distraction_count);
+    let base = match period {
         Period::Daily => [
             t_string!(i18n, stats.tile_daily_focus_time).to_string(),
             t_string!(i18n, stats.tile_daily_hourly_average).to_string(),
@@ -454,7 +472,146 @@ fn tile_labels(i18n: I18nCtx, period: Period) -> [String; 4] {
             t_string!(i18n, stats.tile_yearly_sessions).to_string(),
             t_string!(i18n, stats.tile_yearly_total_time).to_string(),
         ],
+    };
+    let [a, b, c, d] = base;
+    let widened_c = if count_suffix.is_empty() {
+        c
+    } else {
+        format!("{c}{count_suffix}")
+    };
+    [a, b, widened_c, d]
+}
+
+/// Build the ` · N quicklogs · M distractions` suffix for the
+/// session-count tile per period. Yearly omits the suffix (no
+/// canonical key set; counts at year scale are not meaningful for the
+/// current FR set).
+fn session_count_suffix(
+    i18n: I18nCtx,
+    period: Period,
+    quicklog_count: u32,
+    distraction_count: u32,
+) -> String {
+    // Plural key suffix uses `_singular` / `_plural` instead of the
+    // CLDR-conventional `_one` / `_other` because `leptos_i18n`'s proc
+    // macro auto-detects the CLDR suffixes and requires the `plurals`
+    // feature flag, which is intentionally off in this crate (see
+    // `src/src/i18n.rs` `PLURALIZATION_AUDIT` comment). The two
+    // suffixes here are plain disambiguators consumed by manual
+    // branching on `count == 1`.
+    let ql_label = match (period, quicklog_count) {
+        (Period::Daily, 1) => {
+            Some(t_string!(i18n, stats.tile_daily_quicklogs_singular).to_string())
+        }
+        (Period::Daily, _) => Some(t_string!(i18n, stats.tile_daily_quicklogs_plural).to_string()),
+        (Period::Weekly, 1) => {
+            Some(t_string!(i18n, stats.tile_weekly_quicklogs_singular).to_string())
+        }
+        (Period::Weekly, _) => {
+            Some(t_string!(i18n, stats.tile_weekly_quicklogs_plural).to_string())
+        }
+        (Period::Monthly, 1) => {
+            Some(t_string!(i18n, stats.tile_monthly_quicklogs_singular).to_string())
+        }
+        (Period::Monthly, _) => {
+            Some(t_string!(i18n, stats.tile_monthly_quicklogs_plural).to_string())
+        }
+        (Period::Yearly, _) => None,
+    };
+    let d_label = match (period, distraction_count) {
+        (Period::Daily, 1) => {
+            Some(t_string!(i18n, stats.tile_daily_distractions_singular).to_string())
+        }
+        (Period::Daily, _) => {
+            Some(t_string!(i18n, stats.tile_daily_distractions_plural).to_string())
+        }
+        (Period::Weekly, 1) => {
+            Some(t_string!(i18n, stats.tile_weekly_distractions_singular).to_string())
+        }
+        (Period::Weekly, _) => {
+            Some(t_string!(i18n, stats.tile_weekly_distractions_plural).to_string())
+        }
+        (Period::Monthly, 1) => {
+            Some(t_string!(i18n, stats.tile_monthly_distractions_singular).to_string())
+        }
+        (Period::Monthly, _) => {
+            Some(t_string!(i18n, stats.tile_monthly_distractions_plural).to_string())
+        }
+        (Period::Yearly, _) => None,
+    };
+
+    let mut out = String::new();
+    if quicklog_count > 0 {
+        if let Some(label) = ql_label {
+            let _ = write!(out, " \u{00b7} {quicklog_count} {label}");
+        }
     }
+    if distraction_count > 0 {
+        if let Some(label) = d_label {
+            let _ = write!(out, " \u{00b7} {distraction_count} {label}");
+        }
+    }
+    out
+}
+
+/// Project the set of `format_session_date` strings the active period
+/// covers — daily=1 day, weekly=7 days, monthly=days-in-month,
+/// yearly=days-in-year. Used to filter quick-log / distraction lists
+/// by period.
+fn period_date_set(period: Period, cursor: DateTime<Utc>) -> Vec<String> {
+    match period {
+        Period::Daily => vec![format_session_date(cursor.timestamp_millis())],
+        Period::Weekly => week_date_set(cursor).to_vec(),
+        Period::Monthly => {
+            let year = cursor.year();
+            let month = cursor.month();
+            let dim = days_in_month(year, month);
+            let mut out = Vec::with_capacity(dim as usize);
+            for d in 1..=dim {
+                if let Some(dt) = Utc.with_ymd_and_hms(year, month, d, 0, 0, 0).single() {
+                    out.push(format_session_date(dt.timestamp_millis()));
+                }
+            }
+            out
+        }
+        Period::Yearly => {
+            let year = cursor.year();
+            let mut out = Vec::with_capacity(366);
+            for month in 1..=12_u32 {
+                let dim = days_in_month(year, month);
+                for d in 1..=dim {
+                    if let Some(dt) = Utc.with_ymd_and_hms(year, month, d, 0, 0, 0).single() {
+                        out.push(format_session_date(dt.timestamp_millis()));
+                    }
+                }
+            }
+            out
+        }
+    }
+}
+
+/// Count quick-log entries in `mgr` whose `date` matches any day in
+/// the period-anchored date set.
+fn quicklog_count_for_period(mgr: &QuickLogManager, period: Period, cursor: DateTime<Utc>) -> u32 {
+    let dates = period_date_set(period, cursor);
+    mgr.entries()
+        .iter()
+        .filter(|q| dates.iter().any(|d| d == &q.date))
+        .fold(0_u32, |acc, _| acc.saturating_add(1))
+}
+
+/// Count distraction entries in `mgr` whose `date` matches any day in
+/// the period-anchored date set.
+fn distraction_count_for_period(
+    mgr: &DistractionManager,
+    period: Period,
+    cursor: DateTime<Utc>,
+) -> u32 {
+    let dates = period_date_set(period, cursor);
+    mgr.entries()
+        .iter()
+        .filter(|d| dates.iter().any(|s| s == &d.date))
+        .fold(0_u32, |acc, _| acc.saturating_add(1))
 }
 
 /// Project the localised bar-chart title per period.
@@ -643,7 +800,18 @@ pub fn StatisticsView() -> impl IntoView {
         sessions.with(|ss| period_tile_metrics(p, c, ss))
     });
     let summary_card_title = Signal::derive(move || summary_title(i18n, period.get()));
-    let summary_tile_labels = Signal::derive(move || tile_labels(i18n, period.get()));
+    let quick_logs_ctx: RwSignal<QuickLogManager> = use_context::<RwSignal<QuickLogManager>>()
+        .unwrap_or_else(|| RwSignal::new(QuickLogManager::new()));
+    let distractions_ctx: RwSignal<DistractionManager> =
+        use_context::<RwSignal<DistractionManager>>()
+            .unwrap_or_else(|| RwSignal::new(DistractionManager::new()));
+    let summary_tile_labels = Signal::derive(move || {
+        let p = period.get();
+        let c = cursor.get();
+        let ql = quick_logs_ctx.with(|mgr| quicklog_count_for_period(mgr, p, c));
+        let d = distractions_ctx.with(|mgr| distraction_count_for_period(mgr, p, c));
+        tile_labels(i18n, p, ql, d)
+    });
     let tag_usage_title_signal = Signal::derive(move || tag_usage_title(i18n, period.get()));
 
     view! {

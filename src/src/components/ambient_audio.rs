@@ -790,7 +790,7 @@ pub fn prime_ambient_audio() {
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-pub fn prime_ambient_audio() {}
+pub const fn prime_ambient_audio() {}
 
 #[cfg(target_arch = "wasm32")]
 impl Default for WebAudioWrapper {
@@ -956,8 +956,7 @@ impl AudioElementHandle for WebAudioWrapper {
         if self.current_src.borrow().is_empty() {
             return Ok(());
         }
-        let cached =
-            BUFFER_CACHE.with(|c| c.borrow().get(&*self.current_src.borrow()).cloned());
+        let cached = BUFFER_CACHE.with(|c| c.borrow().get(&*self.current_src.borrow()).cloned());
         if let Some(buffer) = cached {
             self.start_source(&buffer);
             self.play_pending.set(false);

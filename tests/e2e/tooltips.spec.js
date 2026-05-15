@@ -11,12 +11,14 @@ test("control-button tooltips expose data-tooltip + react to keyboard focus", as
   // Wait for the timer view to settle on cold-load.
   await page.waitForSelector("#timer-minutes", { state: "visible", timeout: 15000 });
 
-  // FR-027 — Focus mode: stop-btn shows "Reset" terse + "Reset timer"
-  // verbose; aria-label == title.
+  // Feature 006 (T049): the Idle left-slot is `+ Quick Log` and the
+  // Idle right-slot is `Skip Mode` (renamed from `Skip session`).
+  // The state-aware matrix flips `data-tooltip` / `aria-label` per
+  // (RunState, TimerMode); the assertions here pin the Idle baseline.
   const stopBtn = page.locator("#stop-btn");
-  await expect(stopBtn).toHaveAttribute("data-tooltip", "Reset");
-  await expect(stopBtn).toHaveAttribute("aria-label", "Reset timer");
-  await expect(stopBtn).toHaveAttribute("title", "Reset timer");
+  await expect(stopBtn).toHaveAttribute("data-tooltip", "Quick Log");
+  await expect(stopBtn).toHaveAttribute("aria-label", "Open quick log entry form");
+  await expect(stopBtn).toHaveAttribute("title", "Open quick log entry form");
 
   // FR-028 — idle play/pause: terse "Start", verbose stable.
   const playPauseBtn = page.locator("#play-pause-btn");
@@ -24,22 +26,19 @@ test("control-button tooltips expose data-tooltip + react to keyboard focus", as
   await expect(playPauseBtn).toHaveAttribute("aria-label", "Start or pause timer");
   await expect(playPauseBtn).toHaveAttribute("title", "Start or pause timer");
 
-  // FR-029 — skip: terse "Skip session", verbose "Skip current
-  // session and advance to the next phase". Spec A11 + SC-004 +
-  // contracts §3 require these to be DISTINCT catalogue keys
-  // (`timer.ctrl_skip_session` for the terse tooltip, and
-  // `timer.ctrl_skip_session_aria` for the verbose aria-label / title)
-  // so a copy edit on one cannot silently collapse the pair (CHK041
-  // drift-impossibility).
+  // Feature 006 (T049 / FR-018): the right slot in Idle reads
+  // "Skip Mode" (renamed from "Skip session"). The verbose aria-label
+  // becomes "Skip current mode and advance to the next phase" —
+  // distinct catalogue key per CHK041 drift-impossibility.
   const skipBtn = page.locator("#skip-btn");
-  await expect(skipBtn).toHaveAttribute("data-tooltip", "Skip session");
+  await expect(skipBtn).toHaveAttribute("data-tooltip", "Skip Mode");
   await expect(skipBtn).toHaveAttribute(
     "aria-label",
-    "Skip current session and advance to the next phase",
+    "Skip current mode and advance to the next phase",
   );
   await expect(skipBtn).toHaveAttribute(
     "title",
-    "Skip current session and advance to the next phase",
+    "Skip current mode and advance to the next phase",
   );
 
   // SC-013 — tooltip shows on both `:hover` AND `:focus-visible` per

@@ -12,7 +12,8 @@
 // in `presto-ipc`. Re-exported here so `bridge::types` is the
 // single hub for every type that crosses the IPC boundary.
 pub use presto_ipc::{
-    BridgeError, ManualSession, Session, SessionTag, SessionType, Tag, Task, TimerMode,
+    BridgeError, Distraction, DistractionParentRef, ManualSession, QuickLog, Session, SessionTag,
+    SessionType, Tag, Task, TimerMode,
 };
 
 // Settings tree (Shortcut/Appearance/Timer/Notification/Advanced

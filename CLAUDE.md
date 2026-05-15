@@ -75,6 +75,6 @@ releases (no user data on the wire).
 ## Active plan
 
 <!-- SPECKIT START -->
-Active plan: [`specs/002-titles-longbreak-metronome/plan.md`](specs/002-titles-longbreak-metronome/plan.md)
-— Three QoL bundles: per-session titles, configurable long-break cadence, opt-in metronome.
+Active plan: [`specs/006-timer-controls-quicklog-distractions/plan.md`](specs/006-timer-controls-quicklog-distractions/plan.md)
+— State-aware timer controls, combined tag-and-title pill, Quick Log + Distraction capture, Inventory subsection.
 <!-- SPECKIT END -->
