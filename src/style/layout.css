@@ -5,6 +5,20 @@ body {
   padding: 0;
 }
 
+/* Invisible drag affordance for the top of the window. macOS
+   titleBarStyle: Overlay (see tauri.conf.json) drops the native
+   titlebar but keeps the traffic-light controls floating; the
+   draggability is wired through Tauri's `data-tauri-drag-region`
+   attribute, not the Electron-style `-webkit-app-region` CSS. */
+.window-drag-region {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 28px;
+  z-index: 1001;
+}
+
 /* Timer view specific - prevent scrolling */
 body.timer-active {
   overflow: hidden;

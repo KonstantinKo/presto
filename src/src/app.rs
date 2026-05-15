@@ -636,6 +636,11 @@ pub fn App() -> impl IntoView {
         <I18nContextProvider enable_cookie=false>
             <LocaleSync settings=settings/>
             <SaveFailureMessageSync target=save_failure_message/>
+            // macOS titleBarStyle: Overlay hides the system titlebar
+            // chrome but keeps the traffic-light controls floating over
+            // the window content. This invisible strip restores the
+            // native window-drag affordance over that top band.
+            <div class="window-drag-region" data-tauri-drag-region="true"></div>
         // The sidebar carries a per-mode theme class (`focus` /
         // `break` / `longBreak`) so `style/sidebar.css`'s
         // `.sidebar.focus .sidebar-icon.active { background:
