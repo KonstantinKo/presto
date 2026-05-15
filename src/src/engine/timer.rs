@@ -96,6 +96,28 @@ pub enum TimerEvent {
     /// completion message. Mirrors the legacy `completeSession`
     /// break-branch toast at `pomodoro-timer.js:1276-1281`.
     BreakCompleted { mode: TimerMode },
+    /// `abort()` discarded the in-progress session. Carries the
+    /// mode that was being aborted and the elapsed-seconds value
+    /// captured before zeroing. Read by the Leptos tick-loop
+    /// subscriber to clear pending auto-restart-countdown UI state;
+    /// the auto-restart UI gate at
+    /// `src/src/components/timer/mod.rs:1471-1483` is also extended
+    /// in feature 006 to require `PomodoroCompleted` (not just a
+    /// running-edge transition) so `SessionAborted` does not trigger
+    /// auto-restart. Engine-internal — never reaches the Tauri
+    /// bridge (Principle II).
+    SessionAborted {
+        aborted_mode: TimerMode,
+        elapsed_secs: u32,
+    },
+    /// `complete()` ended a paused (or auto-paused) focus session
+    /// early. Carries the elapsed-seconds captured before zeroing.
+    /// Engine-internal observability for the feature-006 RED tests;
+    /// emitted unconditionally in the count-incrementing branch
+    /// (including the continuous-mode overtime sub-branch where the
+    /// canonical `PomodoroCompleted` already fired at zero-cross).
+    /// Never reaches the Tauri bridge.
+    SessionCompletedEarly { elapsed_secs: u32 },
 }
 
 /// Pomodoro state machine.

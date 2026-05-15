@@ -33,8 +33,8 @@ use super::availability::bridge_available;
 use super::types::BridgeError;
 use super::types::TimerMode;
 use super::types::{
-    AddSessionTagArgs, DeleteTagArgs, ManualSession, Session, SessionTag, Settings,
-    ShortcutSettings, StartActivityMonitoringArgs, Tag, Task, UpdateActivityTimeoutArgs,
+    AddSessionTagArgs, DeleteTagArgs, Distraction, ManualSession, QuickLog, Session, SessionTag,
+    Settings, ShortcutSettings, StartActivityMonitoringArgs, Tag, Task, UpdateActivityTimeoutArgs,
     UpdateTrayIconArgs, UpdateTrayMenuArgs,
 };
 
@@ -272,6 +272,67 @@ pub async fn save_manual_sessions(sessions: Vec<ManualSession>) -> Result<(), Br
 /// unknown `session_type` variant.
 pub async fn load_manual_sessions() -> Result<Vec<ManualSession>, BridgeError> {
     invoke_serde("load_manual_sessions", &serde_json::Value::Null).await
+}
+
+// ---------------------------------------------------------------------------
+// Persistence — quick logs & distractions (feature 006)
+//
+// Wire-shape stubs land here in Phase 1. The Tauri-side handlers,
+// validation, and JSON IO helpers arrive in Phase 4 (T039-T040). The
+// shape mirrors `save_manual_sessions` / `load_manual_sessions`
+// exactly — bulk re-save per mutation, empty-vec on missing file.
+// ---------------------------------------------------------------------------
+
+/// Persist the user's quick-log entries to disk. Tauri-side handler:
+/// `save_quick_logs(quickLogs: Vec<QuickLog>) -> Result<(), BridgeError>`
+/// (Phase 4, T040).
+///
+/// # Errors
+/// Returns `BridgeError::BridgeUnavailable` when the Tauri JS bridge is
+/// not present. Otherwise returns whatever variant the Tauri-side
+/// handler maps boundary-validation or IO failure to (typically
+/// `BridgeError::InvalidArgument` or `BridgeError::Internal`).
+pub async fn save_quick_logs(quick_logs: Vec<QuickLog>) -> Result<(), BridgeError> {
+    invoke_named_arg("save_quick_logs", "quickLogs", quick_logs).await
+}
+
+/// Read the persisted quick-log entries. Tauri-side handler:
+/// `load_quick_logs() -> Result<Vec<QuickLog>, BridgeError>` (Phase 4,
+/// T040). Missing file ⇒ empty vec (cold-start convention).
+///
+/// # Errors
+/// Returns `BridgeError::BridgeUnavailable` when the Tauri JS bridge is
+/// not present. Otherwise returns whatever variant the Tauri-side
+/// handler maps its filesystem failure to (typically
+/// `BridgeError::Internal`).
+pub async fn load_quick_logs() -> Result<Vec<QuickLog>, BridgeError> {
+    invoke_serde("load_quick_logs", &serde_json::Value::Null).await
+}
+
+/// Persist the user's distraction entries to disk. Tauri-side handler:
+/// `save_distractions(distractions: Vec<Distraction>) -> Result<(), BridgeError>`
+/// (Phase 4, T040).
+///
+/// # Errors
+/// Returns `BridgeError::BridgeUnavailable` when the Tauri JS bridge is
+/// not present. Otherwise returns whatever variant the Tauri-side
+/// handler maps boundary-validation or IO failure to (typically
+/// `BridgeError::InvalidArgument` or `BridgeError::Internal`).
+pub async fn save_distractions(distractions: Vec<Distraction>) -> Result<(), BridgeError> {
+    invoke_named_arg("save_distractions", "distractions", distractions).await
+}
+
+/// Read the persisted distraction entries. Tauri-side handler:
+/// `load_distractions() -> Result<Vec<Distraction>, BridgeError>`
+/// (Phase 4, T040). Missing file ⇒ empty vec (cold-start convention).
+///
+/// # Errors
+/// Returns `BridgeError::BridgeUnavailable` when the Tauri JS bridge is
+/// not present. Otherwise returns whatever variant the Tauri-side
+/// handler maps its filesystem failure to (typically
+/// `BridgeError::Internal`).
+pub async fn load_distractions() -> Result<Vec<Distraction>, BridgeError> {
+    invoke_serde("load_distractions", &serde_json::Value::Null).await
 }
 
 // ---------------------------------------------------------------------------

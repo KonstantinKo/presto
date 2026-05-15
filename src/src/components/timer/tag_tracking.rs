@@ -52,11 +52,13 @@ pub(super) const fn tag_tracking_action_for_event(event: &TimerEvent) -> TagTrac
         | TimerEvent::AutoPaused
         | TimerEvent::PomodoroCompleted { .. }
         | TimerEvent::BreakCompleted { .. }
-        | TimerEvent::SessionSkipped { .. } => TagTrackingAction::FlushAll,
+        | TimerEvent::SessionSkipped { .. }
+        | TimerEvent::SessionAborted { .. } => TagTrackingAction::FlushAll,
         TimerEvent::OvertimeStarted { .. }
         | TimerEvent::TwoMinutesRemaining
         | TimerEvent::ThirtySecondsRemaining
-        | TimerEvent::ManualSessionRecorded { .. } => TagTrackingAction::NoOp,
+        | TimerEvent::ManualSessionRecorded { .. }
+        | TimerEvent::SessionCompletedEarly { .. } => TagTrackingAction::NoOp,
     }
 }
 

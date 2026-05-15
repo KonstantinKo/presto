@@ -26,8 +26,10 @@
 #![allow(unreachable_pub)]
 
 pub mod args;
+pub mod distraction;
 pub mod error;
 pub mod events;
+pub mod quick_log;
 pub mod session;
 pub mod settings;
 pub mod tags;
@@ -38,8 +40,10 @@ pub mod timer;
 // type into scope at the call site. Keep the surface flat so call
 // sites read like the original `bridge::types::*` imports.
 pub use args::*;
+pub use distraction::*;
 pub use error::*;
 pub use events::*;
+pub use quick_log::*;
 pub use session::*;
 pub use settings::*;
 pub use tags::*;

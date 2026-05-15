@@ -208,6 +208,62 @@ const fn stop_icon_for_mode(mode: TimerMode) -> &'static str {
     }
 }
 
+// -------- Feature 006: closed-sum UI run-state --------
+//
+// The engine carries three orthogonal bools (`is_running`,
+// `is_paused`, `is_auto_paused`) — see `engine::timer.rs:119-173` for
+// why the engine keeps them as bools (1:1 JS-era parity). At the UI
+// layer we want an exhaustive `match` (Principle III) driving the
+// state-aware button matrix, so we fold the bools into a closed sum
+// at the boundary. AutoPaused folds into `Paused` per FR-012 ¶3 +
+// Story 1 AC 3 — the UI matrix treats both pause variants identically.
+//
+// Engine-wide refactor (switch the engine itself to a `State` enum)
+// is explicitly out of scope; the boundary fold below is feature
+// 006's UI-only contract.
+
+/// Closed sum that drives the state-aware button matrix per FR-012.
+/// Derived from the engine's three orthogonal bools at the UI layer
+/// — engine bools stay as-is.
+//
+// SAFETY-ALLOW: `dead_code` — Phase 1 lands the closed sum + the
+// engine-bool projection; Phase 6 (T049) consumes both inside the
+// state-aware button matrix. Removing the `#[allow]` after Phase 6
+// is the gate.
+#[allow(dead_code)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum RunState {
+    Idle,
+    Running,
+    Paused,
+}
+
+impl RunState {
+    /// Project the engine's run-state predicates to the closed sum.
+    ///
+    /// The `is_paused || is_auto_paused` branch fires **first** —
+    /// otherwise `(false, true, false)` (engine-Paused) would fall
+    /// through to `is_running == false ⇒ Idle` and the matrix would
+    /// render Idle controls over a paused session (AG-1 finding,
+    /// `data-model.md` §`RunState` lines 132-157).
+    //
+    // SAFETY-ALLOW: `dead_code` — see the parent enum's allow.
+    #[allow(dead_code)]
+    pub(super) fn from_engine(is_running: bool, is_paused: bool, is_auto_paused: bool) -> Self {
+        debug_assert!(
+            !(is_running && (is_paused || is_auto_paused)),
+            "engine illegal state: cannot be both running and paused"
+        );
+        if is_paused || is_auto_paused {
+            Self::Paused
+        } else if is_running {
+            Self::Running
+        } else {
+            Self::Idle
+        }
+    }
+}
+
 // -------- Feature 003 Bundle D: control-button tooltip state --------
 //
 // Two derived `Signal<String>`s per button (`verbose_label`, `terse_tooltip`)
@@ -708,6 +764,16 @@ fn handle_events(
                     });
                 }
             }
+            // Feature 006: no toast / chime / desktop notification for
+            // either new variant. `SessionAborted` is a discard — the
+            // user already saw the button press; UI side-effect
+            // bookkeeping (clearing pending auto-restart countdown) is
+            // handled in the auto-restart effect, not here.
+            // `SessionCompletedEarly` is engine-internal observability
+            // only (paired with `PomodoroCompleted` in branch B or
+            // `SessionAborted` in branch A — the paired event drives
+            // the toast/chime).
+            TimerEvent::SessionAborted { .. } | TimerEvent::SessionCompletedEarly { .. } => {}
         }
     }
 }
