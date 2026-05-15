@@ -773,6 +773,24 @@ pub async fn export_sessions_xlsx(
     invoke_serde("export_sessions_xlsx", &Args { path, sessions }).await
 }
 
+/// Write `sessions` to `path` as RFC 4180 CSV. Same column schema as
+/// the xlsx export.
+///
+/// # Errors
+/// Returns `BridgeError::BridgeUnavailable` when the Tauri JS bridge is
+/// not present. Returns `BridgeError::Internal` for filesystem errors.
+pub async fn export_sessions_csv(
+    path: String,
+    sessions: Vec<ManualSession>,
+) -> Result<(), BridgeError> {
+    #[derive(Serialize)]
+    struct Args {
+        path: String,
+        sessions: Vec<ManualSession>,
+    }
+    invoke_serde("export_sessions_csv", &Args { path, sessions }).await
+}
+
 // ---------------------------------------------------------------------------
 // UI helpers — dialog
 // ---------------------------------------------------------------------------

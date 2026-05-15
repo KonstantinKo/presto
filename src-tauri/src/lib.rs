@@ -675,6 +675,7 @@ pub fn build_specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         delete_tag,
         add_session_tag,
         export_sessions_xlsx,
+        export_sessions_csv,
     ])
 }
 
@@ -1020,6 +1021,19 @@ async fn export_sessions_xlsx(
     sessions: Vec<ManualSession>,
 ) -> Result<(), BridgeError> {
     exports::export(std::path::Path::new(&path), &sessions)
+}
+
+// `export_sessions_csv` — write the same column schema as the xlsx
+// export to `path` as RFC 4180 CSV. Used by the daily view's export
+// button (the xlsx wrapper is retained for callers that prefer
+// spreadsheets).
+#[tauri::command]
+#[specta::specta]
+async fn export_sessions_csv(
+    path: String,
+    sessions: Vec<ManualSession>,
+) -> Result<(), BridgeError> {
+    exports::export_csv(std::path::Path::new(&path), &sessions)
 }
 
 #[cfg(target_os = "macos")]

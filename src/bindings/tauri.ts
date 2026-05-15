@@ -236,6 +236,14 @@ async exportSessionsXlsx(path: string, sessions: ManualSession[]) : Promise<Resu
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
 }
+},
+async exportSessionsCsv(path: string, sessions: ManualSession[]) : Promise<Result<null, BridgeError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("export_sessions_csv", { path, sessions }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
 }
 }
 

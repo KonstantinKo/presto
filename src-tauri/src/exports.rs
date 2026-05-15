@@ -1,4 +1,4 @@
-// XLSX export adapter — replaces the JS `xlsx` library's writeFile path.
+// XLSX + CSV export adapters — replace the JS `xlsx` library's writeFile path.
 //
 // Spec 001-leptos-migration §Phase 1D T097-T098; research.md §8 (`xlsx`
 // replacement). The handler builds the workbook server-side from a typed
@@ -98,9 +98,67 @@ pub(super) fn export(path: &Path, sessions: &[ManualSession]) -> Result<(), Brid
     Ok(())
 }
 
+/// Build a CSV string from `sessions` and write it to `path`.
+///
+/// Schema mirrors the XLSX export so both formats round-trip the same
+/// columns. Fields containing commas, quotes, or newlines are wrapped
+/// in double quotes with embedded `"` doubled per RFC 4180.
+pub(super) fn export_csv(path: &Path, sessions: &[ManualSession]) -> Result<(), BridgeError> {
+    let mut out = String::new();
+    out.push_str("id,session_type,duration,start_time,end_time,date,created_at,title,tags,notes\n");
+    for session in sessions {
+        let session_type_str = match session.session_type {
+            super::SessionType::Focus => "focus",
+            super::SessionType::Break => "break",
+            super::SessionType::LongBreak => "longBreak",
+            super::SessionType::Custom => "custom",
+        };
+        let tags_joined = session
+            .tags
+            .as_ref()
+            .map(|values| {
+                values
+                    .iter()
+                    .filter_map(|v| v.get("name").and_then(serde_json::Value::as_str))
+                    .collect::<Vec<_>>()
+                    .join("; ")
+            })
+            .unwrap_or_default();
+        let title = session.title.as_deref().unwrap_or("");
+        let notes = session.notes.as_deref().unwrap_or("");
+        let row = [
+            csv_field(&session.id),
+            csv_field(session_type_str),
+            session.duration.to_string(),
+            csv_field(&session.start_time),
+            csv_field(&session.end_time),
+            csv_field(&session.date),
+            csv_field(&session.created_at),
+            csv_field(title),
+            csv_field(&tags_joined),
+            csv_field(notes),
+        ];
+        out.push_str(&row.join(","));
+        out.push('\n');
+    }
+    std::fs::write(path, out).map_err(|e| BridgeError::Internal {
+        msg: format!("Failed to save csv to {}: {e}", path.display()),
+    })?;
+    Ok(())
+}
+
+fn csv_field(value: &str) -> String {
+    if value.contains(',') || value.contains('"') || value.contains('\n') || value.contains('\r') {
+        let escaped = value.replace('"', "\"\"");
+        format!("\"{escaped}\"")
+    } else {
+        value.to_string()
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{export, ManualSession};
+    use super::{csv_field, export, export_csv, ManualSession};
     use crate::SessionType;
     use tempfile::tempdir;
 
@@ -162,5 +220,39 @@ mod tests {
         export(&out, &[session]).unwrap();
         let metadata = std::fs::metadata(&out).unwrap();
         assert!(metadata.len() > 0);
+    }
+
+    #[test]
+    fn csv_field_quotes_special_chars() {
+        assert_eq!(csv_field("plain"), "plain");
+        assert_eq!(csv_field("a,b"), "\"a,b\"");
+        assert_eq!(csv_field("say \"hi\""), "\"say \"\"hi\"\"\"");
+        assert_eq!(csv_field("line1\nline2"), "\"line1\nline2\"");
+    }
+
+    #[test]
+    fn export_csv_writes_header_and_rows() {
+        let dir = tempdir().unwrap();
+        let out = dir.path().join("export.csv");
+        let mut session = sample_session("ms-1", SessionType::Focus);
+        session.title = Some("Spec, draft".to_string());
+        session.notes = Some("includes \"quoted\" word".to_string());
+        export_csv(&out, &[session]).unwrap();
+        let contents = std::fs::read_to_string(&out).unwrap();
+        let lines: Vec<&str> = contents.lines().collect();
+        assert_eq!(lines.len(), 2, "header + 1 row");
+        assert!(lines[0].starts_with("id,session_type,duration,"));
+        assert!(lines[1].contains("\"Spec, draft\""));
+        assert!(lines[1].contains("\"includes \"\"quoted\"\" word\""));
+    }
+
+    #[test]
+    fn export_csv_handles_empty_session_list() {
+        let dir = tempdir().unwrap();
+        let out = dir.path().join("empty.csv");
+        export_csv(&out, &[]).unwrap();
+        let contents = std::fs::read_to_string(&out).unwrap();
+        assert!(contents.starts_with("id,session_type,"));
+        assert_eq!(contents.lines().count(), 1);
     }
 }

@@ -152,14 +152,14 @@ pub fn SessionsHistoryTable() -> impl IntoView {
                             let snapshot = sessions.get_untracked();
                             spawn_local(async move {
                                 let path = commands::dialog_save(
-                                    Some("sessions.xlsx".to_string()),
-                                    vec![("Excel".to_string(), vec!["xlsx".to_string()])],
+                                    Some("sessions.csv".to_string()),
+                                    vec![("CSV".to_string(), vec!["csv".to_string()])],
                                 )
                                 .await
                                 .ok()
                                 .flatten();
                                 if let Some(p) = path {
-                                    let _ = commands::export_sessions_xlsx(p, snapshot).await;
+                                    let _ = commands::export_sessions_csv(p, snapshot).await;
                                 }
                             });
                         }
