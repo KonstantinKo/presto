@@ -1851,9 +1851,6 @@ pub fn TimerView() -> impl IntoView {
     // the next session. Mirrors the JS-era flow at
     // `pomodoro-timer.js:1175-1180` and is what
     // `settings-automation.spec.js:59` exercises.
-    let last_remaining: std::rc::Rc<std::cell::Cell<u32>> =
-        std::rc::Rc::new(std::cell::Cell::new(u32::MAX));
-
     let tick_body: std::rc::Rc<dyn Fn()> = {
         std::rc::Rc::new(move || {
                 let remaining_before = engine.with_untracked(TimerState::time_remaining_secs);
@@ -1992,7 +1989,6 @@ pub fn TimerView() -> impl IntoView {
                 // the display didn't change.
                 let remaining_after = engine.with_untracked(TimerState::time_remaining_secs);
                 let crossed_second = remaining_after < remaining_before;
-                last_remaining.set(remaining_after);
                 let should_tick = crossed_second
                     && settings.with_untracked(|s| s.notifications.metronome)
                     && engine.with_untracked(|s| {

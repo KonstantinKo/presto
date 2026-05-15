@@ -790,10 +790,17 @@ pub fn run() {
                 // `crossed_second` gate around the metronome, so
                 // overlapping fires are idempotent.
                 let tick_handle = app.handle().clone();
-                thread::spawn(move || loop {
-                    thread::sleep(Duration::from_secs(1));
-                    if tick_handle.emit("engine-tick", ()).is_err() {
-                        break;
+                thread::spawn(move || {
+                    loop {
+                        thread::sleep(Duration::from_secs(1));
+                        if let Err(e) = tick_handle.emit("engine-tick", ()) {
+                            log::warn!(
+                                "engine-tick thread exiting; emit failed: {e}. \
+                                 Frontend setInterval driver remains, but the 1Hz \
+                                 cadence will degrade if the window is unfocused."
+                            );
+                            break;
+                        }
                     }
                 });
 
@@ -1207,12 +1214,17 @@ fn disable_app_nap() {
         let sel_process_info = sel_registerName(c"processInfo".as_ptr());
         let sel_begin = sel_registerName(c"beginActivityWithOptions:reason:".as_ptr());
         let sel_retain = sel_registerName(c"retain".as_ptr());
+        let sel_release = sel_registerName(c"release".as_ptr());
 
         // [NSProcessInfo processInfo]
         let msg_class: extern "C" fn(id, *const std::os::raw::c_void) -> id =
             std::mem::transmute(objc_msgSend as *const ());
         let pi = msg_class(cls, sel_process_info);
 
+        // `NSString::alloc(nil).init_str(...)` is an `alloc/init`
+        // pair — caller owns +1 retain and is responsible for
+        // releasing once `beginActivityWithOptions:reason:` has
+        // internally retained the string.
         let reason: id =
             NSString::alloc(nil).init_str("Pomodoro timer requires 1Hz tick cadence");
 
@@ -1221,10 +1233,21 @@ fn disable_app_nap() {
             std::mem::transmute(objc_msgSend as *const ());
         let activity = msg_begin(pi, sel_begin, OPTIONS, reason);
 
-        // [activity retain]
+        // [activity retain] — beginActivityWithOptions returns an
+        // autoreleased token. Retain so it outlives the surrounding
+        // autorelease pool; we never call -endActivity:, so the
+        // activity lives for the process lifetime.
         let msg_retain: extern "C" fn(id, *const std::os::raw::c_void) -> id =
             std::mem::transmute(objc_msgSend as *const ());
         let _ = msg_retain(activity, sel_retain);
+
+        // [reason release] — balance the +1 from alloc/init. The
+        // activity object retains its own copy of the string, so
+        // releasing here doesn't dangle the reason inside the
+        // scheduler.
+        let msg_release: extern "C" fn(id, *const std::os::raw::c_void) =
+            std::mem::transmute(objc_msgSend as *const ());
+        msg_release(reason, sel_release);
 
         log::info!("App Nap suppression engaged (NSProcessInfo activity token={activity:p})");
     }
