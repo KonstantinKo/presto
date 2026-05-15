@@ -25,6 +25,8 @@ const TAURI_MOCK_INIT_SCRIPT = `
   var _state = {
     tags: null, // lazy init; see _getTags()
     manualSessions: [],
+    quickLogs: [],
+    distractions: [],
     settings: {},
     sessionData: {
       completed_pomodoros: 0,
@@ -35,6 +37,10 @@ const TAURI_MOCK_INIT_SCRIPT = `
     autostartEnabled: false,
     saveManualSessionsCallCount: 0,
     lastSaveManualSessionsArgs: null,
+    saveQuickLogsCallCount: 0,
+    lastSaveQuickLogsArgs: null,
+    saveDistractionsCallCount: 0,
+    lastSaveDistractionsArgs: null,
   };
 
   function _getTags() {
@@ -126,6 +132,46 @@ const TAURI_MOCK_INIT_SCRIPT = `
             return;
           }
 
+          case "load_quick_logs":
+            return _state.quickLogs.slice();
+
+          case "save_quick_logs": {
+            _state.saveQuickLogsCallCount++;
+            var quickLogsArr = (args && args.quickLogs)
+              ? args.quickLogs
+              : (args && args.quick_logs)
+                ? args.quick_logs
+                : (args instanceof Map ? (args.get("quickLogs") || args.get("quick_logs")) : null);
+            _state.lastSaveQuickLogsArgs = quickLogsArr
+              ? (Array.isArray(quickLogsArr) ? quickLogsArr.slice() : Array.from(quickLogsArr))
+              : (Array.isArray(args) ? args.slice() : null);
+            if (quickLogsArr) {
+              _state.quickLogs = Array.isArray(quickLogsArr) ? quickLogsArr.slice() : Array.from(quickLogsArr);
+            } else if (Array.isArray(args)) {
+              _state.quickLogs = args.slice();
+            }
+            return;
+          }
+
+          case "load_distractions":
+            return _state.distractions.slice();
+
+          case "save_distractions": {
+            _state.saveDistractionsCallCount++;
+            var distractionsArr = (args && args.distractions)
+              ? args.distractions
+              : (args instanceof Map ? args.get("distractions") : null);
+            _state.lastSaveDistractionsArgs = distractionsArr
+              ? (Array.isArray(distractionsArr) ? distractionsArr.slice() : Array.from(distractionsArr))
+              : (Array.isArray(args) ? args.slice() : null);
+            if (distractionsArr) {
+              _state.distractions = Array.isArray(distractionsArr) ? distractionsArr.slice() : Array.from(distractionsArr);
+            } else if (Array.isArray(args)) {
+              _state.distractions = args.slice();
+            }
+            return;
+          }
+
           case "is_autostart_enabled":
             return _state.autostartEnabled;
 
@@ -165,6 +211,8 @@ const TAURI_MOCK_INIT_SCRIPT = `
               },
             ];
             _state.manualSessions = [];
+            _state.quickLogs = [];
+            _state.distractions = [];
             _state.settings = {};
             _state.history = [];
             return;

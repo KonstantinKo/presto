@@ -69,7 +69,10 @@ struct ActivityMonitor {
 // `PomodoroSession` as a local alias for the shared `Session` to
 // minimise call-site churn (helpers.rs uses `PomodoroSession`
 // pervasively).
-pub use presto_ipc::{ManualSession, Session as PomodoroSession, SessionTag, Tag, Task};
+pub use presto_ipc::{
+    Distraction, DistractionParentRef, ManualSession, QuickLog, Session as PomodoroSession,
+    SessionTag, Tag, Task,
+};
 
 // Settings tree (`AppSettings`, `AppSettingsOnDisk` shim, nested
 // settings substructs) moved to `presto_ipc::settings` in Phase F.
@@ -1497,5 +1500,208 @@ mod tests {
                 .collect::<Vec<_>>()
                 .join("\n")
         );
+    }
+
+    // -- Feature 006: Quick-log + Distraction persistence (T030–T038).
+    //
+    // Tests exercise (1) the helpers in `helpers.rs` for read/write IO
+    // round-trips + missing-file + corrupt-file behaviour, and (2) the
+    // boundary-validation functions `validate_quick_logs` /
+    // `validate_distractions` (extracted so the contract is testable
+    // without spinning up a tauri::test runtime). The Tauri command
+    // bodies are thin glue over these two layers.
+
+    use super::{Distraction, DistractionParentRef, QuickLog};
+
+    fn sample_quick_log() -> QuickLog {
+        QuickLog {
+            id: "11111111-1111-1111-1111-111111111111".to_string(),
+            title: "Reply to email".to_string(),
+            elapsed_minutes: 5,
+            created_at: "2026-05-15T12:00:00Z".to_string(),
+            date: "Fri May 15 2026".to_string(),
+        }
+    }
+
+    fn sample_distraction(note: &str) -> Distraction {
+        Distraction {
+            id: "22222222-2222-2222-2222-222222222222".to_string(),
+            note: note.to_string(),
+            created_at: "2026-05-15T12:30:00Z".to_string(),
+            date: "Fri May 15 2026".to_string(),
+            parent_ref: Some(DistractionParentRef {
+                parent_session_start_ts: "2026-05-15T12:25:00Z".to_string(),
+                parent_mode: super::TimerMode::Focus,
+                parent_tag_id: Some("default-focus".to_string()),
+                parent_title: Some("Deep work".to_string()),
+            }),
+        }
+    }
+
+    /// T030: save → load round-trip preserves the vec verbatim.
+    #[test]
+    fn save_quick_logs_round_trip() {
+        let dir = std::env::temp_dir().join(format!(
+            "presto_test_quick_logs_round_trip_{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
+        let logs = vec![sample_quick_log()];
+        super::helpers::write_quick_logs_to(&dir, &logs).expect("write");
+        let loaded = super::helpers::read_quick_logs_from(&dir).expect("read");
+        assert_eq!(loaded, logs);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// T031: elapsed_minutes range 1..=720, both boundaries rejected.
+    /// Field name is camelCase per the wire shape.
+    #[test]
+    fn save_quick_logs_rejects_out_of_range_minutes() {
+        for &m in &[0u32, 721u32] {
+            let mut log = sample_quick_log();
+            log.elapsed_minutes = m;
+            let err =
+                super::validate_quick_logs(&[log]).expect_err("must reject out-of-range minutes");
+            match err {
+                super::BridgeError::InvalidArgument { field, .. } => {
+                    assert_eq!(field, "elapsedMinutes", "field name must be camelCase");
+                }
+                other => panic!("expected InvalidArgument, got {other:?}"),
+            }
+        }
+    }
+
+    /// T032: 121-char title rejected.
+    #[test]
+    fn save_quick_logs_rejects_overlong_title() {
+        let mut log = sample_quick_log();
+        log.title = "a".repeat(121);
+        let err = super::validate_quick_logs(&[log]).expect_err("must reject overlong title");
+        match err {
+            super::BridgeError::InvalidArgument { field, .. } => {
+                assert_eq!(field, "title");
+            }
+            other => panic!("expected InvalidArgument, got {other:?}"),
+        }
+    }
+
+    /// T033: empty title rejected.
+    #[test]
+    fn save_quick_logs_rejects_empty_title() {
+        let mut log = sample_quick_log();
+        log.title = String::new();
+        let err = super::validate_quick_logs(&[log]).expect_err("must reject empty title");
+        match err {
+            super::BridgeError::InvalidArgument { field, .. } => {
+                assert_eq!(field, "title");
+            }
+            other => panic!("expected InvalidArgument, got {other:?}"),
+        }
+    }
+
+    /// T034: save → load round-trip preserves the vec verbatim, including
+    /// the parent_ref payload.
+    #[test]
+    fn save_distractions_round_trip() {
+        let dir = std::env::temp_dir().join(format!(
+            "presto_test_distractions_round_trip_{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
+        let entries = vec![sample_distraction("Slack ping")];
+        super::helpers::write_distractions_to(&dir, &entries).expect("write");
+        let loaded = super::helpers::read_distractions_from(&dir).expect("read");
+        assert_eq!(loaded, entries);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// T035: 121-char note rejected.
+    #[test]
+    fn save_distractions_rejects_overlong_note() {
+        let entry = sample_distraction(&"a".repeat(121));
+        let err =
+            super::validate_distractions(&[entry]).expect_err("must reject overlong note");
+        match err {
+            super::BridgeError::InvalidArgument { field, .. } => {
+                assert_eq!(field, "note");
+            }
+            other => panic!("expected InvalidArgument, got {other:?}"),
+        }
+    }
+
+    /// T036: parent_ref.parent_title overlength rejected with field
+    /// `parentRef.parentTitle`.
+    #[test]
+    fn save_distractions_rejects_overlong_parent_title() {
+        let mut entry = sample_distraction("Quick");
+        if let Some(parent) = entry.parent_ref.as_mut() {
+            parent.parent_title = Some("a".repeat(121));
+        }
+        let err = super::validate_distractions(&[entry])
+            .expect_err("must reject overlong parent title");
+        match err {
+            super::BridgeError::InvalidArgument { field, .. } => {
+                assert_eq!(field, "parentRef.parentTitle");
+            }
+            other => panic!("expected InvalidArgument, got {other:?}"),
+        }
+    }
+
+    /// T037: missing files yield Ok(empty vec) for both load paths.
+    #[test]
+    fn load_returns_empty_when_file_missing() {
+        let dir = std::env::temp_dir().join(format!(
+            "presto_test_missing_files_{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
+        // Note: directory itself is absent — read helpers should still
+        // return Ok([]) (mirrors `read_manual_sessions_from` semantics).
+        let ql = super::helpers::read_quick_logs_from(&dir).expect("read missing quick logs");
+        let dr = super::helpers::read_distractions_from(&dir).expect("read missing distractions");
+        assert!(ql.is_empty());
+        assert!(dr.is_empty());
+    }
+
+    /// T038: corrupt JSON yields an error string whose message is
+    /// PII-scrubbed (no payload bytes from the corrupt file appear in
+    /// the human-readable reason). Mirrors AG-10 finding.
+    #[test]
+    fn load_handles_corrupt_file_with_bridge_error_internal() {
+        let dir = std::env::temp_dir().join(format!(
+            "presto_test_corrupt_files_{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).expect("mkdir");
+        // Distinctive PII-style bytes the test asserts are NOT echoed.
+        let sentinel = "USER_SECRET_KAYAK_BANANA";
+        std::fs::write(
+            dir.join("quick_logs.json"),
+            format!("{{ corrupted {sentinel} }}"),
+        )
+        .expect("seed corrupt file");
+        std::fs::write(
+            dir.join("distractions.json"),
+            format!("[ corrupted {sentinel} ]"),
+        )
+        .expect("seed corrupt file");
+
+        let ql_err = super::helpers::read_quick_logs_from(&dir).expect_err("must fail on corrupt");
+        let dr_err =
+            super::helpers::read_distractions_from(&dir).expect_err("must fail on corrupt");
+        assert!(
+            !ql_err.contains(sentinel),
+            "PII payload leaked into quick_logs error: {ql_err}"
+        );
+        assert!(
+            !dr_err.contains(sentinel),
+            "PII payload leaked into distractions error: {dr_err}"
+        );
+        // BridgeError::from(String) maps to Internal { msg } per contract.
+        let lifted: super::BridgeError = ql_err.into();
+        assert!(matches!(lifted, super::BridgeError::Internal { .. }));
+
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }
