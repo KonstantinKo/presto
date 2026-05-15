@@ -131,17 +131,24 @@ pub fn SessionsHistoryTable(selected_day: RwSignal<DateTime<Utc>>) -> impl IntoV
     });
 
     let session_modal_open = RwSignal::new(false);
-    let modal_duration = RwSignal::new(0_u32);
     let modal_session_id = RwSignal::new(Option::<String>::None);
     let modal_start = RwSignal::new(String::new());
     let modal_end = RwSignal::new(String::new());
     let modal_title = RwSignal::new(String::new());
 
+    // Duration is a derived display — single source of truth is the
+    // (start_time, end_time) pair. The persisted `ManualSession.duration`
+    // field is a denormalised cache that we always overwrite at save
+    // time via this same computation, so reads of the cached value
+    // never disagree with (end - start).
+    let modal_duration_minutes = Signal::derive(move || {
+        duration_from_start_end_minutes(&modal_start.get(), &modal_end.get())
+    });
+
     let on_open_modal = move |session: ManualSession| {
         modal_session_id.set(Some(session.id.clone()));
         modal_start.set(session.start_time.clone());
         modal_end.set(session.end_time.clone());
-        modal_duration.set(session.duration);
         let fallback = match session.session_type {
             SessionType::Focus => t_string!(i18n, timer.mode_focus).to_string(),
             SessionType::Break => t_string!(i18n, timer.mode_break).to_string(),
@@ -290,56 +297,27 @@ pub fn SessionsHistoryTable(selected_day: RwSignal<DateTime<Utc>>) -> impl IntoV
                             type="time"
                             id="session-start-time"
                             prop:value=move || modal_start.get()
-                            on:input=move |ev| {
-                                let new_start = event_target_value(&ev);
-                                let (new_end, new_dur) = end_time_from_start_duration(
-                                    &new_start,
-                                    modal_duration.get_untracked(),
-                                );
-                                modal_start.set(new_start);
-                                modal_end.set(new_end);
-                                modal_duration.set(new_dur);
-                            }
+                            on:input=move |ev| modal_start.set(event_target_value(&ev))
                         />
                         <label for="session-end-time">{t!(i18n, daily.modal_field_end)}</label>
                         <input
                             type="time"
                             id="session-end-time"
                             prop:value=move || modal_end.get()
-                            on:input=move |ev| {
-                                let new_end = event_target_value(&ev);
-                                let raw_dur = duration_from_start_end_minutes(
-                                    &modal_start.get_untracked(),
-                                    &new_end,
-                                );
-                                let clamped = raw_dur.clamp(1, 180);
-                                let (end_clamped, final_dur) = end_time_from_start_duration(
-                                    &modal_start.get_untracked(),
-                                    clamped,
-                                );
-                                modal_end.set(end_clamped);
-                                modal_duration.set(final_dur);
-                            }
+                            on:input=move |ev| modal_end.set(event_target_value(&ev))
                         />
-                        <label for="session-duration">{t!(i18n, daily.modal_field_duration)}</label>
-                        <input
-                            type="number"
+                        <label>{t!(i18n, daily.modal_field_duration)}</label>
+                        <div
                             id="session-duration"
-                            min="1"
-                            max="180"
-                            prop:value=move || modal_duration.get().to_string()
-                            on:input=move |ev| {
-                                let raw: u32 =
-                                    event_target_value(&ev).parse().unwrap_or(1);
-                                let clamped = raw.clamp(1, 180);
-                                let (new_end, clamped_dur) = end_time_from_start_duration(
-                                    &modal_start.get_untracked(),
-                                    clamped,
-                                );
-                                modal_duration.set(clamped_dur);
-                                modal_end.set(new_end);
-                            }
-                        />
+                            class="session-duration-readout"
+                            aria-live="polite"
+                        >
+                            {move || format!(
+                                "{} {}",
+                                modal_duration_minutes.get(),
+                                t_string!(i18n, stats.minutes_unit),
+                            )}
+                        </div>
                     </div>
                     <div class="modal-actions">
                         <button
@@ -369,10 +347,19 @@ pub fn SessionsHistoryTable(selected_day: RwSignal<DateTime<Utc>>) -> impl IntoV
                             class="btn-primary"
                             on:click=move |_| {
                                 if let Some(id) = modal_session_id.get_untracked() {
-                                    let dur = modal_duration.get_untracked();
+                                    // Duration is derived from
+                                    // (start, end). Clamp to the
+                                    // [1, 180] minute window the
+                                    // legacy modal enforced — beyond
+                                    // that the saved row would render
+                                    // outside the 24h timeline track.
                                     let start = modal_start.get_untracked();
+                                    let end = modal_end.get_untracked();
+                                    let raw_dur =
+                                        duration_from_start_end_minutes(&start, &end);
+                                    let clamped_dur = raw_dur.clamp(1, 180);
                                     let (end, clamped_dur) =
-                                        end_time_from_start_duration(&start, dur);
+                                        end_time_from_start_duration(&start, clamped_dur);
                                     let title_raw = modal_title.get_untracked();
                                     let title = {
                                         let trimmed = title_raw.trim();
