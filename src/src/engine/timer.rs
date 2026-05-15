@@ -683,7 +683,7 @@ impl TimerState {
     /// is idle (not running, not already paused). Pausing while
     /// already paused is a no-op (`Ok(vec![])`) — the JS source
     /// silently ignores redundant pauses, and so does this.
-    pub fn pause(&mut self, _clock: &dyn Clock) -> Result<Vec<TimerEvent>, TimerError> {
+    pub fn pause(&mut self, clock: &dyn Clock) -> Result<Vec<TimerEvent>, TimerError> {
         if self.is_paused {
             // Already paused — no-op (idempotent). The JS source
             // mirrors this at `pauseTimer:792` (`if (this.isPaused)
@@ -693,6 +693,11 @@ impl TimerState {
         if !self.is_running {
             return Err(TimerError::NotRunning);
         }
+        // FR-013a: settle wall-clock-accumulated elapsed into the
+        // session accumulator before clearing the anchor — so a
+        // subsequent `complete` reads the true elapsed at pause time
+        // even if no `tick` happened to fold the delta in.
+        self.settle_wall_clock_elapsed(clock);
         self.is_running = false;
         self.is_paused = true;
         // Freeze the wall-clock anchor: clearing `timer_start_ms`
@@ -702,6 +707,51 @@ impl TimerState {
         self.timer_start_ms = None;
         self.timer_duration_secs = None;
         Ok(vec![TimerEvent::SessionPaused])
+    }
+
+    /// Fold any wall-clock seconds elapsed since the most recent
+    /// `tick` integration into the session accumulator, then clear
+    /// the anchor.
+    ///
+    /// Used by `pause` (FR-013a) and defensively by `abort` /
+    /// `complete` so callers from any state observe a consistent
+    /// `current_session_elapsed_secs` even when no `tick` has fired
+    /// between `start` / `resume` and the pause moment. Mirrors the
+    /// integer-truncated arithmetic in `tick_drift_compensation`
+    /// (lines 824-832) — `div_euclid(1000)` for the seconds floor,
+    /// `saturating_add` for the accumulator update.
+    ///
+    /// The increment is computed against the current
+    /// `time_remaining_secs`, not against `timer_start_ms` directly,
+    /// because previous ticks have already drained
+    /// `time_remaining_secs` by the integrated portion. Settling here
+    /// folds only the residual sub-tick wall-clock seconds — never
+    /// double-counts time already in the accumulator.
+    fn settle_wall_clock_elapsed(&mut self, clock: &dyn Clock) {
+        let (Some(start_ms), Some(duration_secs)) = (self.timer_start_ms, self.timer_duration_secs)
+        else {
+            return;
+        };
+        if self.current_mode != TimerMode::Focus {
+            self.timer_start_ms = None;
+            self.timer_duration_secs = None;
+            return;
+        }
+        let now = clock.now_ms();
+        let elapsed_ms = now.saturating_sub(start_ms);
+        let elapsed_secs = elapsed_ms.div_euclid(1000);
+        let new_remaining = duration_secs - elapsed_secs;
+        let old_remaining = self.time_remaining_secs;
+        let drained = old_remaining.saturating_sub(new_remaining);
+        if drained > 0 {
+            let drained_u32 = u32::try_from(drained).unwrap_or(u32::MAX);
+            self.current_session_elapsed_secs = self
+                .current_session_elapsed_secs
+                .saturating_add(drained_u32);
+            self.time_remaining_secs = new_remaining;
+        }
+        self.timer_start_ms = None;
+        self.timer_duration_secs = None;
     }
 
     /// Resume from a manual pause.
@@ -745,25 +795,172 @@ impl TimerState {
 
     // -------- Feature 006: new entry points --------
     //
-    // Phase 1 stubs — both bodies are `unimplemented!()` so the
-    // Phase 2 RED tests fail with the expected panic. Phase 3 swaps
-    // these for the contracted implementations per
-    // `contracts/timer-engine-actions.md`.
+    // Phase 3 implementations of `abort` and `complete` per
+    // `specs/006-timer-controls-quicklog-distractions/contracts/timer-engine-actions.md`.
+    // The shared `complete_focus_session` helper below dedups the
+    // natural zero-cross focus path with the early-`complete` path
+    // (branch B.1) so both observe identical accumulator and event
+    // semantics (AG-9 finding).
+
+    /// Shared seal-and-advance for a focus-session completion.
+    ///
+    /// Increments `completed_pomodoros`, integrates the in-flight
+    /// `current_session_elapsed_secs` into `total_focus_secs`, runs
+    /// the long-break cadence check, advances `current_mode`, and
+    /// emits `PomodoroCompleted`. Resets the wall-clock anchor and
+    /// the three run-state bools. Consumed by:
+    ///
+    /// - `tick_drift_compensation`'s natural zero-cross focus branch
+    ///   (line region 929-960).
+    /// - `complete`'s branch B.1 (paused, elapsed >= 30, not in
+    ///   continuous-mode overtime).
+    fn complete_focus_session(&mut self) -> Vec<TimerEvent> {
+        self.completed_pomodoros = self.completed_pomodoros.saturating_add(1);
+        // Integrate the wall-clock-accumulated focus work into the
+        // run-wide total. Mirrors `totalFocusTime += actualElapsedTime`
+        // at `pomodoro-timer.js:1167`.
+        self.total_focus_secs = self
+            .total_focus_secs
+            .saturating_add(self.current_session_elapsed_secs);
+        self.current_session_elapsed_secs = 0;
+        // Every Nth focus completion enters `LongBreak`; otherwise
+        // short `Break`. `N` is `self.sessions_per_long_break`.
+        self.current_mode = if self
+            .completed_pomodoros
+            .is_multiple_of(self.sessions_per_long_break)
+        {
+            TimerMode::LongBreak
+        } else {
+            TimerMode::Break
+        };
+        self.time_remaining_secs = i64::from(self.durations.for_mode(self.current_mode));
+        self.is_running = false;
+        self.is_paused = false;
+        self.is_auto_paused = false;
+        self.timer_start_ms = None;
+        self.timer_duration_secs = None;
+        vec![TimerEvent::PomodoroCompleted {
+            completed_pomodoros: self.completed_pomodoros,
+        }]
+    }
 
     /// Discard the in-progress session entirely.
     ///
-    /// Implementation lands in Phase 3 (T026).
-    #[allow(unused_variables)]
+    /// Idempotent — a call from Idle returns `[]`. From Running /
+    /// Paused / `AutoPaused`: settles wall-clock-accumulated elapsed
+    /// into the captured event payload, then resets state without
+    /// advancing `current_mode` or touching `completed_pomodoros` /
+    /// `total_focus_secs`.
+    ///
+    /// Clears `session_completed_but_not_saved` to prevent leak into
+    /// the next session (mirrors `skip`'s clearing at lines 429-433).
     pub fn abort(&mut self, clock: &dyn Clock) -> Vec<TimerEvent> {
-        unimplemented!("Timer::abort — Phase 3 T026")
+        if !self.is_running && !self.is_paused && !self.is_auto_paused {
+            return Vec::new();
+        }
+        self.settle_wall_clock_elapsed(clock);
+        let aborted_mode = self.current_mode;
+        let elapsed_secs = self.current_session_elapsed_secs;
+        self.is_running = false;
+        self.is_paused = false;
+        self.is_auto_paused = false;
+        self.current_session_elapsed_secs = 0;
+        self.session_completed_but_not_saved = false;
+        self.timer_start_ms = None;
+        self.timer_duration_secs = None;
+        // Restore the displayed countdown for the current mode so a
+        // follow-up `start()` runs a full session (avoids a negative
+        // `time_remaining_secs` leaking in from a prior continuous-
+        // mode overtime — see `abort_clears_session_completed_but_not_saved_flag`).
+        self.time_remaining_secs = i64::from(self.durations.for_mode(self.current_mode));
+        vec![TimerEvent::SessionAborted {
+            aborted_mode,
+            elapsed_secs,
+        }]
     }
 
     /// Honestly end a paused (or auto-paused) Focus session early.
     ///
-    /// Implementation lands in Phase 3 (T027).
-    #[allow(unused_variables)]
+    /// Precondition: `is_paused || is_auto_paused`. From any other
+    /// state returns `[]` (engine-side cheat-tax for the
+    /// state-aware-matrix UI gate).
+    ///
+    /// Branches on `current_session_elapsed_secs`:
+    /// - `< 30` ⇒ delegates to `abort` (no count, no advance).
+    /// - `>= 30` and `session_completed_but_not_saved == false` ⇒
+    ///   runs `complete_focus_session` (count, integrate, advance,
+    ///   emit `PomodoroCompleted`). Appends `SessionCompletedEarly`.
+    /// - `>= 30` and `session_completed_but_not_saved == true`
+    ///   (continuous-mode overtime) ⇒ integrates the overtime
+    ///   portion only into `total_focus_secs`, clears the flag,
+    ///   does NOT re-increment `completed_pomodoros` or re-emit
+    ///   `PomodoroCompleted` (the zero-cross already did both).
+    ///   Emits only `SessionCompletedEarly`.
     pub fn complete(&mut self, clock: &dyn Clock) -> Vec<TimerEvent> {
-        unimplemented!("Timer::complete — Phase 3 T027")
+        if !(self.is_paused || self.is_auto_paused) {
+            return Vec::new();
+        }
+        // Defensive — `pause` already settled, but `is_auto_paused`
+        // paths may have skipped it. Costs O(1) and keeps the
+        // contract local.
+        self.settle_wall_clock_elapsed(clock);
+        let elapsed = self.current_session_elapsed_secs;
+
+        // Branch on `session_completed_but_not_saved` BEFORE the
+        // < 30 abort gate: in continuous-mode overtime the original
+        // session already counted via the zero-cross, so the < 30
+        // abort carveout does not apply to the overtime portion —
+        // any positive overtime is sealed verbatim (B.2).
+        if self.session_completed_but_not_saved {
+            // B.2 — continuous-mode overtime. The zero-cross already
+            // incremented `completed_pomodoros` and emitted
+            // `PomodoroCompleted`. Seal the overtime portion and
+            // transition out of the still-running overtime mode
+            // (the zero-cross also set `current_mode` to the next
+            // mode via the cadence check there).
+            self.total_focus_secs = self.total_focus_secs.saturating_add(elapsed);
+            self.current_session_elapsed_secs = 0;
+            self.session_completed_but_not_saved = false;
+            self.is_running = false;
+            self.is_paused = false;
+            self.is_auto_paused = false;
+            self.timer_start_ms = None;
+            self.timer_duration_secs = None;
+            // Note: continuous-mode zero-cross at line 871 leaves
+            // `current_mode` as Focus and re-anchors for negative-
+            // countdown overtime. The spec-mandated post-`complete`
+            // mode is the cadence-determined next mode — run the
+            // cadence check here against the count the zero-cross
+            // already incremented so the post-condition matches B.1.
+            self.current_mode = if self
+                .completed_pomodoros
+                .is_multiple_of(self.sessions_per_long_break)
+            {
+                TimerMode::LongBreak
+            } else {
+                TimerMode::Break
+            };
+            self.time_remaining_secs = i64::from(self.durations.for_mode(self.current_mode));
+            return vec![TimerEvent::SessionCompletedEarly {
+                elapsed_secs: elapsed,
+            }];
+        }
+
+        if elapsed < 30 {
+            // Branch A: discard as abort (FR-015). Below-threshold
+            // completion is treated as a Cancel — no count, no
+            // mode advance.
+            return self.abort(clock);
+        }
+
+        // B.1 — normal paused-before-zero path. Reuse the shared
+        // helper so the side-effect sequence matches natural
+        // completion exactly.
+        let mut events = self.complete_focus_session();
+        events.push(TimerEvent::SessionCompletedEarly {
+            elapsed_secs: elapsed,
+        });
+        events
     }
 
     /// Advance the state machine to wall-clock `now`, emitting any
@@ -884,36 +1081,11 @@ impl TimerState {
                     self.timer_duration_secs = Some(0);
                 }
                 TimerMode::Focus => {
-                    self.completed_pomodoros = self.completed_pomodoros.saturating_add(1);
-                    // Integrate the wall-clock-accumulated focus
-                    // work into the run-wide total. Mirrors
-                    // `totalFocusTime += actualElapsedTime` at
-                    // `pomodoro-timer.js:1167`.
-                    self.total_focus_secs = self
-                        .total_focus_secs
-                        .saturating_add(self.current_session_elapsed_secs);
-                    self.current_session_elapsed_secs = 0;
-                    events.push(TimerEvent::PomodoroCompleted {
-                        completed_pomodoros: self.completed_pomodoros,
-                    });
-                    // Every Nth focus completion enters `LongBreak`;
-                    // otherwise short `Break`. `N` is
-                    // `self.sessions_per_long_break`, replacing the
-                    // pre-002 hard-coded literal `4`. Mirrors
-                    // `pomodoro-timer.js:1195-1199`.
-                    self.current_mode = if self
-                        .completed_pomodoros
-                        .is_multiple_of(self.sessions_per_long_break)
-                    {
-                        TimerMode::LongBreak
-                    } else {
-                        TimerMode::Break
-                    };
-                    self.time_remaining_secs =
-                        i64::from(self.durations.for_mode(self.current_mode));
-                    self.is_running = false;
-                    self.timer_start_ms = None;
-                    self.timer_duration_secs = None;
+                    // Natural zero-cross focus completion. Delegates
+                    // to the shared `complete_focus_session` helper
+                    // so the early-`complete()` path (Phase 3 T025)
+                    // traverses the identical state transitions.
+                    events.extend(self.complete_focus_session());
                 }
                 TimerMode::Break | TimerMode::LongBreak => {
                     // Break-mode completion returns to focus. Mirrors
