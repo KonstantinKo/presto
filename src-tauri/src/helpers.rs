@@ -427,6 +427,12 @@ pub(super) fn delete_all_data_in(dir: &Path) -> Result<(), String> {
         "manual_sessions.json",
         "tags.json",
         "session_tags.json",
+        // Feature 006 — quick logs + distractions persistence files.
+        // AR-1 fix: reset-all-data left these on disk, leaking the
+        // user's quick-log + distraction history past a "wipe all"
+        // request.
+        "quick_logs.json",
+        "distractions.json",
     ];
     for file_name in FILES {
         let file_path = dir.join(file_name);
@@ -789,13 +795,23 @@ mod tests {
     #[test]
     fn delete_all_data_removes_present_files() {
         let dir = tempfile::tempdir().expect("tempdir");
-        for name in &["session.json", "tasks.json", "settings.json"] {
+        for name in &[
+            "session.json",
+            "tasks.json",
+            "settings.json",
+            // AR-1 regression: feature 006's quick_logs.json and
+            // distractions.json must also be wiped by reset-all-data.
+            "quick_logs.json",
+            "distractions.json",
+        ] {
             std::fs::write(dir.path().join(name), b"{}").expect("write");
         }
         delete_all_data_in(dir.path()).expect("delete");
         assert!(!dir.path().join("session.json").exists());
         assert!(!dir.path().join("tasks.json").exists());
         assert!(!dir.path().join("settings.json").exists());
+        assert!(!dir.path().join("quick_logs.json").exists());
+        assert!(!dir.path().join("distractions.json").exists());
     }
 
     #[test]
