@@ -3072,10 +3072,7 @@ mod tests {
         // sequence: pause then complete in one go.
         let pause_events = state.pause(&clock).expect("synth pause precondition");
         let complete_events = state.complete(&clock);
-        let all_events: Vec<_> = pause_events
-            .into_iter()
-            .chain(complete_events)
-            .collect();
+        let all_events: Vec<_> = pause_events.into_iter().chain(complete_events).collect();
 
         // Order: SessionPaused first (drives FlushAll in tag_tracking),
         // SessionCompletedEarly second (branch B.2's only emission).

@@ -525,17 +525,15 @@ pub(crate) fn install_audio_priming_listener() {
             chime::ensure_context();
             ambient_audio::prime_ambient_audio();
             if let Some(c) = slot_for_cb.borrow_mut().take() {
-                let _ = document_for_cb.remove_event_listener_with_callback(
-                    "pointerdown",
-                    c.as_ref().unchecked_ref(),
-                );
+                let _ = document_for_cb
+                    .remove_event_listener_with_callback("pointerdown", c.as_ref().unchecked_ref());
                 // Closure is dropped here when the Rc<RefCell> slot
                 // releases its Some(...) on scope exit.
             }
         },
     );
-    let _ = document
-        .add_event_listener_with_callback("pointerdown", closure.as_ref().unchecked_ref());
+    let _ =
+        document.add_event_listener_with_callback("pointerdown", closure.as_ref().unchecked_ref());
     *slot.borrow_mut() = Some(closure);
 }
 
