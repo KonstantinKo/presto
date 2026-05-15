@@ -671,6 +671,22 @@ impl TimerState {
         events
     }
 
+    /// D-3 fix: engine-side guard against the impossible
+    /// `(is_running && (is_paused || is_auto_paused))` tuple.
+    ///
+    /// Per Principle III the engine boundary should reject illegal
+    /// state combinations as loudly as the UI layer (which already
+    /// asserts via `RunState::from_engine`). Called at the start of
+    /// every state-transition method that touches these flags so the
+    /// dev-build panics at the first frame the invariant breaks —
+    /// the production build is a no-op.
+    fn assert_consistent_state(&self) {
+        debug_assert!(
+            !(self.is_running && (self.is_paused || self.is_auto_paused)),
+            "engine illegal state: cannot be both running and paused/auto-paused"
+        );
+    }
+
     /// Begin (or resume) the countdown.
     ///
     /// Records the wall-clock anchor and the duration snapshot so
@@ -731,6 +747,7 @@ impl TimerState {
     /// already paused is a no-op (`Ok(vec![])`) — the JS source
     /// silently ignores redundant pauses, and so does this.
     pub fn pause(&mut self, clock: &dyn Clock) -> Result<Vec<TimerEvent>, TimerError> {
+        self.assert_consistent_state();
         if self.is_paused {
             // Already paused — no-op (idempotent). The JS source
             // mirrors this at `pauseTimer:792` (`if (this.isPaused)
@@ -825,6 +842,7 @@ impl TimerState {
     /// already running is a no-op (`Ok(vec![])`) — symmetric with
     /// the `pause()` no-op when already paused.
     pub fn resume(&mut self, clock: &dyn Clock) -> Result<Vec<TimerEvent>, TimerError> {
+        self.assert_consistent_state();
         if self.is_running && !self.is_paused {
             // Already running — no-op (idempotent).
             return Ok(Vec::new());
@@ -908,6 +926,7 @@ impl TimerState {
     /// Clears `session_completed_but_not_saved` to prevent leak into
     /// the next session (mirrors `skip`'s clearing at lines 429-433).
     pub fn abort(&mut self, clock: &dyn Clock) -> Vec<TimerEvent> {
+        self.assert_consistent_state();
         if !self.is_running && !self.is_paused && !self.is_auto_paused {
             return Vec::new();
         }
@@ -954,6 +973,7 @@ impl TimerState {
     ///   `PomodoroCompleted` (the zero-cross already did both).
     ///   Emits only `SessionCompletedEarly`.
     pub fn complete(&mut self, clock: &dyn Clock) -> Vec<TimerEvent> {
+        self.assert_consistent_state();
         if !(self.is_paused || self.is_auto_paused) {
             return Vec::new();
         }
@@ -2947,6 +2967,54 @@ mod tests {
             Some(1_006_000),
             "re-start stamps a fresh anchor"
         );
+    }
+
+    /// D-3: drive the engine through its full transition surface
+    /// and verify the `(is_running && (is_paused || is_auto_paused))`
+    /// illegal-state combination never appears. Mirrors the UI-layer
+    /// guard in `RunState::from_engine` so a future engine refactor
+    /// can't silently introduce the impossible tuple.
+    #[test]
+    fn engine_never_reports_running_and_paused() {
+        let clock = MockClock::new(1_000_000);
+        let mut state = TimerState::new(Durations::default());
+        let check = |s: &TimerState, label: &str| {
+            assert!(
+                !(s.is_running() && (s.is_paused() || s.is_auto_paused())),
+                "engine illegal state at {label}: running={} paused={} auto_paused={}",
+                s.is_running(),
+                s.is_paused(),
+                s.is_auto_paused(),
+            );
+        };
+        check(&state, "fresh");
+
+        state.start(&clock).expect("start");
+        check(&state, "post-start");
+
+        state.pause(&clock).expect("pause");
+        check(&state, "post-pause");
+
+        state.resume(&clock).expect("resume");
+        check(&state, "post-resume");
+
+        state.set_smart_pause_enabled(true);
+        let _ = state.observe_activity(ActivitySignal::Idle, &clock);
+        check(&state, "post-auto-pause");
+
+        let _ = state.observe_activity(ActivitySignal::Active, &clock);
+        check(&state, "post-auto-resume");
+
+        state.pause(&clock).expect("pause-2");
+        check(&state, "post-pause-2");
+
+        // Run elapsed for ≥ 30 s so complete takes the B.1 branch.
+        clock.advance(30_000);
+        state.resume(&clock).expect("resume-2");
+        check(&state, "post-resume-2");
+        state.pause(&clock).expect("pause-3");
+        let _ = state.complete(&clock);
+        check(&state, "post-complete");
     }
 
     /// Natural focus completion (via `complete`) clears the anchor.
