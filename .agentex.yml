@@ -64,10 +64,17 @@ qa:
     # 10 pre-existing drift from features 001/002/#50).
     # ui-parity-port carve-out: same 17-cap — full visual re-skin to match
     # the upstream UI (ramazanberkozbek/presto) touches all major surfaces.
-    # Cap scoped to branch 003-* and ui-parity-port; others keep default of 2.
+    # Feature 006 carve-out: 3 baselines authorised by spec FR-029/FR-030
+    # (1 new timer-focus-paused-with-complete + 2 regen for combined pill
+    # and Inventory subsection — the state-aware button matrix introduces
+    # a new Paused-with-Complete visual that requires its own baseline).
+    # Cap scoped per branch; others keep default of 2.
     - |
-      if git rev-parse --abbrev-ref HEAD 2>/dev/null | grep -qE "^003-|^ui-parity-port$"; then
+      branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null)
+      if echo "$branch" | grep -qE "^003-|^ui-parity-port$"; then
         BASELINE_CAP=17 bash scripts/check-baseline-cap.sh
+      elif echo "$branch" | grep -qE "^006-"; then
+        BASELINE_CAP=3 bash scripts/check-baseline-cap.sh
       else
         bash scripts/check-baseline-cap.sh
       fi
