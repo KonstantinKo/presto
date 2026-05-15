@@ -930,6 +930,12 @@ impl TimerState {
         if !self.is_running && !self.is_paused && !self.is_auto_paused {
             return Vec::new();
         }
+        if self.is_auto_paused {
+            // Auto-pause anchor predates the idle gap — clear it so settle
+            // does not count inactivity as focused elapsed.
+            self.timer_start_ms = None;
+            self.timer_duration_secs = None;
+        }
         self.settle_wall_clock_elapsed(clock);
         let aborted_mode = self.current_mode;
         let elapsed_secs = self.current_session_elapsed_secs;
@@ -978,8 +984,14 @@ impl TimerState {
             return Vec::new();
         }
         // Defensive — `pause` already settled, but `is_auto_paused`
-        // paths may have skipped it. Costs O(1) and keeps the
-        // contract local.
+        // paths may have skipped it. The guard below clears the stale
+        // anchor first so the idle gap is not counted as focused elapsed.
+        if self.is_auto_paused {
+            // Auto-pause anchor predates the idle gap — clear it so settle
+            // does not count inactivity as focused elapsed.
+            self.timer_start_ms = None;
+            self.timer_duration_secs = None;
+        }
         self.settle_wall_clock_elapsed(clock);
         let elapsed = self.current_session_elapsed_secs;
 

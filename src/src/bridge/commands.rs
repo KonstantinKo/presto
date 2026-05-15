@@ -854,18 +854,19 @@ pub async fn dialog_save(
 mod tests {
     use super::{
         add_session_tag, delete_tag, dialog_save, disable_autostart, enable_autostart,
-        export_sessions_xlsx, get_stats_history, is_autostart_enabled, load_manual_sessions,
-        load_session_data, load_settings, load_tags, load_tasks, register_global_shortcuts,
-        reset_all_data, save_daily_stats, save_manual_sessions, save_session_data, save_settings,
-        save_tag, save_tasks, start_activity_monitoring, stop_activity_monitoring,
-        update_activity_timeout, update_tray_icon, update_tray_menu,
+        export_sessions_xlsx, get_stats_history, is_autostart_enabled, load_distractions,
+        load_manual_sessions, load_quick_logs, load_session_data, load_settings, load_tags,
+        load_tasks, register_global_shortcuts, reset_all_data, save_daily_stats, save_distractions,
+        save_manual_sessions, save_quick_logs, save_session_data, save_settings, save_tag,
+        save_tasks, start_activity_monitoring, stop_activity_monitoring, update_activity_timeout,
+        update_tray_icon, update_tray_menu,
     };
     use crate::bridge::types::BridgeError;
     use crate::bridge::types::SessionType;
     use crate::bridge::types::TimerMode;
     use crate::bridge::types::{
-        ManualSession, Session, SessionTag, Settings, ShortcutSettings, Tag, Task,
-        UpdateTrayIconArgs,
+        Distraction, ManualSession, QuickLog, Session, SessionTag, Settings, ShortcutSettings, Tag,
+        Task, UpdateTrayIconArgs,
     };
     use wasm_bindgen_test::wasm_bindgen_test;
 
@@ -1597,5 +1598,73 @@ mod tests {
             vec![("Excel".to_string(), vec!["xlsx".to_string()])],
         )
         .await;
+    }
+
+    #[wasm_bindgen_test]
+    async fn save_quick_logs_short_circuits_when_bridge_absent() {
+        let result = save_quick_logs(vec![]).await;
+        match result {
+            Err(BridgeError::BridgeUnavailable) => {}
+            other => panic!("expected BridgeUnavailable, got {other:?}"),
+        }
+    }
+
+    #[wasm_bindgen_test]
+    async fn save_quick_logs_signature_pinned() {
+        async fn assert_signature(ql: Vec<QuickLog>) -> Result<(), BridgeError> {
+            save_quick_logs(ql).await
+        }
+        let _ = assert_signature(vec![]).await;
+    }
+
+    #[wasm_bindgen_test]
+    async fn load_quick_logs_short_circuits_when_bridge_absent() {
+        let result = load_quick_logs().await;
+        match result {
+            Err(BridgeError::BridgeUnavailable) => {}
+            other => panic!("expected BridgeUnavailable, got {other:?}"),
+        }
+    }
+
+    #[wasm_bindgen_test]
+    async fn load_quick_logs_signature_pinned() {
+        async fn assert_signature() -> Result<Vec<QuickLog>, BridgeError> {
+            load_quick_logs().await
+        }
+        let _ = assert_signature().await;
+    }
+
+    #[wasm_bindgen_test]
+    async fn save_distractions_short_circuits_when_bridge_absent() {
+        let result = save_distractions(vec![]).await;
+        match result {
+            Err(BridgeError::BridgeUnavailable) => {}
+            other => panic!("expected BridgeUnavailable, got {other:?}"),
+        }
+    }
+
+    #[wasm_bindgen_test]
+    async fn save_distractions_signature_pinned() {
+        async fn assert_signature(d: Vec<Distraction>) -> Result<(), BridgeError> {
+            save_distractions(d).await
+        }
+        let _ = assert_signature(vec![]).await;
+    }
+
+    #[wasm_bindgen_test]
+    async fn load_distractions_short_circuits_when_bridge_absent() {
+        let result = load_distractions().await;
+        match result {
+            Err(BridgeError::BridgeUnavailable) => {}
+            other => panic!("expected BridgeUnavailable, got {other:?}"),
+        }
+    }
+
+    #[wasm_bindgen_test]
+    async fn load_distractions_signature_pinned() {
+        async fn assert_signature() -> Result<Vec<Distraction>, BridgeError> {
+            load_distractions().await
+        }
+        let _ = assert_signature().await;
     }
 }

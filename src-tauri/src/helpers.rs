@@ -286,6 +286,9 @@ pub(super) fn read_quick_logs_from(dir: &Path) -> Result<Vec<super::QuickLog>, S
     }
     let content = fs::read_to_string(file_path)
         .map_err(|e| format!("Failed to read quick logs file: {e}"))?;
+    if content.trim().is_empty() || content.trim() == "null" {
+        return Ok(Vec::new());
+    }
     serde_json::from_str(&content).map_err(|e| format!("Failed to parse quick logs: {e}"))
 }
 
@@ -308,6 +311,9 @@ pub(super) fn read_distractions_from(dir: &Path) -> Result<Vec<super::Distractio
     }
     let content = fs::read_to_string(file_path)
         .map_err(|e| format!("Failed to read distractions file: {e}"))?;
+    if content.trim().is_empty() || content.trim() == "null" {
+        return Ok(Vec::new());
+    }
     serde_json::from_str(&content).map_err(|e| format!("Failed to parse distractions: {e}"))
 }
 

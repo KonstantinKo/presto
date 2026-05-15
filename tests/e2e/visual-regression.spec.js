@@ -133,6 +133,7 @@ test("visual baseline: timer, tags, statistics (4 periods), daily, all settings 
   // only (chevron hidden, title input readonly) per FR-005. This is
   // the headline new visual for feature 006.
   await tapTab(page, "Timer");
+  await expect(page.locator("#play-pause-btn")).toBeVisible();
   await page.locator("#play-pause-btn").click();
   await expect(page.locator("#pause-icon")).toBeVisible();
   await page.locator("#play-pause-btn").click();

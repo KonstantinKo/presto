@@ -42,8 +42,8 @@ impl DistractionManager {
         self.entries.clone()
     }
 
-    /// Append a new distraction entry. Generates UUID v4 `id`,
-    /// ISO-8601 `created_at`, chrono `%a %b %d %Y` `date`.
+    /// Append a new distraction entry. `id` is caller-supplied;
+    /// derives ISO-8601 `created_at`, chrono `%a %b %d %Y` `date`.
     /// `parent_ref` is `Some(_)` for in-session captures
     /// (snapshotted at modal-open per spec Clarifications +
     /// Edge Cases) and `None` for retroactive entries.

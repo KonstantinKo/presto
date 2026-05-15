@@ -27,9 +27,11 @@ use leptos::prelude::*;
 use leptos::task::spawn_local;
 use leptos_i18n::{t, t_string};
 
+#[cfg(target_arch = "wasm32")]
 use super::super::browser_clock::BrowserClock;
 use crate::bridge::commands;
 use crate::bridge::types::{Distraction, QuickLog, Tag};
+#[cfg(target_arch = "wasm32")]
 use crate::engine::clock::Clock;
 use crate::engine::date_format::format_session_date;
 use crate::i18n::i18n::use_i18n;
@@ -192,7 +194,7 @@ pub fn Inventory(selected_day: RwSignal<DateTime<Utc>>) -> impl IntoView {
         if raw.is_empty() || !(1..=720).contains(&mins) {
             return;
         }
-        let now_ms = BrowserClock.now_ms();
+        let now_ms = selected_day.get_untracked().timestamp_millis();
         let id = format!("quicklog-{}", inventory_uuid());
         quick_logs.update(|mgr| mgr.add(raw, mins, now_ms, id));
         let snapshot = quick_logs.with_untracked(QuickLogManager::save_payload);

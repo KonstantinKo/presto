@@ -269,4 +269,23 @@ mod tests {
             TagTrackingAction::NoOp,
         );
     }
+
+    #[test]
+    fn flushes_on_session_aborted() {
+        assert_eq!(
+            tag_tracking_action_for_event(&TimerEvent::SessionAborted {
+                aborted_mode: TimerMode::Focus,
+                elapsed_secs: 0,
+            }),
+            TagTrackingAction::FlushAll,
+        );
+    }
+
+    #[test]
+    fn no_op_on_session_completed_early() {
+        assert_eq!(
+            tag_tracking_action_for_event(&TimerEvent::SessionCompletedEarly { elapsed_secs: 30 }),
+            TagTrackingAction::NoOp,
+        );
+    }
 }
