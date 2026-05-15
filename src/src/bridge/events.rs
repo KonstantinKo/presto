@@ -93,6 +93,16 @@ pub const TRAY_CANCEL: &str = "tray-cancel";
 /// not per-emitter.
 pub const UPDATE_AVAILABLE: &str = "tauri://update-available";
 
+/// E11 — backend-driven 1 Hz tick.
+///
+/// Emitted by a Rust thread spawned in `src-tauri/src/lib.rs::run()`
+/// to keep the timer cadence at 1 Hz even when `WKWebView` occludes
+/// the window and throttles `setInterval`. Payload: `()`. Consumer:
+/// `components/timer/mod.rs` (runs the same `engine.tick` /
+/// tray-update / metronome body as the frontend
+/// `set_interval_with_handle` driver).
+pub const ENGINE_TICK: &str = "engine-tick";
+
 // ---------------------------------------------------------------------------
 // Tauri 2.x JS event-API binding
 // ---------------------------------------------------------------------------

@@ -1822,32 +1822,40 @@ pub fn TimerView() -> impl IntoView {
     // 1 Hz tick loop. Ticking unconditionally (not gated on
     // `is_running`) is safe because `tick()` short-circuits when
     // the engine is idle (`if !self.is_running { return events; }`).
-    // The handle is dropped on cleanup; Leptos's RAII guarantees
-    // the interval clears when the component unmounts.
     //
-    // Post-tick, if the engine just transitioned to a new mode
-    // (the previous tick fired `PomodoroCompleted` or the engine
-    // is idle in a non-Focus mode after a break completion) AND
-    // `Settings::notifications.auto_start_timer` is on, auto-
-    // start the next session. Mirrors the JS-era flow at
+    // Two drivers fire the same body:
+    //
+    // 1. `set_interval_with_handle` — the original wasm-side driver.
+    //    Throttled by WKWebView occlusion-detection on macOS once the
+    //    window is fully covered by another app, falling to ~0.5 Hz.
+    //    Survives anyway as the only driver outside of Tauri (Trunk
+    //    dev server / e2e harness).
+    // 2. `bridge::events::ENGINE_TICK` — backend-emitted 1 Hz event
+    //    from `src-tauri/src/lib.rs::run()`. A native std::thread is
+    //    immune to WKWebView throttling, so when the window is
+    //    occluded this driver keeps the tick at the wall-clock cadence
+    //    the metronome + tray + visible digit all depend on.
+    //
+    // Both drivers call the same `tick_body` closure. The body is
+    // safe to call multiple times per second: `engine.tick` is
+    // wall-clock-arithmetic-based (idempotent within a second), the
+    // tray-update IPC is content-stable (same payload twice is a
+    // no-op), and the metronome is gated on a `remaining_after <
+    // remaining_before` diff so it fires exactly on the wall-clock
+    // second crossing — never twice in the same second.
+    //
+    // Post-tick, if the engine just transitioned to a new mode (the
+    // previous tick fired `PomodoroCompleted` or the engine is idle
+    // in a non-Focus mode after a break completion) AND
+    // `Settings::notifications.auto_start_timer` is on, auto-start
+    // the next session. Mirrors the JS-era flow at
     // `pomodoro-timer.js:1175-1180` and is what
-    // `settings-automation.spec.js:59` exercises (the spec waits
-    // for `#pause-icon` to be visible after a focus → break →
-    // focus auto-roll).
-    // Closure-captured remembrance of the engine's `time_remaining_secs()`
-    // at the *prior* interval fire. The ticking sound fires only when this
-    // value decreases — that's the same instant the visible digit changes
-    // and `update_tray_icon` is dispatched. `setInterval(1000ms)` doesn't
-    // align with wall-clock-second boundaries, so without the diff guard
-    // the tone could fire twice on the same second or skip a second.
-    let last_remaining_for_tick: std::rc::Rc<std::cell::Cell<u32>> =
+    // `settings-automation.spec.js:59` exercises.
+    let last_remaining: std::rc::Rc<std::cell::Cell<u32>> =
         std::rc::Rc::new(std::cell::Cell::new(u32::MAX));
-    Effect::new(move |_| {
-        // Read once on mount to register the dependency; the
-        // closure re-runs only on cleanup, not on every tick.
-        let last_remaining = last_remaining_for_tick.clone();
-        let handle = set_interval_with_handle(
-            move || {
+
+    let tick_body: std::rc::Rc<dyn Fn()> = {
+        std::rc::Rc::new(move || {
                 let remaining_before = engine.with_untracked(TimerState::time_remaining_secs);
                 // R-001 fix: capture `total_focus_before` outside the
                 // try_update so the shared `persist_focus_completion`
@@ -1997,7 +2005,18 @@ pub fn TimerView() -> impl IntoView {
                 if should_tick {
                     play_metronome_tick();
                 }
-            },
+        })
+    };
+
+    // Driver 1: WebView setInterval. Survives in non-Tauri contexts
+    // (Trunk dev server / e2e mock harness) where the backend event
+    // bus is absent. Throttled by WKWebView when the window is
+    // occluded — driver 2 covers that case.
+    let tick_for_interval = tick_body.clone();
+    Effect::new(move |_| {
+        let tick = tick_for_interval.clone();
+        let handle = set_interval_with_handle(
+            move || tick(),
             std::time::Duration::from_secs(1),
         );
         // The handle is intentionally leaked into the closure's
@@ -2007,6 +2026,34 @@ pub fn TimerView() -> impl IntoView {
         // — neither applies to the wasm target this component
         // mounts on), so swallow.
         let _ = handle;
+    });
+
+    // Driver 2: backend-emitted ENGINE_TICK. Native std::thread on
+    // the Tauri side fires once per wall-clock second regardless of
+    // WKWebView occlusion state — keeps tick + tray + metronome at
+    // 1 Hz when the user is doing focus work in another app and the
+    // presto window is fully covered. The Listener is leaked: the
+    // tick must run for the lifetime of the timer view, which is
+    // the lifetime of the app (the view doesn't unmount in normal
+    // navigation flows — `app.rs` toggles `.hidden` instead of
+    // tearing down the component tree).
+    let tick_for_listen = tick_body.clone();
+    spawn_local(async move {
+        match crate::bridge::events::listen::<()>(
+            crate::bridge::events::ENGINE_TICK,
+            move |()| tick_for_listen(),
+        )
+        .await
+        {
+            Ok(listener) => std::mem::forget(listener),
+            Err(crate::bridge::types::BridgeError::BridgeUnavailable) => {
+                // Trunk dev / e2e mock — driver 1 carries the cadence.
+            }
+            Err(e) => leptos::logging::warn!(
+                "engine-tick listen failed; falling back to setInterval only: {:?}",
+                e
+            ),
+        }
     });
 
     // Feature 004 (R-004 fix): unified ambient-sound gate Effect.
