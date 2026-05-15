@@ -221,6 +221,26 @@ pub struct TimerState {
     /// Settings UI input boundary (Principle III); the engine takes
     /// any `u32` and uses it verbatim.
     sessions_per_long_break: u32,
+    /// Wall-clock timestamp (ms since unix epoch) at which the user
+    /// FIRST started the currently-active session — set on the
+    /// Idle → Running transition, preserved across pause / resume
+    /// cycles, cleared on `abort` / `complete` / natural completion
+    /// / `skip` / `reset`.
+    ///
+    /// R-003 fix: the Distraction modal needs a stable
+    /// `parent_session_start_ts` so two distractions captured from
+    /// the same logical focus session share the same anchor. The
+    /// pre-fix UI derived it as `now - elapsed_secs * 1000`, but
+    /// `current_session_elapsed_secs` is focus-only accumulated time
+    /// (paused gaps excluded), so after a pause cycle the derived
+    /// timestamp drifts. This field is the wall-clock truth that
+    /// `current_session_started_at_ms` returns.
+    ///
+    /// Distinct from `timer_start_ms`: the latter is the CURRENT
+    /// run-segment anchor (cleared on pause, re-set on resume) used
+    /// for drift compensation, whereas this field is the SESSION
+    /// anchor used by the UI for cross-event correlation.
+    session_started_at_ms: Option<i64>,
 }
 
 impl TimerState {
@@ -248,6 +268,7 @@ impl TimerState {
             allow_continuous_sessions: false,
             session_completed_but_not_saved: false,
             sessions_per_long_break: 4,
+            session_started_at_ms: None,
         }
     }
 
@@ -394,6 +415,19 @@ impl TimerState {
         self.total_focus_secs
     }
 
+    /// Wall-clock timestamp (ms since unix epoch) at which the user
+    /// first started the currently-active session.
+    ///
+    /// R-003 fix: the Distraction modal reads this to derive a
+    /// `parent_session_start_ts` that stays stable across pause /
+    /// resume cycles, so two distractions captured from the same
+    /// logical session share the same anchor. Returns `None` when
+    /// the engine is fully Idle (no active session).
+    #[must_use]
+    pub const fn current_session_started_at_ms(&self) -> Option<i64> {
+        self.session_started_at_ms
+    }
+
     /// Skip the current mode and advance to the next.
     ///
     /// Mirrors `skipSession` at `pomodoro-timer.js:974-1150` (the
@@ -458,6 +492,9 @@ impl TimerState {
         self.is_paused = false;
         self.timer_start_ms = None;
         self.timer_duration_secs = None;
+        // R-003 fix: skip ends the current logical session — clear
+        // the anchor so the next start() stamps a fresh one.
+        self.session_started_at_ms = None;
 
         events.push(TimerEvent::SessionSkipped {
             skipped_mode,
@@ -516,6 +553,8 @@ impl TimerState {
         self.timer_start_ms = None;
         self.timer_duration_secs = None;
         self.session_completed_but_not_saved = false;
+        // R-003 fix: reset returns the engine to a clean Idle state.
+        self.session_started_at_ms = None;
     }
 
     /// Decrement `completed_pomodoros` by one, saturating at zero.
@@ -663,6 +702,14 @@ impl TimerState {
         self.is_paused = false;
         self.timer_start_ms = Some(now);
         self.timer_duration_secs = Some(self.time_remaining_secs);
+        // R-003 fix: stamp the session-start anchor ONLY on the
+        // Idle → Running transition. Resuming from pause must NOT
+        // re-stamp — the UI relies on the original-start invariant
+        // for cross-event correlation (e.g. Distraction modal's
+        // parent_session_start_ts).
+        if self.session_started_at_ms.is_none() {
+            self.session_started_at_ms = Some(now);
+        }
         Ok(vec![TimerEvent::SessionStarted])
     }
 
@@ -839,6 +886,12 @@ impl TimerState {
         self.is_auto_paused = false;
         self.timer_start_ms = None;
         self.timer_duration_secs = None;
+        // R-003 fix: focus completion (early or natural) ends the
+        // current session. Clear the anchor so the next start()
+        // stamps a fresh one. Note: this branch covers BOTH the
+        // natural zero-cross path (via tick_drift_compensation) and
+        // the explicit `complete()` path's B.1 branch.
+        self.session_started_at_ms = None;
         vec![TimerEvent::PomodoroCompleted {
             completed_pomodoros: self.completed_pomodoros,
         }]
@@ -868,6 +921,10 @@ impl TimerState {
         self.session_completed_but_not_saved = false;
         self.timer_start_ms = None;
         self.timer_duration_secs = None;
+        // R-003 fix: clear the session-start anchor — the next
+        // start() will stamp a fresh one. Symmetric with skip/reset/
+        // complete and the natural-completion branch in tick.
+        self.session_started_at_ms = None;
         // Restore the displayed countdown for the current mode so a
         // follow-up `start()` runs a full session (avoids a negative
         // `time_remaining_secs` leaking in from a prior continuous-
@@ -926,6 +983,10 @@ impl TimerState {
             self.is_auto_paused = false;
             self.timer_start_ms = None;
             self.timer_duration_secs = None;
+            // R-003 fix: B.2 overtime completion ends the logical
+            // session too (the zero-cross already counted it; the
+            // overtime portion sealing here is the final step).
+            self.session_started_at_ms = None;
             // Note: continuous-mode zero-cross at line 871 leaves
             // `current_mode` as Focus and re-anchors for negative-
             // countdown overtime. The spec-mandated post-`complete`
@@ -1098,6 +1159,9 @@ impl TimerState {
                     self.is_running = false;
                     self.timer_start_ms = None;
                     self.timer_duration_secs = None;
+                    // R-003 fix: break completion ends the logical
+                    // break session — clear the anchor.
+                    self.session_started_at_ms = None;
                     events.push(TimerEvent::BreakCompleted {
                         mode: completed_mode,
                     });
@@ -2809,5 +2873,109 @@ mod tests {
         assert_eq!(complete_events, Vec::<super::TimerEvent>::new());
         assert_eq!(state.completed_pomodoros(), 1);
         assert_eq!(state.current_mode(), TimerMode::Break);
+    }
+
+    // R-003 fix: session-start anchor for stable Distraction
+    // parent-ref across pause/resume.
+
+    /// The session-start anchor is stamped on the Idle → Running
+    /// transition and survives pause / resume cycles. The Distraction
+    /// modal relies on this stability so two distractions captured
+    /// from the same logical session share the same
+    /// `parent_session_start_ts`.
+    #[test]
+    fn session_started_at_ms_survives_pause_resume_cycle() {
+        let clock = MockClock::new(1_000_000);
+        let mut state = TimerState::new(Durations::default());
+        assert_eq!(
+            state.current_session_started_at_ms(),
+            None,
+            "Idle pre-start: no anchor"
+        );
+
+        state.start(&clock).expect("start");
+        let stamped = state.current_session_started_at_ms();
+        assert_eq!(stamped, Some(1_000_000), "anchor stamped at start()");
+
+        clock.advance(5_000);
+        state.pause(&clock).expect("pause");
+        assert_eq!(
+            state.current_session_started_at_ms(),
+            stamped,
+            "pause does NOT touch the anchor"
+        );
+
+        clock.advance(10_000);
+        state.resume(&clock).expect("resume");
+        assert_eq!(
+            state.current_session_started_at_ms(),
+            stamped,
+            "resume does NOT re-stamp the anchor"
+        );
+
+        clock.advance(5_000);
+        state.pause(&clock).expect("second pause");
+        assert_eq!(
+            state.current_session_started_at_ms(),
+            stamped,
+            "anchor unchanged across multiple pause cycles"
+        );
+    }
+
+    /// `abort` clears the session-start anchor — the next `start()`
+    /// will stamp a fresh one.
+    #[test]
+    fn session_started_at_ms_clears_on_abort() {
+        let clock = MockClock::new(1_000_000);
+        let mut state = TimerState::new(Durations::default());
+        state.start(&clock).expect("start");
+        assert!(state.current_session_started_at_ms().is_some());
+
+        clock.advance(5_000);
+        let _ = state.abort(&clock);
+        assert_eq!(
+            state.current_session_started_at_ms(),
+            None,
+            "abort clears the session-start anchor"
+        );
+
+        // A subsequent start stamps a fresh anchor (not the original).
+        clock.advance(1_000);
+        state.start(&clock).expect("re-start");
+        assert_eq!(
+            state.current_session_started_at_ms(),
+            Some(1_006_000),
+            "re-start stamps a fresh anchor"
+        );
+    }
+
+    /// Natural focus completion (via `complete`) clears the anchor.
+    /// Together with the analogous tick / break-completion / skip /
+    /// reset coverage in the wider test matrix, this pins the
+    /// invariant that the field is cleared on every logical session
+    /// end.
+    #[test]
+    fn session_started_at_ms_clears_on_complete() {
+        let clock = MockClock::new(1_000_000);
+        let mut state = TimerState::new(Durations::default());
+        state.start(&clock).expect("start");
+        assert!(state.current_session_started_at_ms().is_some());
+
+        // Run ≥ 30 s wall-clock so complete() takes the B.1 branch
+        // (count + advance) rather than abort-delegate.
+        clock.advance(30_000);
+        state.pause(&clock).expect("pause");
+        let events = state.complete(&clock);
+        assert!(
+            events
+                .iter()
+                .any(|e| matches!(e, super::TimerEvent::PomodoroCompleted { .. })),
+            "expected PomodoroCompleted in {events:?}"
+        );
+        assert_eq!(
+            state.current_session_started_at_ms(),
+            None,
+            "complete clears the session-start anchor"
+        );
     }
 }

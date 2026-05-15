@@ -1474,11 +1474,23 @@ pub fn TimerView() -> impl IntoView {
     // right-slot button. Snapshots the current session context at
     // modal-open time per FR-035 + Edge Cases (race-free against
     // mid-modal mode transitions).
+    //
+    // R-003 fix: read the engine's session-start anchor instead of
+    // deriving `start_ms = now - elapsed_secs * 1000`.
+    // `current_session_elapsed_secs` is focus-only accumulated time
+    // (paused gaps excluded), so the derived form drifted across
+    // pause cycles — two distractions captured from the same logical
+    // session got different `parent_session_start_ts` values. The
+    // engine's anchor is stamped on Idle → Running and survives
+    // pause/resume, so it's the wall-clock truth here. Fallback to
+    // `now` for the impossible case where the engine is Idle when
+    // the modal opens (matrix gates Distraction to Running-only).
     let on_open_distraction = move |_| {
         let snapshot = engine.with_untracked(|s| {
             let mode = s.current_mode();
-            let elapsed_ms = i64::from(s.current_session_elapsed_secs()) * 1000;
-            let start_ms = BrowserClock.now_ms() - elapsed_ms;
+            let start_ms = s
+                .current_session_started_at_ms()
+                .unwrap_or_else(|| BrowserClock.now_ms());
             crate::bridge::types::DistractionParentRef {
                 parent_session_start_ts: chrono::DateTime::<chrono::Utc>::from_timestamp_millis(
                     start_ms,
