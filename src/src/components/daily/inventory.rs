@@ -40,7 +40,7 @@ use leptos_i18n::{t, t_string};
 use super::super::browser_clock::BrowserClock;
 use crate::app::AppToast;
 use crate::bridge::commands;
-use crate::bridge::types::{Distraction, QuickLog, Tag};
+use crate::bridge::types::{BridgeError, Distraction, QuickLog, Tag};
 #[cfg(target_arch = "wasm32")]
 use crate::engine::clock::Clock;
 use crate::engine::date_format::format_session_date;
@@ -252,9 +252,14 @@ pub fn Inventory(selected_day: RwSignal<DateTime<Utc>>) -> impl IntoView {
             }
         });
         let snapshot = quick_logs.with_untracked(QuickLogManager::save_payload);
+        let save_failure_msg = t_string!(i18n, timer.toast.quick_log_save_failed).to_string();
         spawn_local(async move {
-            if let Err(e) = commands::save_quick_logs(snapshot).await {
-                leptos::logging::warn!("save_quick_logs (edit) failed: {:?}", e);
+            match commands::save_quick_logs(snapshot).await {
+                Ok(()) | Err(BridgeError::BridgeUnavailable) => {}
+                Err(e) => {
+                    leptos::logging::warn!("save_quick_logs (edit) failed: {:?}", e);
+                    app_toast.show(save_failure_msg);
+                }
             }
         });
         ql_edit_open.set(false);
@@ -263,9 +268,14 @@ pub fn Inventory(selected_day: RwSignal<DateTime<Utc>>) -> impl IntoView {
     let ql_delete = move |id: String| {
         quick_logs.update(|mgr| mgr.delete_by_id(&id));
         let snapshot = quick_logs.with_untracked(QuickLogManager::save_payload);
+        let save_failure_msg = t_string!(i18n, timer.toast.quick_log_save_failed).to_string();
         spawn_local(async move {
-            if let Err(e) = commands::save_quick_logs(snapshot).await {
-                leptos::logging::warn!("save_quick_logs (delete) failed: {:?}", e);
+            match commands::save_quick_logs(snapshot).await {
+                Ok(()) | Err(BridgeError::BridgeUnavailable) => {}
+                Err(e) => {
+                    leptos::logging::warn!("save_quick_logs (delete) failed: {:?}", e);
+                    app_toast.show(save_failure_msg);
+                }
             }
         });
     };
@@ -299,9 +309,14 @@ pub fn Inventory(selected_day: RwSignal<DateTime<Utc>>) -> impl IntoView {
             }
         });
         let snapshot = distractions.with_untracked(DistractionManager::save_payload);
+        let save_failure_msg = t_string!(i18n, timer.toast.distraction_save_failed).to_string();
         spawn_local(async move {
-            if let Err(e) = commands::save_distractions(snapshot).await {
-                leptos::logging::warn!("save_distractions (edit) failed: {:?}", e);
+            match commands::save_distractions(snapshot).await {
+                Ok(()) | Err(BridgeError::BridgeUnavailable) => {}
+                Err(e) => {
+                    leptos::logging::warn!("save_distractions (edit) failed: {:?}", e);
+                    app_toast.show(save_failure_msg);
+                }
             }
         });
         d_edit_open.set(false);
@@ -310,9 +325,14 @@ pub fn Inventory(selected_day: RwSignal<DateTime<Utc>>) -> impl IntoView {
     let d_delete = move |id: String| {
         distractions.update(|mgr| mgr.delete_by_id(&id));
         let snapshot = distractions.with_untracked(DistractionManager::save_payload);
+        let save_failure_msg = t_string!(i18n, timer.toast.distraction_save_failed).to_string();
         spawn_local(async move {
-            if let Err(e) = commands::save_distractions(snapshot).await {
-                leptos::logging::warn!("save_distractions (delete) failed: {:?}", e);
+            match commands::save_distractions(snapshot).await {
+                Ok(()) | Err(BridgeError::BridgeUnavailable) => {}
+                Err(e) => {
+                    leptos::logging::warn!("save_distractions (delete) failed: {:?}", e);
+                    app_toast.show(save_failure_msg);
+                }
             }
         });
     };
@@ -332,17 +352,21 @@ pub fn Inventory(selected_day: RwSignal<DateTime<Utc>>) -> impl IntoView {
             return;
         }
         let now_ms = selected_day.get_untracked().timestamp_millis();
-        let id = format!("quicklog-{}", inventory_uuid());
+        let id = inventory_uuid();
         quick_logs.update(|mgr| mgr.add(raw, mins, now_ms, id));
         let snapshot = quick_logs.with_untracked(QuickLogManager::save_payload);
+        let save_success_msg = t_string!(i18n, timer.toast.quick_log_added).to_string();
+        let save_failure_msg = t_string!(i18n, timer.toast.quick_log_save_failed).to_string();
         spawn_local(async move {
-            if let Err(e) = commands::save_quick_logs(snapshot).await {
-                leptos::logging::warn!("save_quick_logs (inventory add) failed: {:?}", e);
+            match commands::save_quick_logs(snapshot).await {
+                Ok(()) => app_toast.show(save_success_msg),
+                Err(BridgeError::BridgeUnavailable) => {}
+                Err(e) => {
+                    leptos::logging::warn!("save_quick_logs (inventory add) failed: {:?}", e);
+                    app_toast.show(save_failure_msg);
+                }
             }
         });
-        // Optimistic confirmation toast — same key as the timer-view
-        // QuickLogModal so the two add paths feel identical.
-        app_toast.show(t_string!(i18n, timer.toast.quick_log_added).to_string());
         inv_quick_log_modal_open.set(false);
         ql_add_title.set(String::new());
         ql_add_minutes.set(5);

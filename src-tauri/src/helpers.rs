@@ -845,6 +845,7 @@ mod tests {
             "session.json",
             "tasks.json",
             "settings.json",
+            "history.json.corrupt",
             // AR-1 regression: feature 006's quick_logs.json and
             // distractions.json must also be wiped by reset-all-data.
             "quick_logs.json",
@@ -858,6 +859,7 @@ mod tests {
         assert!(!dir.path().join("session.json").exists());
         assert!(!dir.path().join("tasks.json").exists());
         assert!(!dir.path().join("settings.json").exists());
+        assert!(!dir.path().join("history.json.corrupt").exists());
         assert!(!dir.path().join("quick_logs.json").exists());
         assert!(!dir.path().join("distractions.json").exists());
         assert!(!dir.path().join("quick_logs.json.corrupt").exists());
