@@ -254,7 +254,8 @@
     "btn_add_quicklog": "+ Voce rapida",
     "scope_day": "Giorno",
     "scope_week": "Settimana",
-    "scope_month": "Mese"
+    "scope_month": "Mese",
+    "scope_aria_label": "Ambito inventario"
   },
   "tag": {
     "choose_header": "Scegli tag",

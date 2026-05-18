@@ -254,7 +254,8 @@
     "btn_add_quicklog": "+ Schnelleintrag",
     "scope_day": "Tag",
     "scope_week": "Woche",
-    "scope_month": "Monat"
+    "scope_month": "Monat",
+    "scope_aria_label": "Inventarumfang"
   },
   "tag": {
     "choose_header": "Tag wählen",

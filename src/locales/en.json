@@ -254,7 +254,8 @@
     "btn_add_quicklog": "+ Quick Log",
     "scope_day": "Day",
     "scope_week": "Week",
-    "scope_month": "Month"
+    "scope_month": "Month",
+    "scope_aria_label": "Inventory scope"
   },
   "tag": {
     "choose_header": "Choose tag",

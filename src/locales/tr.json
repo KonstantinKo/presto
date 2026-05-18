@@ -254,7 +254,8 @@
     "btn_add_quicklog": "+ Hızlı kayıt",
     "scope_day": "Gün",
     "scope_week": "Hafta",
-    "scope_month": "Ay"
+    "scope_month": "Ay",
+    "scope_aria_label": "Envanter kapsamı"
   },
   "tag": {
     "choose_header": "Etiket seç",

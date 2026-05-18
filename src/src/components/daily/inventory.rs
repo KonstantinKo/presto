@@ -356,7 +356,7 @@ pub fn Inventory(selected_day: RwSignal<DateTime<Utc>>) -> impl IntoView {
                     <div
                         class="inventory-scope-selector"
                         role="radiogroup"
-                        aria-label="Inventory scope"
+                        aria-label=move || t_string!(i18n, inventory.scope_aria_label).to_string()
                         on:keydown=move |ev| {
                             let key = ev.key();
                             let current = scope.get_untracked();
@@ -583,6 +583,18 @@ pub fn Inventory(selected_day: RwSignal<DateTime<Utc>>) -> impl IntoView {
                                                 style="cursor: pointer"
                                                 on:click=move |_| {
                                                     if let Some(ts) = target.as_deref() {
+                                                        if let Ok(parent_dt) = chrono::DateTime::parse_from_rfc3339(ts) {
+                                                            selected_day.set(parent_dt.with_timezone(&Utc));
+                                                        }
+                                                        #[cfg(target_arch = "wasm32")]
+                                                        {
+                                                            let ts_owned = ts.to_string();
+                                                            let _ = leptos::leptos_dom::helpers::set_timeout_with_handle(
+                                                                move || flash_session_row(&ts_owned),
+                                                                std::time::Duration::from_millis(0),
+                                                            );
+                                                        }
+                                                        #[cfg(not(target_arch = "wasm32"))]
                                                         flash_session_row(ts);
                                                     }
                                                 }
@@ -591,6 +603,18 @@ pub fn Inventory(selected_day: RwSignal<DateTime<Utc>>) -> impl IntoView {
                                                     if key == "Enter" || key == " " {
                                                         ev.prevent_default();
                                                         if let Some(ts) = target_kb.as_deref() {
+                                                            if let Ok(parent_dt) = chrono::DateTime::parse_from_rfc3339(ts) {
+                                                                selected_day.set(parent_dt.with_timezone(&Utc));
+                                                            }
+                                                            #[cfg(target_arch = "wasm32")]
+                                                            {
+                                                                let ts_owned = ts.to_string();
+                                                                let _ = leptos::leptos_dom::helpers::set_timeout_with_handle(
+                                                                    move || flash_session_row(&ts_owned),
+                                                                    std::time::Duration::from_millis(0),
+                                                                );
+                                                            }
+                                                            #[cfg(not(target_arch = "wasm32"))]
                                                             flash_session_row(ts);
                                                         }
                                                     }

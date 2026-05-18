@@ -476,6 +476,7 @@ pub(super) fn delete_all_data_in(dir: &Path) -> Result<(), String> {
         // request.
         "quick_logs.json",
         "distractions.json",
+        "history.json.corrupt",
         "quick_logs.json.corrupt",
         "distractions.json.corrupt",
     ];
