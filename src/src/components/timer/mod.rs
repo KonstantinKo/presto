@@ -1851,8 +1851,23 @@ pub fn TimerView() -> impl IntoView {
     // the next session. Mirrors the JS-era flow at
     // `pomodoro-timer.js:1175-1180` and is what
     // `settings-automation.spec.js:59` exercises.
-    let tick_body: std::rc::Rc<dyn Fn()> = {
-        std::rc::Rc::new(move || {
+    // `backend_driver_active` flips to `true` the first time the
+    // backend `ENGINE_TICK` event is observed and stays true for the
+    // app lifetime. Used to suppress the setInterval driver's
+    // metronome playback once the backend driver is known to be
+    // alive — otherwise both drivers race to be the "first observer
+    // of the second crossing" each cycle, and which driver wins
+    // swaps cycle-to-cycle as their relative JS event-loop jitter
+    // shifts. The result is an audible uneven rhythm (one tick
+    // arrives ~30 ms early, the next ~30 ms late). State mutation
+    // and tray IPC stay idempotent across both drivers; only
+    // metronome playback needs a single source of truth.
+    let backend_driver_active: std::rc::Rc<std::cell::Cell<bool>> =
+        std::rc::Rc::new(std::cell::Cell::new(false));
+
+    let tick_body: std::rc::Rc<dyn Fn(bool)> = {
+        let backend_driver_active = backend_driver_active.clone();
+        std::rc::Rc::new(move |is_backend_driver: bool| {
                 let remaining_before = engine.with_untracked(TimerState::time_remaining_secs);
                 // R-001 fix: capture `total_focus_before` outside the
                 // try_update so the shared `persist_focus_completion`
@@ -1989,7 +2004,17 @@ pub fn TimerView() -> impl IntoView {
                 // the display didn't change.
                 let remaining_after = engine.with_untracked(TimerState::time_remaining_secs);
                 let crossed_second = remaining_after < remaining_before;
+                // Suppress setInterval's metronome once the backend
+                // driver is alive — see the `backend_driver_active`
+                // comment above. The backend driver always plays
+                // (its callback path is the canonical 1 Hz source on
+                // Tauri); the setInterval driver only plays in the
+                // dev-server / e2e-mock case where the backend bus
+                // never fires.
+                let drive_metronome =
+                    is_backend_driver || !backend_driver_active.get();
                 let should_tick = crossed_second
+                    && drive_metronome
                     && settings.with_untracked(|s| s.notifications.metronome)
                     && engine.with_untracked(|s| {
                         matches!(s.current_mode(), TimerMode::Focus)
@@ -2012,7 +2037,7 @@ pub fn TimerView() -> impl IntoView {
     Effect::new(move |_| {
         let tick = tick_for_interval.clone();
         let handle = set_interval_with_handle(
-            move || tick(),
+            move || tick(false),
             std::time::Duration::from_secs(1),
         );
         // The handle is intentionally leaked into the closure's
@@ -2034,10 +2059,18 @@ pub fn TimerView() -> impl IntoView {
     // navigation flows — `app.rs` toggles `.hidden` instead of
     // tearing down the component tree).
     let tick_for_listen = tick_body.clone();
+    let backend_driver_active_for_listen = backend_driver_active;
     spawn_local(async move {
         match crate::bridge::events::listen::<()>(
             crate::bridge::events::ENGINE_TICK,
-            move |()| tick_for_listen(),
+            move |()| {
+                // First fire flips the flag so the setInterval driver
+                // stops playing its own metronome ticks. Cheap idempotent
+                // write — no read-modify-write race in single-threaded
+                // wasm.
+                backend_driver_active_for_listen.set(true);
+                tick_for_listen(true);
+            },
         )
         .await
         {
