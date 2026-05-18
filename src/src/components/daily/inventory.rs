@@ -107,7 +107,10 @@ fn format_hh_mm(rfc3339: &str) -> String {
         let Ok(parsed) = chrono::DateTime::parse_from_rfc3339(rfc3339) else {
             return String::new();
         };
-        #[allow(clippy::cast_precision_loss)]
+        #[allow(
+            clippy::cast_precision_loss,
+            reason = "millisecond timestamps fit in f64 without loss for any date in the expected range (~53-bit mantissa covers ±285 million years)"
+        )]
         let d = js_sys::Date::new(&wasm_bindgen::JsValue::from_f64(
             parsed.timestamp_millis() as f64
         ));
