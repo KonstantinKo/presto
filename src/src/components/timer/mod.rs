@@ -2730,7 +2730,6 @@ pub fn TimerView() -> impl IntoView {
                     ></i>
                 </button>
                 <button id="skip-btn" class="control-btn"
-                    class:primary=move || matches!(run_state.get(), RunState::Paused)
                     class:overtime=move || matches!(run_state.get(), RunState::Running) && is_overtime.get()
                     // R-005 fix: see #stop-btn for rationale — `aria-hidden`
                     // is only emitted when actually hidden.
