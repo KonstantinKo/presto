@@ -226,7 +226,8 @@
       "manual_session_recorded": "Sessione manuale registrata",
       "session_deleted": "Sessione eliminata ❌",
       "minutes_added": "5 minuti aggiunti al timer ⏰",
-      "minutes_subtracted": "5 minuti sottratti dal timer ⏰"
+      "minutes_subtracted": "5 minuti sottratti dal timer ⏰",
+      "distraction_logged": "Distrazione registrata 📝"
     }
   },
   "modal": {

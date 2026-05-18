@@ -226,7 +226,8 @@
       "manual_session_recorded": "Manuel oturum kaydedildi",
       "session_deleted": "Oturum silindi ❌",
       "minutes_added": "Zamanlayıcıya 5 dakika eklendi ⏰",
-      "minutes_subtracted": "Zamanlayıcıdan 5 dakika çıkarıldı ⏰"
+      "minutes_subtracted": "Zamanlayıcıdan 5 dakika çıkarıldı ⏰",
+      "distraction_logged": "Dikkat dağıtıcı kaydedildi 📝"
     }
   },
   "modal": {

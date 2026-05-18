@@ -3056,6 +3056,7 @@ fn DistractionModal(
     distractions: RwSignal<crate::managers::distraction::DistractionManager>,
 ) -> impl IntoView {
     let i18n = use_i18n();
+    let app_toast = use_context::<AppToast>().unwrap_or_default();
     let note = RwSignal::new(String::new());
 
     let do_close = move || {
@@ -3079,6 +3080,12 @@ fn DistractionModal(
                 leptos::logging::warn!("save_distractions failed: {:?}", e);
             }
         });
+        // Optimistic confirmation — fires before the persistence
+        // async completes. Mirrors the timer's own toast flow
+        // (`timer.toast.timer_paused` etc., which also fire on
+        // dispatch). A persistence failure surfaces via the warn log
+        // above; user-facing recovery for that case isn't wired yet.
+        app_toast.show(t_string!(i18n, timer.toast.distraction_logged).to_string());
         open.set(false);
         note.set(String::new());
         parent_ref_snapshot.set(None);
