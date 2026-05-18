@@ -228,7 +228,9 @@
       "minutes_added": "5 minuti aggiunti al timer ⏰",
       "minutes_subtracted": "5 minuti sottratti dal timer ⏰",
       "distraction_logged": "Distrazione registrata 📝",
-      "quick_log_added": "Voce rapida aggiunta ✅"
+      "quick_log_added": "Voce rapida aggiunta ✅",
+      "quick_log_save_failed": "Impossibile salvare la voce rapida",
+      "distraction_save_failed": "Impossibile salvare la distrazione"
     }
   },
   "modal": {
@@ -249,7 +251,10 @@
     "empty_quicklogs": "Nessuna voce rapida oggi.",
     "empty_distractions": "Nessuna distrazione oggi.",
     "deleted_tag_placeholder": "(tag eliminato)",
-    "btn_add_quicklog": "+ Voce rapida"
+    "btn_add_quicklog": "+ Voce rapida",
+    "scope_day": "Giorno",
+    "scope_week": "Settimana",
+    "scope_month": "Mese"
   },
   "tag": {
     "choose_header": "Scegli tag",

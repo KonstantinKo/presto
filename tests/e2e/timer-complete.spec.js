@@ -2,15 +2,15 @@
 // regression coverage on natural completion.
 //
 // Covers FR-013 (Complete reveals as the right-slot button in
-// Paused), FR-015 (elapsed < 30 acts as Abort delegation: no count,
-// title preserved), the headline FR-007 regression (natural focus
-// completion clears the title).
+// Paused) and the headline FR-007 regression (natural focus
+// completion clears the title). PO overrode the FR-015 anti-cheat
+// threshold: sub-30s Complete now counts as a completed pomodoro,
+// so the persistence path runs even on a short paused-Complete.
 //
-// Engine-level coverage for FR-014 (≥ 30 s threshold) lives in the
-// 14 GREEN tests under `src/src/engine/timer.rs` (T014, T020 etc.).
-// The DOM-level surface here proves the affordance is wired
-// correctly and the long-lived FR-007 contract still holds under the
-// rework.
+// Engine-level coverage of the Complete branches lives in the GREEN
+// tests under `src/src/engine/timer.rs` (T014, T020 etc.). The DOM-
+// level surface here proves the affordance is wired correctly and
+// the long-lived FR-007 contract still holds under the rework.
 
 import { test, expect } from "./fixtures/index.js";
 import {
@@ -23,11 +23,6 @@ import {
 test("Complete affordance + FR-007 natural-completion title clear regression", async ({
   page,
 }) => {
-  // R-001 regression adds a > 30-second wall-clock wait so a UI-
-  // triggered Complete from Paused crosses the engine's elapsed
-  // threshold. Bump the default test timeout to allow that plus
-  // the upstream debug-mode flow.
-  test.setTimeout(180_000);
   await page.goto("/index.html");
 
   // ── 0. Enable debug mode so the focus duration is 3 s wall-clock —
@@ -90,7 +85,8 @@ test("Complete affordance + FR-007 natural-completion title clear regression", a
   await expect(page.locator("#session-title-input")).toBeVisible();
   await expect(page.locator("#session-title-input")).toHaveValue("");
 
-  // Start → immediately Pause so elapsed is < 30 s.
+  // Start → immediately Pause (short elapsed, well under the former
+  // 30 s threshold — PO removed that gate so this still counts).
   await page.locator("#play-pause-btn").click();
   await expect(page.locator("#pause-icon")).toBeVisible();
   await page.locator("#play-pause-btn").click();
@@ -102,54 +98,13 @@ test("Complete affordance + FR-007 natural-completion title clear regression", a
     /complete/i
   );
 
-  // ── 4. R-001 regression: a UI-triggered Complete from Paused with
-  // elapsed ≥ 30 s persists the session into the sessions-history
-  // table. Before R-001 the persistence block was tick-only, so the
-  // engine.complete() event vector never reached `save_session_data`
-  // and the daily-history view stayed empty.
-  //
-  // The engine's 30-second threshold (FR-014) lives on wall-clock
-  // elapsed, not on the configured focus duration — debug mode's
-  // 3-second focus can't satisfy it (it auto-completes naturally
-  // before 30s). Plan:
-  //   1. From the current Paused state (debug-3s focus), click the
-  //      left-slot Abort button to return the engine to Idle on
-  //      Focus mode.
-  //   2. Disable debug mode so the next start uses the configured
-  //      25-min focus duration. set_durations rebases the displayed
-  //      remaining only when fully Idle — the abort above is the
-  //      precondition.
-  //   3. Start a fresh focus, wait > 30 s, pause, Complete, assert.
-  await page.locator("#stop-btn").click(); // left-slot = Abort in Paused
-  await expect(page.locator("#play-icon")).toBeVisible();
-  await expect(page.locator("#status-text")).toContainText(/focus/i);
-
-  await openSettings(page);
-  await selectSettingsCategory(page, "Advanced");
-  await page.locator("#debug-mode").click();
-  await expect(page.locator("#debug-mode")).not.toBeChecked();
-  await tapTab(page, "Timer");
-  // Confirm the displayed remaining rebased to the 25-min default.
-  await expect(page.locator("#timer-minutes")).toHaveText("25");
-
-  // Start a fresh 25-min focus.
-  await page.locator("#play-pause-btn").click();
-  await expect(page.locator("#pause-icon")).toBeVisible();
-
-  // Wait > 30 s wall-clock so elapsed crosses the threshold. Playwright
-  // doesn't bless explicit waits — but the engine's 30-second gate is
-  // wall-clock-bound, and the only way to test the Complete branch
-  // without mid-flow state injection (forbidden by E2E Rule 1.2) is
-  // to actually wait. Lock the wait on the document title (the title
-  // Effect re-renders on every engine tick from time_remaining_secs)
-  // until the displayed remaining is between 24:00 and 24:29, i.e.
-  // ≥ 31 s elapsed. The minutes digit alone is too coarse — 24:59
-  // satisfies `expect minutes="24"` after just one tick.
-  await expect(page).toHaveTitle(/^24:[0-2]\d — Presto$/, { timeout: 60_000 });
-
-  // Pause and Complete.
-  await page.locator("#play-pause-btn").click();
-  await expect(page.locator("#play-icon")).toBeVisible();
+  // ── 4. R-001 regression: a UI-triggered Complete from Paused
+  // persists the session into the sessions-history table. Before R-001
+  // the persistence block was tick-only, so the engine.complete()
+  // event vector never reached `save_session_data` and the daily-
+  // history view stayed empty. With the PO override of FR-015 the
+  // engine no longer requires ≥ 30 s elapsed for the count to fire,
+  // so the short-elapsed Paused state above is the regression case.
   await page.locator("#skip-btn").click(); // right-slot = Complete in Paused
 
   // Mode should advance to Break (focus completion → break).

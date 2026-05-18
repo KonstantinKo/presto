@@ -492,13 +492,18 @@ const fn prime_audio_context() {}
 /// app startup that primes both audio contexts (chime + ambient) the first
 /// time the user touches the surface. Self-removes after the first fire.
 ///
-/// Audio context unlock per WKWebView gesture-stack requirement; must run
+/// Audio context unlock per `WKWebView` gesture-stack requirement; must run
 /// inside a real user-gesture call frame, so synthetic Leptos events from
-/// ShortcutBus do not satisfy the gesture rule. The first pointerdown
+/// `ShortcutBus` do not satisfy the gesture rule. The first pointerdown
 /// anywhere in the document is sufficient — the user must have clicked,
 /// tapped, or pressed at least once before any keyboard-only flow could
 /// have produced inaudible chimes, so this listener wins the race against
 /// the global-shortcut path.
+#[cfg(target_arch = "wasm32")]
+type AudioPrimingSlot = std::rc::Rc<
+    std::cell::RefCell<Option<wasm_bindgen::closure::Closure<dyn FnMut(web_sys::Event)>>>,
+>;
+
 #[cfg(target_arch = "wasm32")]
 pub(crate) fn install_audio_priming_listener() {
     use std::cell::RefCell;
@@ -516,8 +521,7 @@ pub(crate) fn install_audio_priming_listener() {
     // post-construction; before fill, the closure refuses to run (slot
     // is None on the first pointerdown only in the impossible "fires
     // before the slot fill below executes synchronously" race).
-    let slot: Rc<RefCell<Option<wasm_bindgen::closure::Closure<dyn FnMut(web_sys::Event)>>>> =
-        Rc::new(RefCell::new(None));
+    let slot: AudioPrimingSlot = Rc::new(RefCell::new(None));
     let slot_for_cb = slot.clone();
     let document_for_cb = document.clone();
     let closure = wasm_bindgen::closure::Closure::<dyn FnMut(web_sys::Event)>::new(
@@ -1553,13 +1557,13 @@ pub fn TimerView() -> impl IntoView {
     // Feature 006 (T054): Complete handler. Called from the
     // right-slot button in Paused (or AutoPaused — folded into
     // RunState::Paused). Routes through `engine.complete(clock)`
-    // which: (a) if elapsed < 30 s, internally delegates to
-    // `abort()` (FR-015 — discard as Abort, no count); (b) else
-    // increments `completed_pomodoros`, integrates elapsed into
+    // which, for any positive elapsed, increments
+    // `completed_pomodoros`, integrates elapsed into
     // `total_focus_secs`, advances mode per cadence, emits
     // `PomodoroCompleted` + `SessionCompletedEarly`. The downstream
     // tick-loop hooks (session-save, auto-restart) read the events
-    // and act per FR-013/FR-014/FR-016.
+    // and act per FR-013/FR-014/FR-016. (PO override of FR-015
+    // anti-cheat threshold — sub-30s completions count by design.)
     //
     // R-001 fix: persistence used to live exclusively inside the
     // tick branch. Since `complete()` flips `is_running = false`,
@@ -2257,22 +2261,24 @@ pub fn TimerView() -> impl IntoView {
 
             // Status / mode label + tag-dropdown trigger.
             //
-            // Feature 006 (T048): combined `#timer-status-pill`
-            // wraps the existing `#timer-status` (chip + mode label
-            // + chevron) and `#session-title-input` so the two read
-            // as a unified pill. In Focus Idle the pill is
-            // interactive (chevron visible, title editable). In
-            // Focus Running / Paused / AutoPaused the pill collapses
-            // read-only — chevron hidden via inline-style + tag
-            // click no-op via `on_status_click` gate, title input
-            // gets `readonly` via `prop:readonly`. Break / LongBreak
-            // modes don't render the title region — the `<Show>`
-            // guard below keeps the JS-era status-quo intact.
+            // Feature 006 (T048) — TRUE embedded-prefix design:
+            // `#timer-status-pill` is the SOLE bordered element.
+            // `#timer-status` (the chip: icon + mode label + chevron)
+            // and `#session-title-input` are direct flex siblings
+            // inside the pill, so the whole thing reads as one input
+            // with a non-editable prefix token — like an @-mention
+            // or search pill-prefix. No inner separators, no inner
+            // border distinction between chip and text. In Focus
+            // Idle the chevron shows + title is editable; in
+            // Running / Paused / AutoPaused the chevron hides and
+            // the input flips readonly so the pill collapses to a
+            // single static label visually. Break / LongBreak modes
+            // render only the chip (no title input) — the `<Show>`
+            // below keeps that path working.
             <div style="text-align: center;">
                 <div class="timer-status-pill" id="timer-status-pill"
                     class:running=move || matches!(run_state.get(), RunState::Running)
                     class:paused=move || matches!(run_state.get(), RunState::Paused)>
-                <div class="timer-status-container">
                     <div
                         class="timer-status clickable"
                         class:active=move || tag_dropdown_open.get()
@@ -2313,14 +2319,39 @@ pub fn TimerView() -> impl IntoView {
                         ></i>
                     </div>
 
-                    // Tag-dropdown popover. Anchored as a sibling of
-                    // `#timer-status` inside `.timer-status-container`
-                    // so the JS-era CSS positioning rules
-                    // (`.tag-dropdown-menu` `position: absolute; top:
-                    // calc(100% + 8px)`) anchor against the trigger.
-                    // The `.active` class is what
-                    // `style/timer.css` reads to flip
-                    // `display: none` → `display: block`.
+                    // Feature 002 Bundle A + Feature 006 (T048):
+                    // per-session title input — direct sibling of
+                    // the chip inside the pill so the two read as a
+                    // single line. Only rendered during Focus —
+                    // breaks don't carry titles. Becomes `readonly`
+                    // outside Focus-Idle so the user can't edit
+                    // mid-session; placeholder copy flips to the
+                    // lighter `pill_title_placeholder` (FR-003).
+                    <Show when=move || engine.with(|s| matches!(s.current_mode(), TimerMode::Focus))>
+                        <input
+                            type="text"
+                            id="session-title-input"
+                            class="session-title-input"
+                            class:pill-readonly=move || !matches!(run_state.get(), RunState::Idle)
+                            maxlength="120"
+                            placeholder=move || t_string!(i18n, timer.pill_title_placeholder)
+                            prop:value=move || session_title.get()
+                            prop:readonly=move || !matches!(run_state.get(), RunState::Idle)
+                            on:input=move |ev| {
+                                session_title.set(event_target_value(&ev));
+                            }
+                        />
+                    </Show>
+
+                    // Tag-dropdown popover. Lives inside
+                    // `#timer-status-pill` (which is `position:
+                    // relative`) so the absolute-positioned popover
+                    // anchors against the whole pill — `top:
+                    // calc(100% + 8px); left: 50%; transform:
+                    // translateX(-50%)` centers it horizontally
+                    // under the pill. The `.active` class is what
+                    // `style/timer.css` reads to flip `display:
+                    // none` → `display: block`.
                     <div
                         class="tag-dropdown-menu"
                         id="tag-dropdown-menu"
@@ -2539,34 +2570,6 @@ pub fn TimerView() -> impl IntoView {
                             </div>
                         </div>
                     </div>
-                </div>
-                // Feature 002 Bundle A + Feature 006 (T048):
-                // per-session title input, rendered below the tag
-                // pill inside `#timer-status-pill` so the combined
-                // pill reads as a single unit. Only shown during
-                // Focus — breaks don't carry titles. The input
-                // becomes `readonly` outside Focus-Idle so the user
-                // can't edit mid-session; the displayed placeholder
-                // also flips to the lighter `pill_title_placeholder`
-                // copy when Idle (FR-003: faint placeholder).
-                <Show when=move || engine.with(|s| matches!(s.current_mode(), TimerMode::Focus))>
-                    <div class="session-title-row"
-                        class:pill-readonly=move || !matches!(run_state.get(), RunState::Idle)
-                        class:pill-placeholder=move || session_title.with(|t| t.trim().is_empty())>
-                        <input
-                            type="text"
-                            id="session-title-input"
-                            class="session-title-input"
-                            maxlength="120"
-                            placeholder=move || t_string!(i18n, timer.pill_title_placeholder)
-                            prop:value=move || session_title.get()
-                            prop:readonly=move || !matches!(run_state.get(), RunState::Idle)
-                            on:input=move |ev| {
-                                session_title.set(event_target_value(&ev));
-                            }
-                        />
-                    </div>
-                </Show>
                 </div>
             </div>
 
@@ -2945,11 +2948,113 @@ fn QuickLogModal(
     let title = RwSignal::new(String::new());
     let minutes = RwSignal::new(5u32);
 
-    let on_close = move |_| {
+    // a11y wiring (audit findings #6, #7). `title_ref` receives
+    // imperative focus on open — the HTML `autofocus` attribute
+    // doesn't refire across re-opens in Leptos CSR because the node
+    // is reused. `return_focus` snapshots whichever element opened
+    // the modal so keyboard users land back on the trigger button on
+    // close. Locally duplicated (not extracted to a shared helper)
+    // because inventory.rs is being edited in parallel and we want to
+    // avoid a new shared module collision — follow-up cleanup later.
+    let title_ref = NodeRef::<leptos::html::Input>::new();
+    // `new_local` (LocalStorage) — `web_sys::HtmlElement` isn't
+    // `Send + Sync`, so the default arena variant doesn't compile.
+    // CSR-only context anyway; LocalStorage is the right fit.
+    let return_focus = StoredValue::new_local(None::<web_sys::HtmlElement>);
+
+    let do_close = move || {
         open.set(false);
         title.set(String::new());
         minutes.set(5);
+        if let Some(prev) = return_focus.get_value() {
+            let _ = prev.focus();
+            return_focus.set_value(None);
+        }
     };
+    let on_close = move |_| do_close();
+
+    // Open transition: capture the active element, then focus the
+    // first input. The closure's previous-value param tracks the
+    // last observed `open` state so we only fire on the false→true
+    // transition (not on every re-render of the modal subtree).
+    Effect::new(move |prev: Option<bool>| {
+        let now = open.get();
+        if now && prev != Some(true) {
+            let captured = web_sys::window()
+                .and_then(|w| w.document())
+                .and_then(|d| d.active_element())
+                .and_then(|e| e.dyn_into::<web_sys::HtmlElement>().ok());
+            return_focus.set_value(captured);
+            if let Some(el) = title_ref.get() {
+                let _ = el.focus();
+            }
+        }
+        now
+    });
+
+    // Focus trap + Escape close. `Tab` / `Shift+Tab` cycles within
+    // the dialog's focusable children, wrapping at the edges.
+    // Enumerated via `query_selector_all` — the modals are small
+    // enough that scanning every keydown is fine.
+    let on_form_keydown = move |ev: leptos::ev::KeyboardEvent| {
+        let key = ev.key();
+        if key == "Escape" {
+            ev.prevent_default();
+            do_close();
+            return;
+        }
+        if key != "Tab" {
+            return;
+        }
+        let Some(doc) = web_sys::window().and_then(|w| w.document()) else {
+            return;
+        };
+        let Some(form) = doc.get_element_by_id("quick-log-form") else {
+            return;
+        };
+        let Ok(nodes) = form.query_selector_all(
+            "input:not([disabled]), button:not([disabled]), [tabindex]:not([tabindex='-1'])",
+        ) else {
+            return;
+        };
+        let len = nodes.length();
+        if len == 0 {
+            return;
+        }
+        let mut focusables: Vec<web_sys::HtmlElement> = Vec::with_capacity(len as usize);
+        for i in 0..len {
+            if let Some(node) = nodes.item(i) {
+                if let Ok(el) = node.dyn_into::<web_sys::HtmlElement>() {
+                    focusables.push(el);
+                }
+            }
+        }
+        if focusables.is_empty() {
+            return;
+        }
+        let active = doc
+            .active_element()
+            .and_then(|e| e.dyn_into::<web_sys::HtmlElement>().ok());
+        let current_idx = active
+            .as_ref()
+            .and_then(|el| focusables.iter().position(|f| f.is_same_node(Some(el))));
+        let last = focusables.len() - 1;
+        let next_idx = if ev.shift_key() {
+            match current_idx {
+                Some(0) | None => last,
+                Some(i) => i - 1,
+            }
+        } else {
+            match current_idx {
+                Some(i) if i == last => 0,
+                Some(i) => i + 1,
+                None => 0,
+            }
+        };
+        ev.prevent_default();
+        let _ = focusables[next_idx].focus();
+    };
+
     let on_submit = move |_| {
         let raw_title = title.with_untracked(|t| t.trim().to_string());
         let mins = minutes.get_untracked();
@@ -2957,18 +3062,34 @@ fn QuickLogModal(
             return;
         }
         let now_ms = BrowserClock.now_ms();
-        let id = format!("quicklog-{}", random_uuid());
+        // Bare UUID v4 string per the data model — `random_uuid()`
+        // wraps `crypto.randomUUID()` which is spec-compliant v4.
+        // Legacy on-disk entries with the old `quicklog-` prefix
+        // remain loadable; the id field is opaque.
+        let id = random_uuid();
         quick_logs.update(|mgr| mgr.add(raw_title, mins, now_ms, id));
         let snapshot =
             quick_logs.with_untracked(crate::managers::quick_log::QuickLogManager::save_payload);
+        // AG-08 silent-data-loss fix: surface save failures through the
+        // app-level toast queue. `BridgeUnavailable` is filtered out so
+        // dev-server runs (no Tauri runtime) don't toast on every save;
+        // any other Err means the on-disk file is now out of sync with
+        // the in-memory state and the user needs to know. Resolving the
+        // localised string here (before the spawn) keeps `t_string!`
+        // inside the live i18n context.
+        let save_failure_msg = t_string!(i18n, timer.toast.quick_log_save_failed).to_string();
         spawn_local(async move {
-            if let Err(e) = crate::bridge::commands::save_quick_logs(snapshot).await {
-                leptos::logging::warn!("save_quick_logs failed: {:?}", e);
+            match crate::bridge::commands::save_quick_logs(snapshot).await {
+                Ok(()) | Err(crate::bridge::types::BridgeError::BridgeUnavailable) => {}
+                Err(e) => {
+                    leptos::logging::warn!("save_quick_logs failed: {:?}", e);
+                    app_toast.show(save_failure_msg);
+                }
             }
         });
         // Optimistic confirmation toast — mirrors the distraction
-        // modal flow. Fires on dispatch; persistence failure still
-        // surfaces via the warn log above.
+        // modal flow. Fires on dispatch; the save-failure toast above
+        // is enqueued separately if the persistence Err arm trips.
         app_toast.show(t_string!(i18n, timer.toast.quick_log_added).to_string());
         open.set(false);
         title.set(String::new());
@@ -2986,6 +3107,7 @@ fn QuickLogModal(
                 role="dialog"
                 aria-modal="true"
                 aria-labelledby="quick-log-modal-title"
+                on:keydown=on_form_keydown
                 on:submit=move |ev| {
                     ev.prevent_default();
                     on_submit(ev);
@@ -3005,8 +3127,8 @@ fn QuickLogModal(
                         type="text"
                         id="quick-log-title"
                         maxlength="120"
-                        autofocus
                         required
+                        node_ref=title_ref
                         prop:value=move || title.get()
                         on:input=move |ev| title.set(event_target_value(&ev))
                     />
@@ -3058,11 +3180,99 @@ fn DistractionModal(
     let app_toast = use_context::<AppToast>().unwrap_or_default();
     let note = RwSignal::new(String::new());
 
+    // a11y wiring (audit findings #6, #7). Mirrors the QuickLogModal
+    // package: `note_ref` for imperative open-focus, `return_focus`
+    // for restoring the opening trigger on close. Inline-duplicated
+    // (not extracted) so the parallel inventory.rs edit doesn't fight
+    // over a new shared module.
+    let note_ref = NodeRef::<leptos::html::Input>::new();
+    // See QuickLogModal — `LocalStorage` for the same Send+Sync reason.
+    let return_focus = StoredValue::new_local(None::<web_sys::HtmlElement>);
+
     let do_close = move || {
         open.set(false);
         note.set(String::new());
         parent_ref_snapshot.set(None);
+        if let Some(prev) = return_focus.get_value() {
+            let _ = prev.focus();
+            return_focus.set_value(None);
+        }
     };
+
+    Effect::new(move |prev: Option<bool>| {
+        let now = open.get();
+        if now && prev != Some(true) {
+            let captured = web_sys::window()
+                .and_then(|w| w.document())
+                .and_then(|d| d.active_element())
+                .and_then(|e| e.dyn_into::<web_sys::HtmlElement>().ok());
+            return_focus.set_value(captured);
+            if let Some(el) = note_ref.get() {
+                let _ = el.focus();
+            }
+        }
+        now
+    });
+
+    let on_form_keydown = move |ev: leptos::ev::KeyboardEvent| {
+        let key = ev.key();
+        if key == "Escape" {
+            ev.prevent_default();
+            do_close();
+            return;
+        }
+        if key != "Tab" {
+            return;
+        }
+        let Some(doc) = web_sys::window().and_then(|w| w.document()) else {
+            return;
+        };
+        let Some(form) = doc.get_element_by_id("distraction-form") else {
+            return;
+        };
+        let Ok(nodes) = form.query_selector_all(
+            "input:not([disabled]), button:not([disabled]), [tabindex]:not([tabindex='-1'])",
+        ) else {
+            return;
+        };
+        let len = nodes.length();
+        if len == 0 {
+            return;
+        }
+        let mut focusables: Vec<web_sys::HtmlElement> = Vec::with_capacity(len as usize);
+        for i in 0..len {
+            if let Some(node) = nodes.item(i) {
+                if let Ok(el) = node.dyn_into::<web_sys::HtmlElement>() {
+                    focusables.push(el);
+                }
+            }
+        }
+        if focusables.is_empty() {
+            return;
+        }
+        let active = doc
+            .active_element()
+            .and_then(|e| e.dyn_into::<web_sys::HtmlElement>().ok());
+        let current_idx = active
+            .as_ref()
+            .and_then(|el| focusables.iter().position(|f| f.is_same_node(Some(el))));
+        let last = focusables.len() - 1;
+        let next_idx = if ev.shift_key() {
+            match current_idx {
+                Some(0) | None => last,
+                Some(i) => i - 1,
+            }
+        } else {
+            match current_idx {
+                Some(i) if i == last => 0,
+                Some(i) => i + 1,
+                None => 0,
+            }
+        };
+        ev.prevent_default();
+        let _ = focusables[next_idx].focus();
+    };
+
     let do_submit = move || {
         let raw_note = note.with_untracked(|n| n.trim().to_string());
         if raw_note.is_empty() {
@@ -3070,20 +3280,33 @@ fn DistractionModal(
         }
         let pref = parent_ref_snapshot.get_untracked();
         let now_ms = BrowserClock.now_ms();
-        let id = format!("distraction-{}", random_uuid());
+        // Bare UUID v4 per the data model. See QuickLogModal for the
+        // legacy-prefix back-compat note.
+        let id = random_uuid();
         distractions.update(|mgr| mgr.add(raw_note, pref, now_ms, id));
         let snapshot = distractions
             .with_untracked(crate::managers::distraction::DistractionManager::save_payload);
+        // AG-08 silent-data-loss fix: surface save failures through the
+        // app-level toast queue. `BridgeUnavailable` is filtered out so
+        // dev-server runs don't toast; any other Err means the on-disk
+        // file is now stale and the user needs to know. Resolving the
+        // localised string here (before the spawn) keeps `t_string!`
+        // inside the live i18n context.
+        let save_failure_msg = t_string!(i18n, timer.toast.distraction_save_failed).to_string();
         spawn_local(async move {
-            if let Err(e) = crate::bridge::commands::save_distractions(snapshot).await {
-                leptos::logging::warn!("save_distractions failed: {:?}", e);
+            match crate::bridge::commands::save_distractions(snapshot).await {
+                Ok(()) | Err(crate::bridge::types::BridgeError::BridgeUnavailable) => {}
+                Err(e) => {
+                    leptos::logging::warn!("save_distractions failed: {:?}", e);
+                    app_toast.show(save_failure_msg);
+                }
             }
         });
         // Optimistic confirmation — fires before the persistence
         // async completes. Mirrors the timer's own toast flow
         // (`timer.toast.timer_paused` etc., which also fire on
-        // dispatch). A persistence failure surfaces via the warn log
-        // above; user-facing recovery for that case isn't wired yet.
+        // dispatch). The save-failure toast above is enqueued
+        // separately if the persistence Err arm trips.
         app_toast.show(t_string!(i18n, timer.toast.distraction_logged).to_string());
         open.set(false);
         note.set(String::new());
@@ -3101,15 +3324,10 @@ fn DistractionModal(
                 role="dialog"
                 aria-modal="true"
                 aria-labelledby="distraction-modal-title"
+                on:keydown=on_form_keydown
                 on:submit=move |ev| {
                     ev.prevent_default();
                     do_submit();
-                }
-                on:keydown=move |ev: leptos::ev::KeyboardEvent| {
-                    if ev.key() == "Escape" {
-                        ev.prevent_default();
-                        do_close();
-                    }
                 }>
                 <div class="session-modal-header">
                     <h3 id="distraction-modal-title">{t!(i18n, modal.note_distraction_title)}</h3>
@@ -3126,8 +3344,8 @@ fn DistractionModal(
                         type="text"
                         id="distraction-note"
                         maxlength="120"
-                        autofocus
                         required
+                        node_ref=note_ref
                         prop:value=move || note.get()
                         on:input=move |ev| note.set(event_target_value(&ev))
                     />
@@ -3235,6 +3453,17 @@ mod tests {
             "smart-indicator",
             "auto-start-indicator",
             "continuous-session-indicator",
+            // Feature 006 + 007 additions. Each entry's source spec /
+            // e2e file is listed next to it.
+            "timer-status-pill", // 007 status-pill shell (specs/007 §UI; visual regression baseline)
+            "quick-log-modal-overlay", // 006 Quick Log modal root (specs/006 plan.md)
+            "distraction-modal-overlay", // 006 Distraction modal root (specs/006 plan.md)
+            "stop-complete-icon", // 007 T020 overtime check glyph, left slot (specs/007 plan.md)
+            "center-complete-icon", // 007 T020 overtime check glyph, center slot (specs/007 plan.md)
+            "cancel-quick-log-btn", // 006 Quick Log cancel action (specs/006 plan.md)
+            "save-quick-log-btn",   // 006 Quick Log submit action (specs/006 plan.md)
+            "cancel-distraction-btn", // 006 Distraction cancel action (specs/006 plan.md)
+            "save-distraction-btn", // 006 Distraction submit action (specs/006 plan.md)
         ];
         let mut seen: Vec<&str> = Vec::with_capacity(REQUIRED_IDS.len());
         for id in REQUIRED_IDS {

@@ -228,7 +228,9 @@
       "minutes_added": "Zamanlayıcıya 5 dakika eklendi ⏰",
       "minutes_subtracted": "Zamanlayıcıdan 5 dakika çıkarıldı ⏰",
       "distraction_logged": "Dikkat dağıtıcı kaydedildi 📝",
-      "quick_log_added": "Hızlı kayıt eklendi ✅"
+      "quick_log_added": "Hızlı kayıt eklendi ✅",
+      "quick_log_save_failed": "Hızlı kayıt kaydedilemedi",
+      "distraction_save_failed": "Dikkat dağıtıcı kaydedilemedi"
     }
   },
   "modal": {
@@ -249,7 +251,10 @@
     "empty_quicklogs": "Bugün hızlı kayıt yok.",
     "empty_distractions": "Bugün dikkat dağınıklığı yok.",
     "deleted_tag_placeholder": "(silinmiş etiket)",
-    "btn_add_quicklog": "+ Hızlı kayıt"
+    "btn_add_quicklog": "+ Hızlı kayıt",
+    "scope_day": "Gün",
+    "scope_week": "Hafta",
+    "scope_month": "Ay"
   },
   "tag": {
     "choose_header": "Etiket seç",

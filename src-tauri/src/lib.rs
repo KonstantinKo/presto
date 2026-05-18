@@ -1989,42 +1989,56 @@ mod tests {
         assert!(dr.is_empty());
     }
 
-    /// T038: corrupt JSON yields an error string whose message is
-    /// PII-scrubbed (no payload bytes from the corrupt file appear in
-    /// the human-readable reason). Mirrors AG-10 finding.
+    /// T038: corrupt JSON triggers a rescue-rename (matching the
+    /// `history.json` convention) and returns Ok(empty) rather than
+    /// surfacing an error. The corrupt payload is preserved as
+    /// `<name>.json.corrupt` so the user's data is not silently
+    /// overwritten by the next save (AG-08 silent-data-loss fix).
+    /// AG-10 PII contract still holds: nothing in the rescue path
+    /// echoes the corrupt bytes on the wire.
     #[test]
-    fn load_handles_corrupt_file_with_bridge_error_internal() {
+    fn load_rescues_corrupt_file_with_rename_and_returns_empty() {
         let dir =
             std::env::temp_dir().join(format!("presto_test_corrupt_files_{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).expect("mkdir");
-        // Distinctive PII-style bytes the test asserts are NOT echoed.
+        // Distinctive PII-style bytes the test asserts are preserved
+        // verbatim in the renamed `.corrupt` file (so the user can
+        // recover) but never round-trip through the bridge contract.
         let sentinel = "USER_SECRET_KAYAK_BANANA";
-        std::fs::write(
-            dir.join("quick_logs.json"),
-            format!("{{ corrupted {sentinel} }}"),
-        )
-        .expect("seed corrupt file");
-        std::fs::write(
-            dir.join("distractions.json"),
-            format!("[ corrupted {sentinel} ]"),
-        )
-        .expect("seed corrupt file");
+        let ql_payload = format!("{{ corrupted {sentinel} }}");
+        let dr_payload = format!("[ corrupted {sentinel} ]");
+        std::fs::write(dir.join("quick_logs.json"), &ql_payload).expect("seed corrupt file");
+        std::fs::write(dir.join("distractions.json"), &dr_payload).expect("seed corrupt file");
 
-        let ql_err = super::helpers::read_quick_logs_from(&dir).expect_err("must fail on corrupt");
-        let dr_err =
-            super::helpers::read_distractions_from(&dir).expect_err("must fail on corrupt");
+        // Both reads return Ok(empty) — the next save won't clobber
+        // user data because the original is preserved out-of-band.
+        let ql =
+            super::helpers::read_quick_logs_from(&dir).expect("rescue path must return Ok(empty)");
+        let dr = super::helpers::read_distractions_from(&dir)
+            .expect("rescue path must return Ok(empty)");
+        assert!(ql.is_empty(), "rescue must yield empty quick_logs vec");
+        assert!(dr.is_empty(), "rescue must yield empty distractions vec");
+
+        // Original files are gone, renamed copies preserve the payload
+        // byte-for-byte so the user can salvage the data.
         assert!(
-            !ql_err.contains(sentinel),
-            "PII payload leaked into quick_logs error: {ql_err}"
+            !dir.join("quick_logs.json").exists(),
+            "corrupt quick_logs.json must be renamed away"
         );
         assert!(
-            !dr_err.contains(sentinel),
-            "PII payload leaked into distractions error: {dr_err}"
+            !dir.join("distractions.json").exists(),
+            "corrupt distractions.json must be renamed away"
         );
-        // BridgeError::from(String) maps to Internal { msg } per contract.
-        let lifted: super::BridgeError = ql_err.into();
-        assert!(matches!(lifted, super::BridgeError::Internal { .. }));
+        let ql_corrupt =
+            std::fs::read_to_string(dir.join("quick_logs.json.corrupt")).expect("corrupt sibling");
+        let dr_corrupt = std::fs::read_to_string(dir.join("distractions.json.corrupt"))
+            .expect("corrupt sibling");
+        assert_eq!(ql_corrupt, ql_payload);
+        assert_eq!(dr_corrupt, dr_payload);
+        // Sanity: the sentinel bytes survived the rename verbatim.
+        assert!(ql_corrupt.contains(sentinel));
+        assert!(dr_corrupt.contains(sentinel));
 
         let _ = std::fs::remove_dir_all(&dir);
     }
