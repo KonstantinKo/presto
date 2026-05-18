@@ -2034,10 +2034,29 @@ pub fn TimerView() -> impl IntoView {
     // bus is absent. Throttled by WKWebView when the window is
     // occluded — driver 2 covers that case.
     let tick_for_interval = tick_body.clone();
+    let backend_driver_active_for_interval = backend_driver_active.clone();
     Effect::new(move |_| {
         let tick = tick_for_interval.clone();
+        let backend_active = backend_driver_active_for_interval.clone();
         let handle = set_interval_with_handle(
-            move || tick(false),
+            move || {
+                // Once the backend driver is alive it's the sole tick
+                // source. Running the setInterval body in parallel
+                // would have it race the backend's `engine.tick`
+                // call — whichever fires first within the wall-clock
+                // second observes the crossing and the other sees
+                // `remaining_before == remaining_after` (no sound).
+                // Suppressing the body entirely keeps the backend's
+                // crossing observation deterministic, which keeps
+                // sound, tray, and visible digit aligned to the
+                // backend's emit cadence (a steady wall-clock
+                // anchored 1 Hz from the Rust thread, not the
+                // JS-event-loop-jittered setInterval).
+                if backend_active.get() {
+                    return;
+                }
+                tick(false);
+            },
             std::time::Duration::from_secs(1),
         );
         // The handle is intentionally leaked into the closure's
