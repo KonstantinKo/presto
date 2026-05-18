@@ -47,6 +47,12 @@
   transform: scale(0.95);
 }
 
+.timer-adjust-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
 .timer-adjust-btn i {
   font-size: 14px;
   line-height: 1;

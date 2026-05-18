@@ -226,7 +226,9 @@
       "manual_session_recorded": "Manuelle Sitzung erfasst",
       "session_deleted": "Sitzung gelöscht ❌",
       "minutes_added": "5 Minuten zum Timer hinzugefügt ⏰",
-      "minutes_subtracted": "5 Minuten vom Timer abgezogen ⏰"
+      "minutes_subtracted": "5 Minuten vom Timer abgezogen ⏰",
+      "distraction_logged": "Ablenkung notiert 📝",
+      "quick_log_added": "Schnellnotiz hinzugefügt ✅"
     }
   },
   "modal": {
@@ -254,7 +256,8 @@
     "new_placeholder": "Neuer Tag...",
     "new_aria_label": "Name des neuen Tags",
     "delete_aria": "Tag {{ name }} löschen",
-    "tags_plural": "Tags"
+    "tags_plural": "Tags",
+    "default_name": "Fokus"
   },
   "sidebar": {
     "timer_tooltip": "Timer",
@@ -280,7 +283,8 @@
     "history_col_duration": "Dauer",
     "history_col_actions": "Aktionen",
     "history_export_label": "Exportieren",
-    "history_export_title": "Nach Excel exportieren",
+    "history_export_title": "Als CSV exportieren",
+    "history_empty": "Keine Sitzungen an diesem Tag",
     "history_edit_button": "Bearbeiten",
     "history_edit_aria": "Sitzung bearbeiten",
     "modal_title": "Sitzung bearbeiten",

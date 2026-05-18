@@ -226,7 +226,9 @@
       "manual_session_recorded": "Sessione manuale registrata",
       "session_deleted": "Sessione eliminata ❌",
       "minutes_added": "5 minuti aggiunti al timer ⏰",
-      "minutes_subtracted": "5 minuti sottratti dal timer ⏰"
+      "minutes_subtracted": "5 minuti sottratti dal timer ⏰",
+      "distraction_logged": "Distrazione registrata 📝",
+      "quick_log_added": "Quick log aggiunto ✅"
     }
   },
   "modal": {
@@ -254,7 +256,8 @@
     "new_placeholder": "Nuovo tag...",
     "new_aria_label": "Nome del nuovo tag",
     "delete_aria": "Elimina tag {{ name }}",
-    "tags_plural": "Tag"
+    "tags_plural": "Tag",
+    "default_name": "Concentrazione"
   },
   "sidebar": {
     "timer_tooltip": "Timer",
@@ -280,7 +283,8 @@
     "history_col_duration": "Durata",
     "history_col_actions": "Azioni",
     "history_export_label": "Esporta",
-    "history_export_title": "Esporta in Excel",
+    "history_export_title": "Esporta in CSV",
+    "history_empty": "Nessuna sessione in questo giorno",
     "history_edit_button": "Modifica",
     "history_edit_aria": "Modifica sessione",
     "modal_title": "Modifica sessione",

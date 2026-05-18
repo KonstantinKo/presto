@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 use std::sync::{Arc, LazyLock, Mutex};
-#[cfg(target_os = "macos")]
 use std::thread;
 use std::time::{Duration, Instant};
 use tauri::menu::{Menu, MenuItem};
@@ -696,6 +695,9 @@ pub fn build_specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         delete_tag,
         add_session_tag,
         export_sessions_xlsx,
+        export_sessions_csv,
+        dialog_save,
+        dialog_ask,
     ])
 }
 
@@ -765,6 +767,40 @@ pub fn run() {
             .setup(|app| {
                 let initial_settings = load_settings_sync(app.handle());
                 app.manage(SettingsState(Mutex::new(initial_settings)));
+
+                // Suppress macOS App Nap so the 1 Hz tick driving the
+                // visible timer, tray label, and metronome stays at
+                // 1 Hz when the window loses focus. See
+                // `disable_app_nap` for the in-sync contract this
+                // protects.
+                #[cfg(target_os = "macos")]
+                disable_app_nap();
+
+                // Backend-driven 1 Hz tick. WKWebView throttles JS
+                // `setInterval` callbacks when the window is occluded
+                // (App Nap suppression alone doesn't lift this — the
+                // throttle lives in WebKit's page-activity state, not
+                // the macOS scheduler). A native std::thread can emit
+                // an event on every wall-clock second regardless of
+                // WebView state; the frontend listens and runs the
+                // same tick body it would have run from
+                // `set_interval_with_handle`. The frontend interval
+                // stays as a redundant driver — both are guarded by
+                // wall-clock arithmetic in `engine.tick` and a
+                // `crossed_second` gate around the metronome, so
+                // overlapping fires are idempotent.
+                let tick_handle = app.handle().clone();
+                thread::spawn(move || loop {
+                    thread::sleep(Duration::from_secs(1));
+                    if let Err(e) = tick_handle.emit("engine-tick", ()) {
+                        log::warn!(
+                            "engine-tick thread exiting; emit failed: {e}. \
+                                 Frontend setInterval driver remains, but the 1Hz \
+                                 cadence will degrade if the window is unfocused."
+                        );
+                        break;
+                    }
+                });
 
                 let show_item = MenuItem::with_id(app, "show", "Show Presto", true, None::<&str>)?;
                 let start_session_item =
@@ -1041,6 +1077,177 @@ async fn export_sessions_xlsx(
     sessions: Vec<ManualSession>,
 ) -> Result<(), BridgeError> {
     exports::export(std::path::Path::new(&path), &sessions)
+}
+
+// `export_sessions_csv` — write the same column schema as the xlsx
+// export to `path` as RFC 4180 CSV. Used by the daily view's export
+// button (the xlsx wrapper is retained for callers that prefer
+// spreadsheets).
+#[tauri::command]
+#[specta::specta]
+async fn export_sessions_csv(
+    path: String,
+    sessions: Vec<ManualSession>,
+) -> Result<(), BridgeError> {
+    exports::export_csv(std::path::Path::new(&path), &sessions)
+}
+
+// Dialog plugin wrappers.
+//
+// The frontend used to call `plugin:dialog|save` / `plugin:dialog|ask`
+// directly through the raw `invoke` bridge, hand-rolling the JSON
+// envelope. That had no compile-time contract against the plugin's
+// signature — the dialog plugin expects `{ options: SaveDialogOptions }`
+// but our wrapper sent the fields flat, and Serde silently bound
+// nothing into the missing field. Result: the save dialog never
+// opened.
+//
+// Wrapping the plugin calls in our own typed commands moves the wire
+// contract under the `tauri-specta` bindings-drift test
+// (`tests/bindings_export.rs`), so any future signature change between
+// the frontend's `commands::dialog_*` wrappers and these handlers
+// fails CI loud instead of silently dropping calls.
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct DialogFilter {
+    pub name: String,
+    pub extensions: Vec<String>,
+}
+
+#[tauri::command]
+#[specta::specta]
+async fn dialog_save(
+    window: tauri::Window,
+    default_path: Option<String>,
+    filters: Vec<DialogFilter>,
+) -> Result<Option<String>, BridgeError> {
+    use tauri_plugin_dialog::DialogExt;
+    let mut builder = window.dialog().file().set_parent(&window);
+    if let Some(p) = default_path {
+        builder = builder.set_file_name(p);
+    }
+    for filter in &filters {
+        let exts: Vec<&str> = filter.extensions.iter().map(String::as_str).collect();
+        builder = builder.add_filter(&filter.name, &exts);
+    }
+    // `blocking_save_file` is safe inside a `#[tauri::command]` because
+    // Tauri runs commands on a dedicated worker thread — same pattern
+    // the dialog plugin's own `save` command uses (commands.rs:231).
+    let path = builder.blocking_save_file();
+    Ok(path.map(|p| p.to_string()))
+}
+
+#[tauri::command]
+#[specta::specta]
+async fn dialog_ask(
+    window: tauri::Window,
+    message: String,
+    title: String,
+) -> Result<bool, BridgeError> {
+    use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
+    let confirmed = window
+        .dialog()
+        .message(message)
+        .title(title)
+        .kind(MessageDialogKind::Warning)
+        .buttons(MessageDialogButtons::YesNo)
+        .blocking_show();
+    Ok(confirmed)
+}
+
+/// Prevent macOS App Nap from throttling the app when its window is
+/// unfocused. Without this, the 1 Hz `setInterval` driving
+/// `components/timer/mod.rs` is scaled back to ~0.5 Hz once the
+/// system marks the app as napping — the visible timer, tray label,
+/// and metronome tick all slow in lockstep (they share one Effect
+/// body, so when the tick fires every 2 s instead of every 1 s, all
+/// three updates skip together rather than drifting apart).
+///
+/// `NSActivityUserInitiatedAllowingIdleSystemSleep` keeps the app
+/// out of App Nap while still letting the Mac sleep on idle (the
+/// timer is paused on sleep anyway). `NSActivityLatencyCritical`
+/// asks the scheduler to keep the run-loop's timer resolution tight
+/// — needed so the 1 Hz interval doesn't drift off the wall-clock
+/// second.
+///
+/// The returned activity token is retained for the process lifetime;
+/// activities end implicitly at exit, so we never call
+/// `-endActivity:`. This keeps the in-sync tick/tray/sound contract
+/// from `specs/006-…/plan.md` load-bearing in the unfocused window
+/// state.
+#[cfg(target_os = "macos")]
+#[allow(unsafe_code)]
+fn disable_app_nap() {
+    use cocoa::base::{id, nil};
+    use cocoa::foundation::NSString;
+
+    // Direct objc_msgSend FFI — avoids objc 0.2's `msg_send!` /
+    // `class!` macros, whose expansions emit
+    // `cfg(feature = "cargo-clippy")` checks that newer rustc rejects
+    // under our workspace-wide `-D warnings`. Bumping objc is the
+    // long-term answer; until then this raw call keeps the build
+    // clippy-clean.
+    #[link(name = "objc", kind = "dylib")]
+    extern "C" {
+        fn objc_getClass(name: *const std::os::raw::c_char) -> id;
+        fn sel_registerName(name: *const std::os::raw::c_char) -> *const std::os::raw::c_void;
+    }
+    extern "C" {
+        fn objc_msgSend();
+    }
+
+    // NSActivityOptions bits from Foundation/NSProcessInfo.h:
+    //   NSActivityUserInitiatedAllowingIdleSystemSleep = 0x00FFFFFF
+    //   NSActivityLatencyCritical                      = 0xFF00000000
+    const OPTIONS: u64 = 0x00FF_FFFF | 0xFF_0000_0000;
+
+    // SAFETY: NSProcessInfo.processInfo is a thread-safe singleton.
+    // beginActivityWithOptions:reason: returns an autoreleased token,
+    // so we retain it explicitly to outlive the surrounding
+    // autorelease pool. The activity ends at process exit; we never
+    // end it manually. All four selectors below resolve at runtime
+    // and are stable AppKit/Foundation entry points.
+    unsafe {
+        let cls = objc_getClass(c"NSProcessInfo".as_ptr());
+        let sel_process_info = sel_registerName(c"processInfo".as_ptr());
+        let sel_begin = sel_registerName(c"beginActivityWithOptions:reason:".as_ptr());
+        let sel_retain = sel_registerName(c"retain".as_ptr());
+        let sel_release = sel_registerName(c"release".as_ptr());
+
+        // [NSProcessInfo processInfo]
+        let msg_class: extern "C" fn(id, *const std::os::raw::c_void) -> id =
+            std::mem::transmute(objc_msgSend as *const ());
+        let pi = msg_class(cls, sel_process_info);
+
+        // `NSString::alloc(nil).init_str(...)` is an `alloc/init`
+        // pair — caller owns +1 retain and is responsible for
+        // releasing once `beginActivityWithOptions:reason:` has
+        // internally retained the string.
+        let reason: id = NSString::alloc(nil).init_str("Pomodoro timer requires 1Hz tick cadence");
+
+        // [pi beginActivityWithOptions:OPTIONS reason:reason]
+        let msg_begin: extern "C" fn(id, *const std::os::raw::c_void, u64, id) -> id =
+            std::mem::transmute(objc_msgSend as *const ());
+        let activity = msg_begin(pi, sel_begin, OPTIONS, reason);
+
+        // [activity retain] — beginActivityWithOptions returns an
+        // autoreleased token. Retain so it outlives the surrounding
+        // autorelease pool; we never call -endActivity:, so the
+        // activity lives for the process lifetime.
+        let msg_retain: extern "C" fn(id, *const std::os::raw::c_void) -> id =
+            std::mem::transmute(objc_msgSend as *const ());
+        let _ = msg_retain(activity, sel_retain);
+
+        // [reason release] — balance the +1 from alloc/init. The
+        // activity object retains its own copy of the string, so
+        // releasing here doesn't dangle the reason inside the
+        // scheduler.
+        let msg_release: extern "C" fn(id, *const std::os::raw::c_void) =
+            std::mem::transmute(objc_msgSend as *const ());
+        msg_release(reason, sel_release);
+
+        log::info!("App Nap suppression engaged (NSProcessInfo activity token={activity:p})");
+    }
 }
 
 #[cfg(target_os = "macos")]
