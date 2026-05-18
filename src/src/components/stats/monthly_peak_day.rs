@@ -106,7 +106,7 @@ pub fn MonthlyPeakDay(sessions: Signal<Vec<ManualSession>>) -> impl IntoView {
             <p class="line-chart-subhead">
                 {t!(i18n, stats.monthly_peak_day_subhead)}
             </p>
-            <LineChart cfg=cfg.get() />
+            {move || view! { <LineChart cfg=cfg.get() /> }}
         </div>
     }
 }

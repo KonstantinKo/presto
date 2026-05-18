@@ -249,7 +249,16 @@ pub fn SessionsHistoryTable(selected_day: RwSignal<DateTime<Utc>>) -> impl IntoV
                             children=move |row| {
                                 let session_for_modal = row.clone();
                                 let time_range = format!("{} – {}", row.start_time, row.end_time);
-                                let duration_text = format!("{} {}", row.duration, t_string!(i18n, stats.minutes_unit));
+                                // Bind as a reactive closure so the
+                                // `minutes_unit` translation re-resolves
+                                // when the locale changes — `<For>`'s
+                                // children fn runs once per row at mount,
+                                // so an eager `t_string!` would freeze the
+                                // label until the row is recreated.
+                                let duration_minutes = row.duration;
+                                let duration_text = move || {
+                                    format!("{} {}", duration_minutes, t_string!(i18n, stats.minutes_unit))
+                                };
                                 let title_cell = title_cell_view(
                                     row.title.as_deref(),
                                     row.tags.as_deref(),
