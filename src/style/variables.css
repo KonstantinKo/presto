@@ -35,6 +35,25 @@
   --smart-indicator-inactive: #94a3b8;
   --smart-indicator-bg: rgba(255, 255, 255, 0.1);
   --smart-indicator-bg-hover: rgba(255, 255, 255, 0.2);
+
+  /* Mode-aware accent tokens for navigation / selection markers.
+     These shadow the timer-state classes on `body` so that any marker
+     using `var(--mode-marker-bg)` follows the current timer mode
+     instead of being permanently tinted by `--focus-color`. The base
+     fallback (focus) is set on `:root`; `body.break` / `body.longBreak`
+     overrides live below. */
+  --mode-marker-bg: var(--focus-color);
+  --mode-marker-text: var(--text-on-focus, #ffffff);
+}
+
+body.break {
+  --mode-marker-bg: color-mix(in srgb, var(--break-color) 60%, #000);
+  --mode-marker-text: #ffffff;
+}
+
+body.longBreak {
+  --mode-marker-bg: var(--long-break-color);
+  --mode-marker-text: #ffffff;
 }
 
 /* Dark Theme Variables */

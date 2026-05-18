@@ -315,14 +315,14 @@
 }
 
 .nav-item-base.active {
-    color: var(--text-on-focus, white);
-    background: var(--focus-color);
+    color: var(--mode-marker-text, var(--text-on-focus, white));
+    background: var(--mode-marker-bg, var(--focus-color));
     opacity: 1;
 }
 
 .nav-item-base.active:hover {
     transform: none;
-    background: var(--focus-color);
+    background: var(--mode-marker-bg, var(--focus-color));
 }
 
 .nav-item-base.active i {

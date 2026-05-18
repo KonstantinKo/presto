@@ -187,7 +187,7 @@
     "ctrl_note_distraction_aria": "Capture a distraction note for the current session",
     "ctrl_complete": "Complete",
     "ctrl_complete_aria": "Complete the current session and advance",
-    "pill_title_placeholder": "session title…",
+    "pill_title_placeholder": "Session title…",
     "session_title_placeholder": "What is this session for?",
     "indicator_smart_pause": "Smart Pause: Click to toggle automatic pause when inactive",
     "indicator_auto_start": "Auto-start: Click to toggle automatic session start",
@@ -226,7 +226,11 @@
       "manual_session_recorded": "Manual session recorded",
       "session_deleted": "Session deleted ❌",
       "minutes_added": "5 minutes added to timer ⏰",
-      "minutes_subtracted": "5 minutes subtracted from timer ⏰"
+      "minutes_subtracted": "5 minutes subtracted from timer ⏰",
+      "distraction_logged": "Distraction logged 📝",
+      "quick_log_added": "Quick log added ✅",
+      "quick_log_save_failed": "Failed to save quick log",
+      "distraction_save_failed": "Failed to save distraction"
     }
   },
   "modal": {
@@ -247,14 +251,18 @@
     "empty_quicklogs": "No quick logs today.",
     "empty_distractions": "No distractions today.",
     "deleted_tag_placeholder": "(deleted tag)",
-    "btn_add_quicklog": "+ Quick Log"
+    "btn_add_quicklog": "+ Quick Log",
+    "scope_day": "Day",
+    "scope_week": "Week",
+    "scope_month": "Month"
   },
   "tag": {
     "choose_header": "Choose tag",
     "new_placeholder": "New tag...",
     "new_aria_label": "New tag name",
     "delete_aria": "Delete {{ name }} tag",
-    "tags_plural": "Tags"
+    "tags_plural": "Tags",
+    "default_name": "Focus"
   },
   "sidebar": {
     "timer_tooltip": "Timer",
@@ -280,7 +288,8 @@
     "history_col_duration": "Duration",
     "history_col_actions": "Actions",
     "history_export_label": "Export",
-    "history_export_title": "Export to Excel",
+    "history_export_title": "Export to CSV",
+    "history_empty": "No sessions on this day",
     "history_edit_button": "Edit",
     "history_edit_aria": "Edit session",
     "modal_title": "Edit session",

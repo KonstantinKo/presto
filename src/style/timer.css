@@ -6,22 +6,26 @@
   background: transparent;
 }
 
-/* Timer Status Container with Adjust Buttons */
-.timer-status-container {
-  display: flex;
-  align-items: start;
-  justify-content: center;
-  gap: 0.25rem;
-  margin-bottom: 0.5rem;
-  position: relative;
-}
-
-/* Per-session title row — sits directly below the tag-status pill
-   and mirrors its visual register so the two read as a stacked pair. */
-.session-title-row {
-  display: flex;
-  justify-content: center;
+/* Feature 006 (FR-001) — TRUE embedded-prefix pill. The pill is the
+   sole bordered visual unit; `#timer-status` (the chip: icon + mode
+   label + chevron) and `#session-title-input` are direct flex
+   siblings inside it so the whole pill reads as one input with a
+   non-editable prefix token (like an @-mention or search pill-prefix).
+   No inner separators, no inner background distinction — only the
+   outer border defines the visual unit. `position: relative` anchors
+   the absolutely-positioned `.tag-dropdown-menu` popover, which lives
+   as a direct child of the pill (popover centers under the whole
+   pill, not just the chip). Theme tint comes from the per-mode
+   `#timer-view.container.{focus,break,longBreak}` rules below. */
+.timer-status-pill {
+  display: inline-flex;
+  align-items: center;
   margin-bottom: 0.75rem;
+  border: 2px solid var(--focus-timer-color);
+  border-radius: 2rem;
+  background-color: var(--focus-secondary-btn);
+  position: relative;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
 .timer-adjust-btn {
@@ -47,6 +51,12 @@
   transform: scale(0.95);
 }
 
+.timer-adjust-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
 .timer-adjust-btn i {
   font-size: 14px;
   line-height: 1;
@@ -58,10 +68,12 @@
   line-height: 1;
 }
 
-/* Timer status label - positioned outside timer-container in HTML */
-#timer-view .timer-status {
+/* Tag chip — inline prefix INSIDE the pill's flex flow. Sits at the
+   start of the input as a non-editable token (icon + mode label +
+   chevron). No border / background / radius of its own; those live
+   on the outer pill. Vertically centered with the input. */
+.timer-status {
   font-size: 14px;
-  margin-bottom: 0.5rem;
   color: var(--focus-timer-color);
   font-family: 'Roboto Flex', sans-serif;
   font-weight: 800;
@@ -69,23 +81,10 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 0.2rem 1rem;
-  border-radius: 2rem;
-  background-color: var(--focus-secondary-btn);
-  border: 2px solid var(--focus-timer-color);
-}
-
-.timer-status {
-  font-size: 14px;
-  margin-bottom: 0.5rem;
-  color: var(--focus-timer-color);
-  font-family: 'Roboto Flex', sans-serif;
-  font-weight: 800;
-  text-align: center;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  position: relative;
+  padding: 0.2rem 0.75rem 0.2rem 1rem;
+  background-color: transparent;
+  border: none;
+  flex: 0 0 auto;
 }
 
 #status-icon {
@@ -99,32 +98,31 @@
   vertical-align: middle;
 }
 
-/* Session Title Input — sits directly below the tag-status pill
-   and mirrors its visual register pixel-for-pixel (same font, weight,
-   padding, radius, border, and tinted background). The explicit
-   theme-aware `.session-title-input` background overrides the global
-   `[data-theme="dark"] input` rule from variables.css (specificity
-   tie broken by `:where()`-free class+attr selectors below). */
+/* Session title input — direct flex sibling of the chip inside the
+   pill. Transparent fill, no border, no radius — the only bordered
+   element is the outer pill. The input takes the remaining width
+   of the pill (`flex: 1 1 auto`); the caret blinks inside the
+   shared outer border. Text is left-aligned so reading flows from
+   the chip-prefix into the title, like an @-mention. */
 .session-title-input {
   font-family: 'Roboto Flex', sans-serif;
   font-size: 14px;
   font-weight: 800;
   color: var(--focus-timer-color);
-  background-color: var(--focus-secondary-btn);
-  border: 2px solid var(--focus-timer-color);
-  border-radius: 2rem;
-  padding: 0.2rem 1rem;
-  width: 320px;
+  background-color: transparent;
+  border: none;
+  padding: 0.2rem 1rem 0.2rem 0.75rem;
+  width: 280px;
   max-width: 100%;
-  text-align: center;
+  text-align: left;
   outline: none;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 [data-theme="dark"] .session-title-input,
 [data-theme="auto"] .session-title-input {
-  background-color: var(--focus-secondary-btn);
-  border-color: var(--focus-timer-color);
+  background-color: transparent;
   color: var(--focus-timer-color);
 }
 
@@ -134,48 +132,45 @@
   font-weight: 600;
 }
 
-.session-title-input:focus {
-  border-color: var(--focus-timer-color);
+/* Focus ring lifted to the outer pill so the single border lights
+   up as one unit when the user is typing. */
+.timer-status-pill:focus-within {
   box-shadow: 0 0 0 3px var(--focus-bg-alpha);
 }
 
-/* Break-mode tinted session-title input. */
-#timer-view.container.break .session-title-input {
-  color: var(--break-timer-color);
-  background-color: var(--break-secondary-btn);
-  border-color: var(--break-timer-color);
-}
-#timer-view.container.break .session-title-input::placeholder {
-  color: var(--break-timer-color);
-}
-#timer-view.container.break .session-title-input:focus {
-  border-color: var(--break-timer-color);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--break-color) 25%, transparent);
-}
-#timer-view.container.longBreak .session-title-input {
-  color: var(--long-break-timer-color);
-  background-color: var(--long-break-secondary-btn);
-  border-color: var(--long-break-timer-color);
-}
-#timer-view.container.longBreak .session-title-input::placeholder {
-  color: var(--long-break-timer-color);
-}
-#timer-view.container.longBreak .session-title-input:focus {
-  border-color: var(--long-break-timer-color);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--long-break-color) 25%, transparent);
+/* Readonly state — pill is in Running / Paused / AutoPaused. Title
+   text fades and the caret turns into the default pointer so the
+   input no longer looks active (FR-002 read-only gating). */
+.session-title-input.pill-readonly {
+  opacity: 0.6;
+  cursor: default;
 }
 
 /* Tag Dropdown Styles */
 .timer-status.clickable {
   cursor: pointer;
-  position: relative;
   transition: background-color 0.2s ease;
   gap: 4px;
 }
 
 
+/* Idle hover — subtle background tint on the chip portion. The
+   left side rounds to match the outer pill corner so the highlight
+   sits flush in the pill's left end; the right side is square so
+   it abuts the input area without an internal seam. */
 .timer-status.clickable:hover {
   background-color: var(--focus-primary-btn);
+  border-radius: 2rem 0 0 2rem;
+}
+
+/* Locked (Running / Paused / AutoPaused) — chip is read-only.
+   Strip hover affordance + pointer so users see the pill is gated. */
+.timer-status.locked,
+.timer-status.locked.clickable {
+  cursor: default;
+}
+.timer-status.locked.clickable:hover {
+  background-color: transparent;
 }
 
 .tag-dropdown-arrow {
@@ -602,28 +597,51 @@
   color: var(--long-break-timer-color);
 }
 
-/* Mode badge + tag-selector trigger (.timer-status). #timer-view itself
-   carries the .container.{focus,break,longBreak} class. The base
-   `#timer-view .timer-status` rule above bakes in focus colors at
-   ID-class specificity (110), so the mode overrides have to match that
-   or higher — we lift them to `#timer-view.container.X` (ID + 3 classes
-   = 130) to win. */
-#timer-view.container.focus .timer-status {
+/* Mode-tinted outer pill — the single bordered visual unit. The
+   chip + title input inside inherit color but draw no border /
+   background of their own. `#timer-view.container.X` (ID + 2
+   classes = 120) outweighs the bare `.timer-status-pill` (10) so
+   the per-mode tint always wins. */
+#timer-view.container.focus .timer-status-pill {
   background-color: var(--focus-secondary-btn);
-  border: 2px solid var(--focus-timer-color);
+  border-color: var(--focus-timer-color);
+}
+#timer-view.container.focus .timer-status,
+#timer-view.container.focus .session-title-input,
+#timer-view.container.focus .session-title-input::placeholder {
   color: var(--focus-timer-color);
 }
 
-#timer-view.container.break .timer-status {
+#timer-view.container.break .timer-status-pill {
   background-color: var(--break-secondary-btn);
-  border: 2px solid var(--break-timer-color);
+  border-color: var(--break-timer-color);
+}
+#timer-view.container.break .timer-status,
+#timer-view.container.break .session-title-input,
+#timer-view.container.break .session-title-input::placeholder {
   color: var(--break-timer-color);
 }
+#timer-view.container.break .timer-status-pill:focus-within {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--break-color) 25%, transparent);
+}
+#timer-view.container.break .timer-status.clickable:hover {
+  background-color: var(--break-primary-btn);
+}
 
-#timer-view.container.longBreak .timer-status {
+#timer-view.container.longBreak .timer-status-pill {
   background-color: var(--long-break-secondary-btn);
-  border: 2px solid var(--long-break-timer-color);
+  border-color: var(--long-break-timer-color);
+}
+#timer-view.container.longBreak .timer-status,
+#timer-view.container.longBreak .session-title-input,
+#timer-view.container.longBreak .session-title-input::placeholder {
   color: var(--long-break-timer-color);
+}
+#timer-view.container.longBreak .timer-status-pill:focus-within {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--long-break-color) 25%, transparent);
+}
+#timer-view.container.longBreak .timer-status.clickable:hover {
+  background-color: var(--long-break-primary-btn);
 }
 
 /* Timer adjust buttons for different timer modes */
@@ -648,10 +666,12 @@
   animation: overtime-pulse 2s infinite ease-in-out;
 }
 
-/* Overtime tinting for the mode badge + its inner status icon.
-   `.timer-status` and `#status-icon` are siblings of `.timer-container`
-   under `#timer-view`, so the overtime class has to come from
-   `#timer-view.container.overtime` (set on the wrapper). */
+/* Overtime tinting for the combined pill: outer border + chip text +
+   status icon all flip to `--warning-color` so the pill, the
+   countdown pulse, and the button matrix read as one unit. */
+.container.overtime .timer-status-pill {
+  border-color: var(--warning-color);
+}
 .container.overtime .timer-status,
 .container.overtime #status-icon {
   color: var(--warning-color);

@@ -275,21 +275,38 @@ pub(super) fn write_manual_sessions_to(
 
 /// Reads `quick_logs.json` from `dir`, returning an empty vec when absent.
 ///
-/// On corrupt JSON, returns an error string scrubbed of payload bytes
-/// (the formatter receives only the `serde_json::Error` text, never the
-/// raw content) — feeds AG-10's PII-safety contract.
+/// On corrupt JSON, rescues the file by renaming it to `quick_logs.json.corrupt`
+/// (matching the `history.json` convention in `append_daily_stats_to`) so the
+/// next save does not silently clobber the user's data, then returns an empty
+/// vec. The `serde_json::Error` text is logged but never persisted on the
+/// wire — feeds AG-10's PII-safety contract.
 #[allow(clippy::redundant_pub_crate)]
 pub(super) fn read_quick_logs_from(dir: &Path) -> Result<Vec<super::QuickLog>, String> {
     let file_path = dir.join("quick_logs.json");
     if !file_path.exists() {
         return Ok(Vec::new());
     }
-    let content = fs::read_to_string(file_path)
+    let content = fs::read_to_string(&file_path)
         .map_err(|e| format!("Failed to read quick logs file: {e}"))?;
     if content.trim().is_empty() || content.trim() == "null" {
         return Ok(Vec::new());
     }
-    serde_json::from_str(&content).map_err(|e| format!("Failed to parse quick logs: {e}"))
+    match serde_json::from_str(&content) {
+        Ok(logs) => Ok(logs),
+        Err(e) => {
+            let corrupt_path = file_path.with_extension("json.corrupt");
+            match fs::rename(&file_path, &corrupt_path) {
+                Ok(()) => log::warn!(
+                    "quick_logs.json could not be parsed, preserved as {}: {e}",
+                    corrupt_path.display()
+                ),
+                Err(rename_err) => log::warn!(
+                    "quick_logs.json could not be parsed and rename to .corrupt failed ({rename_err}): {e}"
+                ),
+            }
+            Ok(Vec::new())
+        }
+    }
 }
 
 /// Creates `dir` if necessary, then atomically writes `logs` to
@@ -303,18 +320,38 @@ pub(super) fn write_quick_logs_to(dir: &Path, logs: &[super::QuickLog]) -> Resul
 // ── Distractions ──────────────────────────────────────────────────────────────
 
 /// Reads `distractions.json` from `dir`, returning an empty vec when absent.
+///
+/// On corrupt JSON, rescues the file by renaming it to
+/// `distractions.json.corrupt` (matching the `history.json` convention in
+/// `append_daily_stats_to`) so the next save does not silently clobber the
+/// user's data, then returns an empty vec.
 #[allow(clippy::redundant_pub_crate)]
 pub(super) fn read_distractions_from(dir: &Path) -> Result<Vec<super::Distraction>, String> {
     let file_path = dir.join("distractions.json");
     if !file_path.exists() {
         return Ok(Vec::new());
     }
-    let content = fs::read_to_string(file_path)
+    let content = fs::read_to_string(&file_path)
         .map_err(|e| format!("Failed to read distractions file: {e}"))?;
     if content.trim().is_empty() || content.trim() == "null" {
         return Ok(Vec::new());
     }
-    serde_json::from_str(&content).map_err(|e| format!("Failed to parse distractions: {e}"))
+    match serde_json::from_str(&content) {
+        Ok(entries) => Ok(entries),
+        Err(e) => {
+            let corrupt_path = file_path.with_extension("json.corrupt");
+            match fs::rename(&file_path, &corrupt_path) {
+                Ok(()) => log::warn!(
+                    "distractions.json could not be parsed, preserved as {}: {e}",
+                    corrupt_path.display()
+                ),
+                Err(rename_err) => log::warn!(
+                    "distractions.json could not be parsed and rename to .corrupt failed ({rename_err}): {e}"
+                ),
+            }
+            Ok(Vec::new())
+        }
+    }
 }
 
 /// Creates `dir` if necessary, then atomically writes `entries` to
@@ -439,6 +476,8 @@ pub(super) fn delete_all_data_in(dir: &Path) -> Result<(), String> {
         // request.
         "quick_logs.json",
         "distractions.json",
+        "quick_logs.json.corrupt",
+        "distractions.json.corrupt",
     ];
     for file_name in FILES {
         let file_path = dir.join(file_name);
@@ -809,6 +848,8 @@ mod tests {
             // distractions.json must also be wiped by reset-all-data.
             "quick_logs.json",
             "distractions.json",
+            "quick_logs.json.corrupt",
+            "distractions.json.corrupt",
         ] {
             std::fs::write(dir.path().join(name), b"{}").expect("write");
         }
@@ -818,6 +859,8 @@ mod tests {
         assert!(!dir.path().join("settings.json").exists());
         assert!(!dir.path().join("quick_logs.json").exists());
         assert!(!dir.path().join("distractions.json").exists());
+        assert!(!dir.path().join("quick_logs.json.corrupt").exists());
+        assert!(!dir.path().join("distractions.json.corrupt").exists());
     }
 
     #[test]

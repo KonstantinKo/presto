@@ -137,8 +137,7 @@ pub fn MonthGrid(
             // labels change.
             <div class="calendar-grid calendar-day-names">
                 {(0..7usize).map(|idx| {
-                    let label = day_name_for(i18n, idx);
-                    view! { <div class="day-name">{label}</div> }
+                    view! { <div class="day-name">{move || day_name_for(i18n, idx)}</div> }
                 }).collect_view()}
             </div>
             <div class="calendar-grid" id="calendar-grid">

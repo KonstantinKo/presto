@@ -83,7 +83,7 @@ impl ShortcutSlot {
             // updated to match actual behaviour (the engine has no
             // `reset()` method since feature 006 removed it).
             Self::Reset => "Reset session:",
-            Self::Skip => "Save Session:",
+            Self::Skip => "Skip:",
             Self::Abort => "Abort Session:",
         }
     }
@@ -96,20 +96,6 @@ impl ShortcutSlot {
             // Feature 007: no canonical default — abort is opt-in. The
             // placeholder hints at the shape the user would type.
             Self::Abort => "CommandOrControl+Alt+W",
-        }
-    }
-
-    #[allow(dead_code)]
-    const fn description(self) -> &'static str {
-        match self {
-            Self::StartStop => "Start or pause the current Pomodoro session.",
-            // R-003 fix: matches the actual engine behaviour. Reset
-            // dispatches through `on_abort` — the engine has no
-            // `reset()` since feature 006; the "undo last Pomodoro"
-            // affordance was removed by FR-028.
-            Self::Reset => "Discard the current session without counting it.",
-            Self::Skip => "Save the current session and start the next one.",
-            Self::Abort => "Discard the current focus session without logging it.",
         }
     }
 }

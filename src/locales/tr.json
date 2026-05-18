@@ -226,7 +226,11 @@
       "manual_session_recorded": "Manuel oturum kaydedildi",
       "session_deleted": "Oturum silindi ❌",
       "minutes_added": "Zamanlayıcıya 5 dakika eklendi ⏰",
-      "minutes_subtracted": "Zamanlayıcıdan 5 dakika çıkarıldı ⏰"
+      "minutes_subtracted": "Zamanlayıcıdan 5 dakika çıkarıldı ⏰",
+      "distraction_logged": "Dikkat dağıtıcı kaydedildi 📝",
+      "quick_log_added": "Hızlı kayıt eklendi ✅",
+      "quick_log_save_failed": "Hızlı kayıt kaydedilemedi",
+      "distraction_save_failed": "Dikkat dağıtıcı kaydedilemedi"
     }
   },
   "modal": {
@@ -247,14 +251,18 @@
     "empty_quicklogs": "Bugün hızlı kayıt yok.",
     "empty_distractions": "Bugün dikkat dağınıklığı yok.",
     "deleted_tag_placeholder": "(silinmiş etiket)",
-    "btn_add_quicklog": "+ Hızlı kayıt"
+    "btn_add_quicklog": "+ Hızlı kayıt",
+    "scope_day": "Gün",
+    "scope_week": "Hafta",
+    "scope_month": "Ay"
   },
   "tag": {
     "choose_header": "Etiket seç",
     "new_placeholder": "Yeni etiket...",
     "new_aria_label": "Yeni etiket adı",
     "delete_aria": "{{ name }} etiketini sil",
-    "tags_plural": "Etiketler"
+    "tags_plural": "Etiketler",
+    "default_name": "Odak"
   },
   "sidebar": {
     "timer_tooltip": "Zamanlayıcı",
@@ -280,7 +288,8 @@
     "history_col_duration": "Süre",
     "history_col_actions": "İşlemler",
     "history_export_label": "Dışa aktar",
-    "history_export_title": "Excel'e aktar",
+    "history_export_title": "CSV olarak aktar",
+    "history_empty": "Bu güne ait oturum yok",
     "history_edit_button": "Düzenle",
     "history_edit_aria": "Oturumu düzenle",
     "modal_title": "Oturumu düzenle",

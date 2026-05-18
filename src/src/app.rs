@@ -29,6 +29,7 @@
 
 use leptos::prelude::*;
 use leptos::task::spawn_local;
+use wasm_bindgen::JsValue;
 
 use crate::bridge::availability::{bridge_available, BridgeAvailable};
 use crate::bridge::commands;
@@ -538,19 +539,28 @@ pub fn App() -> impl IntoView {
         });
 
         // Feature 006 R-007: cold-start hydration for the quick-log +
-        // distraction managers. Both managers are pure side channels
-        // (FR-035) so a load failure is silent (the manager stays
-        // empty). Per-mutation persistence is handled at the
-        // call-site (timer/inventory modals each spawn a save after
+        // distraction managers. Per-mutation persistence is handled at
+        // the call-site (timer/inventory modals each spawn a save after
         // the in-memory `update(...)` lands).
+        //
+        // After the AG-08 rescue-rename fix in `helpers.rs`, a parse
+        // failure no longer reaches this branch — `read_quick_logs_from`
+        // / `read_distractions_from` now rescue the corrupt file and
+        // return Ok(empty). The Err arm here only fires on filesystem-
+        // level failures (e.g. permission denied), which we surface to
+        // the dev log. We deliberately don't toast at mount because the
+        // toast queue may be observed before the user's first paint —
+        // a cold-start filesystem error is rare enough to live in logs.
         spawn_local(async move {
-            if let Ok(loaded) = crate::managers::quick_log::QuickLogManager::load().await {
-                quick_logs_mgr.set(loaded);
+            match crate::managers::quick_log::QuickLogManager::load().await {
+                Ok(loaded) => quick_logs_mgr.set(loaded),
+                Err(e) => leptos::logging::warn!("load_quick_logs failed at mount: {:?}", e),
             }
         });
         spawn_local(async move {
-            if let Ok(loaded) = crate::managers::distraction::DistractionManager::load().await {
-                distractions_mgr.set(loaded);
+            match crate::managers::distraction::DistractionManager::load().await {
+                Ok(loaded) => distractions_mgr.set(loaded),
+                Err(e) => leptos::logging::warn!("load_distractions failed at mount: {:?}", e),
             }
         });
 
@@ -691,6 +701,16 @@ pub fn App() -> impl IntoView {
         });
     }
 
+    // `titleBarStyle: Overlay` (tauri.conf.json) is a macOS-only setting;
+    // on other platforms the native titlebar remains and the drag strip
+    // is dead DOM. Gate it on a runtime platform check so the element is
+    // absent on Windows / Linux.
+    let is_mac_overlay = js_sys::Reflect::get(&js_sys::global(), &JsValue::from_str("navigator"))
+        .ok()
+        .and_then(|nav| js_sys::Reflect::get(&nav, &JsValue::from_str("platform")).ok())
+        .and_then(|p| p.as_string())
+        .is_some_and(|p| p.starts_with("Mac"));
+
     view! {
         // Feature 005: wrap the app tree in the leptos_i18n provider
         // so every `t!(i18n, ...)` call site descends from a live
@@ -703,6 +723,9 @@ pub fn App() -> impl IntoView {
         <I18nContextProvider enable_cookie=false>
             <LocaleSync settings=settings/>
             <SaveFailureMessageSync target=save_failure_message/>
+            // Restores native window-drag affordance under the macOS
+            // traffic-light controls when titleBarStyle: Overlay is active.
+            {is_mac_overlay.then(|| view! { <div class="window-drag-region" data-tauri-drag-region="true"></div> })}
         // The sidebar carries a per-mode theme class (`focus` /
         // `break` / `longBreak`) so `style/sidebar.css`'s
         // `.sidebar.focus .sidebar-icon.active { background:

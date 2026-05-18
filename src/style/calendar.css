@@ -121,10 +121,10 @@
 }
 
 .calendar-day.selected {
-  background: var(--focus-color);
-  color: #ffffff;
+  background: var(--mode-marker-bg, var(--focus-color));
+  color: var(--mode-marker-text, #ffffff);
   font-weight: 600;
-  border-color: var(--focus-timer-color);
+  border-color: var(--mode-marker-bg, var(--focus-timer-color));
 }
 
 .calendar-day.selected .calendar-dot {
@@ -633,27 +633,22 @@
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
 }
 
-.selected-day-details h4 {
-  margin: 0 0 0.75rem 0;
-  color: var(--accent-color);
-  font-size: 1.05rem;
-  font-weight: 700;
-  letter-spacing: 0.01em;
-}
-
-/* Sessions Header Styles */
+/* Sessions Header Styles — shared by the timeline card and the history
+   card so both daily-view sections present the same heading rhythm. */
 .sessions-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 0.75rem;
+  margin-bottom: 1rem;
 }
 
+.sessions-header h3,
 .sessions-header h4 {
   margin: 0;
   color: var(--accent-color);
-  font-size: 0.95rem;
-  font-weight: 600;
+  font-size: 1.1rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
 }
 
 /* Sessions History Table */
@@ -664,20 +659,6 @@
   padding: 1.5rem;
   margin-bottom: 1rem;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
-}
-
-.sessions-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 1rem;
-}
-
-.sessions-header h3 {
-  margin: 0;
-  color: var(--accent-color);
-  font-size: 1.1rem;
-  font-weight: 600;
 }
 
 .sessions-controls {
@@ -759,7 +740,7 @@
   color: var(--text-color);
 }
 
-.sessions-table tbody tr:hover {
+.sessions-table tbody tr:hover:not(.sessions-table-empty-row) {
   background: var(--setting-item-bg);
 }
 
@@ -866,8 +847,23 @@
 .sessions-table-empty {
   text-align: center;
   padding: 2rem;
-  color: var(--text-secondary);
+  background: var(--card-bg-subtle);
+  color: var(--text-light);
   font-style: italic;
+}
+
+/* Empty-state placeholder shown when the selected day has no
+   sessions — mirrors `.timeline-track` so both daily-view cards
+   present the same greyed-out box. */
+.sessions-history-empty {
+  background: var(--card-bg-subtle);
+  border: 1px solid var(--shared-border);
+  border-radius: 8px;
+  padding: 1.5rem;
+  text-align: center;
+  color: var(--text-light);
+  font-style: italic;
+  font-size: 0.9rem;
 }
 
 /* Theme support is now handled through CSS variables in individual theme files */

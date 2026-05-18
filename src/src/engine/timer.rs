@@ -877,8 +877,8 @@ impl TimerState {
     ///
     /// - `tick_drift_compensation`'s natural zero-cross focus branch
     ///   (line region 929-960).
-    /// - `complete`'s branch B.1 (paused, elapsed >= 30, not in
-    ///   continuous-mode overtime).
+    /// - `complete`'s branch B.1 (paused, any positive elapsed, not
+    ///   in continuous-mode overtime).
     fn complete_focus_session(&mut self) -> Vec<TimerEvent> {
         self.completed_pomodoros = self.completed_pomodoros.saturating_add(1);
         // Integrate the wall-clock-accumulated focus work into the
@@ -967,13 +967,15 @@ impl TimerState {
     /// state returns `[]` (engine-side cheat-tax for the
     /// state-aware-matrix UI gate).
     ///
-    /// Branches on `current_session_elapsed_secs`:
-    /// - `< 30` ⇒ delegates to `abort` (no count, no advance).
-    /// - `>= 30` and `session_completed_but_not_saved == false` ⇒
-    ///   runs `complete_focus_session` (count, integrate, advance,
-    ///   emit `PomodoroCompleted`). Appends `SessionCompletedEarly`.
-    /// - `>= 30` and `session_completed_but_not_saved == true`
-    ///   (continuous-mode overtime) ⇒ integrates the overtime
+    /// Any positive `current_session_elapsed_secs` counts as a
+    /// completion — no anti-cheat threshold. (PO overrode FR-015
+    /// anti-cheat; sub-30s completions count by design.)
+    ///
+    /// Branches on `session_completed_but_not_saved`:
+    /// - `false` ⇒ runs `complete_focus_session` (count, integrate,
+    ///   advance, emit `PomodoroCompleted`). Appends
+    ///   `SessionCompletedEarly`.
+    /// - `true` (continuous-mode overtime) ⇒ integrates the overtime
     ///   portion only into `total_focus_secs`, clears the flag,
     ///   does NOT re-increment `completed_pomodoros` or re-emit
     ///   `PomodoroCompleted` (the zero-cross already did both).
@@ -995,11 +997,9 @@ impl TimerState {
         self.settle_wall_clock_elapsed(clock);
         let elapsed = self.current_session_elapsed_secs;
 
-        // Branch on `session_completed_but_not_saved` BEFORE the
-        // < 30 abort gate: in continuous-mode overtime the original
-        // session already counted via the zero-cross, so the < 30
-        // abort carveout does not apply to the overtime portion —
-        // any positive overtime is sealed verbatim (B.2).
+        // Continuous-mode overtime path: the original session already
+        // counted via the zero-cross, so the overtime portion is sealed
+        // verbatim (B.2) without re-incrementing the pomodoro count.
         if self.session_completed_but_not_saved {
             // B.2 — continuous-mode overtime. The zero-cross already
             // incremented `completed_pomodoros` and emitted
@@ -1039,16 +1039,10 @@ impl TimerState {
             }];
         }
 
-        if elapsed < 30 {
-            // Branch A: discard as abort (FR-015). Below-threshold
-            // completion is treated as a Cancel — no count, no
-            // mode advance.
-            return self.abort(clock);
-        }
-
         // B.1 — normal paused-before-zero path. Reuse the shared
         // helper so the side-effect sequence matches natural
-        // completion exactly.
+        // completion exactly. Any positive elapsed counts (PO
+        // override of FR-015 anti-cheat threshold).
         let mut events = self.complete_focus_session();
         events.push(TimerEvent::SessionCompletedEarly {
             elapsed_secs: elapsed,
@@ -2552,11 +2546,12 @@ mod tests {
         );
     }
 
-    /// T015: Complete from Paused with elapsed=29 acts as Abort
-    /// (branch A): no count, no advance, returns to Idle in same mode,
-    /// emits only `SessionAborted { elapsed_secs: 29 }`.
+    /// T015: Complete from Paused with short elapsed (5 s) counts as
+    /// a completed pomodoro — PO override of the FR-015 anti-cheat
+    /// threshold means any positive elapsed runs branch B.1, not the
+    /// former abort fallback.
     #[test]
-    fn complete_from_paused_with_elapsed_29_acts_as_abort() {
+    fn complete_from_paused_with_short_elapsed_counts_as_completed() {
         let clock = MockClock::new(0);
         let mut state = TimerState::new(Durations {
             focus: 60,
@@ -2564,27 +2559,39 @@ mod tests {
             long_break: 1200,
         });
         state.start(&clock).expect("start");
-        clock.advance(29 * 1000);
+        clock.advance(5 * 1000);
         let _ = state.tick(&clock);
         state.pause(&clock).expect("pause");
-        assert_eq!(state.current_session_elapsed_secs(), 29);
+        assert_eq!(state.current_session_elapsed_secs(), 5);
 
         let events = state.complete(&clock);
 
         assert_eq!(
             state.completed_pomodoros(),
-            0,
-            "below-threshold complete must NOT count"
+            1,
+            "short-elapsed complete must count (no anti-cheat threshold)"
         );
-        assert_eq!(state.current_mode(), TimerMode::Focus, "no mode advance");
-        assert_eq!(state.current_session_elapsed_secs(), 0);
+        assert_eq!(state.total_focus_secs(), 5);
         assert_eq!(
-            events,
-            vec![super::TimerEvent::SessionAborted {
-                aborted_mode: TimerMode::Focus,
-                elapsed_secs: 29,
-            }],
-            "below-threshold complete emits only SessionAborted"
+            state.current_mode(),
+            TimerMode::Break,
+            "short-elapsed complete advances mode per cadence"
+        );
+        assert!(!state.is_running());
+        assert!(!state.is_paused());
+        assert!(!state.is_auto_paused());
+        assert!(
+            events
+                .iter()
+                .any(|e| matches!(e, super::TimerEvent::PomodoroCompleted { .. })),
+            "short-elapsed complete must emit PomodoroCompleted; got {events:?}"
+        );
+        assert!(
+            events.iter().any(|e| matches!(
+                e,
+                super::TimerEvent::SessionCompletedEarly { elapsed_secs: 5 }
+            )),
+            "short-elapsed complete must emit SessionCompletedEarly{{5}}; got {events:?}"
         );
     }
 
@@ -2745,9 +2752,11 @@ mod tests {
     }
 
     /// T020: Pause settles wall-clock delta before complete reads
-    /// `current_session_elapsed_secs`. At exactly 30 s wall-clock the
-    /// count fires (not the abort path). Fails until T024 lands
-    /// `pause()` wall-clock-delta settling.
+    /// `current_session_elapsed_secs`. After T024 lands `pause()`
+    /// wall-clock-delta settling, the engine sees the full elapsed
+    /// at complete-time. Originally guarded the 30 s abort gate
+    /// boundary; with the PO override removing that gate the test
+    /// still pins the same wall-clock-settling contract.
     #[test]
     fn complete_at_exactly_30s_wall_clock_counts_not_aborts() {
         let clock = MockClock::new(0);
@@ -3020,7 +3029,7 @@ mod tests {
         state.pause(&clock).expect("pause-2");
         check(&state, "post-pause-2");
 
-        // Run elapsed for ≥ 30 s so complete takes the B.1 branch.
+        // Run some elapsed so complete takes the B.1 branch.
         clock.advance(30_000);
         state.resume(&clock).expect("resume-2");
         check(&state, "post-resume-2");
@@ -3114,8 +3123,8 @@ mod tests {
         state.start(&clock).expect("start");
         assert!(state.current_session_started_at_ms().is_some());
 
-        // Run ≥ 30 s wall-clock so complete() takes the B.1 branch
-        // (count + advance) rather than abort-delegate.
+        // Run some wall-clock elapsed so complete() takes the B.1
+        // branch (count + advance).
         clock.advance(30_000);
         state.pause(&clock).expect("pause");
         let events = state.complete(&clock);

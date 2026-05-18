@@ -12,9 +12,18 @@
 //   from catalogue key `inventory.deleted_tag_placeholder`.
 //   `parent_title` is rendered as-snapshotted (never re-resolved).
 //
-// Date filter inherits the existing daily-view `selected_day`
-// signal — the inventory shows only entries whose `date` field
-// matches the currently-selected day.
+// Date filter is scope-driven: a local `InventoryScope` signal picks
+// Day (default), Week (Mon-Sun containing `selected_day` — matches
+// `components::stats::start_of_week_monday`), or Month (calendar
+// month of `selected_day`). The selector pills live in the header
+// next to `+ Quick Log`; entries are projected against the resulting
+// date-set on every render.
+//
+// Distractions with a `parent_ref` whose `parent_session_start_ts`
+// matches a session row's `data-session-start-ts` become a click
+// target: clicking the parentref cluster scrolls the matching
+// `.sessions-table-row` into view and flashes a `.highlighted` class
+// for 2 seconds.
 
 #![allow(
     clippy::must_use_candidate,
@@ -22,13 +31,14 @@
     reason = "Leptos `#[component]` returning `impl IntoView`; body is a single `view!` macro expansion (two lists + two edit modals). Matches `sessions_history_table.rs:108` precedent."
 )]
 
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Datelike, Days, TimeZone, Utc};
 use leptos::prelude::*;
 use leptos::task::spawn_local;
 use leptos_i18n::{t, t_string};
 
 #[cfg(target_arch = "wasm32")]
 use super::super::browser_clock::BrowserClock;
+use crate::app::AppToast;
 use crate::bridge::commands;
 use crate::bridge::types::{Distraction, QuickLog, Tag};
 #[cfg(target_arch = "wasm32")]
@@ -38,10 +48,132 @@ use crate::i18n::i18n::use_i18n;
 use crate::managers::distraction::DistractionManager;
 use crate::managers::quick_log::QuickLogManager;
 
+/// Date-range scope for the Inventory subsection.
+///
+/// Default = `Day` (preserves the original single-day projection).
+/// `Week` is Monday-to-Sunday — matches `start_of_week_monday` in
+/// `components::stats::mod` so the inventory and the weekly metrics
+/// agree on what "this week" means. `Month` is the calendar month of
+/// `selected_day`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum InventoryScope {
+    Day,
+    Week,
+    Month,
+}
+
+/// Build the set of `format_session_date` strings the active scope
+/// covers, anchored on `anchor`. `Day` returns a 1-element vec; `Week`
+/// returns 7 (Mon-Sun); `Month` returns the days of the calendar
+/// month. The filter closures compare each entry's `date` field
+/// (already in `%a %b %d %Y` shape) against this set with a string
+/// `contains`.
+fn scope_date_set(anchor: DateTime<Utc>, scope: InventoryScope) -> Vec<String> {
+    match scope {
+        InventoryScope::Day => vec![format_session_date(anchor.timestamp_millis())],
+        InventoryScope::Week => {
+            let weekday = anchor.weekday().num_days_from_monday();
+            let start = anchor - Days::new(u64::from(weekday));
+            (0..7_u64)
+                .map(|d| format_session_date((start + Days::new(d)).timestamp_millis()))
+                .collect()
+        }
+        InventoryScope::Month => {
+            let year = anchor.year();
+            let month = anchor.month();
+            // Walk down from 31 until chrono accepts the candidate.
+            let dim = (28u32..=31u32)
+                .rev()
+                .find(|d| chrono::NaiveDate::from_ymd_opt(year, month, *d).is_some())
+                .unwrap_or(28);
+            (1..=dim)
+                .filter_map(|d| {
+                    Utc.with_ymd_and_hms(year, month, d, 0, 0, 0)
+                        .single()
+                        .map(|dt| format_session_date(dt.timestamp_millis()))
+                })
+                .collect()
+        }
+    }
+}
+
+/// Project an RFC-3339 timestamp to a local-time `HH:MM` string. Used
+/// for the per-row time chip. Returns the empty string if the input
+/// fails to parse (graceful degradation — the chip simply disappears
+/// rather than rendering a malformed label).
+fn format_hh_mm(rfc3339: &str) -> String {
+    #[cfg(target_arch = "wasm32")]
+    {
+        let Ok(parsed) = chrono::DateTime::parse_from_rfc3339(rfc3339) else {
+            return String::new();
+        };
+        #[allow(clippy::cast_precision_loss)]
+        let d = js_sys::Date::new(&wasm_bindgen::JsValue::from_f64(
+            parsed.timestamp_millis() as f64
+        ));
+        format!("{:02}:{:02}", d.get_hours(), d.get_minutes())
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        // Host-side fallback — chrono UTC. Tests don't assert on the
+        // exact projection (no `js_sys::Date` available off-wasm), but
+        // a stable, non-panicking output keeps the unit tests green.
+        chrono::DateTime::parse_from_rfc3339(rfc3339)
+            .map(|dt| dt.with_timezone(&Utc).format("%H:%M").to_string())
+            .unwrap_or_default()
+    }
+}
+
+/// Locate the session-history row with the matching
+/// `data-session-start-ts` attribute, scroll it into view, and flash
+/// the `.highlighted` class on `.sessions-table-row` for 2 seconds.
+/// No-op when no element matches (orphan distraction) or when the
+/// document is unavailable (host-side tests).
+#[cfg(target_arch = "wasm32")]
+fn flash_session_row(parent_session_start_ts: &str) {
+    use wasm_bindgen::JsCast as _;
+
+    let Some(window) = web_sys::window() else {
+        return;
+    };
+    let Some(document) = window.document() else {
+        return;
+    };
+    let selector = format!(
+        "[data-session-start-ts=\"{}\"]",
+        parent_session_start_ts.replace('"', "\\\"")
+    );
+    let Ok(Some(element)) = document.query_selector(&selector) else {
+        return;
+    };
+    let Ok(html_el) = element.dyn_into::<web_sys::HtmlElement>() else {
+        return;
+    };
+    // `scroll_into_view_with_bool(true)` aligns the target to the top
+    // of the scrolling box. The smooth-scroll variant (
+    // `ScrollIntoViewOptions { behavior: 'smooth' }`) requires extra
+    // `web-sys` features — declined to keep the dependency surface
+    // unchanged. Browser CSS `scroll-behavior: smooth` on the
+    // scrolling ancestor would still smooth this.
+    html_el.scroll_into_view_with_bool(true);
+    let _ = html_el.class_list().add_1("highlighted");
+    let class_list = html_el.class_list();
+    let _ = leptos::leptos_dom::helpers::set_timeout_with_handle(
+        move || {
+            let _ = class_list.remove_1("highlighted");
+        },
+        std::time::Duration::from_secs(2),
+    );
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+const fn flash_session_row(_parent_session_start_ts: &str) {}
+
 /// Inventory subsection. Renders below the `SessionsHistoryTable`.
 #[component]
 pub fn Inventory(selected_day: RwSignal<DateTime<Utc>>) -> impl IntoView {
     let i18n = use_i18n();
+    let app_toast = use_context::<AppToast>().unwrap_or_default();
     let quick_logs: RwSignal<QuickLogManager> = use_context::<RwSignal<QuickLogManager>>()
         .unwrap_or_else(|| RwSignal::new(QuickLogManager::new()));
     let distractions: RwSignal<DistractionManager> = use_context::<RwSignal<DistractionManager>>()
@@ -49,30 +181,35 @@ pub fn Inventory(selected_day: RwSignal<DateTime<Utc>>) -> impl IntoView {
     let tags: RwSignal<Vec<Tag>> =
         use_context::<RwSignal<Vec<Tag>>>().unwrap_or_else(|| RwSignal::new(Vec::new()));
 
-    // `selected_day` -> chrono-formatted "%a %b %d %Y" date string;
-    // matches the `QuickLog.date` / `Distraction.date` schema.
-    let selected_date_str = Signal::derive(move || {
-        let day = selected_day.get();
-        format_session_date(day.timestamp_millis())
-    });
+    // Active scope (Day/Week/Month). Default `Day` preserves the
+    // pre-feature behaviour for callers that haven't touched the new
+    // selector.
+    let scope = RwSignal::new(InventoryScope::Day);
 
-    // Date-filtered projections. Cloned out of the manager so the
-    // signal carries owned values (the `entries_for_date` borrow
-    // would otherwise outlive the `with` closure).
+    // Set of `format_session_date` strings the scope spans. Re-derives
+    // whenever `selected_day` or `scope` changes; the row projections
+    // filter against the resulting `Vec<String>`.
+    let scope_dates = Signal::derive(move || scope_date_set(selected_day.get(), scope.get()));
+
+    // Scope-filtered projections. Cloned out of the manager so the
+    // signal carries owned values (the manager borrow would otherwise
+    // outlive the `with` closure).
     let quick_logs_today = Signal::derive(move || {
-        let day = selected_date_str.get();
+        let dates = scope_dates.get();
         quick_logs.with(|mgr| {
-            mgr.entries_for_date(&day)
-                .into_iter()
+            mgr.entries()
+                .iter()
+                .filter(|q| dates.iter().any(|d| d == &q.date))
                 .cloned()
                 .collect::<Vec<QuickLog>>()
         })
     });
     let distractions_today = Signal::derive(move || {
-        let day = selected_date_str.get();
+        let dates = scope_dates.get();
         distractions.with(|mgr| {
-            mgr.entries_for_date(&day)
-                .into_iter()
+            mgr.entries()
+                .iter()
+                .filter(|d| dates.iter().any(|s| s == &d.date))
                 .cloned()
                 .collect::<Vec<Distraction>>()
         })
@@ -203,6 +340,9 @@ pub fn Inventory(selected_day: RwSignal<DateTime<Utc>>) -> impl IntoView {
                 leptos::logging::warn!("save_quick_logs (inventory add) failed: {:?}", e);
             }
         });
+        // Optimistic confirmation toast — same key as the timer-view
+        // QuickLogModal so the two add paths feel identical.
+        app_toast.show(t_string!(i18n, timer.toast.quick_log_added).to_string());
         inv_quick_log_modal_open.set(false);
         ql_add_title.set(String::new());
         ql_add_minutes.set(5);
@@ -212,17 +352,94 @@ pub fn Inventory(selected_day: RwSignal<DateTime<Utc>>) -> impl IntoView {
         <div class="inventory-card" id="inventory">
             <div class="inventory-header">
                 <h3>{t!(i18n, inventory.section_header)}</h3>
-                <button
-                    type="button"
-                    id="inventory-add-quicklog-btn"
-                    class="btn-primary"
-                    on:click=move |_| inv_quick_log_modal_open.set(true)
-                >{t!(i18n, inventory.btn_add_quicklog)}</button>
+                <div class="inventory-header-actions">
+                    <div
+                        class="inventory-scope-selector"
+                        role="radiogroup"
+                        aria-label="Inventory scope"
+                        on:keydown=move |ev| {
+                            let key = ev.key();
+                            let current = scope.get_untracked();
+                            let new_scope = match key.as_str() {
+                                "ArrowRight" | "ArrowDown" => match current {
+                                    InventoryScope::Day => Some(InventoryScope::Week),
+                                    InventoryScope::Week => Some(InventoryScope::Month),
+                                    InventoryScope::Month => Some(InventoryScope::Day),
+                                },
+                                "ArrowLeft" | "ArrowUp" => match current {
+                                    InventoryScope::Day => Some(InventoryScope::Month),
+                                    InventoryScope::Week => Some(InventoryScope::Day),
+                                    InventoryScope::Month => Some(InventoryScope::Week),
+                                },
+                                _ => None,
+                            };
+                            if let Some(s) = new_scope {
+                                ev.prevent_default();
+                                scope.set(s);
+                                #[cfg(target_arch = "wasm32")]
+                                {
+                                    use wasm_bindgen::JsCast as _;
+                                    if let Some(doc) = web_sys::window().and_then(|w| w.document()) {
+                                        let idx = match s {
+                                            InventoryScope::Day => 0u32,
+                                            InventoryScope::Week => 1u32,
+                                            InventoryScope::Month => 2u32,
+                                        };
+                                        if let Ok(btns) = doc.query_selector_all(".inventory-scope-btn") {
+                                            if let Some(btn) = btns.item(idx) {
+                                                let _ = btn.unchecked_into::<web_sys::HtmlElement>().focus();
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    >
+                        <button
+                            type="button"
+                            role="radio"
+                            class="inventory-scope-btn"
+                            class:active=move || scope.get() == InventoryScope::Day
+                            aria-checked=move || (scope.get() == InventoryScope::Day).to_string()
+                            tabindex=move || if scope.get() == InventoryScope::Day { 0i32 } else { -1i32 }
+                            on:click=move |_| scope.set(InventoryScope::Day)
+                        >{t!(i18n, inventory.scope_day)}</button>
+                        <button
+                            type="button"
+                            role="radio"
+                            class="inventory-scope-btn"
+                            class:active=move || scope.get() == InventoryScope::Week
+                            aria-checked=move || (scope.get() == InventoryScope::Week).to_string()
+                            tabindex=move || if scope.get() == InventoryScope::Week { 0i32 } else { -1i32 }
+                            on:click=move |_| scope.set(InventoryScope::Week)
+                        >{t!(i18n, inventory.scope_week)}</button>
+                        <button
+                            type="button"
+                            role="radio"
+                            class="inventory-scope-btn"
+                            class:active=move || scope.get() == InventoryScope::Month
+                            aria-checked=move || (scope.get() == InventoryScope::Month).to_string()
+                            tabindex=move || if scope.get() == InventoryScope::Month { 0i32 } else { -1i32 }
+                            on:click=move |_| scope.set(InventoryScope::Month)
+                        >{t!(i18n, inventory.scope_month)}</button>
+                    </div>
+                    <button
+                        type="button"
+                        id="inventory-add-quicklog-btn"
+                        class="btn-primary"
+                        on:click=move |_| inv_quick_log_modal_open.set(true)
+                    >{t!(i18n, inventory.btn_add_quicklog)}</button>
+                </div>
             </div>
 
             // ── Quick logs subsection ───────────────────────────────
             <div class="inventory-subsection" id="inventory-quicklogs-section">
-                <h4>{t!(i18n, inventory.subsection_quicklogs)}</h4>
+                <h4>
+                    {t!(i18n, inventory.subsection_quicklogs)}
+                    <span class="inventory-subsection-count">
+                        {move || quick_logs_today.with(Vec::len)}
+                    </span>
+                </h4>
                 <Show
                     when=move || !quick_logs_today.get().is_empty()
                     fallback=move || view! {
@@ -238,9 +455,17 @@ pub fn Inventory(selected_day: RwSignal<DateTime<Utc>>) -> impl IntoView {
                             children=move |q| {
                                 let q_for_edit = q.clone();
                                 let id_for_delete = q.id.clone();
-                                let mins_label = format!("{} {}", q.elapsed_minutes, t_string!(i18n, stats.minutes_unit));
+                                // Reactive closure so `minutes_unit` re-
+                                // resolves on locale change — `<For>`'s
+                                // children fn runs once per row at mount.
+                                let mins = q.elapsed_minutes;
+                                let mins_label = move || {
+                                    format!("{} {}", mins, t_string!(i18n, stats.minutes_unit))
+                                };
+                                let time_chip = format_hh_mm(&q.created_at);
                                 view! {
                                     <li class="inventory-row" data-quicklog-id=q.id>
+                                        <span class="inventory-row-time">{time_chip}</span>
                                         <span class="inventory-row-title">{q.title}</span>
                                         <span class="inventory-row-meta">{mins_label}</span>
                                         <span class="inventory-row-actions">
@@ -265,7 +490,12 @@ pub fn Inventory(selected_day: RwSignal<DateTime<Utc>>) -> impl IntoView {
 
             // ── Distractions subsection ─────────────────────────────
             <div class="inventory-subsection" id="inventory-distractions-section">
-                <h4>{t!(i18n, inventory.subsection_distractions)}</h4>
+                <h4>
+                    {t!(i18n, inventory.subsection_distractions)}
+                    <span class="inventory-subsection-count">
+                        {move || distractions_today.with(Vec::len)}
+                    </span>
+                </h4>
                 <Show
                     when=move || !distractions_today.get().is_empty()
                     fallback=move || view! {
@@ -289,12 +519,22 @@ pub fn Inventory(selected_day: RwSignal<DateTime<Utc>>) -> impl IntoView {
                                     .parent_ref
                                     .as_ref()
                                     .and_then(|p| p.parent_tag_id.clone());
+                                // Back-link target: the session row's
+                                // `data-session-start-ts` mirrors this
+                                // RFC-3339 string. `None` for orphan
+                                // (retroactively-captured) distractions.
+                                let parentref_target = d
+                                    .parent_ref
+                                    .as_ref()
+                                    .map(|p| p.parent_session_start_ts.clone());
+                                let parentref_clickable = parentref_target.is_some();
+                                let time_chip = format_hh_mm(&d.created_at);
                                 // FR-024a: resolve parent_tag_id
                                 // against the *current* tag table.
                                 // Tag exists -> render current name +
                                 // colour swatch. Tag deleted -> render
                                 // (deleted tag) placeholder.
-                                let parent_ref_view = move || -> AnyView {
+                                let parent_ref_inner = move || -> AnyView {
                                     match (parent_title.clone(), parent_tag_id.clone()) {
                                         (None, None) => view! { <span class="inventory-parentref-none">""</span> }.into_any(),
                                         (title_opt, tag_opt) => {
@@ -326,10 +566,52 @@ pub fn Inventory(selected_day: RwSignal<DateTime<Utc>>) -> impl IntoView {
                                         }
                                     }
                                 };
+                                // Wrap the parentref in a clickable
+                                // span when a back-link target exists;
+                                // orphan distractions render the same
+                                // markup with no click handler so
+                                // pointer-cursor / hover don't fire.
+                                let parentref_wrapper = move || -> AnyView {
+                                    if parentref_clickable {
+                                        let target = parentref_target.clone();
+                                        let target_kb = parentref_target.clone();
+                                        view! {
+                                            <span
+                                                class="inventory-row-parentref inventory-parentref-clickable"
+                                                role="button"
+                                                tabindex="0"
+                                                style="cursor: pointer"
+                                                on:click=move |_| {
+                                                    if let Some(ts) = target.as_deref() {
+                                                        flash_session_row(ts);
+                                                    }
+                                                }
+                                                on:keydown=move |ev| {
+                                                    let key = ev.key();
+                                                    if key == "Enter" || key == " " {
+                                                        ev.prevent_default();
+                                                        if let Some(ts) = target_kb.as_deref() {
+                                                            flash_session_row(ts);
+                                                        }
+                                                    }
+                                                }
+                                            >
+                                                {parent_ref_inner()}
+                                            </span>
+                                        }.into_any()
+                                    } else {
+                                        view! {
+                                            <span class="inventory-row-parentref">
+                                                {parent_ref_inner()}
+                                            </span>
+                                        }.into_any()
+                                    }
+                                };
                                 view! {
                                     <li class="inventory-row" data-distraction-id=d.id>
+                                        <span class="inventory-row-time">{time_chip}</span>
                                         <span class="inventory-row-title">{d.note}</span>
-                                        <span class="inventory-row-parentref">{parent_ref_view()}</span>
+                                        {parentref_wrapper()}
                                         <span class="inventory-row-actions">
                                             <button
                                                 type="button"
