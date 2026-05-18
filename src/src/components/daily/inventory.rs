@@ -29,6 +29,7 @@ use leptos_i18n::{t, t_string};
 
 #[cfg(target_arch = "wasm32")]
 use super::super::browser_clock::BrowserClock;
+use crate::app::AppToast;
 use crate::bridge::commands;
 use crate::bridge::types::{Distraction, QuickLog, Tag};
 #[cfg(target_arch = "wasm32")]
@@ -42,6 +43,7 @@ use crate::managers::quick_log::QuickLogManager;
 #[component]
 pub fn Inventory(selected_day: RwSignal<DateTime<Utc>>) -> impl IntoView {
     let i18n = use_i18n();
+    let app_toast = use_context::<AppToast>().unwrap_or_default();
     let quick_logs: RwSignal<QuickLogManager> = use_context::<RwSignal<QuickLogManager>>()
         .unwrap_or_else(|| RwSignal::new(QuickLogManager::new()));
     let distractions: RwSignal<DistractionManager> = use_context::<RwSignal<DistractionManager>>()
@@ -203,6 +205,9 @@ pub fn Inventory(selected_day: RwSignal<DateTime<Utc>>) -> impl IntoView {
                 leptos::logging::warn!("save_quick_logs (inventory add) failed: {:?}", e);
             }
         });
+        // Optimistic confirmation toast — same key as the timer-view
+        // QuickLogModal so the two add paths feel identical.
+        app_toast.show(t_string!(i18n, timer.toast.quick_log_added).to_string());
         inv_quick_log_modal_open.set(false);
         ql_add_title.set(String::new());
         ql_add_minutes.set(5);

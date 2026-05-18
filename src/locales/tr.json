@@ -227,7 +227,8 @@
       "session_deleted": "Oturum silindi ❌",
       "minutes_added": "Zamanlayıcıya 5 dakika eklendi ⏰",
       "minutes_subtracted": "Zamanlayıcıdan 5 dakika çıkarıldı ⏰",
-      "distraction_logged": "Dikkat dağıtıcı kaydedildi 📝"
+      "distraction_logged": "Dikkat dağıtıcı kaydedildi 📝",
+      "quick_log_added": "Hızlı kayıt eklendi ✅"
     }
   },
   "modal": {

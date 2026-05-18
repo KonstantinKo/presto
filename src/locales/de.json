@@ -227,7 +227,8 @@
       "session_deleted": "Sitzung gelöscht ❌",
       "minutes_added": "5 Minuten zum Timer hinzugefügt ⏰",
       "minutes_subtracted": "5 Minuten vom Timer abgezogen ⏰",
-      "distraction_logged": "Ablenkung notiert 📝"
+      "distraction_logged": "Ablenkung notiert 📝",
+      "quick_log_added": "Schnellnotiz hinzugefügt ✅"
     }
   },
   "modal": {

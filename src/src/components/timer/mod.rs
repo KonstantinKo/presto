@@ -2946,6 +2946,7 @@ fn QuickLogModal(
     quick_logs: RwSignal<crate::managers::quick_log::QuickLogManager>,
 ) -> impl IntoView {
     let i18n = use_i18n();
+    let app_toast = use_context::<AppToast>().unwrap_or_default();
     let title = RwSignal::new(String::new());
     let minutes = RwSignal::new(5u32);
 
@@ -2970,6 +2971,10 @@ fn QuickLogModal(
                 leptos::logging::warn!("save_quick_logs failed: {:?}", e);
             }
         });
+        // Optimistic confirmation toast — mirrors the distraction
+        // modal flow. Fires on dispatch; persistence failure still
+        // surfaces via the warn log above.
+        app_toast.show(t_string!(i18n, timer.toast.quick_log_added).to_string());
         open.set(false);
         title.set(String::new());
         minutes.set(5);
