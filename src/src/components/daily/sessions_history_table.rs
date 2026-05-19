@@ -108,6 +108,26 @@ fn end_time_from_start_duration(start: &str, duration: u32) -> (String, u32) {
     )
 }
 
+/// Derive the session's start RFC-3339 timestamp from its `created_at`
+/// (end / completion time, per `synth_completed_session`) minus its
+/// `duration` in minutes. Mirrors the
+/// `DistractionParentRef.parent_session_start_ts` shape so the
+/// Inventory back-link can match against `data-session-start-ts`.
+///
+/// Returns the input `created_at` unchanged if it doesn't parse as
+/// RFC-3339 — the back-link will simply not match, which is the
+/// graceful-degradation contract.
+fn derive_session_start_ts(created_at: &str, duration_minutes: u32) -> String {
+    chrono::DateTime::parse_from_rfc3339(created_at).map_or_else(
+        |_| created_at.to_string(),
+        |dt| {
+            (dt - chrono::Duration::minutes(i64::from(duration_minutes)))
+                .with_timezone(&chrono::Utc)
+                .to_rfc3339()
+        },
+    )
+}
+
 fn parse_time_minutes(value: &str) -> Option<u32> {
     let mut p = value.splitn(2, ':');
     let h = p.next()?.parse::<u32>().ok()?;
@@ -263,8 +283,21 @@ pub fn SessionsHistoryTable(selected_day: RwSignal<DateTime<Utc>>) -> impl IntoV
                                     row.title.as_deref(),
                                     row.tags.as_deref(),
                                 );
+                                // Back-link target attrs (Inventory →
+                                // session row). `data-session-start-ts`
+                                // mirrors the `DistractionParentRef.
+                                // parent_session_start_ts` shape (RFC-3339,
+                                // derived from `created_at - duration*60s`).
+                                let session_id_attr = row.id.clone();
+                                let session_start_ts_attr =
+                                    derive_session_start_ts(&row.created_at, row.duration);
                                 view! {
-                                    <tr class="session-row" role="row">
+                                    <tr
+                                        class="session-row sessions-table-row"
+                                        role="row"
+                                        data-session-id=session_id_attr
+                                        data-session-start-ts=session_start_ts_attr
+                                    >
                                         <td>{time_range}</td>
                                         {title_cell}
                                         <td>{duration_text}</td>
