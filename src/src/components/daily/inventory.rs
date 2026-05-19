@@ -31,7 +31,7 @@
     reason = "Leptos `#[component]` returning `impl IntoView`; body is a single `view!` macro expansion (two lists + two edit modals). Matches `sessions_history_table.rs:108` precedent."
 )]
 
-use chrono::{DateTime, Datelike, Days, TimeZone, Utc};
+use chrono::{DateTime, Datelike, Days, Utc};
 use leptos::prelude::*;
 use leptos::task::spawn_local;
 use leptos_i18n::{t, t_string};
@@ -79,20 +79,56 @@ fn scope_date_set(anchor: DateTime<Utc>, scope: InventoryScope) -> Vec<String> {
                 .collect()
         }
         InventoryScope::Month => {
-            let year = anchor.year();
-            let month = anchor.month();
-            // Walk down from 31 until chrono accepts the candidate.
-            let dim = (28u32..=31u32)
-                .rev()
-                .find(|d| chrono::NaiveDate::from_ymd_opt(year, month, *d).is_some())
-                .unwrap_or(28);
-            (1..=dim)
-                .filter_map(|d| {
-                    Utc.with_ymd_and_hms(year, month, d, 0, 0, 0)
-                        .single()
-                        .map(|dt| format_session_date(dt.timestamp_millis()))
-                })
-                .collect()
+            #[cfg(target_arch = "wasm32")]
+            {
+                let anchor_ts = anchor.timestamp_millis();
+                #[allow(
+                    clippy::cast_precision_loss,
+                    reason = "millisecond timestamps fit in f64 without loss for any date in the expected range (~53-bit mantissa covers ±285 million years)"
+                )]
+                let anchor_js =
+                    js_sys::Date::new(&wasm_bindgen::JsValue::from_f64(anchor_ts as f64));
+                #[allow(
+                    clippy::cast_possible_wrap,
+                    reason = "get_full_year() returns a real calendar year, never larger than i32::MAX"
+                )]
+                let local_year = anchor_js.get_full_year() as i32;
+                let local_month_1 = anchor_js.get_month() + 1; // 0-indexed → 1-indexed
+                let local_day = i64::from(anchor_js.get_date()); // 1-31, local day-of-month
+                let dim = i64::from(
+                    (28u32..=31u32)
+                        .rev()
+                        .find(|d| {
+                            chrono::NaiveDate::from_ymd_opt(local_year, local_month_1, *d).is_some()
+                        })
+                        .unwrap_or(28),
+                );
+                // Whole-day offset from the anchor to day 1 of the local month. Keeping
+                // the same time-of-day avoids UTC-midnight misclassification in negative
+                // offset timezones (UTC-midnight = previous local day).
+                let to_day1 = 1_i64 - local_day;
+                (0..dim)
+                    .map(|d| format_session_date(anchor_ts + (to_day1 + d) * 86_400_000))
+                    .collect()
+            }
+            #[cfg(not(target_arch = "wasm32"))]
+            {
+                use chrono::TimeZone as _;
+                let year = anchor.year();
+                let month = anchor.month();
+                // Walk down from 31 until chrono accepts the candidate.
+                let dim = (28u32..=31u32)
+                    .rev()
+                    .find(|d| chrono::NaiveDate::from_ymd_opt(year, month, *d).is_some())
+                    .unwrap_or(28);
+                (1..=dim)
+                    .filter_map(|d| {
+                        Utc.with_ymd_and_hms(year, month, d, 0, 0, 0)
+                            .single()
+                            .map(|dt| format_session_date(dt.timestamp_millis()))
+                    })
+                    .collect()
+            }
         }
     }
 }
