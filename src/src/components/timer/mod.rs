@@ -38,7 +38,11 @@
 // fns would fragment the JSX-style DOM tree without aiding
 // readability — the alternative (a Manager struct + slot-prop
 // bridge) is the post-merge plan's larger refactor.
-#![allow(clippy::must_use_candidate, clippy::too_many_lines)]
+#![allow(
+    clippy::must_use_candidate,
+    clippy::too_many_lines,
+    reason = "Leptos component returns are consumed by view!; TimerView stays one coherent DOM tree."
+)]
 
 mod tag_tracking;
 mod tray;
@@ -137,7 +141,10 @@ const fn mode_label(mode: TimerMode) -> &'static str {
 // Grouping them into a struct would add ceremony without improving
 // readability at the single call site.
 #[cfg(test)]
-#[allow(clippy::fn_params_excessive_bools)]
+#[allow(
+    clippy::fn_params_excessive_bools,
+    reason = "Four bools mirror four orthogonal TimerState predicates at the only call site."
+)]
 fn mode_label_with_status(
     mode: TimerMode,
     is_running: bool,
@@ -397,7 +404,10 @@ fn synth_completed_session(
 
 #[cfg(target_arch = "wasm32")]
 fn local_hh_mm(ms: i64) -> (u32, u32) {
-    #[allow(clippy::cast_precision_loss)]
+    #[allow(
+        clippy::cast_precision_loss,
+        reason = "Millisecond timestamps fit in f64 for realistic session dates."
+    )]
     let d = js_sys::Date::new(&wasm_bindgen::JsValue::from_f64(ms as f64));
     (d.get_hours(), d.get_minutes())
 }

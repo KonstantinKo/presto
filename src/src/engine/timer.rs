@@ -137,7 +137,10 @@ pub enum TimerEvent {
 // layer renders with different tray icons) and break parity with
 // the JS source. Keeping the bool fields preserves the 1:1
 // behavioural-port mapping that Principle I demands.
-#[allow(clippy::struct_excessive_bools)]
+#[allow(
+    clippy::struct_excessive_bools,
+    reason = "TimerState bools preserve distinct JS-era run/pause/smart-pause signals required by UI and tray parity."
+)]
 pub struct TimerState {
     /// Configured per-mode duration set in seconds.
     durations: Durations,
@@ -284,9 +287,7 @@ impl TimerState {
     #[allow(
         clippy::cast_sign_loss,
         clippy::cast_possible_truncation,
-        // Safe: `time_remaining_secs` is `>= 0` outside `tick`'s
-        // internal arithmetic and bounded by the largest mode
-        // duration (long break: 20 min = 1_200 < u32::MAX).
+        reason = "Steady-state time_remaining_secs is >= 0 and bounded by configured mode durations."
     )]
     pub const fn time_remaining_secs(&self) -> u32 {
         if self.time_remaining_secs < 0 {

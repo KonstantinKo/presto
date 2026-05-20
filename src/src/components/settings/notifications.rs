@@ -24,7 +24,11 @@
 // wide for the same reason as on `timer.rs`. `clippy::too_many_lines`
 // is silenced because the view body is a single Leptos `view!`
 // expansion plus a small change-handler cluster.
-#![allow(clippy::must_use_candidate, clippy::too_many_lines)]
+#![allow(
+    clippy::must_use_candidate,
+    clippy::too_many_lines,
+    reason = "Leptos component returns are consumed by view!; tab body is one settings form tree."
+)]
 
 use leptos::prelude::*;
 use leptos_i18n::{t, t_string};

@@ -56,7 +56,11 @@
 // derived-signal cluster — splitting either across helper fns
 // fragments the JSX-style DOM tree. Same rationale as on
 // `history.rs` / `tags.rs`.
-#![allow(clippy::must_use_candidate, clippy::too_many_lines)]
+#![allow(
+    clippy::must_use_candidate,
+    clippy::too_many_lines,
+    reason = "Leptos component returns are consumed by view!; settings shell keeps tab DOM together."
+)]
 
 use leptos::prelude::*;
 use leptos_i18n::{t, t_string};
@@ -142,12 +146,12 @@ impl Default for SettingsToast {
 ///   the per-tab routing matches `screens.js:72`'s
 ///   `#category-<tab>.active` wait.
 ///
-/// `#[allow(clippy::needless_pass_by_value)]` on `on_select_tab`
-/// would be required if we accepted `Callback<SettingsTab>` directly
-/// — but using a `Callback` prop is the established Leptos pattern
-/// and the framework's `Callback::run` consumes by reference, so the
-/// pass-by-value is on the prop binding only and isn't actually a
-/// move at the click-handler site.
+/// A `clippy::needless_pass_by_value` suppression on `on_select_tab`
+/// would be required if we accepted `Callback<SettingsTab>` directly,
+/// but using a `Callback` prop is the established Leptos pattern and
+/// the framework's `Callback::run` consumes by reference, so the
+/// pass-by-value is on the prop binding only and is not a move at the
+/// click-handler site.
 #[component]
 pub fn SettingsView(
     /// Active tab — the `data-category` value of the nav button that

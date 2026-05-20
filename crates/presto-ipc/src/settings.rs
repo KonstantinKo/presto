@@ -332,7 +332,10 @@ pub const fn default_sessions_per_long_break() -> u32 {
 /// `clippy::struct_excessive_bools` is silenced because every bool
 /// maps to an independent UI toggle; collapsing them into a state
 /// machine would not match the on-disk JSON or the settings UI.
-#[allow(clippy::struct_excessive_bools)]
+#[allow(
+    clippy::struct_excessive_bools,
+    reason = "Each bool maps to an independent persisted settings toggle and UI control."
+)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "specta", derive(specta::Type))]
 pub struct NotificationSettings {
@@ -417,7 +420,10 @@ pub struct AdvancedSettings {
 /// `clippy::struct_excessive_bools` allowance: every bool is an
 /// independent settings toggle exposed in the UI; restructuring
 /// would not match the JSON shape on disk or the settings page.
-#[allow(clippy::struct_excessive_bools)]
+#[allow(
+    clippy::struct_excessive_bools,
+    reason = "Each bool maps to an independent persisted settings toggle and UI control."
+)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "specta", derive(specta::Type))]
 #[serde(from = "SettingsOnDisk")]
@@ -471,7 +477,10 @@ impl Default for Settings {
 /// 4. Else, use `StatusBarDisplay::default()`.
 ///
 /// Tie-breaker: when both fields are present, the new field wins.
-#[allow(clippy::struct_excessive_bools)]
+#[allow(
+    clippy::struct_excessive_bools,
+    reason = "On-disk migration shim mirrors legacy and current bool fields without reshaping JSON."
+)]
 #[derive(Debug, Clone, Deserialize)]
 #[cfg_attr(feature = "specta", derive(specta::Type))]
 pub struct SettingsOnDisk {

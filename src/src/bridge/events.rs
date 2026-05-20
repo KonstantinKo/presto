@@ -22,7 +22,10 @@
 // runtime is single-threaded and `JsValue` (plus everything
 // transitively built on it: `JsFuture`, `Promise`, `Closure`,
 // `serde-wasm-bindgen` values) is `!Send` by construction.
-#![allow(clippy::future_not_send)]
+#![allow(
+    clippy::future_not_send,
+    reason = "Tauri event futures carry JsValue/Closure and run only on single-threaded wasm32."
+)]
 
 use serde::de::DeserializeOwned;
 use wasm_bindgen::closure::Closure;

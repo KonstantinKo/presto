@@ -384,12 +384,11 @@ fn emit_tray_and_show(app: &AppHandle, event: &str) {
     }
     let app_clone = app.clone();
     tauri::async_runtime::spawn(async move {
-        show_app_window(app_clone).await;
+        show_app_window(&app_clone);
     });
 }
 
-#[allow(clippy::unused_async)] // awaits run_on_main_thread on macOS
-async fn show_app_window(app: AppHandle) {
+fn show_app_window(app: &AppHandle) {
     let settings = helpers::lock_or_recover(&app.state::<SettingsState>().0).clone();
     if settings.hide_icon_on_close {
         #[cfg(target_os = "macos")]
@@ -843,7 +842,7 @@ pub fn run() {
                         "show" => {
                             let app_clone = app_handle.clone();
                             tauri::async_runtime::spawn(async move {
-                                show_app_window(app_clone).await;
+                                show_app_window(&app_clone);
                             });
                         }
                         "start_session" => {
@@ -867,7 +866,7 @@ pub fn run() {
                         if let TrayIconEvent::Click { .. } = event {
                             let app_clone = app_handle_for_click.clone();
                             tauri::async_runtime::spawn(async move {
-                                show_app_window(app_clone).await;
+                                show_app_window(&app_clone);
                             });
                         }
                     });
@@ -940,7 +939,7 @@ pub fn run() {
                 tauri::RunEvent::Reopen { .. } => {
                     let app_handle_clone = app_handle.clone();
                     tauri::async_runtime::spawn(async move {
-                        show_app_window(app_handle_clone).await;
+                        show_app_window(&app_handle_clone);
                     });
                 }
                 _ => {

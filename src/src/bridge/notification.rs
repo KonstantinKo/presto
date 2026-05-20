@@ -5,7 +5,10 @@
 // __TAURI__.notification.* surface rather than __TAURI_INTERNALS__.invoke.
 // The existing tauriMock.js fixture mocks the JS-level surface so this
 // wrapper works under both real Tauri builds and the e2e mock harness.
-#![allow(clippy::future_not_send)]
+#![allow(
+    clippy::future_not_send,
+    reason = "Notification bridge futures carry JsValue and run only on single-threaded wasm32."
+)]
 
 use serde::Serialize;
 use wasm_bindgen::prelude::*;

@@ -28,7 +28,11 @@
 // silenced because the view body is a single Leptos `view!`
 // expansion (one row per shortcut) plus a small recording-state
 // helper cluster.
-#![allow(clippy::must_use_candidate, clippy::too_many_lines)]
+#![allow(
+    clippy::must_use_candidate,
+    clippy::too_many_lines,
+    reason = "Leptos component returns are consumed by view!; shortcut recorder stays one form tree."
+)]
 
 use leptos::ev::KeyboardEvent;
 use leptos::prelude::*;

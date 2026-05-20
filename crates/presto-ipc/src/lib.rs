@@ -17,7 +17,10 @@
 //             disables (keeps specta transitives out of the wasm
 //             dep graph).
 
-#![allow(clippy::module_name_repetitions)]
+#![allow(
+    clippy::module_name_repetitions,
+    reason = "IPC wire type names repeat module domains intentionally for flat crate-root re-exports."
+)]
 // Module-level glob re-exports below intentionally surface everything
 // from each sub-module flat at the crate root. `unreachable_pub` fires
 // on every empty module declaration; suppress at the use site rather

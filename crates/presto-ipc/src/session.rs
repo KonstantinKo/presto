@@ -38,7 +38,10 @@ pub struct Session {
 // `Option<Vec<serde_json::Value>>` and `serde_json::Value` carries
 // `f64`, which is not `Eq`. The structural `PartialEq` is enough for
 // Leptos `Memo` cache equality in `components/stats/mod.rs::period_sessions`.
-#[allow(clippy::derive_partial_eq_without_eq)]
+#[allow(
+    clippy::derive_partial_eq_without_eq,
+    reason = "ManualSession tags contain serde_json::Value, whose f64 variant prevents Eq."
+)]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "specta", derive(specta::Type))]
 pub struct ManualSession {

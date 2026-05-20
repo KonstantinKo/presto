@@ -18,7 +18,11 @@
 // Lint allowance: `clippy::must_use_candidate` is silenced for the
 // usual Leptos `#[component]` reason. `clippy::too_many_lines` is
 // silenced for the same `view!` reason as other settings tabs.
-#![allow(clippy::must_use_candidate, clippy::too_many_lines)]
+#![allow(
+    clippy::must_use_candidate,
+    clippy::too_many_lines,
+    reason = "Leptos component returns are consumed by view!; tab body is one settings form tree."
+)]
 
 use leptos::prelude::*;
 use leptos::task::spawn_local;

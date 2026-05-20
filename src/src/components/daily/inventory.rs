@@ -84,7 +84,7 @@ fn scope_date_set(anchor: DateTime<Utc>, scope: InventoryScope) -> Vec<String> {
                 let anchor_ts = anchor.timestamp_millis();
                 #[allow(
                     clippy::cast_precision_loss,
-                    reason = "millisecond timestamps fit in f64 without loss for any date in the expected range (~53-bit mantissa covers ±285 million years)"
+                    reason = "millisecond timestamps fit in f64 without loss for expected app dates (~53-bit mantissa covers about +/-285,000 years)"
                 )]
                 let anchor_js =
                     js_sys::Date::new(&wasm_bindgen::JsValue::from_f64(anchor_ts as f64));
@@ -145,7 +145,7 @@ fn format_hh_mm(rfc3339: &str) -> String {
         };
         #[allow(
             clippy::cast_precision_loss,
-            reason = "millisecond timestamps fit in f64 without loss for any date in the expected range (~53-bit mantissa covers ±285 million years)"
+            reason = "millisecond timestamps fit in f64 without loss for expected app dates (~53-bit mantissa covers about +/-285,000 years)"
         )]
         let d = js_sys::Date::new(&wasm_bindgen::JsValue::from_f64(
             parsed.timestamp_millis() as f64

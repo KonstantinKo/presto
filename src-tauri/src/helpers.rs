@@ -1,3 +1,8 @@
+#![allow(
+    clippy::redundant_pub_crate,
+    reason = "Private module exposes pub(super) persistence helpers to lib.rs while avoiding plain pub unreachable_pub."
+)]
+
 use serde::Serialize;
 use std::collections::HashMap;
 use std::fs;
@@ -13,7 +18,6 @@ use std::time::{Duration, Instant};
 /// # Errors
 ///
 /// Returns an error string if serialization, temp-file write, or rename fails.
-#[allow(clippy::redundant_pub_crate)]
 pub(super) fn write_json_atomic<T: Serialize + ?Sized>(
     path: &Path,
     value: &T,
@@ -31,7 +35,6 @@ pub(super) fn write_json_atomic<T: Serialize + ?Sized>(
 ///
 /// If the mutex was poisoned by a prior panicking holder, logs a warning and
 /// returns the inner value rather than propagating the panic.
-#[allow(clippy::redundant_pub_crate)]
 pub(super) fn lock_or_recover<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
     m.lock().unwrap_or_else(|e| {
         log::warn!("recovering poisoned mutex");
@@ -45,11 +48,8 @@ pub(super) fn lock_or_recover<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
 /// Extracting this logic as a pure function (caller-supplied state) makes
 /// it trivially testable without touching the global `SHORTCUT_DEBOUNCE` mutex.
 #[must_use]
-// pub(super) is the correct visibility here: the function is used by the parent module
-// (lib.rs) and its descendants (the test module), but not from anywhere else in the crate.
-// clippy::redundant_pub_crate fires because the enclosing module is private; however,
-// pub(super) is intentionally more restrictive than pub(crate).
-#[allow(clippy::redundant_pub_crate)]
+// Module-level `clippy::redundant_pub_crate` allowance covers this parent-module API:
+// `pub(super)` records "lib.rs helper", while plain `pub` would trip `unreachable_pub`.
 pub(super) fn is_debounced(
     map: &mut HashMap<String, Instant>,
     action: &str,
@@ -72,7 +72,6 @@ pub(super) fn is_debounced(
 /// Returns `Ok(AppSettings::default())` when the file is absent or contains
 /// malformed JSON. Returns `Err` for any other I/O error (e.g. permission
 /// denied) so callers can surface unexpected failures.
-#[allow(clippy::redundant_pub_crate)]
 pub(super) fn read_settings_from(dir: &Path) -> Result<super::AppSettings, std::io::Error> {
     let file_path = dir.join("settings.json");
     if !file_path.exists() {
@@ -87,7 +86,6 @@ pub(super) fn read_settings_from(dir: &Path) -> Result<super::AppSettings, std::
 
 /// Creates `dir` if necessary, then atomically writes `settings` to
 /// `settings.json`.
-#[allow(clippy::redundant_pub_crate)]
 pub(super) fn write_settings_to(dir: &Path, settings: &super::AppSettings) -> Result<(), String> {
     fs::create_dir_all(dir).map_err(|e| format!("Failed to create directory: {e}"))?;
     write_json_atomic(&dir.join("settings.json"), settings)
@@ -100,7 +98,6 @@ pub(super) fn write_settings_to(dir: &Path, settings: &super::AppSettings) -> Re
 /// Returns `None` if the file is absent. Applies the date-rollover logic from
 /// `load_session_data`: if the stored date is from a previous day, the session
 /// counters are reset to fresh-day defaults before returning.
-#[allow(clippy::redundant_pub_crate)]
 pub(super) fn read_session_from(dir: &Path) -> Result<Option<super::PomodoroSession>, String> {
     let file_path = dir.join("session.json");
     if !file_path.exists() {
@@ -135,7 +132,6 @@ pub(super) fn read_session_from(dir: &Path) -> Result<Option<super::PomodoroSess
 
 /// Creates `dir` if necessary, then atomically writes `session` to
 /// `session.json`.
-#[allow(clippy::redundant_pub_crate)]
 pub(super) fn write_session_to(dir: &Path, session: &super::PomodoroSession) -> Result<(), String> {
     fs::create_dir_all(dir).map_err(|e| format!("Failed to create directory: {e}"))?;
     write_json_atomic(&dir.join("session.json"), session)
@@ -144,7 +140,6 @@ pub(super) fn write_session_to(dir: &Path, session: &super::PomodoroSession) -> 
 // ── Tasks ─────────────────────────────────────────────────────────────────────
 
 /// Reads `tasks.json` from `dir`, returning an empty vec when absent.
-#[allow(clippy::redundant_pub_crate)]
 pub(super) fn read_tasks_from(dir: &Path) -> Result<Vec<super::Task>, String> {
     let file_path = dir.join("tasks.json");
     if !file_path.exists() {
@@ -156,7 +151,6 @@ pub(super) fn read_tasks_from(dir: &Path) -> Result<Vec<super::Task>, String> {
 }
 
 /// Creates `dir` if necessary, then atomically writes `tasks` to `tasks.json`.
-#[allow(clippy::redundant_pub_crate)]
 pub(super) fn write_tasks_to(dir: &Path, tasks: &[super::Task]) -> Result<(), String> {
     fs::create_dir_all(dir).map_err(|e| format!("Failed to create directory: {e}"))?;
     write_json_atomic(&dir.join("tasks.json"), tasks)
@@ -165,7 +159,6 @@ pub(super) fn write_tasks_to(dir: &Path, tasks: &[super::Task]) -> Result<(), St
 // ── History ───────────────────────────────────────────────────────────────────
 
 /// Reads `history.json` from `dir`, returning an empty vec when absent.
-#[allow(clippy::redundant_pub_crate)]
 pub(super) fn read_history_from(dir: &Path) -> Result<Vec<super::PomodoroSession>, String> {
     let history_path = dir.join("history.json");
     if !history_path.exists() {
@@ -196,7 +189,6 @@ fn normalize_date(date: &str) -> String {
 /// normalized to ISO `"%Y-%m-%d"` before deduplication, sorting, and write-back
 /// so that legacy-format entries and ISO-format entries for the same day are
 /// always treated as identical.
-#[allow(clippy::redundant_pub_crate)]
 pub(super) fn append_daily_stats_to(
     dir: &Path,
     session: &super::PomodoroSession,
@@ -249,7 +241,6 @@ pub(super) fn append_daily_stats_to(
 // ── Manual sessions ───────────────────────────────────────────────────────────
 
 /// Reads `manual_sessions.json` from `dir`, returning an empty vec when absent.
-#[allow(clippy::redundant_pub_crate)]
 pub(super) fn read_manual_sessions_from(dir: &Path) -> Result<Vec<super::ManualSession>, String> {
     let file_path = dir.join("manual_sessions.json");
     if !file_path.exists() {
@@ -262,7 +253,6 @@ pub(super) fn read_manual_sessions_from(dir: &Path) -> Result<Vec<super::ManualS
 
 /// Creates `dir` if necessary, then atomically writes `sessions` to
 /// `manual_sessions.json`.
-#[allow(clippy::redundant_pub_crate)]
 pub(super) fn write_manual_sessions_to(
     dir: &Path,
     sessions: &[super::ManualSession],
@@ -280,7 +270,6 @@ pub(super) fn write_manual_sessions_to(
 /// next save does not silently clobber the user's data, then returns an empty
 /// vec. The `serde_json::Error` text is logged but never persisted on the
 /// wire — feeds AG-10's PII-safety contract.
-#[allow(clippy::redundant_pub_crate)]
 pub(super) fn read_quick_logs_from(dir: &Path) -> Result<Vec<super::QuickLog>, String> {
     let file_path = dir.join("quick_logs.json");
     if !file_path.exists() {
@@ -311,7 +300,6 @@ pub(super) fn read_quick_logs_from(dir: &Path) -> Result<Vec<super::QuickLog>, S
 
 /// Creates `dir` if necessary, then atomically writes `logs` to
 /// `quick_logs.json`.
-#[allow(clippy::redundant_pub_crate)]
 pub(super) fn write_quick_logs_to(dir: &Path, logs: &[super::QuickLog]) -> Result<(), String> {
     fs::create_dir_all(dir).map_err(|e| format!("Failed to create directory: {e}"))?;
     write_json_atomic(&dir.join("quick_logs.json"), logs)
@@ -325,7 +313,6 @@ pub(super) fn write_quick_logs_to(dir: &Path, logs: &[super::QuickLog]) -> Resul
 /// `distractions.json.corrupt` (matching the `history.json` convention in
 /// `append_daily_stats_to`) so the next save does not silently clobber the
 /// user's data, then returns an empty vec.
-#[allow(clippy::redundant_pub_crate)]
 pub(super) fn read_distractions_from(dir: &Path) -> Result<Vec<super::Distraction>, String> {
     let file_path = dir.join("distractions.json");
     if !file_path.exists() {
@@ -356,7 +343,6 @@ pub(super) fn read_distractions_from(dir: &Path) -> Result<Vec<super::Distractio
 
 /// Creates `dir` if necessary, then atomically writes `entries` to
 /// `distractions.json`.
-#[allow(clippy::redundant_pub_crate)]
 pub(super) fn write_distractions_to(
     dir: &Path,
     entries: &[super::Distraction],
@@ -371,7 +357,6 @@ pub(super) fn write_distractions_to(
 ///
 /// When the file is absent, bootstraps and persists a default "Focus" tag so
 /// that subsequent reads are consistent.
-#[allow(clippy::redundant_pub_crate)]
 pub(super) fn read_tags_from(dir: &Path) -> Result<Vec<super::Tag>, String> {
     let file_path = dir.join("tags.json");
     if !file_path.exists() {
@@ -397,14 +382,12 @@ pub(super) fn read_tags_from(dir: &Path) -> Result<Vec<super::Tag>, String> {
 }
 
 /// Creates `dir` if necessary, then atomically writes `tags` to `tags.json`.
-#[allow(clippy::redundant_pub_crate)]
 pub(super) fn write_tags_to(dir: &Path, tags: &[super::Tag]) -> Result<(), String> {
     fs::create_dir_all(dir).map_err(|e| format!("Failed to create directory: {e}"))?;
     write_json_atomic(&dir.join("tags.json"), tags)
 }
 
 /// Inserts or replaces the entry matching `tag.id` in `tags.json`.
-#[allow(clippy::redundant_pub_crate)]
 pub(super) fn upsert_tag_in(dir: &Path, tag: super::Tag) -> Result<(), String> {
     let mut tags = read_tags_from(dir)?;
     tags.retain(|t| t.id != tag.id);
@@ -413,7 +396,6 @@ pub(super) fn upsert_tag_in(dir: &Path, tag: super::Tag) -> Result<(), String> {
 }
 
 /// Removes the entry matching `tag_id` from `tags.json`.
-#[allow(clippy::redundant_pub_crate)]
 pub(super) fn delete_tag_in(dir: &Path, tag_id: &str) -> Result<(), String> {
     let mut tags = read_tags_from(dir)?;
     tags.retain(|t| t.id != tag_id);
@@ -423,7 +405,6 @@ pub(super) fn delete_tag_in(dir: &Path, tag_id: &str) -> Result<(), String> {
 // ── Session tags ──────────────────────────────────────────────────────────────
 
 /// Reads `session_tags.json` from `dir`, returning an empty vec when absent.
-#[allow(clippy::redundant_pub_crate)]
 pub(super) fn read_session_tags_from(dir: &Path) -> Result<Vec<super::SessionTag>, String> {
     let file_path = dir.join("session_tags.json");
     if !file_path.exists() {
@@ -436,7 +417,6 @@ pub(super) fn read_session_tags_from(dir: &Path) -> Result<Vec<super::SessionTag
 
 /// Creates `dir` if necessary, then atomically writes `session_tags` to
 /// `session_tags.json`.
-#[allow(clippy::redundant_pub_crate)]
 pub(super) fn write_session_tags_to(
     dir: &Path,
     session_tags: &[super::SessionTag],
@@ -446,7 +426,6 @@ pub(super) fn write_session_tags_to(
 }
 
 /// Appends `session_tag` to `session_tags.json`.
-#[allow(clippy::redundant_pub_crate)]
 pub(super) fn append_session_tag_in(
     dir: &Path,
     session_tag: super::SessionTag,
@@ -460,7 +439,6 @@ pub(super) fn append_session_tag_in(
 
 /// Deletes all known data files from `dir`. Files that do not exist are
 /// silently skipped so the function is idempotent.
-#[allow(clippy::redundant_pub_crate)]
 pub(super) fn delete_all_data_in(dir: &Path) -> Result<(), String> {
     const FILES: &[&str] = &[
         "session.json",
