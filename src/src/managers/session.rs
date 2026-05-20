@@ -15,7 +15,10 @@
 // transitively awaits a `JsFuture` from `bridge::commands`, and
 // `JsValue` (and everything built on it) is `!Send` by construction
 // on `wasm32-unknown-unknown`. The runtime is single-threaded.
-#![allow(clippy::future_not_send)]
+#![allow(
+    clippy::future_not_send,
+    reason = "Manager async paths await wasm32 Tauri bridge futures that carry !Send JsValue."
+)]
 
 use crate::bridge::commands;
 use crate::bridge::types::BridgeError;

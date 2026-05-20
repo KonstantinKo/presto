@@ -22,7 +22,10 @@
 // every wrapper to invent a Send-erasure shim that does nothing on the
 // WASM target. Spec 001 plan.md §Modules makes the same call; no
 // non-WASM consumer of this module exists.
-#![allow(clippy::future_not_send)]
+#![allow(
+    clippy::future_not_send,
+    reason = "Tauri JS bridge futures carry JsValue and run only on single-threaded wasm32."
+)]
 
 use serde::de::DeserializeOwned;
 use serde::Serialize;

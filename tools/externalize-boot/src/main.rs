@@ -29,7 +29,11 @@
 // sibling `presto-build-themes` binary). The Trunk hook captures and
 // forwards stdio to the developer terminal; no alternative logger is
 // wired into this single-file binary.
-#![allow(clippy::print_stderr, clippy::print_stdout)]
+#![allow(
+    clippy::print_stderr,
+    clippy::print_stdout,
+    reason = "Trunk hook binary reports progress and recoverable errors over captured stdio."
+)]
 
 use std::env;
 use std::fmt::Write as _;

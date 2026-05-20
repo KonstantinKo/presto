@@ -25,7 +25,11 @@
 // usual Leptos `#[component]` reason. `clippy::too_many_lines` is
 // silenced because the view body is a single Leptos `view!`
 // expansion covering the sidebar + every top-level view.
-#![allow(clippy::must_use_candidate, clippy::too_many_lines)]
+#![allow(
+    clippy::must_use_candidate,
+    clippy::too_many_lines,
+    reason = "Leptos component returns are consumed by view!; App is one router view tree."
+)]
 
 use leptos::prelude::*;
 use leptos::task::spawn_local;

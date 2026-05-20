@@ -11,13 +11,13 @@
 // The legacy `write_excel_file` cutover-parity command was removed in
 // Phase 6 (T235); the JS-era export path is gone post-cutover.
 //
-// Lint allowance rationale — `clippy::redundant_pub_crate`: same conflict
-// as the `auth` module (see auth.rs header). `pub(super)` items in a
-// private module are flagged by `redundant_pub_crate`; the alternative
-// (plain `pub` in a `pub(crate)` module) is flagged by `unreachable_pub`.
-// We follow the same resolution `helpers.rs` uses and document it once
-// at the module level.
-#![allow(clippy::redundant_pub_crate)]
+// Lint allowance rationale — `clippy::redundant_pub_crate`: `pub(super)`
+// items in a private module are callable by `lib.rs` without widening to
+// plain `pub`, which would trip the workspace `unreachable_pub` lint.
+#![allow(
+    clippy::redundant_pub_crate,
+    reason = "Private module exposes pub(super) export helpers to lib.rs while avoiding plain pub unreachable_pub."
+)]
 
 use std::path::Path;
 
