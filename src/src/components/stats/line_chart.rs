@@ -119,10 +119,13 @@ pub fn compute_line_spec(cfg: &LineChartConfig) -> LineRenderSpec {
 
     #[allow(
         clippy::cast_precision_loss,
-        reason = "Width/height fit in f32 without loss for typical UI sizes."
+        reason = "SVG dimensions are UI pixels far below the f32 exact-integer limit."
     )]
     let chart_w = cfg.width_px as f32 - PADDING_LEFT - PADDING_RIGHT;
-    #[allow(clippy::cast_precision_loss, reason = "See above.")]
+    #[allow(
+        clippy::cast_precision_loss,
+        reason = "Same SVG-dimension bound as chart_w."
+    )]
     let chart_h = cfg.height_px as f32 - PADDING_TOP - PADDING_BOTTOM;
 
     let tick_y_px: Vec<f32> = ticks
@@ -143,13 +146,19 @@ pub fn compute_line_spec(cfg: &LineChartConfig) -> LineRenderSpec {
         let y = chart_h.mul_add(1.0 - frac, PADDING_TOP);
         vec![(PADDING_LEFT + chart_w / 2.0, y)]
     } else {
-        #[allow(clippy::cast_precision_loss, reason = "n-1 small.")]
+        #[allow(
+            clippy::cast_precision_loss,
+            reason = "UI chart point count is far below the f32 exact-integer limit."
+        )]
         let step = chart_w / (n - 1) as f32;
         cfg.points
             .iter()
             .enumerate()
             .map(|(i, &v)| {
-                #[allow(clippy::cast_precision_loss, reason = "Point index small.")]
+                #[allow(
+                    clippy::cast_precision_loss,
+                    reason = "Point index is bounded by the same UI chart point count."
+                )]
                 let x = step.mul_add(i as f32, PADDING_LEFT);
                 let frac = (v / y_max).clamp(0.0, 1.0);
                 let y = chart_h.mul_add(1.0 - frac, PADDING_TOP);
@@ -203,9 +212,15 @@ pub fn LineChart(cfg: LineChartConfig) -> impl IntoView {
         .zip(spec.tick_y_px.iter().copied());
 
     let chart_left = PADDING_LEFT;
-    #[allow(clippy::cast_precision_loss, reason = "Width fits in f32.")]
+    #[allow(
+        clippy::cast_precision_loss,
+        reason = "SVG width is a UI pixel value far below the f32 exact-integer limit."
+    )]
     let chart_right = width_px as f32 - PADDING_RIGHT;
-    #[allow(clippy::cast_precision_loss, reason = "Height fits in f32.")]
+    #[allow(
+        clippy::cast_precision_loss,
+        reason = "SVG height is a UI pixel value far below the f32 exact-integer limit."
+    )]
     let chart_bottom = height_px as f32 - PADDING_BOTTOM;
 
     let labels_with_x: Vec<(String, f32)> = x_labels

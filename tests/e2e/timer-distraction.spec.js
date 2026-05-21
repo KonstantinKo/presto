@@ -27,8 +27,10 @@ test("Distraction: Running right-slot opens modal, Enter submits, Escape cancels
   );
 
   // ── 2. Wait until the timer has accumulated at least 1s. ─────────
+  // 5 s budget absorbs parallel-runner load (timer-complete.spec.js
+  // runs 44 s concurrently and can starve the 1 Hz WASM interval).
   await expect(page.locator("#timer-seconds")).not.toHaveText("00", {
-    timeout: 2000,
+    timeout: 5000,
   });
 
   // Capture elapsed time before opening the modal.

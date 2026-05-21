@@ -31,7 +31,11 @@
 // body is a single Leptos `view!` macro expansion (one DOM subtree
 // per setting) plus a small change-handler cluster; splitting it
 // would fragment the JSX-style DOM tree without aiding readability.
-#![allow(clippy::must_use_candidate, clippy::too_many_lines)]
+#![allow(
+    clippy::must_use_candidate,
+    clippy::too_many_lines,
+    reason = "Leptos component returns are consumed by view!; tab body is one settings form tree."
+)]
 
 use leptos::prelude::*;
 

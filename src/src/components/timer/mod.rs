@@ -38,10 +38,17 @@
 // fns would fragment the JSX-style DOM tree without aiding
 // readability — the alternative (a Manager struct + slot-prop
 // bridge) is the post-merge plan's larger refactor.
-#![allow(clippy::must_use_candidate, clippy::too_many_lines)]
+#![allow(
+    clippy::must_use_candidate,
+    clippy::too_many_lines,
+    reason = "Leptos component returns are consumed by view!; TimerView stays one coherent DOM tree."
+)]
 
+mod mute;
 mod tag_tracking;
 mod tray;
+
+pub use self::mute::{provide_mute_state, Muted};
 
 use std::collections::HashMap;
 
@@ -137,7 +144,10 @@ const fn mode_label(mode: TimerMode) -> &'static str {
 // Grouping them into a struct would add ceremony without improving
 // readability at the single call site.
 #[cfg(test)]
-#[allow(clippy::fn_params_excessive_bools)]
+#[allow(
+    clippy::fn_params_excessive_bools,
+    reason = "Four bools mirror four orthogonal TimerState predicates at the only call site."
+)]
 fn mode_label_with_status(
     mode: TimerMode,
     is_running: bool,
@@ -397,7 +407,10 @@ fn synth_completed_session(
 
 #[cfg(target_arch = "wasm32")]
 fn local_hh_mm(ms: i64) -> (u32, u32) {
-    #[allow(clippy::cast_precision_loss)]
+    #[allow(
+        clippy::cast_precision_loss,
+        reason = "Millisecond timestamps fit in f64 for realistic session dates."
+    )]
     let d = js_sys::Date::new(&wasm_bindgen::JsValue::from_f64(ms as f64));
     (d.get_hours(), d.get_minutes())
 }
@@ -440,6 +453,9 @@ mod chime {
 #[cfg(target_arch = "wasm32")]
 fn play_chime() {
     use web_sys::OscillatorType;
+    if self::mute::is_muted() {
+        return;
+    }
     chime::ensure_context();
     chime::CTX.with(|cell| {
         let slot = cell.borrow();
@@ -551,6 +567,9 @@ pub(crate) const fn install_audio_priming_listener() {}
 fn play_metronome_tick() {
     use std::cell::RefCell;
     use web_sys::{AudioContext, OscillatorType};
+    if self::mute::is_muted() {
+        return;
+    }
     thread_local! {
         static CTX: RefCell<Option<AudioContext>> = const { RefCell::new(None) };
     }
@@ -850,6 +869,13 @@ pub fn TimerView() -> impl IntoView {
         .unwrap_or_else(|| RwSignal::new(TimerState::new(initial_durations)));
     let app_toast = use_context::<AppToast>().unwrap_or_default();
     let warning_signal = RwSignal::new(false);
+
+    // Global mute — silences ticks, chimes, ambient music. Read here
+    // so the ambient Effect below depends on it reactively (toggle ON
+    // → fade out; toggle OFF mid-focus → resume). The chime + tick
+    // gates read the atomic mirror directly (non-reactive), so the
+    // signal is only used by the ambient gate and the mute button.
+    let muted = use_context::<Muted>().unwrap_or_else(provide_mute_state).0;
 
     // Feature 005: i18n context handle. Live for the lifetime of the
     // component; every `t!(...)` / `t_string!(...)` call site below
@@ -1251,7 +1277,13 @@ pub fn TimerView() -> impl IntoView {
                 tags.with(|all| {
                     all.iter()
                         .filter(|t| sel.contains(&t.id))
-                        .map(|t| t.name.clone())
+                        .map(|t| {
+                            if t.id == "default-focus" && t.name == "Focus" {
+                                t_string!(i18n, tag.default_name).to_string()
+                            } else {
+                                t.name.clone()
+                            }
+                        })
                         .collect()
                 })
             });
@@ -1547,13 +1579,13 @@ pub fn TimerView() -> impl IntoView {
     // Feature 006 (T054): Complete handler. Called from the
     // right-slot button in Paused (or AutoPaused — folded into
     // RunState::Paused). Routes through `engine.complete(clock)`
-    // which: (a) if elapsed < 30 s, internally delegates to
-    // `abort()` (FR-015 — discard as Abort, no count); (b) else
-    // increments `completed_pomodoros`, integrates elapsed into
+    // which, for any positive elapsed, increments
+    // `completed_pomodoros`, integrates elapsed into
     // `total_focus_secs`, advances mode per cadence, emits
     // `PomodoroCompleted` + `SessionCompletedEarly`. The downstream
     // tick-loop hooks (session-save, auto-restart) read the events
-    // and act per FR-013/FR-014/FR-016.
+    // and act per FR-013/FR-014/FR-016. (PO override of FR-015
+    // anti-cheat threshold — sub-30s completions count by design.)
     //
     // R-001 fix: persistence used to live exclusively inside the
     // tick branch. Since `complete()` flips `is_running = false`,
@@ -1816,181 +1848,238 @@ pub fn TimerView() -> impl IntoView {
     // 1 Hz tick loop. Ticking unconditionally (not gated on
     // `is_running`) is safe because `tick()` short-circuits when
     // the engine is idle (`if !self.is_running { return events; }`).
-    // The handle is dropped on cleanup; Leptos's RAII guarantees
-    // the interval clears when the component unmounts.
     //
-    // Post-tick, if the engine just transitioned to a new mode
-    // (the previous tick fired `PomodoroCompleted` or the engine
-    // is idle in a non-Focus mode after a break completion) AND
-    // `Settings::notifications.auto_start_timer` is on, auto-
-    // start the next session. Mirrors the JS-era flow at
+    // Two drivers fire the same body:
+    //
+    // 1. `set_interval_with_handle` — the original wasm-side driver.
+    //    Throttled by WKWebView occlusion-detection on macOS once the
+    //    window is fully covered by another app, falling to ~0.5 Hz.
+    //    Survives anyway as the only driver outside of Tauri (Trunk
+    //    dev server / e2e harness).
+    // 2. `bridge::events::ENGINE_TICK` — backend-emitted 1 Hz event
+    //    from `src-tauri/src/lib.rs::run()`. A native std::thread is
+    //    immune to WKWebView throttling, so when the window is
+    //    occluded this driver keeps the tick at the wall-clock cadence
+    //    the metronome + tray + visible digit all depend on.
+    //
+    // Both drivers call the same `tick_body` closure. The body is
+    // safe to call multiple times per second: `engine.tick` is
+    // wall-clock-arithmetic-based (idempotent within a second), the
+    // tray-update IPC is content-stable (same payload twice is a
+    // no-op), and the metronome is gated on a `remaining_after <
+    // remaining_before` diff so it fires exactly on the wall-clock
+    // second crossing — never twice in the same second.
+    //
+    // Post-tick, if the engine just transitioned to a new mode (the
+    // previous tick fired `PomodoroCompleted` or the engine is idle
+    // in a non-Focus mode after a break completion) AND
+    // `Settings::notifications.auto_start_timer` is on, auto-start
+    // the next session. Mirrors the JS-era flow at
     // `pomodoro-timer.js:1175-1180` and is what
-    // `settings-automation.spec.js:59` exercises (the spec waits
-    // for `#pause-icon` to be visible after a focus → break →
-    // focus auto-roll).
-    // Closure-captured remembrance of the engine's `time_remaining_secs()`
-    // at the *prior* interval fire. The ticking sound fires only when this
-    // value decreases — that's the same instant the visible digit changes
-    // and `update_tray_icon` is dispatched. `setInterval(1000ms)` doesn't
-    // align with wall-clock-second boundaries, so without the diff guard
-    // the tone could fire twice on the same second or skip a second.
-    let last_remaining_for_tick: std::rc::Rc<std::cell::Cell<u32>> =
-        std::rc::Rc::new(std::cell::Cell::new(u32::MAX));
-    Effect::new(move |_| {
-        // Read once on mount to register the dependency; the
-        // closure re-runs only on cleanup, not on every tick.
-        let last_remaining = last_remaining_for_tick.clone();
-        let handle = set_interval_with_handle(
-            move || {
-                let remaining_before = engine.with_untracked(TimerState::time_remaining_secs);
-                // R-001 fix: capture `total_focus_before` outside the
-                // try_update so the shared `persist_focus_completion`
-                // closure (called below) can compute the just-sealed
-                // session's wall-clock elapsed against the pre-tick
-                // snapshot. The engine folds `current_session_elapsed_secs`
-                // into `total_focus_secs` on `PomodoroCompleted`, so the
-                // diff between after-tick and pre-tick is the duration.
-                let (was_focus_pre, total_focus_before) = engine.with_untracked(|s| {
-                    (
-                        matches!(s.current_mode(), TimerMode::Focus),
-                        s.total_focus_secs(),
-                    )
-                });
-                let events = engine
-                    .try_update(|state| {
-                        let was_running = state.is_running();
-                        let mode_before = state.current_mode();
-                        let mut events = state.tick(&BrowserClock);
-                        // Feature 006 (T050 / AG-2): auto-restart UI
-                        // gate. Previously this fired on the bare
-                        // `running → !running` transition; with the
-                        // arrival of `engine.abort` (which also flips
-                        // the bool but emits only `SessionAborted`),
-                        // we now also require a session-end event in
-                        // the same tick.
-                        //
-                        // R-002 fix: widened from PomodoroCompleted-
-                        // only to PomodoroCompleted OR BreakCompleted.
-                        // The natural break zero-cross at
-                        // `engine/timer.rs:1090-1103` emits ONLY
-                        // BreakCompleted (focus completion emits
-                        // PomodoroCompleted via complete_focus_session
-                        // — break completion does not). Before this
-                        // widening, `auto_start_timer = true` failed to
-                        // auto-roll Break → Focus on a natural break
-                        // end, regressing
-                        // `tests/e2e/settings-automation.spec.js`.
-                        // SessionAborted and SessionSkipped
-                        // intentionally do NOT appear in the gate
-                        // pattern — abort and skip must not trigger
-                        // an auto-restart countdown.
-                        let saw_session_end = events.iter().any(|e| {
-                            matches!(
-                                e,
-                                TimerEvent::PomodoroCompleted { .. }
-                                    | TimerEvent::BreakCompleted { .. }
-                            )
-                        });
-                        if was_running && !state.is_running() && saw_session_end {
-                            let auto_start =
-                                settings.with_untracked(|s| s.notifications.auto_start_timer);
-                            if auto_start {
-                                match state.start(&BrowserClock) {
-                                    Ok(start_events) => events.extend(start_events),
-                                    Err(e) => leptos::logging::warn!(
-                                        "auto-start after completion failed: {:?}",
-                                        e
-                                    ),
-                                }
+    // `settings-automation.spec.js:59` exercises.
+    // `backend_driver_active` flips to `true` the first time the
+    // backend `ENGINE_TICK` event is observed and stays true for the
+    // app lifetime. Used to suppress the setInterval driver's
+    // metronome playback once the backend driver is known to be
+    // alive — otherwise both drivers race to be the "first observer
+    // of the second crossing" each cycle, and which driver wins
+    // swaps cycle-to-cycle as their relative JS event-loop jitter
+    // shifts. The result is an audible uneven rhythm (one tick
+    // arrives ~30 ms early, the next ~30 ms late). State mutation
+    // and tray IPC stay idempotent across both drivers; only
+    // metronome playback needs a single source of truth.
+    let backend_driver_active: std::rc::Rc<std::cell::Cell<bool>> =
+        std::rc::Rc::new(std::cell::Cell::new(false));
+
+    let tick_body: std::rc::Rc<dyn Fn(bool)> = {
+        let backend_driver_active = backend_driver_active.clone();
+        std::rc::Rc::new(move |is_backend_driver: bool| {
+            let remaining_before = engine.with_untracked(TimerState::time_remaining_secs);
+            // R-001 fix: capture `total_focus_before` outside the
+            // try_update so the shared `persist_focus_completion`
+            // closure (called below) can compute the just-sealed
+            // session's wall-clock elapsed against the pre-tick
+            // snapshot. The engine folds `current_session_elapsed_secs`
+            // into `total_focus_secs` on `PomodoroCompleted`, so the
+            // diff between after-tick and pre-tick is the duration.
+            let (was_focus_pre, total_focus_before) = engine.with_untracked(|s| {
+                (
+                    matches!(s.current_mode(), TimerMode::Focus),
+                    s.total_focus_secs(),
+                )
+            });
+            let events = engine
+                .try_update(|state| {
+                    let was_running = state.is_running();
+                    let mode_before = state.current_mode();
+                    let mut events = state.tick(&BrowserClock);
+                    // Feature 006 (T050 / AG-2): auto-restart UI
+                    // gate. Previously this fired on the bare
+                    // `running → !running` transition; with the
+                    // arrival of `engine.abort` (which also flips
+                    // the bool but emits only `SessionAborted`),
+                    // we now also require a session-end event in
+                    // the same tick.
+                    //
+                    // R-002 fix: widened from PomodoroCompleted-
+                    // only to PomodoroCompleted OR BreakCompleted.
+                    // The natural break zero-cross at
+                    // `engine/timer.rs:1090-1103` emits ONLY
+                    // BreakCompleted (focus completion emits
+                    // PomodoroCompleted via complete_focus_session
+                    // — break completion does not). Before this
+                    // widening, `auto_start_timer = true` failed to
+                    // auto-roll Break → Focus on a natural break
+                    // end, regressing
+                    // `tests/e2e/settings-automation.spec.js`.
+                    // SessionAborted and SessionSkipped
+                    // intentionally do NOT appear in the gate
+                    // pattern — abort and skip must not trigger
+                    // an auto-restart countdown.
+                    let saw_session_end = events.iter().any(|e| {
+                        matches!(
+                            e,
+                            TimerEvent::PomodoroCompleted { .. }
+                                | TimerEvent::BreakCompleted { .. }
+                        )
+                    });
+                    if was_running && !state.is_running() && saw_session_end {
+                        let auto_start =
+                            settings.with_untracked(|s| s.notifications.auto_start_timer);
+                        if auto_start {
+                            match state.start(&BrowserClock) {
+                                Ok(start_events) => events.extend(start_events),
+                                Err(e) => leptos::logging::warn!(
+                                    "auto-start after completion failed: {:?}",
+                                    e
+                                ),
                             }
                         }
-                        let mode_after = state.current_mode();
-                        let mode_changed = mode_before != mode_after;
-                        let running_changed = was_running != state.is_running();
-                        // Tray icon (title + tooltip) refreshes every
-                        // tick to match the legacy `updateDisplay() →
-                        // updateTrayIcon()` chain at
-                        // `pomodoro-timer.js:1630`. Tray menu rebuilds
-                        // only on mode/running transitions (the menu
-                        // labels don't depend on the second-by-second
-                        // countdown), avoiding the macOS NSStatusItem
-                        // menu-flicker bug noted in issue #40.
-                        {
-                            use crate::bridge::types::UpdateTrayIconArgs;
-                            let settings_snapshot = settings.get_untracked();
-                            let (timer_text, mode_icon) =
-                                build_tray_text(state, &settings_snapshot);
-                            let is_running = state.is_running();
-                            let is_paused = state.is_paused() || state.is_auto_paused();
-                            let current_session = state.completed_pomodoros().saturating_add(1);
-                            let tray_args = UpdateTrayIconArgs {
-                                timer_text,
-                                is_running,
-                                session_mode: mode_after,
-                                current_session,
-                                total_sessions: settings_snapshot.timer.total_sessions,
-                                mode_icon,
-                            };
-                            let menu_dirty = mode_changed || running_changed;
-                            let mode_for_menu = mode_after;
-                            spawn_local(async move {
-                                let _ = commands::update_tray_icon(tray_args).await;
-                                if menu_dirty {
-                                    let _ = commands::update_tray_menu(
-                                        is_running,
-                                        is_paused,
-                                        mode_for_menu,
-                                    )
-                                    .await;
-                                }
-                            });
-                        }
-                        events
-                    })
-                    .unwrap_or_default();
-                // R-001 fix: persist on natural focus zero-cross.
-                // Mirrors `on_complete`. Gated on `was_focus_pre` so
-                // a Break → Focus auto-restart roll (which may emit
-                // SessionStarted in the same event vec) doesn't fire
-                // the persistence path for the new focus session.
-                let completed_focus = was_focus_pre
-                    && events
-                        .iter()
-                        .any(|e| matches!(e, TimerEvent::PomodoroCompleted { .. }));
-                if completed_focus {
-                    persist_focus_completion(total_focus_before);
-                }
-                handle_events(
-                    &events,
-                    &settings.get_untracked(),
-                    app_toast,
-                    warning_signal,
-                    i18n,
-                );
-                apply_tag_tracking_events(&events, active_session_tags, selected_tag_ids);
+                    }
+                    let mode_after = state.current_mode();
+                    let mode_changed = mode_before != mode_after;
+                    let running_changed = was_running != state.is_running();
+                    // Tray icon (title + tooltip) refreshes every
+                    // tick to match the legacy `updateDisplay() →
+                    // updateTrayIcon()` chain at
+                    // `pomodoro-timer.js:1630`. Tray menu rebuilds
+                    // only on mode/running transitions (the menu
+                    // labels don't depend on the second-by-second
+                    // countdown), avoiding the macOS NSStatusItem
+                    // menu-flicker bug noted in issue #40.
+                    {
+                        use crate::bridge::types::UpdateTrayIconArgs;
+                        let settings_snapshot = settings.get_untracked();
+                        let (timer_text, mode_icon) = build_tray_text(state, &settings_snapshot);
+                        let is_running = state.is_running();
+                        let is_paused = state.is_paused() || state.is_auto_paused();
+                        let current_session = state.completed_pomodoros().saturating_add(1);
+                        let tray_args = UpdateTrayIconArgs {
+                            timer_text,
+                            is_running,
+                            session_mode: mode_after,
+                            current_session,
+                            total_sessions: settings_snapshot.timer.total_sessions,
+                            mode_icon,
+                        };
+                        let menu_dirty = mode_changed || running_changed;
+                        let mode_for_menu = mode_after;
+                        spawn_local(async move {
+                            let _ = commands::update_tray_icon(tray_args).await;
+                            if menu_dirty {
+                                let _ = commands::update_tray_menu(
+                                    is_running,
+                                    is_paused,
+                                    mode_for_menu,
+                                )
+                                .await;
+                            }
+                        });
+                    }
+                    events
+                })
+                .unwrap_or_default();
+            // R-001 fix: persist on natural focus zero-cross.
+            // Mirrors `on_complete`. Gated on `was_focus_pre` so
+            // a Break → Focus auto-restart roll (which may emit
+            // SessionStarted in the same event vec) doesn't fire
+            // the persistence path for the new focus session.
+            let completed_focus = was_focus_pre
+                && events
+                    .iter()
+                    .any(|e| matches!(e, TimerEvent::PomodoroCompleted { .. }));
+            if completed_focus {
+                persist_focus_completion(total_focus_before);
+            }
+            handle_events(
+                &events,
+                &settings.get_untracked(),
+                app_toast,
+                warning_signal,
+                i18n,
+            );
+            apply_tag_tracking_events(&events, active_session_tags, selected_tag_ids);
 
-                // Ticking sound fires only when the engine's
-                // `time_remaining_secs()` decreases — the same instant
-                // the visible digit changes and the tray text is
-                // refreshed. `setInterval(1000ms)` isn't aligned with
-                // wall-clock-second boundaries; without the diff guard
-                // the tone could double-fire or land on a frame where
-                // the display didn't change.
-                let remaining_after = engine.with_untracked(TimerState::time_remaining_secs);
-                let crossed_second = remaining_after < remaining_before;
-                last_remaining.set(remaining_after);
-                let should_tick = crossed_second
-                    && settings.with_untracked(|s| s.notifications.metronome)
-                    && engine.with_untracked(|s| {
-                        matches!(s.current_mode(), TimerMode::Focus)
-                            && s.is_running()
-                            && !s.is_paused()
-                            && !s.is_auto_paused()
-                            && s.time_remaining_secs() > 0
-                    });
-                if should_tick {
-                    play_metronome_tick();
+            // Ticking sound fires only when the engine's
+            // `time_remaining_secs()` decreases — the same instant
+            // the visible digit changes and the tray text is
+            // refreshed. `setInterval(1000ms)` isn't aligned with
+            // wall-clock-second boundaries; without the diff guard
+            // the tone could double-fire or land on a frame where
+            // the display didn't change.
+            let remaining_after = engine.with_untracked(TimerState::time_remaining_secs);
+            let crossed_second = remaining_after < remaining_before;
+            // Suppress setInterval's metronome once the backend
+            // driver is alive — see the `backend_driver_active`
+            // comment above. The backend driver always plays
+            // (its callback path is the canonical 1 Hz source on
+            // Tauri); the setInterval driver only plays in the
+            // dev-server / e2e-mock case where the backend bus
+            // never fires.
+            let drive_metronome = is_backend_driver || !backend_driver_active.get();
+            let should_tick = crossed_second
+                && drive_metronome
+                && settings.with_untracked(|s| s.notifications.metronome)
+                && engine.with_untracked(|s| {
+                    matches!(s.current_mode(), TimerMode::Focus)
+                        && s.is_running()
+                        && !s.is_paused()
+                        && !s.is_auto_paused()
+                        && s.time_remaining_secs() > 0
+                });
+            if should_tick {
+                play_metronome_tick();
+            }
+        })
+    };
+
+    // Driver 1: WebView setInterval. Survives in non-Tauri contexts
+    // (Trunk dev server / e2e mock harness) where the backend event
+    // bus is absent. Throttled by WKWebView when the window is
+    // occluded — driver 2 covers that case.
+    let tick_for_interval = tick_body.clone();
+    let backend_driver_active_for_interval = backend_driver_active.clone();
+    Effect::new(move |_| {
+        let tick = tick_for_interval.clone();
+        let backend_active = backend_driver_active_for_interval.clone();
+        let handle = set_interval_with_handle(
+            move || {
+                // Once the backend driver is alive it's the sole tick
+                // source. Running the setInterval body in parallel
+                // would have it race the backend's `engine.tick`
+                // call — whichever fires first within the wall-clock
+                // second observes the crossing and the other sees
+                // `remaining_before == remaining_after` (no sound).
+                // Suppressing the body entirely keeps the backend's
+                // crossing observation deterministic, which keeps
+                // sound, tray, and visible digit aligned to the
+                // backend's emit cadence (a steady wall-clock
+                // anchored 1 Hz from the Rust thread, not the
+                // JS-event-loop-jittered setInterval).
+                if backend_active.get() {
+                    return;
                 }
+                tick(false);
             },
             std::time::Duration::from_secs(1),
         );
@@ -2001,6 +2090,39 @@ pub fn TimerView() -> impl IntoView {
         // — neither applies to the wasm target this component
         // mounts on), so swallow.
         let _ = handle;
+    });
+
+    // Driver 2: backend-emitted ENGINE_TICK. Native std::thread on
+    // the Tauri side fires once per wall-clock second regardless of
+    // WKWebView occlusion state — keeps tick + tray + metronome at
+    // 1 Hz when the user is doing focus work in another app and the
+    // presto window is fully covered. The Listener is leaked: the
+    // tick must run for the lifetime of the timer view, which is
+    // the lifetime of the app (the view doesn't unmount in normal
+    // navigation flows — `app.rs` toggles `.hidden` instead of
+    // tearing down the component tree).
+    let tick_for_listen = tick_body.clone();
+    let backend_driver_active_for_listen = backend_driver_active;
+    spawn_local(async move {
+        match crate::bridge::events::listen::<()>(crate::bridge::events::ENGINE_TICK, move |()| {
+            // First fire flips the flag so the setInterval driver
+            // stops playing its own metronome ticks. Cheap idempotent
+            // write — no read-modify-write race in single-threaded
+            // wasm.
+            backend_driver_active_for_listen.set(true);
+            tick_for_listen(true);
+        })
+        .await
+        {
+            Ok(listener) => std::mem::forget(listener),
+            Err(crate::bridge::types::BridgeError::BridgeUnavailable) => {
+                // Trunk dev / e2e mock — driver 1 carries the cadence.
+            }
+            Err(e) => leptos::logging::warn!(
+                "engine-tick listen failed; falling back to setInterval only: {:?}",
+                e
+            ),
+        }
     });
 
     // Feature 004 (R-004 fix): unified ambient-sound gate Effect.
@@ -2036,7 +2158,13 @@ pub fn TimerView() -> impl IntoView {
         let enabled = settings.with(|s| s.notifications.ambient_sound_enabled);
         let track = settings.with(|s| s.notifications.ambient_sound_type);
         let volume = settings.with(|s| s.notifications.ambient_sound_volume);
-        let enabled_and_track_selected = enabled && !matches!(track, AmbientSoundType::None);
+        // Global mute folds into the same intent predicate so the
+        // existing `prev_enabled_track && !enabled_and_track_selected`
+        // arc fires a fade-out on mute, and the `!prev_enabled_track
+        // && enabled_and_track_selected` arc fires a start on unmute.
+        let muted_now = muted.get();
+        let enabled_and_track_selected =
+            enabled && !matches!(track, AmbientSoundType::None) && !muted_now;
 
         let mode_focus = engine.with(|s| matches!(s.current_mode(), TimerMode::Focus));
         let active_focus = mode_focus
@@ -2161,22 +2289,24 @@ pub fn TimerView() -> impl IntoView {
 
             // Status / mode label + tag-dropdown trigger.
             //
-            // Feature 006 (T048): combined `#timer-status-pill`
-            // wraps the existing `#timer-status` (chip + mode label
-            // + chevron) and `#session-title-input` so the two read
-            // as a unified pill. In Focus Idle the pill is
-            // interactive (chevron visible, title editable). In
-            // Focus Running / Paused / AutoPaused the pill collapses
-            // read-only — chevron hidden via inline-style + tag
-            // click no-op via `on_status_click` gate, title input
-            // gets `readonly` via `prop:readonly`. Break / LongBreak
-            // modes don't render the title region — the `<Show>`
-            // guard below keeps the JS-era status-quo intact.
+            // Feature 006 (T048) — TRUE embedded-prefix design:
+            // `#timer-status-pill` is the SOLE bordered element.
+            // `#timer-status` (the chip: icon + mode label + chevron)
+            // and `#session-title-input` are direct flex siblings
+            // inside the pill, so the whole thing reads as one input
+            // with a non-editable prefix token — like an @-mention
+            // or search pill-prefix. No inner separators, no inner
+            // border distinction between chip and text. In Focus
+            // Idle the chevron shows + title is editable; in
+            // Running / Paused / AutoPaused the chevron hides and
+            // the input flips readonly so the pill collapses to a
+            // single static label visually. Break / LongBreak modes
+            // render only the chip (no title input) — the `<Show>`
+            // below keeps that path working.
             <div style="text-align: center;">
                 <div class="timer-status-pill" id="timer-status-pill"
                     class:running=move || matches!(run_state.get(), RunState::Running)
                     class:paused=move || matches!(run_state.get(), RunState::Paused)>
-                <div class="timer-status-container">
                     <div
                         class="timer-status clickable"
                         class:active=move || tag_dropdown_open.get()
@@ -2217,14 +2347,39 @@ pub fn TimerView() -> impl IntoView {
                         ></i>
                     </div>
 
-                    // Tag-dropdown popover. Anchored as a sibling of
-                    // `#timer-status` inside `.timer-status-container`
-                    // so the JS-era CSS positioning rules
-                    // (`.tag-dropdown-menu` `position: absolute; top:
-                    // calc(100% + 8px)`) anchor against the trigger.
-                    // The `.active` class is what
-                    // `style/timer.css` reads to flip
-                    // `display: none` → `display: block`.
+                    // Feature 002 Bundle A + Feature 006 (T048):
+                    // per-session title input — direct sibling of
+                    // the chip inside the pill so the two read as a
+                    // single line. Only rendered during Focus —
+                    // breaks don't carry titles. Becomes `readonly`
+                    // outside Focus-Idle so the user can't edit
+                    // mid-session; placeholder copy flips to the
+                    // lighter `pill_title_placeholder` (FR-003).
+                    <Show when=move || engine.with(|s| matches!(s.current_mode(), TimerMode::Focus))>
+                        <input
+                            type="text"
+                            id="session-title-input"
+                            class="session-title-input"
+                            class:pill-readonly=move || !matches!(run_state.get(), RunState::Idle)
+                            maxlength="120"
+                            placeholder=move || t_string!(i18n, timer.pill_title_placeholder)
+                            prop:value=move || session_title.get()
+                            prop:readonly=move || !matches!(run_state.get(), RunState::Idle)
+                            on:input=move |ev| {
+                                session_title.set(event_target_value(&ev));
+                            }
+                        />
+                    </Show>
+
+                    // Tag-dropdown popover. Lives inside
+                    // `#timer-status-pill` (which is `position:
+                    // relative`) so the absolute-positioned popover
+                    // anchors against the whole pill — `top:
+                    // calc(100% + 8px); left: 50%; transform:
+                    // translateX(-50%)` centers it horizontally
+                    // under the pill. The `.active` class is what
+                    // `style/timer.css` reads to flip `display:
+                    // none` → `display: block`.
                     <div
                         class="tag-dropdown-menu"
                         id="tag-dropdown-menu"
@@ -2241,8 +2396,18 @@ pub fn TimerView() -> impl IntoView {
                                     let tag_id_for_delete = tag.id.clone();
                                     let tag_id_for_select = tag.id.clone();
                                     let tag_id_for_match = tag.id.clone();
-                                    let aria_row = tag.name.clone();
-                                    let display_name = tag.name.clone();
+                                    // The `default-focus` seed keeps a stable
+                                    // English `name` ("Focus") on disk so the
+                                    // identifier survives locale switches and
+                                    // re-renames; the display string is
+                                    // re-translated here at render time.
+                                    let localized_name = if tag.id == "default-focus" && tag.name == "Focus" {
+                                        t_string!(i18n, tag.default_name).to_string()
+                                    } else {
+                                        tag.name.clone()
+                                    };
+                                    let aria_row = localized_name.clone();
+                                    let display_name = localized_name.clone();
                                     // Feature 003 (FR-023): typed dispatch via
                                     // `IconClass::from_icon_name` — supports
                                     // remixicon, Phosphor, and raw-glyph fall-
@@ -2257,7 +2422,7 @@ pub fn TimerView() -> impl IntoView {
                                     // never localised — only the surrounding
                                     // "Delete ... tag" template is translated.
                                     let delete_label =
-                                        t_string!(i18n, tag.delete_aria, name = tag.name.as_str());
+                                        t_string!(i18n, tag.delete_aria, name = localized_name.as_str());
                                     // Multi-select highlight: a row is
                                     // `selected` whenever its id is in
                                     // `selected_tag_ids`. Clicking the
@@ -2433,34 +2598,6 @@ pub fn TimerView() -> impl IntoView {
                             </div>
                         </div>
                     </div>
-                </div>
-                // Feature 002 Bundle A + Feature 006 (T048):
-                // per-session title input, rendered below the tag
-                // pill inside `#timer-status-pill` so the combined
-                // pill reads as a single unit. Only shown during
-                // Focus — breaks don't carry titles. The input
-                // becomes `readonly` outside Focus-Idle so the user
-                // can't edit mid-session; the displayed placeholder
-                // also flips to the lighter `pill_title_placeholder`
-                // copy when Idle (FR-003: faint placeholder).
-                <Show when=move || engine.with(|s| matches!(s.current_mode(), TimerMode::Focus))>
-                    <div class="session-title-row"
-                        class:pill-readonly=move || !matches!(run_state.get(), RunState::Idle)
-                        class:pill-placeholder=move || session_title.with(|t| t.trim().is_empty())>
-                        <input
-                            type="text"
-                            id="session-title-input"
-                            class="session-title-input"
-                            maxlength="120"
-                            placeholder=move || t_string!(i18n, timer.pill_title_placeholder)
-                            prop:value=move || session_title.get()
-                            prop:readonly=move || !matches!(run_state.get(), RunState::Idle)
-                            on:input=move |ev| {
-                                session_title.set(event_target_value(&ev));
-                            }
-                        />
-                    </div>
-                </Show>
                 </div>
             </div>
 
@@ -2742,6 +2879,44 @@ pub fn TimerView() -> impl IntoView {
             // `adjust_remaining_secs` API which preserves the running/
             // paused state and the wall-clock anchor.
             <div class="settings-indicators">
+                // Global mute toggle. Lives in the right rail alongside
+                // the other quick-toggle indicators so the audio surface
+                // (ticks, chime, ambient music) collapses to silence in
+                // one click without diving into Settings. Drives the
+                // `Muted` context signal — see `crate::components::timer::mute`.
+                <i
+                    id="mute-indicator"
+                    class=move || if muted.get() {
+                        "ri-volume-mute-line active"
+                    } else {
+                        "ri-volume-up-line"
+                    }
+                    role="button"
+                    tabindex="0"
+                    aria-pressed=move || if muted.get() { "true" } else { "false" }
+                    data-tooltip=move || if muted.get() {
+                        t_string!(i18n, timer.unmute_tooltip)
+                    } else {
+                        t_string!(i18n, timer.mute_tooltip)
+                    }
+                    title=move || if muted.get() {
+                        t_string!(i18n, timer.unmute_tooltip)
+                    } else {
+                        t_string!(i18n, timer.mute_tooltip)
+                    }
+                    aria-label=move || if muted.get() {
+                        t_string!(i18n, timer.unmute_tooltip)
+                    } else {
+                        t_string!(i18n, timer.mute_tooltip)
+                    }
+                    on:click=move |_| muted.update(|m| *m = !*m)
+                    on:keydown=move |ev: web_sys::KeyboardEvent| {
+                        if ev.key() == "Enter" || ev.key() == " " {
+                            ev.prevent_default();
+                            muted.update(|m| *m = !*m);
+                        }
+                    }
+                ></i>
                 <div class="smart-pause-container">
                     <span
                         id="smart-pause-countdown"
@@ -2793,6 +2968,7 @@ pub fn TimerView() -> impl IntoView {
                     title=move || t_string!(i18n, timer.adjust_minus_aria)
                     aria-label=move || t_string!(i18n, timer.adjust_minus_aria)
                     on:click=on_adjust_minus
+                    prop:disabled=move || is_overtime.get()
                 >
                     <span>"-5"</span>
                 </button>
@@ -2802,6 +2978,7 @@ pub fn TimerView() -> impl IntoView {
                     title=move || t_string!(i18n, timer.adjust_plus_aria)
                     aria-label=move || t_string!(i18n, timer.adjust_plus_aria)
                     on:click=on_adjust_plus
+                    prop:disabled=move || is_overtime.get()
                 >
                     <span>"+5"</span>
                 </button>
@@ -2834,14 +3011,117 @@ fn QuickLogModal(
     quick_logs: RwSignal<crate::managers::quick_log::QuickLogManager>,
 ) -> impl IntoView {
     let i18n = use_i18n();
+    let app_toast = use_context::<AppToast>().unwrap_or_default();
     let title = RwSignal::new(String::new());
     let minutes = RwSignal::new(5u32);
 
-    let on_close = move |_| {
+    // a11y wiring (audit findings #6, #7). `title_ref` receives
+    // imperative focus on open — the HTML `autofocus` attribute
+    // doesn't refire across re-opens in Leptos CSR because the node
+    // is reused. `return_focus` snapshots whichever element opened
+    // the modal so keyboard users land back on the trigger button on
+    // close. Locally duplicated (not extracted to a shared helper)
+    // because inventory.rs is being edited in parallel and we want to
+    // avoid a new shared module collision — follow-up cleanup later.
+    let title_ref = NodeRef::<leptos::html::Input>::new();
+    // `new_local` (LocalStorage) — `web_sys::HtmlElement` isn't
+    // `Send + Sync`, so the default arena variant doesn't compile.
+    // CSR-only context anyway; LocalStorage is the right fit.
+    let return_focus = StoredValue::new_local(None::<web_sys::HtmlElement>);
+
+    let do_close = move || {
         open.set(false);
         title.set(String::new());
         minutes.set(5);
+        if let Some(prev) = return_focus.get_value() {
+            let _ = prev.focus();
+            return_focus.set_value(None);
+        }
     };
+    let on_close = move |_| do_close();
+
+    // Open transition: capture the active element, then focus the
+    // first input. The closure's previous-value param tracks the
+    // last observed `open` state so we only fire on the false→true
+    // transition (not on every re-render of the modal subtree).
+    Effect::new(move |prev: Option<bool>| {
+        let now = open.get();
+        if now && prev != Some(true) {
+            let captured = web_sys::window()
+                .and_then(|w| w.document())
+                .and_then(|d| d.active_element())
+                .and_then(|e| e.dyn_into::<web_sys::HtmlElement>().ok());
+            return_focus.set_value(captured);
+            if let Some(el) = title_ref.get() {
+                let _ = el.focus();
+            }
+        }
+        now
+    });
+
+    // Focus trap + Escape close. `Tab` / `Shift+Tab` cycles within
+    // the dialog's focusable children, wrapping at the edges.
+    // Enumerated via `query_selector_all` — the modals are small
+    // enough that scanning every keydown is fine.
+    let on_form_keydown = move |ev: leptos::ev::KeyboardEvent| {
+        let key = ev.key();
+        if key == "Escape" {
+            ev.prevent_default();
+            do_close();
+            return;
+        }
+        if key != "Tab" {
+            return;
+        }
+        let Some(doc) = web_sys::window().and_then(|w| w.document()) else {
+            return;
+        };
+        let Some(form) = doc.get_element_by_id("quick-log-form") else {
+            return;
+        };
+        let Ok(nodes) = form.query_selector_all(
+            "input:not([disabled]), button:not([disabled]), [tabindex]:not([tabindex='-1'])",
+        ) else {
+            return;
+        };
+        let len = nodes.length();
+        if len == 0 {
+            return;
+        }
+        let mut focusables: Vec<web_sys::HtmlElement> = Vec::with_capacity(len as usize);
+        for i in 0..len {
+            if let Some(node) = nodes.item(i) {
+                if let Ok(el) = node.dyn_into::<web_sys::HtmlElement>() {
+                    focusables.push(el);
+                }
+            }
+        }
+        if focusables.is_empty() {
+            return;
+        }
+        let active = doc
+            .active_element()
+            .and_then(|e| e.dyn_into::<web_sys::HtmlElement>().ok());
+        let current_idx = active
+            .as_ref()
+            .and_then(|el| focusables.iter().position(|f| f.is_same_node(Some(el))));
+        let last = focusables.len() - 1;
+        let next_idx = if ev.shift_key() {
+            match current_idx {
+                Some(0) | None => last,
+                Some(i) => i - 1,
+            }
+        } else {
+            match current_idx {
+                Some(i) if i == last => 0,
+                Some(i) => i + 1,
+                None => 0,
+            }
+        };
+        ev.prevent_default();
+        let _ = focusables[next_idx].focus();
+    };
+
     let on_submit = move |_| {
         let raw_title = title.with_untracked(|t| t.trim().to_string());
         let mins = minutes.get_untracked();
@@ -2849,18 +3129,36 @@ fn QuickLogModal(
             return;
         }
         let now_ms = BrowserClock.now_ms();
-        let id = format!("quicklog-{}", random_uuid());
+        // Bare UUID v4 string per the data model — `random_uuid()`
+        // wraps `crypto.randomUUID()` which is spec-compliant v4.
+        // Legacy on-disk entries with the old `quicklog-` prefix
+        // remain loadable; the id field is opaque.
+        let id = random_uuid();
         quick_logs.update(|mgr| mgr.add(raw_title, mins, now_ms, id));
         let snapshot =
             quick_logs.with_untracked(crate::managers::quick_log::QuickLogManager::save_payload);
+        // AG-08 silent-data-loss fix: surface save failures through the
+        // app-level toast queue. `BridgeUnavailable` is filtered out so
+        // dev-server runs (no Tauri runtime) don't toast on every save;
+        // any other Err means the on-disk file is now out of sync with
+        // the in-memory state and the user needs to know. Resolving the
+        // localised string here (before the spawn) keeps `t_string!`
+        // inside the live i18n context.
+        let save_failure_msg = t_string!(i18n, timer.toast.quick_log_save_failed).to_string();
         spawn_local(async move {
-            if let Err(e) = crate::bridge::commands::save_quick_logs(snapshot).await {
-                leptos::logging::warn!("save_quick_logs failed: {:?}", e);
+            match crate::bridge::commands::save_quick_logs(snapshot).await {
+                Ok(()) | Err(crate::bridge::types::BridgeError::BridgeUnavailable) => {}
+                Err(e) => {
+                    leptos::logging::warn!("save_quick_logs failed: {:?}", e);
+                    app_toast.show(save_failure_msg);
+                }
             }
         });
-        open.set(false);
-        title.set(String::new());
-        minutes.set(5);
+        // Optimistic confirmation toast — mirrors the distraction
+        // modal flow. Fires on dispatch; the save-failure toast above
+        // is enqueued separately if the persistence Err arm trips.
+        app_toast.show(t_string!(i18n, timer.toast.quick_log_added).to_string());
+        do_close();
     };
 
     view! {
@@ -2874,6 +3172,7 @@ fn QuickLogModal(
                 role="dialog"
                 aria-modal="true"
                 aria-labelledby="quick-log-modal-title"
+                on:keydown=on_form_keydown
                 on:submit=move |ev| {
                     ev.prevent_default();
                     on_submit(ev);
@@ -2893,8 +3192,9 @@ fn QuickLogModal(
                         type="text"
                         id="quick-log-title"
                         maxlength="120"
-                        autofocus
                         required
+                        autofocus
+                        node_ref=title_ref
                         prop:value=move || title.get()
                         on:input=move |ev| title.set(event_target_value(&ev))
                     />
@@ -2943,13 +3243,102 @@ fn DistractionModal(
     distractions: RwSignal<crate::managers::distraction::DistractionManager>,
 ) -> impl IntoView {
     let i18n = use_i18n();
+    let app_toast = use_context::<AppToast>().unwrap_or_default();
     let note = RwSignal::new(String::new());
+
+    // a11y wiring (audit findings #6, #7). Mirrors the QuickLogModal
+    // package: `note_ref` for imperative open-focus, `return_focus`
+    // for restoring the opening trigger on close. Inline-duplicated
+    // (not extracted) so the parallel inventory.rs edit doesn't fight
+    // over a new shared module.
+    let note_ref = NodeRef::<leptos::html::Input>::new();
+    // See QuickLogModal — `LocalStorage` for the same Send+Sync reason.
+    let return_focus = StoredValue::new_local(None::<web_sys::HtmlElement>);
 
     let do_close = move || {
         open.set(false);
         note.set(String::new());
         parent_ref_snapshot.set(None);
+        if let Some(prev) = return_focus.get_value() {
+            let _ = prev.focus();
+            return_focus.set_value(None);
+        }
     };
+
+    Effect::new(move |prev: Option<bool>| {
+        let now = open.get();
+        if now && prev != Some(true) {
+            let captured = web_sys::window()
+                .and_then(|w| w.document())
+                .and_then(|d| d.active_element())
+                .and_then(|e| e.dyn_into::<web_sys::HtmlElement>().ok());
+            return_focus.set_value(captured);
+            if let Some(el) = note_ref.get() {
+                let _ = el.focus();
+            }
+        }
+        now
+    });
+
+    let on_form_keydown = move |ev: leptos::ev::KeyboardEvent| {
+        let key = ev.key();
+        if key == "Escape" {
+            ev.prevent_default();
+            do_close();
+            return;
+        }
+        if key != "Tab" {
+            return;
+        }
+        let Some(doc) = web_sys::window().and_then(|w| w.document()) else {
+            return;
+        };
+        let Some(form) = doc.get_element_by_id("distraction-form") else {
+            return;
+        };
+        let Ok(nodes) = form.query_selector_all(
+            "input:not([disabled]), button:not([disabled]), [tabindex]:not([tabindex='-1'])",
+        ) else {
+            return;
+        };
+        let len = nodes.length();
+        if len == 0 {
+            return;
+        }
+        let mut focusables: Vec<web_sys::HtmlElement> = Vec::with_capacity(len as usize);
+        for i in 0..len {
+            if let Some(node) = nodes.item(i) {
+                if let Ok(el) = node.dyn_into::<web_sys::HtmlElement>() {
+                    focusables.push(el);
+                }
+            }
+        }
+        if focusables.is_empty() {
+            return;
+        }
+        let active = doc
+            .active_element()
+            .and_then(|e| e.dyn_into::<web_sys::HtmlElement>().ok());
+        let current_idx = active
+            .as_ref()
+            .and_then(|el| focusables.iter().position(|f| f.is_same_node(Some(el))));
+        let last = focusables.len() - 1;
+        let next_idx = if ev.shift_key() {
+            match current_idx {
+                Some(0) | None => last,
+                Some(i) => i - 1,
+            }
+        } else {
+            match current_idx {
+                Some(i) if i == last => 0,
+                Some(i) => i + 1,
+                None => 0,
+            }
+        };
+        ev.prevent_default();
+        let _ = focusables[next_idx].focus();
+    };
+
     let do_submit = move || {
         let raw_note = note.with_untracked(|n| n.trim().to_string());
         if raw_note.is_empty() {
@@ -2957,18 +3346,35 @@ fn DistractionModal(
         }
         let pref = parent_ref_snapshot.get_untracked();
         let now_ms = BrowserClock.now_ms();
-        let id = format!("distraction-{}", random_uuid());
+        // Bare UUID v4 per the data model. See QuickLogModal for the
+        // legacy-prefix back-compat note.
+        let id = random_uuid();
         distractions.update(|mgr| mgr.add(raw_note, pref, now_ms, id));
         let snapshot = distractions
             .with_untracked(crate::managers::distraction::DistractionManager::save_payload);
+        // AG-08 silent-data-loss fix: surface save failures through the
+        // app-level toast queue. `BridgeUnavailable` is filtered out so
+        // dev-server runs don't toast; any other Err means the on-disk
+        // file is now stale and the user needs to know. Resolving the
+        // localised string here (before the spawn) keeps `t_string!`
+        // inside the live i18n context.
+        let save_failure_msg = t_string!(i18n, timer.toast.distraction_save_failed).to_string();
         spawn_local(async move {
-            if let Err(e) = crate::bridge::commands::save_distractions(snapshot).await {
-                leptos::logging::warn!("save_distractions failed: {:?}", e);
+            match crate::bridge::commands::save_distractions(snapshot).await {
+                Ok(()) | Err(crate::bridge::types::BridgeError::BridgeUnavailable) => {}
+                Err(e) => {
+                    leptos::logging::warn!("save_distractions failed: {:?}", e);
+                    app_toast.show(save_failure_msg);
+                }
             }
         });
-        open.set(false);
-        note.set(String::new());
-        parent_ref_snapshot.set(None);
+        // Optimistic confirmation — fires before the persistence
+        // async completes. Mirrors the timer's own toast flow
+        // (`timer.toast.timer_paused` etc., which also fire on
+        // dispatch). The save-failure toast above is enqueued
+        // separately if the persistence Err arm trips.
+        app_toast.show(t_string!(i18n, timer.toast.distraction_logged).to_string());
+        do_close();
     };
 
     view! {
@@ -2982,15 +3388,10 @@ fn DistractionModal(
                 role="dialog"
                 aria-modal="true"
                 aria-labelledby="distraction-modal-title"
+                on:keydown=on_form_keydown
                 on:submit=move |ev| {
                     ev.prevent_default();
                     do_submit();
-                }
-                on:keydown=move |ev: leptos::ev::KeyboardEvent| {
-                    if ev.key() == "Escape" {
-                        ev.prevent_default();
-                        do_close();
-                    }
                 }>
                 <div class="session-modal-header">
                     <h3 id="distraction-modal-title">{t!(i18n, modal.note_distraction_title)}</h3>
@@ -3007,8 +3408,9 @@ fn DistractionModal(
                         type="text"
                         id="distraction-note"
                         maxlength="120"
-                        autofocus
                         required
+                        autofocus
+                        node_ref=note_ref
                         prop:value=move || note.get()
                         on:input=move |ev| note.set(event_target_value(&ev))
                     />
@@ -3116,6 +3518,17 @@ mod tests {
             "smart-indicator",
             "auto-start-indicator",
             "continuous-session-indicator",
+            // Feature 006 + 007 additions. Each entry's source spec /
+            // e2e file is listed next to it.
+            "timer-status-pill", // 007 status-pill shell (specs/007 §UI; visual regression baseline)
+            "quick-log-modal-overlay", // 006 Quick Log modal root (specs/006 plan.md)
+            "distraction-modal-overlay", // 006 Distraction modal root (specs/006 plan.md)
+            "stop-complete-icon", // 007 T020 overtime check glyph, left slot (specs/007 plan.md)
+            "center-complete-icon", // 007 T020 overtime check glyph, center slot (specs/007 plan.md)
+            "cancel-quick-log-btn", // 006 Quick Log cancel action (specs/006 plan.md)
+            "save-quick-log-btn",   // 006 Quick Log submit action (specs/006 plan.md)
+            "cancel-distraction-btn", // 006 Distraction cancel action (specs/006 plan.md)
+            "save-distraction-btn", // 006 Distraction submit action (specs/006 plan.md)
         ];
         let mut seen: Vec<&str> = Vec::with_capacity(REQUIRED_IDS.len());
         for id in REQUIRED_IDS {

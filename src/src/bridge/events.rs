@@ -22,7 +22,10 @@
 // runtime is single-threaded and `JsValue` (plus everything
 // transitively built on it: `JsFuture`, `Promise`, `Closure`,
 // `serde-wasm-bindgen` values) is `!Send` by construction.
-#![allow(clippy::future_not_send)]
+#![allow(
+    clippy::future_not_send,
+    reason = "Tauri event futures carry JsValue/Closure and run only on single-threaded wasm32."
+)]
 
 use serde::de::DeserializeOwned;
 use wasm_bindgen::closure::Closure;
@@ -92,6 +95,16 @@ pub const TRAY_CANCEL: &str = "tray-cancel";
 /// without adding new constants — the typed surface is per-consumer,
 /// not per-emitter.
 pub const UPDATE_AVAILABLE: &str = "tauri://update-available";
+
+/// E11 — backend-driven 1 Hz tick.
+///
+/// Emitted by a Rust thread spawned in `src-tauri/src/lib.rs::run()`
+/// to keep the timer cadence at 1 Hz even when `WKWebView` occludes
+/// the window and throttles `setInterval`. Payload: `()`. Consumer:
+/// `components/timer/mod.rs` (runs the same `engine.tick` /
+/// tray-update / metronome body as the frontend
+/// `set_interval_with_handle` driver).
+pub const ENGINE_TICK: &str = "engine-tick";
 
 // ---------------------------------------------------------------------------
 // Tauri 2.x JS event-API binding
@@ -293,8 +306,8 @@ where
 #[cfg(all(test, target_arch = "wasm32"))]
 mod tests {
     use super::{
-        listen, Listener, GLOBAL_SHORTCUT, SHORTCUTS_UPDATED, TRAY_CANCEL, TRAY_PAUSE, TRAY_SKIP,
-        TRAY_START_SESSION, UPDATE_AVAILABLE, USER_ACTIVITY, USER_INACTIVITY,
+        listen, Listener, ENGINE_TICK, GLOBAL_SHORTCUT, SHORTCUTS_UPDATED, TRAY_CANCEL, TRAY_PAUSE,
+        TRAY_SKIP, TRAY_START_SESSION, UPDATE_AVAILABLE, USER_ACTIVITY, USER_INACTIVITY,
     };
     use crate::bridge::types::BridgeError;
     use crate::bridge::types::{ShortcutSettings, UpdateAvailablePayload};
@@ -306,7 +319,7 @@ mod tests {
     /// (`__TAURI__.event.listen("user-activity", …)` is what the
     /// Tauri-side `app.emit("user-activity", ())` matches against).
     /// The list mirrors contracts/tauri-bridge.md §"Tauri events"
-    /// rows E1-E10.
+    /// rows E1-E11.
     #[wasm_bindgen_test]
     fn event_names_match_contract() {
         assert_eq!(USER_ACTIVITY, "user-activity");
@@ -318,6 +331,7 @@ mod tests {
         assert_eq!(TRAY_SKIP, "tray-skip");
         assert_eq!(TRAY_CANCEL, "tray-cancel");
         assert_eq!(UPDATE_AVAILABLE, "tauri://update-available");
+        assert_eq!(ENGINE_TICK, "engine-tick");
     }
 
     /// `listen<T>` short-circuits with `BridgeError::BridgeUnavailable`

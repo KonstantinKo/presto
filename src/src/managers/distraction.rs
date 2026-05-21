@@ -7,7 +7,10 @@
 //
 // Lint allowance: `clippy::future_not_send` is allowed at the module
 // level — `JsValue` is `!Send` on `wasm32-unknown-unknown`.
-#![allow(clippy::future_not_send)]
+#![allow(
+    clippy::future_not_send,
+    reason = "Manager async paths await wasm32 Tauri bridge futures that carry !Send JsValue."
+)]
 
 use crate::bridge::commands;
 use crate::bridge::types::BridgeError;

@@ -22,7 +22,10 @@
 // every wrapper to invent a Send-erasure shim that does nothing on the
 // WASM target. Spec 001 plan.md §Modules makes the same call; no
 // non-WASM consumer of this module exists.
-#![allow(clippy::future_not_send)]
+#![allow(
+    clippy::future_not_send,
+    reason = "Tauri JS bridge futures carry JsValue and run only on single-threaded wasm32."
+)]
 
 use serde::de::DeserializeOwned;
 use serde::Serialize;
@@ -773,6 +776,24 @@ pub async fn export_sessions_xlsx(
     invoke_serde("export_sessions_xlsx", &Args { path, sessions }).await
 }
 
+/// Write `sessions` to `path` as RFC 4180 CSV. Same column schema as
+/// the xlsx export.
+///
+/// # Errors
+/// Returns `BridgeError::BridgeUnavailable` when the Tauri JS bridge is
+/// not present. Returns `BridgeError::Internal` for filesystem errors.
+pub async fn export_sessions_csv(
+    path: String,
+    sessions: Vec<ManualSession>,
+) -> Result<(), BridgeError> {
+    #[derive(Serialize)]
+    struct Args {
+        path: String,
+        sessions: Vec<ManualSession>,
+    }
+    invoke_serde("export_sessions_csv", &Args { path, sessions }).await
+}
+
 // ---------------------------------------------------------------------------
 // UI helpers — dialog
 // ---------------------------------------------------------------------------
@@ -793,17 +814,14 @@ pub async fn dialog_ask(message: &str, title: &str) -> Result<bool, BridgeError>
     struct Args<'a> {
         message: &'a str,
         title: &'a str,
-        kind: &'static str,
     }
-    invoke_serde(
-        "plugin:dialog|ask",
-        &Args {
-            message,
-            title,
-            kind: "warning",
-        },
-    )
-    .await
+    // Routed through our own `dialog_ask` Tauri command (defined in
+    // `src-tauri/src/lib.rs`) instead of `plugin:dialog|ask` directly.
+    // The wire shape is pinned by `tests/bindings_export.rs`, so any
+    // drift between the wrapper and the handler signature fails CI
+    // — eliminating the silent-bind-nothing class of bug that
+    // previously broke the dialog_save call.
+    invoke_serde("dialog_ask", &Args { message, title }).await
 }
 
 /// Ask the user for a save path via the native file-save dialog.
@@ -825,17 +843,23 @@ pub async fn dialog_save(
         extensions: Vec<String>,
     }
     #[derive(Serialize)]
+    #[serde(rename_all = "camelCase")]
     struct Args {
-        #[serde(rename = "defaultPath")]
         default_path: Option<String>,
         filters: Vec<FilterArg>,
     }
+    // Routed through our own `dialog_save` Tauri command instead of
+    // `plugin:dialog|save` directly. The plugin's command expects
+    // `{ options: SaveDialogOptions }` — sending flat args at this
+    // boundary silently bound nothing and the file picker never
+    // appeared. The wrapper command owns the envelope shape and
+    // pins it via `tests/bindings_export.rs`.
     let filters = filters
         .into_iter()
         .map(|(name, extensions)| FilterArg { name, extensions })
         .collect();
     invoke_serde(
-        "plugin:dialog|save",
+        "dialog_save",
         &Args {
             default_path,
             filters,

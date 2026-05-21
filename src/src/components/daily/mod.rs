@@ -113,7 +113,7 @@ pub fn DailyView() -> impl IntoView {
             // pre-rework calendar.rs position so the existing CSS
             // (`.sessions-history-card { ... off-viewport positioning ... }`)
             // still applies.
-            <SessionsHistoryTable />
+            <SessionsHistoryTable selected_day=selected_day />
 
             // Feature 006 (T055-T057): Inventory subsection — quick
             // logs + distractions for the selected day. Rendered

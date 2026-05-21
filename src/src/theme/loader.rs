@@ -59,8 +59,7 @@ pub fn apply_theme(theme_name: &str) {
 #[cfg(not(target_arch = "wasm32"))]
 #[allow(
     clippy::missing_const_for_fn,
-    // Cannot be `const fn` because the wasm-target sibling has DOM
-    // I/O; signatures must match across cfg variants.
+    reason = "Host stub signature must match wasm sibling that performs DOM I/O."
 )]
 pub fn apply_theme(_theme_name: &str) {}
 
@@ -119,8 +118,7 @@ pub fn apply_timer_theme(timer_theme_id: &str) {
 #[cfg(not(target_arch = "wasm32"))]
 #[allow(
     clippy::missing_const_for_fn,
-    // Cannot be `const fn` because the wasm-target sibling has DOM
-    // I/O; signatures must match across cfg variants.
+    reason = "Host stub signature must match wasm sibling that performs DOM I/O."
 )]
 pub fn apply_timer_theme(_timer_theme_id: &str) {}
 
@@ -153,8 +151,7 @@ pub fn system_prefers_dark() -> bool {
 #[must_use]
 #[allow(
     clippy::missing_const_for_fn,
-    // Cannot be `const fn` because the wasm-target sibling has DOM
-    // I/O; signatures must match across cfg variants.
+    reason = "Host stub signature must match wasm sibling that performs DOM I/O."
 )]
 pub fn system_prefers_dark() -> bool {
     false

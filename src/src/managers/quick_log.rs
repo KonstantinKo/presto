@@ -14,7 +14,10 @@
 // level for the same reason as on `bridge::commands` and the other
 // managers — every async path here transitively awaits a `JsFuture`
 // from `bridge::commands`, which is `!Send` on `wasm32-unknown-unknown`.
-#![allow(clippy::future_not_send)]
+#![allow(
+    clippy::future_not_send,
+    reason = "Manager async paths await wasm32 Tauri bridge futures that carry !Send JsValue."
+)]
 
 use crate::bridge::commands;
 use crate::bridge::types::BridgeError;

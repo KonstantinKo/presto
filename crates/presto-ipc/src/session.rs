@@ -34,7 +34,15 @@ pub struct Session {
 ///
 /// `session_type` is the closed-domain `SessionType` (was a
 /// stringly-typed `String` pre-cutover per spec 001 T029).
-#[derive(Debug, Clone, Serialize, Deserialize)]
+// `Eq` would be the usual companion to `PartialEq`, but `tags` is
+// `Option<Vec<serde_json::Value>>` and `serde_json::Value` carries
+// `f64`, which is not `Eq`. The structural `PartialEq` is enough for
+// Leptos `Memo` cache equality in `components/stats/mod.rs::period_sessions`.
+#[allow(
+    clippy::derive_partial_eq_without_eq,
+    reason = "ManualSession tags contain serde_json::Value, whose f64 variant prevents Eq."
+)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "specta", derive(specta::Type))]
 pub struct ManualSession {
     pub id: String,

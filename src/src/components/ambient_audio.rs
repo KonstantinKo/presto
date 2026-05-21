@@ -36,7 +36,11 @@
 // would fire on the public API without buying us anything (the
 // public functions are invoked from `timer/mod.rs` for side effects
 // and don't bind a return value).
-#![allow(clippy::must_use_candidate, clippy::too_many_lines)]
+#![allow(
+    clippy::must_use_candidate,
+    clippy::too_many_lines,
+    reason = "Leptos/API return values are side-effect driven; audio state machine is clearer in one module."
+)]
 
 use std::rc::Rc;
 
@@ -943,7 +947,10 @@ impl AudioElementHandle for WebAudioWrapper {
         // GainNode AudioParam takes `f32`. The driver only ever
         // passes 0..=1; out-of-range values would silently clamp at
         // the node, not throw.
-        #[allow(clippy::cast_possible_truncation)]
+        #[allow(
+            clippy::cast_possible_truncation,
+            reason = "Volume is clamped to 0.0..=1.0 before web_sys GainNode f32 boundary."
+        )]
         gain.gain().set_value(vol as f32);
     }
 

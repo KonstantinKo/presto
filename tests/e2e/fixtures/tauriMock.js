@@ -258,13 +258,16 @@ const TAURI_MOCK_INIT_SCRIPT = `
             return;
 
           case "export_sessions_xlsx":
+          case "export_sessions_csv":
             // Spec 001-leptos-migration T096 (mock-first per FR-010):
             // replaces the JS 'xlsx' library's writeFile() path with a
             // Tauri-side rust_xlsxwriter call that builds the workbook
-            // server-side from a typed Vec<ManualSession>. Mock no-op:
-            // the e2e suite asserts on the call shape (path + sessions
-            // length), not on the file's bytes (which the host-side
-            // integration test in src-tauri/tests/ covers).
+            // server-side from a typed Vec<ManualSession>. The CSV
+            // variant uses std::fs::write with the same column schema.
+            // Mock no-op: the e2e suite asserts on the call shape
+            // (path + sessions length), not on the file's bytes (which
+            // the host-side integration test in src-tauri/tests/
+            // covers).
             return;
 
           case "plugin:updater|check": {
@@ -290,9 +293,13 @@ const TAURI_MOCK_INIT_SCRIPT = `
             return;
 
           case "plugin:dialog|ask":
-            return false;
+          case "dialog_ask": {
+            var acfg = window.__E2E_CONFIG__ || {};
+            return acfg.dialogAskResult !== undefined ? acfg.dialogAskResult : false;
+          }
 
-          case "plugin:dialog|save": {
+          case "plugin:dialog|save":
+          case "dialog_save": {
             var scfg = window.__E2E_CONFIG__ || {};
             return scfg.dialogSaveResult !== undefined ? scfg.dialogSaveResult : null;
           }

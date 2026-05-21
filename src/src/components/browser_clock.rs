@@ -7,10 +7,7 @@ impl Clock for BrowserClock {
     #[allow(
         clippy::cast_possible_truncation,
         clippy::cast_sign_loss,
-        // `Date.now()` is f64 milliseconds since the unix epoch;
-        // values up to year 2038 fit easily within i64 (and even
-        // i53 — the f64 mantissa). The cast is safe for any
-        // realistic wall-clock value during the engine's lifetime.
+        reason = "Date.now() millisecond values fit i64 for realistic wall-clock dates."
     )]
     fn now_ms(&self) -> i64 {
         js_sys::Date::now() as i64

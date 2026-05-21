@@ -119,7 +119,7 @@ pub fn PeakFocusTime(
             <p class="line-chart-subhead">
                 {t!(i18n, stats.peak_focus_time_subhead)}
             </p>
-            <LineChart cfg=cfg.get() />
+            {move || view! { <LineChart cfg=cfg.get() /> }}
         </div>
     }
 }

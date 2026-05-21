@@ -29,7 +29,10 @@
 //
 // Lint allowance: `clippy::must_use_candidate` is silenced for the
 // usual Leptos `#[component]` reason.
-#![allow(clippy::must_use_candidate)]
+#![allow(
+    clippy::must_use_candidate,
+    reason = "Leptos component returns are consumed by view!, not bound by callers."
+)]
 
 use leptos::prelude::*;
 use leptos_i18n::{t, t_string};

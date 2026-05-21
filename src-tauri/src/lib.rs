@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 use std::sync::{Arc, LazyLock, Mutex};
-#[cfg(target_os = "macos")]
 use std::thread;
 use std::time::{Duration, Instant};
 use tauri::menu::{Menu, MenuItem};
@@ -385,12 +384,11 @@ fn emit_tray_and_show(app: &AppHandle, event: &str) {
     }
     let app_clone = app.clone();
     tauri::async_runtime::spawn(async move {
-        show_app_window(app_clone).await;
+        show_app_window(&app_clone);
     });
 }
 
-#[allow(clippy::unused_async)] // awaits run_on_main_thread on macOS
-async fn show_app_window(app: AppHandle) {
+fn show_app_window(app: &AppHandle) {
     let settings = helpers::lock_or_recover(&app.state::<SettingsState>().0).clone();
     if settings.hide_icon_on_close {
         #[cfg(target_os = "macos")]
@@ -696,6 +694,9 @@ pub fn build_specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         delete_tag,
         add_session_tag,
         export_sessions_xlsx,
+        export_sessions_csv,
+        dialog_save,
+        dialog_ask,
     ])
 }
 
@@ -766,6 +767,40 @@ pub fn run() {
                 let initial_settings = load_settings_sync(app.handle());
                 app.manage(SettingsState(Mutex::new(initial_settings)));
 
+                // Suppress macOS App Nap so the 1 Hz tick driving the
+                // visible timer, tray label, and metronome stays at
+                // 1 Hz when the window loses focus. See
+                // `disable_app_nap` for the in-sync contract this
+                // protects.
+                #[cfg(target_os = "macos")]
+                disable_app_nap();
+
+                // Backend-driven 1 Hz tick. WKWebView throttles JS
+                // `setInterval` callbacks when the window is occluded
+                // (App Nap suppression alone doesn't lift this — the
+                // throttle lives in WebKit's page-activity state, not
+                // the macOS scheduler). A native std::thread can emit
+                // an event on every wall-clock second regardless of
+                // WebView state; the frontend listens and runs the
+                // same tick body it would have run from
+                // `set_interval_with_handle`. The frontend interval
+                // stays as a redundant driver — both are guarded by
+                // wall-clock arithmetic in `engine.tick` and a
+                // `crossed_second` gate around the metronome, so
+                // overlapping fires are idempotent.
+                let tick_handle = app.handle().clone();
+                thread::spawn(move || loop {
+                    thread::sleep(Duration::from_secs(1));
+                    if let Err(e) = tick_handle.emit("engine-tick", ()) {
+                        log::warn!(
+                            "engine-tick thread exiting; emit failed: {e}. \
+                                 Frontend setInterval driver remains, but the 1Hz \
+                                 cadence will degrade if the window is unfocused."
+                        );
+                        break;
+                    }
+                });
+
                 let show_item = MenuItem::with_id(app, "show", "Show Presto", true, None::<&str>)?;
                 let start_session_item =
                     MenuItem::with_id(app, "start_session", "Start Session", false, None::<&str>)?;
@@ -807,7 +842,7 @@ pub fn run() {
                         "show" => {
                             let app_clone = app_handle.clone();
                             tauri::async_runtime::spawn(async move {
-                                show_app_window(app_clone).await;
+                                show_app_window(&app_clone);
                             });
                         }
                         "start_session" => {
@@ -831,7 +866,7 @@ pub fn run() {
                         if let TrayIconEvent::Click { .. } = event {
                             let app_clone = app_handle_for_click.clone();
                             tauri::async_runtime::spawn(async move {
-                                show_app_window(app_clone).await;
+                                show_app_window(&app_clone);
                             });
                         }
                     });
@@ -904,7 +939,7 @@ pub fn run() {
                 tauri::RunEvent::Reopen { .. } => {
                     let app_handle_clone = app_handle.clone();
                     tauri::async_runtime::spawn(async move {
-                        show_app_window(app_handle_clone).await;
+                        show_app_window(&app_handle_clone);
                     });
                 }
                 _ => {
@@ -1041,6 +1076,177 @@ async fn export_sessions_xlsx(
     sessions: Vec<ManualSession>,
 ) -> Result<(), BridgeError> {
     exports::export(std::path::Path::new(&path), &sessions)
+}
+
+// `export_sessions_csv` — write the same column schema as the xlsx
+// export to `path` as RFC 4180 CSV. Used by the daily view's export
+// button (the xlsx wrapper is retained for callers that prefer
+// spreadsheets).
+#[tauri::command]
+#[specta::specta]
+async fn export_sessions_csv(
+    path: String,
+    sessions: Vec<ManualSession>,
+) -> Result<(), BridgeError> {
+    exports::export_csv(std::path::Path::new(&path), &sessions)
+}
+
+// Dialog plugin wrappers.
+//
+// The frontend used to call `plugin:dialog|save` / `plugin:dialog|ask`
+// directly through the raw `invoke` bridge, hand-rolling the JSON
+// envelope. That had no compile-time contract against the plugin's
+// signature — the dialog plugin expects `{ options: SaveDialogOptions }`
+// but our wrapper sent the fields flat, and Serde silently bound
+// nothing into the missing field. Result: the save dialog never
+// opened.
+//
+// Wrapping the plugin calls in our own typed commands moves the wire
+// contract under the `tauri-specta` bindings-drift test
+// (`tests/bindings_export.rs`), so any future signature change between
+// the frontend's `commands::dialog_*` wrappers and these handlers
+// fails CI loud instead of silently dropping calls.
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct DialogFilter {
+    pub name: String,
+    pub extensions: Vec<String>,
+}
+
+#[tauri::command]
+#[specta::specta]
+async fn dialog_save(
+    window: tauri::Window,
+    default_path: Option<String>,
+    filters: Vec<DialogFilter>,
+) -> Result<Option<String>, BridgeError> {
+    use tauri_plugin_dialog::DialogExt;
+    let mut builder = window.dialog().file().set_parent(&window);
+    if let Some(p) = default_path {
+        builder = builder.set_file_name(p);
+    }
+    for filter in &filters {
+        let exts: Vec<&str> = filter.extensions.iter().map(String::as_str).collect();
+        builder = builder.add_filter(&filter.name, &exts);
+    }
+    // `blocking_save_file` is safe inside a `#[tauri::command]` because
+    // Tauri runs commands on a dedicated worker thread — same pattern
+    // the dialog plugin's own `save` command uses (commands.rs:231).
+    let path = builder.blocking_save_file();
+    Ok(path.map(|p| p.to_string()))
+}
+
+#[tauri::command]
+#[specta::specta]
+async fn dialog_ask(
+    window: tauri::Window,
+    message: String,
+    title: String,
+) -> Result<bool, BridgeError> {
+    use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
+    let confirmed = window
+        .dialog()
+        .message(message)
+        .title(title)
+        .kind(MessageDialogKind::Warning)
+        .buttons(MessageDialogButtons::YesNo)
+        .blocking_show();
+    Ok(confirmed)
+}
+
+/// Prevent macOS App Nap from throttling the app when its window is
+/// unfocused. Without this, the 1 Hz `setInterval` driving
+/// `components/timer/mod.rs` is scaled back to ~0.5 Hz once the
+/// system marks the app as napping — the visible timer, tray label,
+/// and metronome tick all slow in lockstep (they share one Effect
+/// body, so when the tick fires every 2 s instead of every 1 s, all
+/// three updates skip together rather than drifting apart).
+///
+/// `NSActivityUserInitiatedAllowingIdleSystemSleep` keeps the app
+/// out of App Nap while still letting the Mac sleep on idle (the
+/// timer is paused on sleep anyway). `NSActivityLatencyCritical`
+/// asks the scheduler to keep the run-loop's timer resolution tight
+/// — needed so the 1 Hz interval doesn't drift off the wall-clock
+/// second.
+///
+/// The returned activity token is retained for the process lifetime;
+/// activities end implicitly at exit, so we never call
+/// `-endActivity:`. This keeps the in-sync tick/tray/sound contract
+/// from `specs/006-…/plan.md` load-bearing in the unfocused window
+/// state.
+#[cfg(target_os = "macos")]
+#[allow(unsafe_code)]
+fn disable_app_nap() {
+    use cocoa::base::{id, nil};
+    use cocoa::foundation::NSString;
+
+    // Direct objc_msgSend FFI — avoids objc 0.2's `msg_send!` /
+    // `class!` macros, whose expansions emit
+    // `cfg(feature = "cargo-clippy")` checks that newer rustc rejects
+    // under our workspace-wide `-D warnings`. Bumping objc is the
+    // long-term answer; until then this raw call keeps the build
+    // clippy-clean.
+    #[link(name = "objc", kind = "dylib")]
+    extern "C" {
+        fn objc_getClass(name: *const std::os::raw::c_char) -> id;
+        fn sel_registerName(name: *const std::os::raw::c_char) -> *const std::os::raw::c_void;
+    }
+    extern "C" {
+        fn objc_msgSend();
+    }
+
+    // NSActivityOptions bits from Foundation/NSProcessInfo.h:
+    //   NSActivityUserInitiatedAllowingIdleSystemSleep = 0x00FFFFFF
+    //   NSActivityLatencyCritical                      = 0xFF00000000
+    const OPTIONS: u64 = 0x00FF_FFFF | 0xFF_0000_0000;
+
+    // SAFETY: NSProcessInfo.processInfo is a thread-safe singleton.
+    // beginActivityWithOptions:reason: returns an autoreleased token,
+    // so we retain it explicitly to outlive the surrounding
+    // autorelease pool. The activity ends at process exit; we never
+    // end it manually. All four selectors below resolve at runtime
+    // and are stable AppKit/Foundation entry points.
+    unsafe {
+        let cls = objc_getClass(c"NSProcessInfo".as_ptr());
+        let sel_process_info = sel_registerName(c"processInfo".as_ptr());
+        let sel_begin = sel_registerName(c"beginActivityWithOptions:reason:".as_ptr());
+        let sel_retain = sel_registerName(c"retain".as_ptr());
+        let sel_release = sel_registerName(c"release".as_ptr());
+
+        // [NSProcessInfo processInfo]
+        let msg_class: extern "C" fn(id, *const std::os::raw::c_void) -> id =
+            std::mem::transmute(objc_msgSend as *const ());
+        let pi = msg_class(cls, sel_process_info);
+
+        // `NSString::alloc(nil).init_str(...)` is an `alloc/init`
+        // pair — caller owns +1 retain and is responsible for
+        // releasing once `beginActivityWithOptions:reason:` has
+        // internally retained the string.
+        let reason: id = NSString::alloc(nil).init_str("Pomodoro timer requires 1Hz tick cadence");
+
+        // [pi beginActivityWithOptions:OPTIONS reason:reason]
+        let msg_begin: extern "C" fn(id, *const std::os::raw::c_void, u64, id) -> id =
+            std::mem::transmute(objc_msgSend as *const ());
+        let activity = msg_begin(pi, sel_begin, OPTIONS, reason);
+
+        // [activity retain] — beginActivityWithOptions returns an
+        // autoreleased token. Retain so it outlives the surrounding
+        // autorelease pool; we never call -endActivity:, so the
+        // activity lives for the process lifetime.
+        let msg_retain: extern "C" fn(id, *const std::os::raw::c_void) -> id =
+            std::mem::transmute(objc_msgSend as *const ());
+        let _ = msg_retain(activity, sel_retain);
+
+        // [reason release] — balance the +1 from alloc/init. The
+        // activity object retains its own copy of the string, so
+        // releasing here doesn't dangle the reason inside the
+        // scheduler.
+        let msg_release: extern "C" fn(id, *const std::os::raw::c_void) =
+            std::mem::transmute(objc_msgSend as *const ());
+        msg_release(reason, sel_release);
+
+        log::info!("App Nap suppression engaged (NSProcessInfo activity token={activity:p})");
+    }
 }
 
 #[cfg(target_os = "macos")]
@@ -1782,42 +1988,56 @@ mod tests {
         assert!(dr.is_empty());
     }
 
-    /// T038: corrupt JSON yields an error string whose message is
-    /// PII-scrubbed (no payload bytes from the corrupt file appear in
-    /// the human-readable reason). Mirrors AG-10 finding.
+    /// T038: corrupt JSON triggers a rescue-rename (matching the
+    /// `history.json` convention) and returns Ok(empty) rather than
+    /// surfacing an error. The corrupt payload is preserved as
+    /// `<name>.json.corrupt` so the user's data is not silently
+    /// overwritten by the next save (AG-08 silent-data-loss fix).
+    /// AG-10 PII contract still holds: nothing in the rescue path
+    /// echoes the corrupt bytes on the wire.
     #[test]
-    fn load_handles_corrupt_file_with_bridge_error_internal() {
+    fn load_rescues_corrupt_file_with_rename_and_returns_empty() {
         let dir =
             std::env::temp_dir().join(format!("presto_test_corrupt_files_{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).expect("mkdir");
-        // Distinctive PII-style bytes the test asserts are NOT echoed.
+        // Distinctive PII-style bytes the test asserts are preserved
+        // verbatim in the renamed `.corrupt` file (so the user can
+        // recover) but never round-trip through the bridge contract.
         let sentinel = "USER_SECRET_KAYAK_BANANA";
-        std::fs::write(
-            dir.join("quick_logs.json"),
-            format!("{{ corrupted {sentinel} }}"),
-        )
-        .expect("seed corrupt file");
-        std::fs::write(
-            dir.join("distractions.json"),
-            format!("[ corrupted {sentinel} ]"),
-        )
-        .expect("seed corrupt file");
+        let ql_payload = format!("{{ corrupted {sentinel} }}");
+        let dr_payload = format!("[ corrupted {sentinel} ]");
+        std::fs::write(dir.join("quick_logs.json"), &ql_payload).expect("seed corrupt file");
+        std::fs::write(dir.join("distractions.json"), &dr_payload).expect("seed corrupt file");
 
-        let ql_err = super::helpers::read_quick_logs_from(&dir).expect_err("must fail on corrupt");
-        let dr_err =
-            super::helpers::read_distractions_from(&dir).expect_err("must fail on corrupt");
+        // Both reads return Ok(empty) — the next save won't clobber
+        // user data because the original is preserved out-of-band.
+        let ql =
+            super::helpers::read_quick_logs_from(&dir).expect("rescue path must return Ok(empty)");
+        let dr = super::helpers::read_distractions_from(&dir)
+            .expect("rescue path must return Ok(empty)");
+        assert!(ql.is_empty(), "rescue must yield empty quick_logs vec");
+        assert!(dr.is_empty(), "rescue must yield empty distractions vec");
+
+        // Original files are gone, renamed copies preserve the payload
+        // byte-for-byte so the user can salvage the data.
         assert!(
-            !ql_err.contains(sentinel),
-            "PII payload leaked into quick_logs error: {ql_err}"
+            !dir.join("quick_logs.json").exists(),
+            "corrupt quick_logs.json must be renamed away"
         );
         assert!(
-            !dr_err.contains(sentinel),
-            "PII payload leaked into distractions error: {dr_err}"
+            !dir.join("distractions.json").exists(),
+            "corrupt distractions.json must be renamed away"
         );
-        // BridgeError::from(String) maps to Internal { msg } per contract.
-        let lifted: super::BridgeError = ql_err.into();
-        assert!(matches!(lifted, super::BridgeError::Internal { .. }));
+        let ql_corrupt =
+            std::fs::read_to_string(dir.join("quick_logs.json.corrupt")).expect("corrupt sibling");
+        let dr_corrupt = std::fs::read_to_string(dir.join("distractions.json.corrupt"))
+            .expect("corrupt sibling");
+        assert_eq!(ql_corrupt, ql_payload);
+        assert_eq!(dr_corrupt, dr_payload);
+        // Sanity: the sentinel bytes survived the rename verbatim.
+        assert!(ql_corrupt.contains(sentinel));
+        assert!(dr_corrupt.contains(sentinel));
 
         let _ = std::fs::remove_dir_all(&dir);
     }

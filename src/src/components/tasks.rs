@@ -25,7 +25,10 @@
 // wide for the same reason as on `timer.rs` — Leptos `#[component]`
 // functions return `impl IntoView`, which the framework consumes
 // inside `view!` / `mount_to_body` automatically.
-#![allow(clippy::must_use_candidate)]
+#![allow(
+    clippy::must_use_candidate,
+    reason = "Leptos component returns are consumed by view!, not bound by callers."
+)]
 
 use leptos::prelude::*;
 use leptos_i18n::{t, t_string};

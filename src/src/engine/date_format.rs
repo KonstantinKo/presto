@@ -39,7 +39,10 @@ pub fn format_session_date(timestamp_ms: i64) -> String {
         // Mirrors JS-era `new Date(ms).toDateString()` — local-time
         // projection. Both session-save producers MUST agree, so we
         // route both through this helper.
-        #[allow(clippy::cast_precision_loss)]
+        #[allow(
+            clippy::cast_precision_loss,
+            reason = "Millisecond timestamps fit in f64 for realistic session dates."
+        )]
         let d = js_sys::Date::new(&wasm_bindgen::JsValue::from_f64(timestamp_ms as f64));
         d.to_date_string().as_string().unwrap_or_default()
     }
@@ -68,15 +71,7 @@ mod tests {
         clippy::cast_possible_truncation,
         clippy::cast_sign_loss,
         clippy::cast_possible_wrap,
-        // Civil-from-days arithmetic over the proleptic Gregorian
-        // calendar: every cast is in a numerically-bounded range
-        // (era is the 400-year era index; doe ∈ [0, 146_096];
-        // yoe ∈ [0, 399]; doy ∈ [0, 365]; d ∈ [1, 31]; m ∈
-        // [1, 12]). The cast errors clippy flags are within these
-        // bounds and don't actually truncate. Inlined cast_*()
-        // calls would be cleaner but this is test-only ground
-        // truth and the algorithm already requires line-by-line
-        // verification against Hinnant's published constants.
+        reason = "Civil-from-days arithmetic keeps every cast in a bounded calendar range; test oracle mirrors Hinnant constants."
     )]
     fn js_to_date_string(timestamp_ms: i64) -> String {
         const DAYS: [&str; 7] = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];

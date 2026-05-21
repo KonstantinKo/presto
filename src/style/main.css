@@ -30,6 +30,7 @@
 @import 'settings.css';
 @import 'team.css';
 @import 'timeline.css';
+@import 'inventory.css';
 
 /* Interactive elements */
 @import 'modals.css';

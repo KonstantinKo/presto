@@ -68,6 +68,9 @@ qa:
     # (1 new timer-focus-paused-with-complete + 2 regen for combined pill
     # and Inventory subsection — the state-aware button matrix introduces
     # a new Paused-with-Complete visual that requires its own baseline).
+    # post-006-007-polish carve-out: 5 baselines authorised — review-cycle
+    # polish on top of features 006/007 touches timer, overtime, tag-manager,
+    # update-notification, and paused-with-complete surfaces.
     # Cap scoped per branch; others keep default of 2.
     - |
       branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null)
@@ -75,6 +78,8 @@ qa:
         BASELINE_CAP=17 bash scripts/check-baseline-cap.sh
       elif echo "$branch" | grep -qE "^006-"; then
         BASELINE_CAP=3 bash scripts/check-baseline-cap.sh
+      elif echo "$branch" | grep -qE "^post-006-007-polish$"; then
+        BASELINE_CAP=5 bash scripts/check-baseline-cap.sh
       else
         bash scripts/check-baseline-cap.sh
       fi

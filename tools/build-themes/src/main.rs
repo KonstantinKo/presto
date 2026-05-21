@@ -141,9 +141,7 @@ fn main() -> io::Result<()> {
     // `print_stdout` is workspace-denied; allow with rationale.
     #[allow(
         clippy::print_stdout,
-        // Build tools surface progress over stdout by convention; the
-        // Trunk pre_build hook captures and forwards this to the dev
-        // server output. No alternative logger exists in this binary.
+        reason = "Trunk pre_build tool reports generated theme count over captured stdout."
     )]
     {
         println!(
