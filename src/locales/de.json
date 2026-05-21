@@ -194,6 +194,8 @@
     "indicator_continuous": "Fortlaufende Sitzungen: Klicken, um den fortlaufenden Modus umzuschalten",
     "adjust_minus_aria": "5 Minuten abziehen",
     "adjust_plus_aria": "5 Minuten hinzufügen",
+    "mute_tooltip": "Töne stummschalten",
+    "unmute_tooltip": "Stummschaltung aufheben",
     "messages": {
       "pomodoro_completed_toast_short": "Pomodoro abgeschlossen! Mach eine kurze Pause 😌",
       "pomodoro_completed_toast_long": "Tolle Arbeit! Gönn dir eine lange Pause 🎉",

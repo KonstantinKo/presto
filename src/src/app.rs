@@ -178,6 +178,13 @@ pub fn App() -> impl IntoView {
     // session.
     crate::components::timer::install_audio_priming_listener();
 
+    // Global mute toggle — silences ticks, chimes, and ambient music.
+    // Hydrated from localStorage; mirrors to a static atomic for the
+    // non-reactive chime/tick gates and re-runs the ambient Effect on
+    // toggle so a flip fades the resident loop out.
+    let muted_ctx = crate::components::timer::provide_mute_state();
+    provide_context(muted_ctx);
+
     // Feature 005: localised save-failure message. The settings
     // persistence sink below lives in `App`'s body (outside the
     // `I18nContextProvider` tree), so `use_i18n()` cannot resolve at

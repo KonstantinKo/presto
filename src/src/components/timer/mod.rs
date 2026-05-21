@@ -44,8 +44,11 @@
     reason = "Leptos component returns are consumed by view!; TimerView stays one coherent DOM tree."
 )]
 
+mod mute;
 mod tag_tracking;
 mod tray;
+
+pub use self::mute::{provide_mute_state, Muted};
 
 use std::collections::HashMap;
 
@@ -450,6 +453,9 @@ mod chime {
 #[cfg(target_arch = "wasm32")]
 fn play_chime() {
     use web_sys::OscillatorType;
+    if self::mute::is_muted() {
+        return;
+    }
     chime::ensure_context();
     chime::CTX.with(|cell| {
         let slot = cell.borrow();
@@ -565,6 +571,9 @@ pub(crate) const fn install_audio_priming_listener() {}
 fn play_metronome_tick() {
     use std::cell::RefCell;
     use web_sys::{AudioContext, OscillatorType};
+    if self::mute::is_muted() {
+        return;
+    }
     thread_local! {
         static CTX: RefCell<Option<AudioContext>> = const { RefCell::new(None) };
     }
@@ -864,6 +873,13 @@ pub fn TimerView() -> impl IntoView {
         .unwrap_or_else(|| RwSignal::new(TimerState::new(initial_durations)));
     let app_toast = use_context::<AppToast>().unwrap_or_default();
     let warning_signal = RwSignal::new(false);
+
+    // Global mute — silences ticks, chimes, ambient music. Read here
+    // so the ambient Effect below depends on it reactively (toggle ON
+    // → fade out; toggle OFF mid-focus → resume). The chime + tick
+    // gates read the atomic mirror directly (non-reactive), so the
+    // signal is only used by the ambient gate and the mute button.
+    let muted = use_context::<Muted>().map_or_else(|| RwSignal::new(false), |m| m.0);
 
     // Feature 005: i18n context handle. Live for the lifetime of the
     // component; every `t!(...)` / `t_string!(...)` call site below
@@ -2146,7 +2162,13 @@ pub fn TimerView() -> impl IntoView {
         let enabled = settings.with(|s| s.notifications.ambient_sound_enabled);
         let track = settings.with(|s| s.notifications.ambient_sound_type);
         let volume = settings.with(|s| s.notifications.ambient_sound_volume);
-        let enabled_and_track_selected = enabled && !matches!(track, AmbientSoundType::None);
+        // Global mute folds into the same intent predicate so the
+        // existing `prev_enabled_track && !enabled_and_track_selected`
+        // arc fires a fade-out on mute, and the `!prev_enabled_track
+        // && enabled_and_track_selected` arc fires a start on unmute.
+        let muted_now = muted.get();
+        let enabled_and_track_selected =
+            enabled && !matches!(track, AmbientSoundType::None) && !muted_now;
 
         let mode_focus = engine.with(|s| matches!(s.current_mode(), TimerMode::Focus));
         let active_focus = mode_focus
@@ -2860,6 +2882,39 @@ pub fn TimerView() -> impl IntoView {
             // `adjust_remaining_secs` API which preserves the running/
             // paused state and the wall-clock anchor.
             <div class="settings-indicators">
+                // Global mute toggle. Lives in the right rail alongside
+                // the other quick-toggle indicators so the audio surface
+                // (ticks, chime, ambient music) collapses to silence in
+                // one click without diving into Settings. Drives the
+                // `Muted` context signal — see `crate::components::timer::mute`.
+                <i
+                    id="mute-indicator"
+                    class=move || if muted.get() {
+                        "ri-volume-mute-line active"
+                    } else {
+                        "ri-volume-up-line"
+                    }
+                    role="button"
+                    tabindex="0"
+                    aria-pressed=move || if muted.get() { "true" } else { "false" }
+                    data-tooltip=move || if muted.get() {
+                        t_string!(i18n, timer.unmute_tooltip)
+                    } else {
+                        t_string!(i18n, timer.mute_tooltip)
+                    }
+                    title=move || if muted.get() {
+                        t_string!(i18n, timer.unmute_tooltip)
+                    } else {
+                        t_string!(i18n, timer.mute_tooltip)
+                    }
+                    on:click=move |_| muted.update(|m| *m = !*m)
+                    on:keydown=move |ev: web_sys::KeyboardEvent| {
+                        if ev.key() == "Enter" || ev.key() == " " {
+                            ev.prevent_default();
+                            muted.update(|m| *m = !*m);
+                        }
+                    }
+                ></i>
                 <div class="smart-pause-container">
                     <span
                         id="smart-pause-countdown"

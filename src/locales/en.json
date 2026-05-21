@@ -194,6 +194,8 @@
     "indicator_continuous": "Continuous Sessions: Click to toggle continuous mode",
     "adjust_minus_aria": "Subtract 5 minutes",
     "adjust_plus_aria": "Add 5 minutes",
+    "mute_tooltip": "Mute sounds",
+    "unmute_tooltip": "Unmute sounds",
     "messages": {
       "pomodoro_completed_toast_short": "Pomodoro completed! Take a short break 😌",
       "pomodoro_completed_toast_long": "Great work! Take a long break 🎉",

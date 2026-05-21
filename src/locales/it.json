@@ -194,6 +194,8 @@
     "indicator_continuous": "Sessioni continue: clicca per attivare la modalità continua",
     "adjust_minus_aria": "Sottrai 5 minuti",
     "adjust_plus_aria": "Aggiungi 5 minuti",
+    "mute_tooltip": "Disattiva i suoni",
+    "unmute_tooltip": "Riattiva i suoni",
     "messages": {
       "pomodoro_completed_toast_short": "Pomodoro completato! Fai una pausa breve 😌",
       "pomodoro_completed_toast_long": "Ottimo lavoro! Fai una pausa lunga 🎉",

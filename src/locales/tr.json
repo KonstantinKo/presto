@@ -194,6 +194,8 @@
     "indicator_continuous": "Sürekli oturumlar: Sürekli modu açıp kapatmak için tıklayın",
     "adjust_minus_aria": "5 dakika çıkar",
     "adjust_plus_aria": "5 dakika ekle",
+    "mute_tooltip": "Sesleri kapat",
+    "unmute_tooltip": "Sesleri aç",
     "messages": {
       "pomodoro_completed_toast_short": "Pomodoro tamamlandı! Kısa bir mola ver 😌",
       "pomodoro_completed_toast_long": "Harika iş! Uzun bir mola ver 🎉",
