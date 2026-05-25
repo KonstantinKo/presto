@@ -253,7 +253,8 @@ const TAURI_MOCK_INIT_SCRIPT = `
             return;
 
           case "update_tray_menu":
-            // Rust handler signature: (app, is_running, is_paused, current_mode)
+            // Rust handler signature: (app, is_running, is_paused,
+            //                         is_overtime, current_mode)
             //                         -> Result<(), String>
             return;
 
@@ -488,6 +489,20 @@ window.__E2E_CONFIG__.notificationPermission = ${JSON.stringify(permission)};
         content: `
 if (!window.__E2E_CONFIG__) window.__E2E_CONFIG__ = {};
 window.__E2E_CONFIG__.initialTags = ${JSON.stringify(tags)};
+`,
+      });
+    },
+
+    /**
+     * Seeds Inventory quick logs and distractions before navigation.
+     * @param {{ quickLogs?: Array<object>, distractions?: Array<object> }} entries
+     */
+    async seedInventory(entries) {
+      await page.addInitScript({
+        content: `
+if (!window.__E2E_CONFIG__) window.__E2E_CONFIG__ = {};
+window.__E2E_CONFIG__.initialQuickLogs = ${JSON.stringify(entries.quickLogs || [])};
+window.__E2E_CONFIG__.initialDistractions = ${JSON.stringify(entries.distractions || [])};
 `,
       });
     },

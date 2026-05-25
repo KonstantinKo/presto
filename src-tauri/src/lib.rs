@@ -3,7 +3,7 @@ use std::sync::{Arc, LazyLock, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 use tauri::menu::{Menu, MenuItem};
-use tauri::tray::{TrayIconBuilder, TrayIconEvent};
+use tauri::tray::TrayIconBuilder;
 use tauri::{Emitter, Manager};
 use tauri_plugin_autostart::ManagerExt;
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut};
@@ -378,14 +378,19 @@ async fn update_tray_icon(
     final_result
 }
 
-fn emit_tray_and_show(app: &AppHandle, event: &str) {
+fn emit_tray_event(app: &AppHandle, event: &str) {
     if let Some(window) = app.get_webview_window("main") {
         let _ = window.emit(event, ());
     }
-    let app_clone = app.clone();
-    tauri::async_runtime::spawn(async move {
-        show_app_window(&app_clone);
-    });
+}
+
+fn tray_menu_action_requires_focus(action_id: &str) -> bool {
+    matches!(action_id, "quick_log" | "distraction")
+}
+
+fn show_app_window_then_emit_tray_event(app: &AppHandle, event: &str) {
+    show_app_window(app);
+    emit_tray_event(app, event);
 }
 
 fn show_app_window(app: &AppHandle) {
@@ -802,27 +807,24 @@ pub fn run() {
                 });
 
                 let show_item = MenuItem::with_id(app, "show", "Show Presto", true, None::<&str>)?;
+                let quick_log_item =
+                    MenuItem::with_id(app, "quick_log", "Quick Log", true, None::<&str>)?;
                 let start_session_item =
-                    MenuItem::with_id(app, "start_session", "Start Session", false, None::<&str>)?;
-                let pause_item = MenuItem::with_id(app, "pause", "Pause", false, None::<&str>)?;
-                let skip_item =
-                    MenuItem::with_id(app, "skip", "Skip Session", false, None::<&str>)?;
-                let cancel_item = MenuItem::with_id(app, "cancel", "Cancel", false, None::<&str>)?;
+                    MenuItem::with_id(app, "start_session", "Start Session", true, None::<&str>)?;
+                let skip_item = MenuItem::with_id(app, "skip", "Skip Mode", true, None::<&str>)?;
                 let quit_item = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
                 let menu = Menu::with_items(
                     app,
                     &[
                         &show_item,
+                        &quick_log_item,
                         &start_session_item,
-                        &pause_item,
                         &skip_item,
-                        &cancel_item,
                         &quit_item,
                     ],
                 )?;
 
                 let app_handle = app.handle().clone();
-                let app_handle_for_click = app_handle.clone();
 
                 // macOS: TrayIconBuilder does NOT auto-load default_window_icon.
                 // Without an explicit icon AND with no title, the NSStatusItem
@@ -846,29 +848,26 @@ pub fn run() {
                             });
                         }
                         "start_session" => {
-                            emit_tray_and_show(&app_handle, "tray-start-session");
+                            emit_tray_event(&app_handle, "tray-start-session");
                         }
-                        "pause" => {
-                            emit_tray_and_show(&app_handle, "tray-pause");
+                        "quick_log" => {
+                            debug_assert!(tray_menu_action_requires_focus("quick_log"));
+                            show_app_window_then_emit_tray_event(&app_handle, "tray-cancel");
                         }
                         "skip" => {
-                            emit_tray_and_show(&app_handle, "tray-skip");
+                            emit_tray_event(&app_handle, "tray-skip");
+                        }
+                        "distraction" => {
+                            debug_assert!(tray_menu_action_requires_focus("distraction"));
+                            show_app_window_then_emit_tray_event(&app_handle, "tray-skip");
                         }
                         "cancel" => {
-                            emit_tray_and_show(&app_handle, "tray-cancel");
+                            emit_tray_event(&app_handle, "tray-cancel");
                         }
                         "quit" => {
                             app_handle.exit(0);
                         }
                         _ => {}
-                    })
-                    .on_tray_icon_event(move |_tray, event| {
-                        if let TrayIconEvent::Click { .. } = event {
-                            let app_clone = app_handle_for_click.clone();
-                            tauri::async_runtime::spawn(async move {
-                                show_app_window(&app_clone);
-                            });
-                        }
                     });
 
                 let _tray = tray_builder.build(app)?;
@@ -977,15 +976,90 @@ async fn add_session_tag(session_tag: SessionTag, app: AppHandle) -> Result<(), 
     helpers::append_session_tag_in(&app_data_dir, session_tag).map_err(BridgeError::from)
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct TrayMenuPresentation {
+    left_id: &'static str,
+    left_text: &'static str,
+    left_enabled: bool,
+    center_text: &'static str,
+    center_enabled: bool,
+    right_id: &'static str,
+    right_text: &'static str,
+    right_enabled: bool,
+}
+
+const fn tray_menu_presentation(
+    is_running: bool,
+    is_paused: bool,
+    is_overtime: bool,
+) -> TrayMenuPresentation {
+    let overtime_running = is_running && is_overtime && !is_paused;
+    let left_id = if is_running || is_paused || overtime_running {
+        "cancel"
+    } else {
+        "quick_log"
+    };
+    let left_text = if is_running || is_paused {
+        if overtime_running {
+            "Complete"
+        } else {
+            "Abort"
+        }
+    } else {
+        "Quick Log"
+    };
+    let center_text = if is_running {
+        if overtime_running {
+            "Complete"
+        } else {
+            "Pause"
+        }
+    } else if is_paused {
+        "Continue"
+    } else {
+        "Start Session"
+    };
+    let right_id = if is_running && !overtime_running {
+        "distraction"
+    } else {
+        "skip"
+    };
+    let right_text = if is_running {
+        if overtime_running {
+            "Complete"
+        } else {
+            "Distraction"
+        }
+    } else if is_paused {
+        "Complete"
+    } else {
+        "Skip Mode"
+    };
+
+    TrayMenuPresentation {
+        left_id,
+        left_text,
+        left_enabled: !overtime_running,
+        center_text,
+        center_enabled: true,
+        right_id,
+        right_text,
+        right_enabled: !overtime_running,
+    }
+}
+
 // `current_mode: TimerMode` (was `String`) per spec 001 T027 — closed-domain
-// enum tightening. Wire format unchanged: camelCase strings.
+// enum tightening. Wire format unchanged: camelCase strings. Menu labels now
+// mirror GUI run-state buttons, so the mode value is accepted for wire
+// stability but no longer affects presentation.
 #[tauri::command]
 #[specta::specta]
 async fn update_tray_menu(
     app: AppHandle,
     is_running: bool,
     is_paused: bool,
-    current_mode: TimerMode,
+    is_overtime: bool,
+    _current_mode: TimerMode,
 ) -> Result<(), BridgeError> {
     let tray = app.tray_by_id("main");
 
@@ -995,46 +1069,40 @@ async fn update_tray_menu(
                 msg: format!("Failed to create show item: {e}"),
             })?;
 
-        // Start Session: enabled only if not running
+        let presentation = tray_menu_presentation(is_running, is_paused, is_overtime);
+
+        let left_item = MenuItem::with_id(
+            &app,
+            presentation.left_id,
+            presentation.left_text,
+            presentation.left_enabled,
+            None::<&str>,
+        )
+        .map_err(|e| BridgeError::Internal {
+            msg: format!("Failed to create left action item: {e}"),
+        })?;
+
         let start_session_item = MenuItem::with_id(
             &app,
             "start_session",
-            "Start Session",
-            !is_running,
+            presentation.center_text,
+            presentation.center_enabled,
             None::<&str>,
         )
         .map_err(|e| BridgeError::Internal {
-            msg: format!("Failed to create start session item: {e}"),
+            msg: format!("Failed to create center action item: {e}"),
         })?;
 
-        // Pause: enabled only if running and not paused
-        let pause_item = MenuItem::with_id(
+        let skip_item = MenuItem::with_id(
             &app,
-            "pause",
-            "Pause",
-            is_running && !is_paused,
+            presentation.right_id,
+            presentation.right_text,
+            presentation.right_enabled,
             None::<&str>,
         )
         .map_err(|e| BridgeError::Internal {
-            msg: format!("Failed to create pause item: {e}"),
+            msg: format!("Failed to create right action item: {e}"),
         })?;
-
-        // Skip: enabled only if running
-        let skip_item = MenuItem::with_id(&app, "skip", "Skip Session", is_running, None::<&str>)
-            .map_err(|e| BridgeError::Internal {
-            msg: format!("Failed to create skip item: {e}"),
-        })?;
-
-        // Cancel: enabled if in focus mode, disabled in break/longBreak (undo)
-        let cancel_text = if matches!(current_mode, TimerMode::Focus) {
-            "Cancel"
-        } else {
-            "Cancel Last"
-        };
-        let cancel_item = MenuItem::with_id(&app, "cancel", cancel_text, true, None::<&str>)
-            .map_err(|e| BridgeError::Internal {
-                msg: format!("Failed to create cancel item: {e}"),
-            })?;
 
         let quit_item =
             MenuItem::with_id(&app, "quit", "Quit", true, None::<&str>).map_err(|e| {
@@ -1047,10 +1115,9 @@ async fn update_tray_menu(
             &app,
             &[
                 &show_item,
+                &left_item,
                 &start_session_item,
-                &pause_item,
                 &skip_item,
-                &cancel_item,
                 &quit_item,
             ],
         )
@@ -1276,8 +1343,9 @@ fn set_dock_visibility_native(visible: bool) {
 #[cfg(test)]
 mod tests {
     use super::{
-        default_weekly_goal, AppSettings, ManualSession, PomodoroSession, SessionTag,
-        StatusBarDisplay, Tag, Task,
+        default_weekly_goal, tray_menu_action_requires_focus, tray_menu_presentation, AppSettings,
+        ManualSession, PomodoroSession, SessionTag, StatusBarDisplay, Tag, Task,
+        TrayMenuPresentation,
     };
 
     #[test]
@@ -1301,6 +1369,120 @@ mod tests {
             assert!(
                 full_path.exists(),
                 "bundle.icon references missing file: {icon_path}"
+            );
+        }
+    }
+
+    #[test]
+    fn tray_menu_presentation_mirrors_gui_control_matrix() {
+        let cases = [
+            (
+                "idle",
+                false,
+                false,
+                false,
+                TrayMenuPresentation {
+                    left_id: "quick_log",
+                    left_text: "Quick Log",
+                    left_enabled: true,
+                    center_text: "Start Session",
+                    center_enabled: true,
+                    right_id: "skip",
+                    right_text: "Skip Mode",
+                    right_enabled: true,
+                },
+            ),
+            (
+                "running",
+                true,
+                false,
+                false,
+                TrayMenuPresentation {
+                    left_id: "cancel",
+                    left_text: "Abort",
+                    left_enabled: true,
+                    center_text: "Pause",
+                    center_enabled: true,
+                    right_id: "distraction",
+                    right_text: "Distraction",
+                    right_enabled: true,
+                },
+            ),
+            (
+                "paused",
+                false,
+                true,
+                false,
+                TrayMenuPresentation {
+                    left_id: "cancel",
+                    left_text: "Abort",
+                    left_enabled: true,
+                    center_text: "Continue",
+                    center_enabled: true,
+                    right_id: "skip",
+                    right_text: "Complete",
+                    right_enabled: true,
+                },
+            ),
+            (
+                "overtime-running",
+                true,
+                false,
+                true,
+                TrayMenuPresentation {
+                    left_id: "cancel",
+                    left_text: "Complete",
+                    left_enabled: false,
+                    center_text: "Complete",
+                    center_enabled: true,
+                    right_id: "skip",
+                    right_text: "Complete",
+                    right_enabled: false,
+                },
+            ),
+        ];
+
+        for (name, is_running, is_paused, is_overtime, expected) in cases {
+            assert_eq!(
+                tray_menu_presentation(is_running, is_paused, is_overtime),
+                expected,
+                "tray menu mismatch for {name}",
+            );
+        }
+    }
+
+    #[test]
+    fn tray_menu_paused_wins_over_overtime_flag() {
+        assert_eq!(
+            tray_menu_presentation(false, true, true),
+            TrayMenuPresentation {
+                left_id: "cancel",
+                left_text: "Abort",
+                left_enabled: true,
+                center_text: "Continue",
+                center_enabled: true,
+                right_id: "skip",
+                right_text: "Complete",
+                right_enabled: true,
+            },
+        );
+    }
+
+    #[test]
+    fn only_modal_tray_actions_require_focus() {
+        let modal_actions = ["quick_log", "distraction"];
+        for action in modal_actions {
+            assert!(
+                tray_menu_action_requires_focus(action),
+                "{action} opens a modal and must focus Presto first",
+            );
+        }
+
+        let background_actions = ["start_session", "skip", "cancel", "quit", "show"];
+        for action in background_actions {
+            assert!(
+                !tray_menu_action_requires_focus(action),
+                "{action} must not focus Presto implicitly",
             );
         }
     }

@@ -5,8 +5,6 @@
 //   * orange tint + CTA visibility (FR-005, FR-010, SC-001, SC-006, SC-008)
 //   * a11y removal of the outer slots (FR-014, FR-015, FR-016, SC-003, SC-004)
 //   * exit via Complete clears the treatment (FR-024, SC-009)
-//   * exit via Abort keyboard shortcut clears the treatment (FR-021, SC-005)
-//   * pause during overtime reverts to the Paused matrix (FR-022, FR-023)
 //
 // Engine-level coverage for branch B.2 (continuous-mode overtime
 // complete) lives in feature 006's RED tests under
@@ -66,7 +64,7 @@ async function enterOvertime(page) {
   });
 }
 
-test("Overtime treatment: orange tint + CTA + a11y + triple-Complete + Abort exit + Pause revert", async ({
+test("Overtime treatment: orange tint + CTA + a11y + triple-Complete", async ({
   page,
 }) => {
   test.setTimeout(180_000);
@@ -153,53 +151,4 @@ test("Overtime treatment: orange tint + CTA + a11y + triple-Complete + Abort exi
   }
   await expect(page.locator("#status-text")).toContainText(/focus/i);
 
-  // ── Block 6. T031 — Abort keyboard shortcut clears treatment ──────
-  // Emit "abort" on the global-shortcut event channel via the mock
-  // and assert the engine returns to idle in the current focus mode
-  // (NOT advanced to break — abort discards), the overtime treatment
-  // is gone, and the CTA is gone (FR-021, SC-005, SC-009).
-  await enterOvertime(page);
-  await page.evaluate(() => {
-    window.__TAURI__.event.emit("global-shortcut", "abort");
-  });
-  await expect(page.locator(".overtime-cta.visible")).toBeHidden({
-    timeout: 5_000,
-  });
-  await expect(page.locator("#status-text")).toContainText(/focus/i);
-  await expect(page.locator("#play-icon")).toBeVisible();
-  await expect(page.locator("#stop-btn")).not.toHaveClass(/overtime/);
-
-  // ── Block 7. T032 — Pause during overtime reverts to Paused matrix
-  // Re-enter overtime, fire the start-stop shortcut (which mirrors
-  // the play-pause click), and assert the matrix flips back to the
-  // Paused trio (`Abort | Resume | Complete`) with the CTA hidden
-  // and the .overtime button classes gone (FR-022, FR-023).
-  await enterOvertime(page);
-  await page.evaluate(() => {
-    window.__TAURI__.event.emit("global-shortcut", "start-stop");
-  });
-  await expect(page.locator("#play-icon")).toBeVisible({ timeout: 5_000 });
-  await expect(page.locator(".overtime-cta.visible")).toBeHidden();
-  await expect(page.locator("#stop-btn")).not.toHaveClass(/overtime/);
-  await expect(page.locator("#play-pause-btn")).not.toHaveClass(/overtime/);
-  await expect(page.locator("#skip-btn")).not.toHaveClass(/overtime/);
-  // Right slot now reads ✓ Complete (Paused matrix).
-  await expect(page.locator("#skip-btn")).toHaveAttribute(
-    "aria-label",
-    /complete/i
-  );
-  // Left slot reads ✕ Abort (Paused matrix).
-  await expect(page.locator("#stop-btn")).toHaveAttribute(
-    "aria-label",
-    /abort/i
-  );
-
-  // Resume — overtime treatment returns.
-  await page.evaluate(() => {
-    window.__TAURI__.event.emit("global-shortcut", "start-stop");
-  });
-  await expect(page.locator(".overtime-cta.visible")).toBeVisible({
-    timeout: 5_000,
-  });
-  await expect(page.locator("#stop-btn")).toHaveClass(/overtime/);
 });

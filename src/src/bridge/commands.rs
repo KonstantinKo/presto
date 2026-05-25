@@ -706,8 +706,9 @@ pub async fn update_tray_icon(args: UpdateTrayIconArgs) -> Result<(), BridgeErro
 /// reflects the live timer's status.
 ///
 /// Tauri-side handler:
-/// `update_tray_menu(is_running: bool, is_paused: bool, current_mode:
-///                   TimerMode) -> Result<(), BridgeError>`
+/// `update_tray_menu(is_running: bool, is_paused: bool,
+///                   is_overtime: bool, current_mode: TimerMode)
+///                   -> Result<(), BridgeError>`
 /// at `src-tauri/src/lib.rs:1124`.
 ///
 /// Distinct from `update_tray_icon` in that the contract row 24 keeps
@@ -728,6 +729,7 @@ pub async fn update_tray_icon(args: UpdateTrayIconArgs) -> Result<(), BridgeErro
 pub async fn update_tray_menu(
     is_running: bool,
     is_paused: bool,
+    is_overtime: bool,
     current_mode: TimerMode,
 ) -> Result<(), BridgeError> {
     invoke_serde(
@@ -735,6 +737,7 @@ pub async fn update_tray_menu(
         &UpdateTrayMenuArgs {
             is_running,
             is_paused,
+            is_overtime,
             current_mode,
         },
     )
@@ -1524,7 +1527,7 @@ mod tests {
 
     #[wasm_bindgen_test]
     async fn update_tray_menu_round_trip_short_circuits_when_bridge_absent() {
-        let result = update_tray_menu(true, false, TimerMode::Focus).await;
+        let result = update_tray_menu(true, false, false, TimerMode::Focus).await;
         match result {
             Err(BridgeError::BridgeUnavailable) => {}
             other => panic!("expected BridgeUnavailable, got {other:?}"),
@@ -1533,7 +1536,8 @@ mod tests {
 
     /// Compile-time signature pin per contracts/tauri-bridge.md row 24:
     /// `update_tray_menu(is_running: bool, is_paused: bool,
-    ///                   current_mode: TimerMode) -> Result<(), BridgeError>`.
+    ///                   is_overtime: bool, current_mode: TimerMode)
+    ///                   -> Result<(), BridgeError>`.
     /// Distinct from `update_tray_icon` in that the contract keeps the
     /// three Tauri-side args as separate parameters (no struct collapse)
     /// — the call sites are infrequent enough that a wrapper struct
@@ -1545,11 +1549,12 @@ mod tests {
         async fn assert_signature(
             is_running: bool,
             is_paused: bool,
+            is_overtime: bool,
             current_mode: TimerMode,
         ) -> Result<(), BridgeError> {
-            update_tray_menu(is_running, is_paused, current_mode).await
+            update_tray_menu(is_running, is_paused, is_overtime, current_mode).await
         }
-        let _ = assert_signature(true, false, TimerMode::LongBreak).await;
+        let _ = assert_signature(true, false, false, TimerMode::LongBreak).await;
     }
 
     // -----------------------------------------------------------------------

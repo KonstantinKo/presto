@@ -33,15 +33,15 @@ pub struct UpdateTrayIconArgs {
     pub mode_icon: Option<String>,
 }
 
-/// Argument bundle for `update_tray_menu`. Drives the start /
-/// pause / skip / cancel menu-item enable state on the macOS
-/// status item.
+/// Argument bundle for `update_tray_menu`. Drives the three timer
+/// action rows that mirror the GUI controls in the macOS status item.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "specta", derive(specta::Type))]
 #[serde(rename_all = "camelCase")]
 pub struct UpdateTrayMenuArgs {
     pub is_running: bool,
     pub is_paused: bool,
+    pub is_overtime: bool,
     pub current_mode: TimerMode,
 }
 
@@ -140,15 +140,18 @@ mod tests {
         let args = UpdateTrayMenuArgs {
             is_running: true,
             is_paused: false,
+            is_overtime: true,
             current_mode: TimerMode::LongBreak,
         };
         let json = serde_json::to_string(&args).unwrap();
         assert!(json.contains(r#""isRunning":true"#));
         assert!(json.contains(r#""isPaused":false"#));
+        assert!(json.contains(r#""isOvertime":true"#));
         assert!(json.contains(r#""currentMode":"longBreak""#));
         let decoded: UpdateTrayMenuArgs = serde_json::from_str(&json).unwrap();
         assert!(decoded.is_running);
         assert!(!decoded.is_paused);
+        assert!(decoded.is_overtime);
         assert_eq!(decoded.current_mode, TimerMode::LongBreak);
     }
 
@@ -242,6 +245,7 @@ mod tests {
                 serde_json::to_value(UpdateTrayMenuArgs {
                     is_running: false,
                     is_paused: false,
+                    is_overtime: false,
                     current_mode: TimerMode::Focus,
                 })
                 .unwrap(),

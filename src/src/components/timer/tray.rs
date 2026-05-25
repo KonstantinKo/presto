@@ -91,14 +91,16 @@ pub(super) fn dispatch_tray_update(
     menu_dirty: bool,
 ) {
     let settings_snapshot = settings.get_untracked();
-    let (timer_text, mode_icon, is_running, is_paused, mode_after, current_session) = engine
-        .with_untracked(|state| {
+    let (timer_text, mode_icon, is_running, is_paused, is_overtime, mode_after, current_session) =
+        engine.with_untracked(|state| {
             let (text, icon) = build_tray_text(state, &settings_snapshot);
+            let time_signed = state.time_remaining_secs_signed();
             (
                 text,
                 icon,
                 state.is_running(),
                 state.is_paused() || state.is_auto_paused(),
+                time_signed < 0 && settings_snapshot.notifications.allow_continuous_sessions,
                 state.current_mode(),
                 state.completed_pomodoros().saturating_add(1),
             )
@@ -114,7 +116,8 @@ pub(super) fn dispatch_tray_update(
     spawn_local(async move {
         let _ = commands::update_tray_icon(tray_args).await;
         if menu_dirty {
-            let _ = commands::update_tray_menu(is_running, is_paused, mode_after).await;
+            let _ =
+                commands::update_tray_menu(is_running, is_paused, is_overtime, mode_after).await;
         }
     });
 }

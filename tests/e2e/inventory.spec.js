@@ -19,33 +19,30 @@ test("Inventory: renders, edit + delete, deleted-tag placeholder, header + Quick
   // "Fri May 15 2026" for May 15 2026).
   // Build a stable seed by freezing time first.
   await tauriMock.freezeTime("2026-05-15T10:00:00Z");
-  await page.addInitScript({
-    content: `
-if (!window.__E2E_CONFIG__) window.__E2E_CONFIG__ = {};
-window.__E2E_CONFIG__.initialQuickLogs = [
-  {
-    id: "qid-seed-1",
-    title: "Seeded quick log",
-    elapsedMinutes: 7,
-    createdAt: "2026-05-15T09:00:00Z",
-    date: "Fri May 15 2026"
-  }
-];
-window.__E2E_CONFIG__.initialDistractions = [
-  {
-    id: "did-seed-1",
-    note: "Seeded distraction with deleted tag",
-    createdAt: "2026-05-15T09:30:00Z",
-    date: "Fri May 15 2026",
-    parentRef: {
-      parentSessionStartTs: "2026-05-15T09:00:00Z",
-      parentMode: "focus",
-      parentTagId: "tag-that-no-longer-exists",
-      parentTitle: "Original session title"
-    }
-  }
-];
-`,
+  await tauriMock.seedInventory({
+    quickLogs: [
+      {
+        id: "qid-seed-1",
+        title: "Seeded quick log",
+        elapsedMinutes: 7,
+        createdAt: "2026-05-15T09:00:00Z",
+        date: "Fri May 15 2026",
+      },
+    ],
+    distractions: [
+      {
+        id: "did-seed-1",
+        note: "Seeded distraction with deleted tag",
+        createdAt: "2026-05-15T09:30:00Z",
+        date: "Fri May 15 2026",
+        parentRef: {
+          parentSessionStartTs: "2026-05-15T09:00:00Z",
+          parentMode: "focus",
+          parentTagId: "tag-that-no-longer-exists",
+          parentTitle: "Original session title",
+        },
+      },
+    ],
   });
 
   await page.goto("/index.html");

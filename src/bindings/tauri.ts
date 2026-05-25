@@ -61,9 +61,9 @@ async updateTrayIcon(timerText: string, isRunning: boolean, sessionMode: TimerMo
     else return { status: "error", error: e  as any };
 }
 },
-async updateTrayMenu(isRunning: boolean, isPaused: boolean, currentMode: TimerMode) : Promise<Result<null, BridgeError>> {
+async updateTrayMenu(isRunning: boolean, isPaused: boolean, isOvertime: boolean, currentMode: TimerMode) : Promise<Result<null, BridgeError>> {
     try {
-    return { status: "ok", data: await TAURI_INVOKE("update_tray_menu", { isRunning, isPaused, currentMode }) };
+    return { status: "ok", data: await TAURI_INVOKE("update_tray_menu", { isRunning, isPaused, isOvertime, currentMode }) };
 } catch (e) {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };

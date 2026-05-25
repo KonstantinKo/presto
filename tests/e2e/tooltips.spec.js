@@ -70,8 +70,12 @@ test("control-button tooltips expose data-tooltip + react to keyboard focus", as
   // element so `:focus-visible` heuristic accepts the activation.
   await page.keyboard.press("Tab");
   for (let i = 0; i < 15; i++) {
-    const focusedId = await page.evaluate(() => document.activeElement?.id ?? "");
-    if (focusedId === "stop-btn") break;
+    try {
+      await expect(stopBtn).toBeFocused({ timeout: 100 });
+      break;
+    } catch {
+      // Keep walking tab order until the control receives keyboard focus.
+    }
     await page.keyboard.press("Tab");
   }
   await expect(stopBtn).toBeFocused();

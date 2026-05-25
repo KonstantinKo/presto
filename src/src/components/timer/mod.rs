@@ -64,6 +64,7 @@ use self::tray::{build_tray_text, dispatch_tray_update};
 use super::browser_clock::BrowserClock;
 use crate::app::{AppToast, ShortcutBus};
 use crate::bridge::commands;
+use crate::bridge::events;
 use crate::bridge::types::AmbientSoundType;
 use crate::bridge::types::SessionType;
 use crate::bridge::types::TimerMode;
@@ -1749,6 +1750,48 @@ pub fn TimerView() -> impl IntoView {
         dispatch_tray_update(engine, settings, true);
     };
 
+    // Tray menu rows mirror the three GUI control slots. Route them
+    // through the same closures so modals, persistence, toasts, and
+    // tray refresh stay byte-equivalent with pointer clicks.
+    spawn_local(async move {
+        let listener = events::listen::<()>(events::TRAY_CANCEL, move |()| {
+            let synth = leptos::ev::MouseEvent::new("click").unwrap();
+            match (run_state.get_untracked(), is_overtime.get_untracked()) {
+                (RunState::Running, true) => on_complete(synth),
+                (RunState::Idle, _) => on_open_quick_log(synth),
+                (RunState::Running, false) | (RunState::Paused, _) => on_abort(synth),
+            }
+        })
+        .await;
+        if let Ok(guard) = listener {
+            let _ = Box::leak(Box::new(guard));
+        }
+    });
+    spawn_local(async move {
+        let listener = events::listen::<()>(events::TRAY_START_SESSION, move |()| {
+            let synth = leptos::ev::MouseEvent::new("click").unwrap();
+            on_center_click(synth);
+        })
+        .await;
+        if let Ok(guard) = listener {
+            let _ = Box::leak(Box::new(guard));
+        }
+    });
+    spawn_local(async move {
+        let listener = events::listen::<()>(events::TRAY_SKIP, move |()| {
+            let synth = leptos::ev::MouseEvent::new("click").unwrap();
+            match (run_state.get_untracked(), is_overtime.get_untracked()) {
+                (RunState::Idle, _) => on_skip(synth),
+                (RunState::Running, false) => on_open_distraction(synth),
+                (RunState::Running, true) | (RunState::Paused, _) => on_complete(synth),
+            }
+        })
+        .await;
+        if let Ok(guard) = listener {
+            let _ = Box::leak(Box::new(guard));
+        }
+    });
+
     // Feature 007 (T024): global-shortcut bus wiring.
     //
     // The Tauri-side `global-shortcut` event listener (in `app.rs`)
@@ -1912,6 +1955,10 @@ pub fn TimerView() -> impl IntoView {
                 .try_update(|state| {
                     let was_running = state.is_running();
                     let mode_before = state.current_mode();
+                    let allow_continuous =
+                        settings.with_untracked(|s| s.notifications.allow_continuous_sessions);
+                    let overtime_before =
+                        state.time_remaining_secs_signed() < 0 && allow_continuous;
                     let mut events = state.tick(&BrowserClock);
                     // Feature 006 (T050 / AG-2): auto-restart UI
                     // gate. Previously this fired on the bare
@@ -1959,20 +2006,24 @@ pub fn TimerView() -> impl IntoView {
                     let mode_after = state.current_mode();
                     let mode_changed = mode_before != mode_after;
                     let running_changed = was_running != state.is_running();
+                    let overtime_after = state.time_remaining_secs_signed() < 0 && allow_continuous;
+                    let overtime_changed = overtime_before != overtime_after;
                     // Tray icon (title + tooltip) refreshes every
                     // tick to match the legacy `updateDisplay() →
                     // updateTrayIcon()` chain at
                     // `pomodoro-timer.js:1630`. Tray menu rebuilds
-                    // only on mode/running transitions (the menu
-                    // labels don't depend on the second-by-second
-                    // countdown), avoiding the macOS NSStatusItem
-                    // menu-flicker bug noted in issue #40.
+                    // only on mode/running/overtime transitions (the
+                    // menu labels don't depend on the second-by-second
+                    // countdown otherwise), avoiding the macOS
+                    // NSStatusItem menu-flicker bug noted in issue #40.
                     {
                         use crate::bridge::types::UpdateTrayIconArgs;
                         let settings_snapshot = settings.get_untracked();
                         let (timer_text, mode_icon) = build_tray_text(state, &settings_snapshot);
                         let is_running = state.is_running();
                         let is_paused = state.is_paused() || state.is_auto_paused();
+                        let is_overtime = state.time_remaining_secs_signed() < 0
+                            && settings_snapshot.notifications.allow_continuous_sessions;
                         let current_session = state.completed_pomodoros().saturating_add(1);
                         let tray_args = UpdateTrayIconArgs {
                             timer_text,
@@ -1982,7 +2033,7 @@ pub fn TimerView() -> impl IntoView {
                             total_sessions: settings_snapshot.timer.total_sessions,
                             mode_icon,
                         };
-                        let menu_dirty = mode_changed || running_changed;
+                        let menu_dirty = mode_changed || running_changed || overtime_changed;
                         let mode_for_menu = mode_after;
                         spawn_local(async move {
                             let _ = commands::update_tray_icon(tray_args).await;
@@ -1990,6 +2041,7 @@ pub fn TimerView() -> impl IntoView {
                                 let _ = commands::update_tray_menu(
                                     is_running,
                                     is_paused,
+                                    is_overtime,
                                     mode_for_menu,
                                 )
                                 .await;
