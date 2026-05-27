@@ -399,11 +399,30 @@ impl Default for NotificationSettings {
 }
 
 /// Advanced / debug toggles.
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "specta", derive(specta::Type))]
 pub struct AdvancedSettings {
     #[serde(default)]
     pub debug_mode: bool,
+    #[serde(default = "default_true")]
+    pub pause_on_lock_screen: bool,
+    #[serde(default = "default_true")]
+    pub pause_on_system_suspension: bool,
+}
+
+impl Default for AdvancedSettings {
+    fn default() -> Self {
+        Self {
+            debug_mode: false,
+            pause_on_lock_screen: true,
+            pause_on_system_suspension: true,
+        }
+    }
+}
+
+#[must_use]
+pub const fn default_true() -> bool {
+    true
 }
 
 /// Full application settings record.
@@ -526,8 +545,8 @@ impl From<SettingsOnDisk> for Settings {
 #[cfg(test)]
 mod tests {
     use super::{
-        AmbientSoundType, AppearanceSettings, Locale, NotificationSettings, ShortcutSettings,
-        StatusBarDisplay, TimerSettings,
+        AdvancedSettings, AmbientSoundType, AppearanceSettings, Locale, NotificationSettings,
+        ShortcutSettings, StatusBarDisplay, TimerSettings,
     };
 
     /// Feature 007 T010 (RED → T013 GREEN): `ShortcutSettings.abort = Some(_)`
@@ -615,6 +634,27 @@ mod tests {
             s.timer_theme, "espresso",
             "feature-002 timer_theme survives"
         );
+    }
+
+    #[test]
+    fn system_pause_toggles_default_on_for_legacy_advanced_settings() {
+        let legacy = r#"{"debug_mode":false}"#;
+        let s: AdvancedSettings = serde_json::from_str(legacy).expect("deserialise legacy");
+        assert!(s.pause_on_lock_screen);
+        assert!(s.pause_on_system_suspension);
+    }
+
+    #[test]
+    fn system_pause_toggles_round_trip_false() {
+        let s = AdvancedSettings {
+            debug_mode: false,
+            pause_on_lock_screen: false,
+            pause_on_system_suspension: false,
+        };
+        let json = serde_json::to_string(&s).expect("serialise");
+        let back: AdvancedSettings = serde_json::from_str(&json).expect("deserialise");
+        assert!(!back.pause_on_lock_screen);
+        assert!(!back.pause_on_system_suspension);
     }
 
     /// Feature 005 T005 (RED → T007 GREEN): each non-default

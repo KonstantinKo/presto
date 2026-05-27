@@ -1,11 +1,13 @@
 // Advanced settings tab — Phase 4b (T210) of spec
 // 001-leptos-migration. Wires the autostart / hide-icon-on-close /
-// status-bar-display / debug-mode / reset-data toggles.
+// status-bar-display / system-pause / debug-mode / reset-data toggles.
 //
 // **Selector contract** (consumed by `tests/e2e/settings-advanced.spec.js`):
 // - `#autostart-enabled` — checkbox (`spec.js:12-16`).
 // - `#hide-icon-on-close` — checkbox (`spec.js:19-20`).
 // - `#status-bar-display` — `<select>` (`spec.js:23-24`).
+// - `#pause-on-lock-screen` — checkbox.
+// - `#pause-on-system-suspension` — checkbox.
 // - `#debug-mode` — checkbox (`spec.js:32-33,47`).
 // - `#reset-all-data-btn` — danger button (`spec.js:44`).
 //
@@ -59,6 +61,10 @@ pub fn AdvancedSettings(settings: RwSignal<Settings>, toast: SettingsToast) -> i
     let autostart = Signal::derive(move || settings.with(|s| s.autostart));
     let hide_icon = Signal::derive(move || settings.with(|s| s.hide_icon_on_close));
     let debug_mode = Signal::derive(move || settings.with(|s| s.advanced.debug_mode));
+    let pause_on_lock_screen =
+        Signal::derive(move || settings.with(|s| s.advanced.pause_on_lock_screen));
+    let pause_on_system_suspension =
+        Signal::derive(move || settings.with(|s| s.advanced.pause_on_system_suspension));
     let status_bar = Signal::derive(move || {
         settings.with(|s| status_bar_to_str(s.status_bar_display).to_string())
     });
@@ -82,6 +88,18 @@ pub fn AdvancedSettings(settings: RwSignal<Settings>, toast: SettingsToast) -> i
     };
     let on_debug = move |_| {
         settings.update(|s| s.advanced.debug_mode = !s.advanced.debug_mode);
+        toast.show(t_string!(i18n, settings.toast_saved).to_string());
+    };
+    let on_pause_on_lock_screen = move |_| {
+        settings.update(|s| {
+            s.advanced.pause_on_lock_screen = !s.advanced.pause_on_lock_screen;
+        });
+        toast.show(t_string!(i18n, settings.toast_saved).to_string());
+    };
+    let on_pause_on_system_suspension = move |_| {
+        settings.update(|s| {
+            s.advanced.pause_on_system_suspension = !s.advanced.pause_on_system_suspension;
+        });
         toast.show(t_string!(i18n, settings.toast_saved).to_string());
     };
     let on_reset = move |_| {
@@ -151,6 +169,32 @@ pub fn AdvancedSettings(settings: RwSignal<Settings>, toast: SettingsToast) -> i
                 </select>
                 <p class="setting-description">{t!(i18n, settings.advanced.status_bar_help)}</p>
             </div>
+            <div class="setting-item">
+                <label class="checkbox-label">
+                    <input
+                        type="checkbox"
+                        id="pause-on-lock-screen"
+                        prop:checked=move || pause_on_lock_screen.get()
+                        on:change=on_pause_on_lock_screen
+                    />
+                    <span class="checkmark"></span>
+                    {t!(i18n, settings.advanced.pause_on_lock_screen_label)}
+                </label>
+                <p class="setting-description">{t!(i18n, settings.advanced.pause_on_lock_screen_help)}</p>
+            </div>
+            <div class="setting-item">
+                <label class="checkbox-label">
+                    <input
+                        type="checkbox"
+                        id="pause-on-system-suspension"
+                        prop:checked=move || pause_on_system_suspension.get()
+                        on:change=on_pause_on_system_suspension
+                    />
+                    <span class="checkmark"></span>
+                    {t!(i18n, settings.advanced.pause_on_system_suspension_label)}
+                </label>
+                <p class="setting-description">{t!(i18n, settings.advanced.pause_on_system_suspension_help)}</p>
+            </div>
         </div>
         <div class="settings-section">
             <h3 class="section-header">{t!(i18n, settings.advanced.dev_section)}</h3>
@@ -203,6 +247,8 @@ mod tests {
             "autostart-enabled",
             "hide-icon-on-close",
             "status-bar-display",
+            "pause-on-lock-screen",
+            "pause-on-system-suspension",
             "debug-mode",
             "reset-all-data-btn",
         ];

@@ -1,7 +1,7 @@
 import { test, expect } from "./fixtures/index.js";
 import { openSettings, selectSettingsCategory, tapTab } from "./fixtures/screens.js";
 
-test("advanced settings: autostart, hide-icon, status bar, debug mode, cancel reset", async ({
+test("advanced settings: autostart, system pause, status bar, debug mode, cancel reset", async ({
   page,
 }) => {
   await page.goto("/index.html");
@@ -22,6 +22,18 @@ test("advanced settings: autostart, hide-icon, status bar, debug mode, cancel re
   // Change status bar display to icon-only
   await page.locator("#status-bar-display").selectOption("icon-only");
   await expect(page.locator("#status-bar-display")).toHaveValue("icon-only");
+
+  // System pause behaviors default on and can be toggled independently.
+  await expect(page.locator("#pause-on-lock-screen")).toBeChecked();
+  await expect(page.locator("#pause-on-system-suspension")).toBeChecked();
+  await page.locator("#pause-on-lock-screen").click();
+  await expect(page.locator("#pause-on-lock-screen")).not.toBeChecked();
+  await expect(page.locator("#pause-on-system-suspension")).toBeChecked();
+  await page.locator("#pause-on-system-suspension").click();
+  await expect(page.locator("#pause-on-system-suspension")).not.toBeChecked();
+  await page.locator("#pause-on-lock-screen").click();
+  await expect(page.locator("#pause-on-lock-screen")).toBeChecked();
+  await expect(page.locator("#pause-on-system-suspension")).not.toBeChecked();
 
   // Enable debug mode (3-second timers)
   await page.locator("#debug-mode").click();

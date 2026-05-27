@@ -28,6 +28,7 @@
 )]
 
 use serde::de::DeserializeOwned;
+use serde::Deserialize;
 use wasm_bindgen::closure::Closure;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::JsFuture;
@@ -105,6 +106,24 @@ pub const UPDATE_AVAILABLE: &str = "tauri://update-available";
 /// tray-update / metronome body as the frontend
 /// `set_interval_with_handle` driver).
 pub const ENGINE_TICK: &str = "engine-tick";
+
+/// E12 — backend detected a native 1 Hz tick gap.
+///
+/// Payload carries the pause timestamp and native cause.
+pub const SYSTEM_SUSPENDED: &str = "system-suspended";
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum SystemPauseReason {
+    LockScreen,
+    SystemSuspension,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+pub struct SystemSuspendedPayload {
+    pub paused_at_ms: i64,
+    pub reason: SystemPauseReason,
+}
 
 // ---------------------------------------------------------------------------
 // Tauri 2.x JS event-API binding
@@ -306,8 +325,9 @@ where
 #[cfg(all(test, target_arch = "wasm32"))]
 mod tests {
     use super::{
-        listen, Listener, ENGINE_TICK, GLOBAL_SHORTCUT, SHORTCUTS_UPDATED, TRAY_CANCEL, TRAY_PAUSE,
-        TRAY_SKIP, TRAY_START_SESSION, UPDATE_AVAILABLE, USER_ACTIVITY, USER_INACTIVITY,
+        listen, Listener, ENGINE_TICK, GLOBAL_SHORTCUT, SHORTCUTS_UPDATED, SYSTEM_SUSPENDED,
+        TRAY_CANCEL, TRAY_PAUSE, TRAY_SKIP, TRAY_START_SESSION, UPDATE_AVAILABLE, USER_ACTIVITY,
+        USER_INACTIVITY,
     };
     use crate::bridge::types::BridgeError;
     use crate::bridge::types::{ShortcutSettings, UpdateAvailablePayload};
@@ -332,6 +352,7 @@ mod tests {
         assert_eq!(TRAY_CANCEL, "tray-cancel");
         assert_eq!(UPDATE_AVAILABLE, "tauri://update-available");
         assert_eq!(ENGINE_TICK, "engine-tick");
+        assert_eq!(SYSTEM_SUSPENDED, "system-suspended");
     }
 
     /// `listen<T>` short-circuits with `BridgeError::BridgeUnavailable`

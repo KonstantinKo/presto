@@ -111,6 +111,21 @@ const ICON_OPTIONS: &[&str] = &[
 /// raw glyph for `tags.spec.js:17` parity.
 const DEFAULT_NEW_TAG_ICON: &str = "ri-brain-line";
 
+struct FixedClock(i64);
+
+impl Clock for FixedClock {
+    fn now_ms(&self) -> i64 {
+        self.0
+    }
+}
+
+const fn system_pause_enabled(settings: &Settings, reason: events::SystemPauseReason) -> bool {
+    match reason {
+        events::SystemPauseReason::LockScreen => settings.advanced.pause_on_lock_screen,
+        events::SystemPauseReason::SystemSuspension => settings.advanced.pause_on_system_suspension,
+    }
+}
+
 /// Project the engine's `TimerMode` to the JS-era status-text label.
 /// Mirrors the JS-side branch at `src/managers/navigation-manager.js`
 /// where the badge text is `"Focus" / "Break" / "Long Break"`. The
@@ -1786,6 +1801,43 @@ pub fn TimerView() -> impl IntoView {
                 (RunState::Running, true) | (RunState::Paused, _) => on_complete(synth),
             }
         })
+        .await;
+        if let Ok(guard) = listener {
+            let _ = Box::leak(Box::new(guard));
+        }
+    });
+
+    // Native lock / sleep detection feeds one pause path. Suspension arrives
+    // after wake, so backend supplies a pre-gap timestamp to exclude sleep.
+    spawn_local(async move {
+        let listener = events::listen::<events::SystemSuspendedPayload>(
+            events::SYSTEM_SUSPENDED,
+            move |payload| {
+                let enabled = settings.with_untracked(|s| system_pause_enabled(s, payload.reason));
+                if !enabled {
+                    return;
+                }
+                let clock = FixedClock(payload.paused_at_ms);
+                let events = engine
+                    .try_update(|state| {
+                        if state.is_running() {
+                            state.pause(&clock).unwrap_or_default()
+                        } else {
+                            Vec::new()
+                        }
+                    })
+                    .unwrap_or_default();
+                handle_events(
+                    &events,
+                    &settings.get_untracked(),
+                    app_toast,
+                    warning_signal,
+                    i18n,
+                );
+                apply_tag_tracking_events(&events, active_session_tags, selected_tag_ids);
+                dispatch_tray_update(engine, settings, true);
+            },
+        )
         .await;
         if let Ok(guard) = listener {
             let _ = Box::leak(Box::new(guard));
@@ -3495,8 +3547,11 @@ fn dot_count(total: u32) -> u32 {
 mod tests {
     use super::{
         dot_count, indicator_icon_class, mode_label, mode_label_with_status, pad_two,
-        skip_icon_for_mode, PlayPauseButtonState, SkipButtonState, ICON_OPTIONS,
+        skip_icon_for_mode, system_pause_enabled, PlayPauseButtonState, SkipButtonState,
+        ICON_OPTIONS,
     };
+    use crate::bridge::events::SystemPauseReason;
+    use crate::bridge::types::Settings;
     use crate::bridge::types::TimerMode;
 
     /// T191 — visual-regression / selector contract pin.
@@ -3591,6 +3646,35 @@ mod tests {
             );
             seen.push(id);
         }
+    }
+
+    #[test]
+    fn system_pause_enabled_uses_matching_advanced_toggle() {
+        let mut settings = Settings::default();
+        assert!(system_pause_enabled(
+            &settings,
+            SystemPauseReason::LockScreen,
+        ));
+        assert!(system_pause_enabled(
+            &settings,
+            SystemPauseReason::SystemSuspension,
+        ));
+
+        settings.advanced.pause_on_lock_screen = false;
+        assert!(!system_pause_enabled(
+            &settings,
+            SystemPauseReason::LockScreen,
+        ));
+        assert!(system_pause_enabled(
+            &settings,
+            SystemPauseReason::SystemSuspension,
+        ));
+
+        settings.advanced.pause_on_system_suspension = false;
+        assert!(!system_pause_enabled(
+            &settings,
+            SystemPauseReason::SystemSuspension,
+        ));
     }
 
     /// T191 first-paint pin: the smoke spec asserts the initial

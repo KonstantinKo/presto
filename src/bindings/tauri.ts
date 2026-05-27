@@ -276,7 +276,7 @@ async dialogAsk(message: string, title: string) : Promise<Result<boolean, Bridge
 /**
  * Advanced / debug toggles.
  */
-export type AdvancedSettings = { debug_mode?: boolean }
+export type AdvancedSettings = { debug_mode?: boolean; pause_on_lock_screen?: boolean; pause_on_system_suspension?: boolean }
 /**
  * Ambient-sound track selection (feature 004).
  * 

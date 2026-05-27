@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::sync::{Arc, LazyLock, Mutex};
 use std::thread;
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::TrayIconBuilder;
 use tauri::{Emitter, Manager};
@@ -54,6 +54,21 @@ static ACTIVITY_MONITOR: Mutex<Option<ActivityMonitor>> = Mutex::new(None);
 
 static SHORTCUT_DEBOUNCE: LazyLock<Mutex<HashMap<String, Instant>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
+
+const SUSPEND_TICK_GAP_MS: i64 = 5_000;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "kebab-case")]
+enum SystemPauseReason {
+    LockScreen,
+    SystemSuspension,
+}
+
+#[derive(Clone, Copy, serde::Serialize)]
+struct SystemSuspendedPayload {
+    paused_at_ms: i64,
+    reason: SystemPauseReason,
+}
 
 struct ActivityMonitor {
     #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
@@ -386,6 +401,102 @@ fn emit_tray_event(app: &AppHandle, event: &str) {
 
 fn tray_menu_action_requires_focus(action_id: &str) -> bool {
     matches!(action_id, "quick_log" | "distraction")
+}
+
+fn unix_time_ms() -> i64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_or(0, |duration| {
+            i64::try_from(duration.as_millis()).unwrap_or(i64::MAX)
+        })
+}
+
+fn emit_system_suspended(app: &AppHandle, paused_at_ms: i64, reason: SystemPauseReason) {
+    let payload = SystemSuspendedPayload {
+        paused_at_ms,
+        reason,
+    };
+    if let Err(e) = app.emit("system-suspended", payload) {
+        log::warn!("system-suspended emit failed: {e}");
+    }
+}
+
+fn system_pause_reason_for_tick(
+    was_screen_locked: bool,
+    is_screen_locked: bool,
+    elapsed_since_last_tick_ms: i64,
+) -> Option<SystemPauseReason> {
+    if is_screen_locked {
+        return (!was_screen_locked).then_some(SystemPauseReason::LockScreen);
+    }
+    (elapsed_since_last_tick_ms > SUSPEND_TICK_GAP_MS)
+        .then_some(SystemPauseReason::SystemSuspension)
+}
+
+#[cfg(not(target_os = "macos"))]
+const fn macos_screen_locked() -> bool {
+    false
+}
+
+#[cfg(target_os = "macos")]
+#[allow(unsafe_code)]
+fn macos_screen_locked() -> bool {
+    use std::ffi::{c_char, c_void};
+    use std::ptr;
+
+    type CfTypeRef = *const c_void;
+    type CfStringRef = *const c_void;
+    type CfDictionaryRef = *const c_void;
+
+    #[link(name = "ApplicationServices", kind = "framework")]
+    extern "C" {
+        fn CGSessionCopyCurrentDictionary() -> CfDictionaryRef;
+    }
+
+    #[link(name = "CoreFoundation", kind = "framework")]
+    extern "C" {
+        fn CFStringCreateWithCString(
+            alloc: CfTypeRef,
+            c_str: *const c_char,
+            encoding: u32,
+        ) -> CfStringRef;
+        fn CFDictionaryGetValueIfPresent(
+            dict: CfDictionaryRef,
+            key: CfTypeRef,
+            value: *mut CfTypeRef,
+        ) -> u8;
+        fn CFBooleanGetValue(boolean: CfTypeRef) -> u8;
+        fn CFRelease(value: CfTypeRef);
+    }
+
+    const K_CFSTRING_ENCODING_UTF8: u32 = 0x0800_0100;
+
+    // SAFETY: CoreGraphics returns a retained session dictionary or null.
+    // CoreFoundation key is released before return; dictionary owns value lifetime.
+    unsafe {
+        let dict = CGSessionCopyCurrentDictionary();
+        if dict.is_null() {
+            return false;
+        }
+
+        let key = CFStringCreateWithCString(
+            ptr::null(),
+            c"CGSSessionScreenIsLocked".as_ptr(),
+            K_CFSTRING_ENCODING_UTF8,
+        );
+        if key.is_null() {
+            CFRelease(dict);
+            return false;
+        }
+
+        let mut value: CfTypeRef = ptr::null();
+        let found = CFDictionaryGetValueIfPresent(dict, key, &raw mut value);
+        let locked = found != 0 && !value.is_null() && CFBooleanGetValue(value) != 0;
+
+        CFRelease(key);
+        CFRelease(dict);
+        locked
+    }
 }
 
 fn show_app_window_then_emit_tray_event(app: &AppHandle, event: &str) {
@@ -794,15 +905,46 @@ pub fn run() {
                 // `crossed_second` gate around the metronome, so
                 // overlapping fires are idempotent.
                 let tick_handle = app.handle().clone();
-                thread::spawn(move || loop {
-                    thread::sleep(Duration::from_secs(1));
-                    if let Err(e) = tick_handle.emit("engine-tick", ()) {
-                        log::warn!(
-                            "engine-tick thread exiting; emit failed: {e}. \
-                                 Frontend setInterval driver remains, but the 1Hz \
-                                 cadence will degrade if the window is unfocused."
-                        );
-                        break;
+                thread::spawn(move || {
+                    let mut last_tick_ms = unix_time_ms();
+                    let mut was_screen_locked = macos_screen_locked();
+                    loop {
+                        thread::sleep(Duration::from_secs(1));
+                        let now_ms = unix_time_ms();
+                        let is_screen_locked = macos_screen_locked();
+                        let elapsed_since_last_tick_ms = now_ms.saturating_sub(last_tick_ms);
+                        if let Some(reason) = system_pause_reason_for_tick(
+                            was_screen_locked,
+                            is_screen_locked,
+                            elapsed_since_last_tick_ms,
+                        ) {
+                            let paused_at_ms = match reason {
+                                SystemPauseReason::LockScreen => now_ms,
+                                SystemPauseReason::SystemSuspension => {
+                                    last_tick_ms.saturating_add(1_000)
+                                }
+                            };
+                            emit_system_suspended(&tick_handle, paused_at_ms, reason);
+                        }
+                        if is_screen_locked {
+                            was_screen_locked = true;
+                            last_tick_ms = now_ms;
+                            continue;
+                        }
+                        was_screen_locked = false;
+                        if elapsed_since_last_tick_ms > SUSPEND_TICK_GAP_MS {
+                            last_tick_ms = now_ms;
+                            continue;
+                        }
+                        last_tick_ms = now_ms;
+                        if let Err(e) = tick_handle.emit("engine-tick", ()) {
+                            log::warn!(
+                                "engine-tick thread exiting; emit failed: {e}. \
+                                     Frontend setInterval driver remains, but the 1Hz \
+                                     cadence will degrade if the window is unfocused."
+                            );
+                            break;
+                        }
                     }
                 });
 
@@ -1343,9 +1485,9 @@ fn set_dock_visibility_native(visible: bool) {
 #[cfg(test)]
 mod tests {
     use super::{
-        default_weekly_goal, tray_menu_action_requires_focus, tray_menu_presentation, AppSettings,
-        ManualSession, PomodoroSession, SessionTag, StatusBarDisplay, Tag, Task,
-        TrayMenuPresentation,
+        default_weekly_goal, system_pause_reason_for_tick, tray_menu_action_requires_focus,
+        tray_menu_presentation, AppSettings, ManualSession, PomodoroSession, SessionTag,
+        StatusBarDisplay, SystemPauseReason, Tag, Task, TrayMenuPresentation, SUSPEND_TICK_GAP_MS,
     };
 
     #[test]
@@ -1465,6 +1607,35 @@ mod tests {
                 right_text: "Complete",
                 right_enabled: true,
             },
+        );
+    }
+
+    #[test]
+    fn system_pause_reason_detects_lock_transition_only_once() {
+        assert_eq!(
+            system_pause_reason_for_tick(false, true, 1_000),
+            Some(SystemPauseReason::LockScreen),
+        );
+        assert_eq!(system_pause_reason_for_tick(true, true, 1_000), None);
+    }
+
+    #[test]
+    fn system_pause_reason_detects_suspend_gap_when_unlocked() {
+        assert_eq!(
+            system_pause_reason_for_tick(false, false, SUSPEND_TICK_GAP_MS + 1),
+            Some(SystemPauseReason::SystemSuspension),
+        );
+        assert_eq!(
+            system_pause_reason_for_tick(false, false, SUSPEND_TICK_GAP_MS),
+            None,
+        );
+    }
+
+    #[test]
+    fn system_pause_reason_lock_wins_over_gap() {
+        assert_eq!(
+            system_pause_reason_for_tick(false, true, SUSPEND_TICK_GAP_MS + 1),
+            Some(SystemPauseReason::LockScreen),
         );
     }
 
