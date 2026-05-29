@@ -488,9 +488,7 @@ pub fn App() -> impl IntoView {
         // `sessions` signal is appended to by TimerView's tick
         // closure on `PomodoroCompleted` events. The Effect re-runs
         // on every push and persists the full bulk list via
-        // `bridge::commands::save_manual_sessions`. Like the
-        // settings sink, the first effect run is skipped so the
-        // load → save cycle doesn't tail-chase.
+        // `bridge::commands::save_manual_sessions`.
         //
         // Manual session CRUD also runs through this signal (the
         // CalendarView add/edit/delete handlers update the same
@@ -499,12 +497,19 @@ pub fn App() -> impl IntoView {
         // backfills. Bulk-rewrite matches the JS-era
         // `saveSessionsToStorage` flow at
         // `src/managers/session-manager.js:54-78`.
-        let sessions_first_run = std::rc::Rc::new(std::cell::Cell::new(true));
+        //
+        // Hydration guard: the cold-start load below fires the Effect
+        // while `sessions_hydrated` is still false, so we update
+        // `sessions_prev_len` without writing back to disk. Without
+        // this guard, a disk load of exactly 1 session would be
+        // misclassified as an incremental append (new_len == 0+1)
+        // and duplicate-write via `append_manual_session`.
+        let sessions_hydrated = std::rc::Rc::new(std::cell::Cell::new(false));
+        let sessions_hydrated_effect = sessions_hydrated.clone();
         let sessions_prev_len = std::rc::Rc::new(std::cell::Cell::new(0_usize));
         Effect::new(move |_| {
             let snapshot = sessions.get();
-            if sessions_first_run.get() {
-                sessions_first_run.set(false);
+            if !sessions_hydrated_effect.get() {
                 sessions_prev_len.set(snapshot.len());
                 return;
             }
@@ -531,11 +536,12 @@ pub fn App() -> impl IntoView {
         // CalendarView / TagsView starting state matches disk.
         spawn_local(async move {
             if let Ok(loaded) = commands::load_manual_sessions().await {
-                // Bypass the persistence sink's first-run guard by
-                // setting before any user mutation lands. The Effect
-                // above sees this as the FIRST signal value and skips
-                // the round-trip back to disk.
                 sessions.set(loaded);
+                // Mark hydration complete after the signal set so the
+                // Effect above sees hydrated=false during the disk load
+                // and skips persistence. Subsequent user-driven mutations
+                // see hydrated=true and use the append or bulk-save paths.
+                sessions_hydrated.set(true);
             }
         });
         // R-004: cold-start session-data hydration. Restores the
