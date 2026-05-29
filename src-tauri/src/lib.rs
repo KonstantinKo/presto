@@ -669,6 +669,16 @@ async fn load_manual_sessions(app: AppHandle) -> Result<Vec<ManualSession>, Brid
     helpers::read_manual_sessions_from(&app_data_dir).map_err(BridgeError::from)
 }
 
+#[tauri::command]
+#[specta::specta]
+async fn append_manual_session(
+    session: ManualSession,
+    app: AppHandle,
+) -> Result<(), BridgeError> {
+    let app_data_dir = get_app_data_dir(&app)?;
+    helpers::append_manual_session_in(&app_data_dir, session).map_err(BridgeError::from)
+}
+
 // ── Feature 006: Quick logs + Distractions ──────────────────────────────────
 //
 // Tauri boundary-validation per FR-022 lives in two pure helpers
@@ -801,12 +811,14 @@ pub fn build_specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         is_autostart_enabled,
         save_manual_sessions,
         load_manual_sessions,
+        append_manual_session,
         save_quick_logs,
         load_quick_logs,
         save_distractions,
         load_distractions,
         load_tags,
         save_tag,
+        save_tags_bulk,
         delete_tag,
         add_session_tag,
         export_sessions_xlsx,
@@ -1102,6 +1114,13 @@ async fn load_tags(app: AppHandle) -> Result<Vec<Tag>, BridgeError> {
 async fn save_tag(tag: Tag, app: AppHandle) -> Result<(), BridgeError> {
     let app_data_dir = get_app_data_dir(&app)?;
     helpers::upsert_tag_in(&app_data_dir, tag).map_err(BridgeError::from)
+}
+
+#[tauri::command]
+#[specta::specta]
+async fn save_tags_bulk(tags: Vec<Tag>, app: AppHandle) -> Result<(), BridgeError> {
+    let app_data_dir = get_app_data_dir(&app)?;
+    helpers::write_tags_to(&app_data_dir, &tags).map_err(BridgeError::from)
 }
 
 #[tauri::command]

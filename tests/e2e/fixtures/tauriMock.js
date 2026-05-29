@@ -99,9 +99,28 @@ const TAURI_MOCK_INIT_SCRIPT = `
             return;
           }
 
+          case "save_tags_bulk": {
+            var bulkTags = args && args.tags;
+            if (bulkTags) {
+              _state.tags = Array.isArray(bulkTags) ? bulkTags.slice() : Array.from(bulkTags);
+            }
+            return;
+          }
+
           case "delete_tag": {
             var tagId = args && args.tag_id;
             _state.tags = _getTags().filter(function (t) { return t.id !== tagId; });
+            return;
+          }
+
+          case "append_manual_session": {
+            var newSession = args && args.session;
+            if (newSession) {
+              _state.manualSessions.push(newSession);
+              if (_state.manualSessions.length > 1000) {
+                _state.manualSessions = _state.manualSessions.slice(-1000);
+              }
+            }
             return;
           }
 

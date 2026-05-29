@@ -165,6 +165,14 @@ async loadManualSessions() : Promise<Result<ManualSession[], BridgeError>> {
     else return { status: "error", error: e  as any };
 }
 },
+async appendManualSession(session: ManualSession) : Promise<Result<null, BridgeError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("append_manual_session", { session }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
 async saveQuickLogs(quickLogs: QuickLog[]) : Promise<Result<null, BridgeError>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("save_quick_logs", { quickLogs }) };
@@ -208,6 +216,14 @@ async loadTags() : Promise<Result<Tag[], BridgeError>> {
 async saveTag(tag: Tag) : Promise<Result<null, BridgeError>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("save_tag", { tag }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async saveTagsBulk(tags: Tag[]) : Promise<Result<null, BridgeError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("save_tags_bulk", { tags }) };
 } catch (e) {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };

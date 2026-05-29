@@ -254,6 +254,22 @@ pub async fn save_manual_sessions(sessions: Vec<ManualSession>) -> Result<(), Br
     invoke_named_arg("save_manual_sessions", "sessions", sessions).await
 }
 
+/// Append a single completed session. Tauri-side handler:
+/// `append_manual_session(session: ManualSession) -> Result<(), BridgeError>`.
+///
+/// More efficient than `save_manual_sessions` for the timer-completion path —
+/// reads the current list, pushes one entry, and writes back, rather than
+/// bulk-rewriting a list that grows by one per pomodoro. The Tauri side caps
+/// the list at 1,000 entries to bound file growth.
+///
+/// # Errors
+/// Returns `BridgeError::BridgeUnavailable` when the Tauri JS bridge is
+/// not present. Otherwise returns whatever variant the Tauri-side handler
+/// maps its filesystem failure to (typically `BridgeError::Internal`).
+pub async fn append_manual_session(session: ManualSession) -> Result<(), BridgeError> {
+    invoke_named_arg("append_manual_session", "session", session).await
+}
+
 /// Read the persisted manual-session entries. Tauri-side handler:
 /// `load_manual_sessions() -> Result<Vec<ManualSession>, BridgeError>`
 /// at `src-tauri/src/lib.rs:755`.
@@ -356,6 +372,20 @@ pub async fn load_distractions() -> Result<Vec<Distraction>, BridgeError> {
 /// maps its filesystem failure to (typically `BridgeError::Internal`).
 pub async fn load_tags() -> Result<Vec<Tag>, BridgeError> {
     invoke_serde("load_tags", &serde_json::Value::Null).await
+}
+
+/// Persist the full tag list in a single atomic write. Tauri-side handler:
+/// `save_tags_bulk(tags: Vec<Tag>) -> Result<(), BridgeError>`.
+///
+/// Replaces the per-tag `save_tag` loop in the tags Effect with a single
+/// IPC call — N calls → 1 call per mutation.
+///
+/// # Errors
+/// Returns `BridgeError::BridgeUnavailable` when the Tauri JS bridge is
+/// not present. Otherwise returns whatever variant the Tauri-side handler
+/// maps its filesystem failure to (typically `BridgeError::Internal`).
+pub async fn save_tags_bulk(tags: Vec<Tag>) -> Result<(), BridgeError> {
+    invoke_named_arg("save_tags_bulk", "tags", tags).await
 }
 
 /// Persist (insert or update) a single tag. Tauri-side handler:
@@ -880,13 +910,13 @@ pub async fn dialog_save(
 #[cfg(all(test, target_arch = "wasm32"))]
 mod tests {
     use super::{
-        add_session_tag, delete_tag, dialog_save, disable_autostart, enable_autostart,
-        export_sessions_xlsx, get_stats_history, is_autostart_enabled, load_distractions,
-        load_manual_sessions, load_quick_logs, load_session_data, load_settings, load_tags,
-        load_tasks, register_global_shortcuts, reset_all_data, save_daily_stats, save_distractions,
-        save_manual_sessions, save_quick_logs, save_session_data, save_settings, save_tag,
-        save_tasks, start_activity_monitoring, stop_activity_monitoring, update_activity_timeout,
-        update_tray_icon, update_tray_menu,
+        add_session_tag, append_manual_session, delete_tag, dialog_save, disable_autostart,
+        enable_autostart, export_sessions_xlsx, get_stats_history, is_autostart_enabled,
+        load_distractions, load_manual_sessions, load_quick_logs, load_session_data, load_settings,
+        load_tags, load_tasks, register_global_shortcuts, reset_all_data, save_daily_stats,
+        save_distractions, save_manual_sessions, save_quick_logs, save_session_data, save_settings,
+        save_tag, save_tags_bulk, save_tasks, start_activity_monitoring, stop_activity_monitoring,
+        update_activity_timeout, update_tray_icon, update_tray_menu,
     };
     use crate::bridge::types::BridgeError;
     use crate::bridge::types::SessionType;

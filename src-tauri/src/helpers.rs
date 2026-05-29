@@ -261,6 +261,24 @@ pub(super) fn write_manual_sessions_to(
     write_json_atomic(&dir.join("manual_sessions.json"), sessions)
 }
 
+/// Appends `session` to `manual_sessions.json`, trimming the oldest entries
+/// when the list exceeds `MAX_MANUAL_SESSIONS` to bound file growth.
+///
+/// The append-then-cap pattern keeps the hot timer-completion path from
+/// issuing an ever-growing bulk rewrite on every pomodoro.
+pub(super) fn append_manual_session_in(
+    dir: &Path,
+    session: super::ManualSession,
+) -> Result<(), String> {
+    const MAX_MANUAL_SESSIONS: usize = 1_000;
+    let mut sessions = read_manual_sessions_from(dir)?;
+    sessions.push(session);
+    if sessions.len() > MAX_MANUAL_SESSIONS {
+        sessions.drain(..sessions.len() - MAX_MANUAL_SESSIONS);
+    }
+    write_manual_sessions_to(dir, &sessions)
+}
+
 // ── Quick logs ────────────────────────────────────────────────────────────────
 
 /// Reads `quick_logs.json` from `dir`, returning an empty vec when absent.

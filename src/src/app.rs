@@ -500,15 +500,30 @@ pub fn App() -> impl IntoView {
         // `saveSessionsToStorage` flow at
         // `src/managers/session-manager.js:54-78`.
         let sessions_first_run = std::rc::Rc::new(std::cell::Cell::new(true));
+        let sessions_prev_len = std::rc::Rc::new(std::cell::Cell::new(0_usize));
         Effect::new(move |_| {
             let snapshot = sessions.get();
             if sessions_first_run.get() {
                 sessions_first_run.set(false);
+                sessions_prev_len.set(snapshot.len());
                 return;
             }
-            spawn_local(async move {
-                let _ = commands::save_manual_sessions(snapshot).await;
-            });
+            let prev_len = sessions_prev_len.get();
+            let new_len = snapshot.len();
+            sessions_prev_len.set(new_len);
+            // When the list grows by exactly one, a pomodoro just completed —
+            // use the lighter append path instead of bulk-rewriting the full list.
+            if new_len == prev_len + 1 {
+                if let Some(session) = snapshot.into_iter().last() {
+                    spawn_local(async move {
+                        let _ = commands::append_manual_session(session).await;
+                    });
+                }
+            } else {
+                spawn_local(async move {
+                    let _ = commands::save_manual_sessions(snapshot).await;
+                });
+            }
         });
 
         // Phase 4e R-004: cold-start hydration for session/tag lists.
@@ -592,12 +607,7 @@ pub fn App() -> impl IntoView {
                 return;
             }
             spawn_local(async move {
-                // Per-tag save: iterate the list and re-save each.
-                // The Tauri-side handler is idempotent on id so a
-                // re-save of an unchanged tag is a no-op.
-                for tag in snapshot {
-                    let _ = commands::save_tag(tag).await;
-                }
+                let _ = commands::save_tags_bulk(snapshot).await;
             });
         });
 
