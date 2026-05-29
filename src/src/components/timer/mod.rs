@@ -1358,9 +1358,8 @@ pub fn TimerView() -> impl IntoView {
         engine.with(|s| RunState::from_engine(s.is_running(), s.is_paused(), s.is_auto_paused()))
     });
 
-    let is_overtime_running = Signal::derive(move || {
-        matches!(run_state.get(), RunState::Running) && is_overtime.get()
-    });
+    let is_overtime_running =
+        Signal::derive(move || matches!(run_state.get(), RunState::Running) && is_overtime.get());
 
     let play_pause_btn_state = Signal::derive(move || {
         engine.with(|s| {
