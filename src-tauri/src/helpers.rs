@@ -561,18 +561,18 @@ mod tests {
     use super::{
         append_daily_stats_to, append_manual_session_in, append_session_tag_in, delete_all_data_in,
         delete_tag_in, is_debounced, read_distractions_from, read_history_from,
-        read_manual_sessions_from, read_quick_logs_from, read_session_from,
-        read_session_tags_from, read_settings_from, read_tags_from, read_tasks_from, upsert_tag_in,
-        write_distractions_to, write_manual_sessions_to, write_quick_logs_to,
-        write_session_tags_to, write_session_to, write_settings_to, write_tags_to, write_tasks_to,
+        read_manual_sessions_from, read_quick_logs_from, read_session_from, read_session_tags_from,
+        read_settings_from, read_tags_from, read_tasks_from, upsert_tag_in, write_distractions_to,
+        write_manual_sessions_to, write_quick_logs_to, write_session_tags_to, write_session_to,
+        write_settings_to, write_tags_to, write_tasks_to,
     };
     use std::collections::HashMap;
     use std::time::{Duration, Instant};
 
     // Re-use parent-module types (private to lib.rs but accessible from descendants).
     use super::super::{
-        AppSettings, Distraction, ManualSession, PomodoroSession, QuickLog, SessionTag, SessionType,
-        Tag, Task,
+        AppSettings, Distraction, ManualSession, PomodoroSession, QuickLog, SessionTag,
+        SessionType, Tag, Task,
     };
 
     // ── helpers::is_debounced (pre-existing) ──────────────────────────────────
