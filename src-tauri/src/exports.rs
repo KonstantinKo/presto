@@ -34,7 +34,7 @@ const fn session_type_to_str(session_type: super::SessionType) -> &'static str {
     }
 }
 
-fn joined_tag_names(tags: Option<&Vec<serde_json::Value>>) -> String {
+fn joined_tag_names(tags: Option<&[serde_json::Value]>) -> String {
     tags.map(|values| {
         values
             .iter()
@@ -94,7 +94,7 @@ pub(super) fn export(path: &Path, sessions: &[ManualSession]) -> Result<(), Brid
             msg: format!("xlsx row index overflow: {e}"),
         })?;
         let session_type_str = session_type_to_str(session.session_type);
-        let tags_joined = joined_tag_names(session.tags.as_ref());
+        let tags_joined = joined_tag_names(session.tags.as_deref());
         sheet
             .write_string(row, 0, &session.id)
             .and_then(|s| s.write_string(row, 1, session_type_str))
@@ -129,7 +129,7 @@ pub(super) fn export_csv(path: &Path, sessions: &[ManualSession]) -> Result<(), 
     );
     for session in sessions {
         let session_type_str = session_type_to_str(session.session_type);
-        let tags_joined = joined_tag_names(session.tags.as_ref());
+        let tags_joined = joined_tag_names(session.tags.as_deref());
         let title = session.title.as_deref().unwrap_or("");
         let notes = session.notes.as_deref().unwrap_or("");
         let row = [

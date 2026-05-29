@@ -108,8 +108,9 @@ pub(super) fn read_session_from(dir: &Path) -> Result<Option<super::PomodoroSess
     let mut session: super::PomodoroSession =
         serde_json::from_str(&content).map_err(|e| format!("Failed to parse session: {e}"))?;
 
-    let today_legacy = chrono::Local::now().format("%a %b %d %Y").to_string();
-    let today_iso = chrono::Local::now().format("%Y-%m-%d").to_string();
+    let now = chrono::Local::now();
+    let today_legacy = now.format("%a %b %d %Y").to_string();
+    let today_iso = now.format("%Y-%m-%d").to_string();
 
     let is_same_day = session.date == today_legacy
         || session.date == today_iso
@@ -159,14 +160,33 @@ pub(super) fn write_tasks_to(dir: &Path, tasks: &[super::Task]) -> Result<(), St
 // ── History ───────────────────────────────────────────────────────────────────
 
 /// Reads `history.json` from `dir`, returning an empty vec when absent.
+///
+/// On corrupt JSON, rescues the file by renaming it to `history.json.corrupt`
+/// so the next `append_daily_stats_to` does not silently clobber the user's
+/// data, then returns an empty vec.
 pub(super) fn read_history_from(dir: &Path) -> Result<Vec<super::PomodoroSession>, String> {
     let history_path = dir.join("history.json");
     if !history_path.exists() {
         return Ok(Vec::new());
     }
-    let content = fs::read_to_string(history_path)
+    let content = fs::read_to_string(&history_path)
         .map_err(|e| format!("Failed to read history file: {e}"))?;
-    serde_json::from_str(&content).map_err(|e| format!("Failed to parse history: {e}"))
+    match serde_json::from_str(&content) {
+        Ok(h) => Ok(h),
+        Err(e) => {
+            let corrupt_path = history_path.with_extension("json.corrupt");
+            match fs::rename(&history_path, &corrupt_path) {
+                Ok(()) => log::warn!(
+                    "history.json could not be parsed, preserved as {}: {e}",
+                    corrupt_path.display()
+                ),
+                Err(rename_err) => log::warn!(
+                    "history.json could not be parsed and rename to .corrupt failed ({rename_err}): {e}"
+                ),
+            }
+            Ok(Vec::new())
+        }
+    }
 }
 
 /// Converts a date string to canonical ISO `"%Y-%m-%d"` format.
@@ -196,28 +216,7 @@ pub(super) fn append_daily_stats_to(
     fs::create_dir_all(dir).map_err(|e| format!("Failed to create directory: {e}"))?;
     let history_path = dir.join("history.json");
 
-    let mut history: Vec<super::PomodoroSession> = if history_path.exists() {
-        let content = fs::read_to_string(&history_path)
-            .map_err(|e| format!("Failed to read history: {e}"))?;
-        match serde_json::from_str(&content) {
-            Ok(h) => h,
-            Err(e) => {
-                let corrupt_path = history_path.with_extension("json.corrupt");
-                match fs::rename(&history_path, &corrupt_path) {
-                    Ok(()) => log::warn!(
-                        "history.json could not be parsed, preserved as {}: {e}",
-                        corrupt_path.display()
-                    ),
-                    Err(rename_err) => log::warn!(
-                        "history.json could not be parsed and rename to .corrupt failed ({rename_err}): {e}"
-                    ),
-                }
-                Vec::new()
-            }
-        }
-    } else {
-        Vec::new()
-    };
+    let mut history = read_history_from(dir)?;
 
     for entry in &mut history {
         entry.date = normalize_date(&entry.date);
@@ -708,6 +707,16 @@ mod tests {
         let dir = tempfile::tempdir().expect("tempdir");
         let result = read_history_from(dir.path()).expect("read");
         assert!(result.is_empty());
+    }
+
+    #[test]
+    fn history_corrupt_json_is_renamed_and_returns_empty() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        std::fs::write(dir.path().join("history.json"), b"not json").expect("write corrupt file");
+        let result = read_history_from(dir.path()).expect("read");
+        assert!(result.is_empty());
+        assert!(dir.path().join("history.json.corrupt").exists());
+        assert!(!dir.path().join("history.json").exists());
     }
 
     #[test]
