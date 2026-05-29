@@ -283,12 +283,16 @@ pub(super) fn append_manual_session_in(
 
 /// Reads `quick_logs.json` from `dir`, returning an empty vec when absent.
 ///
+/// Trims to the most recent `MAX_QUICK_LOGS` entries on load so cold-start
+/// memory is bounded even if the file grew large before the cap was added.
+///
 /// On corrupt JSON, rescues the file by renaming it to `quick_logs.json.corrupt`
 /// (matching the `history.json` convention in `append_daily_stats_to`) so the
 /// next save does not silently clobber the user's data, then returns an empty
 /// vec. The `serde_json::Error` text is logged but never persisted on the
 /// wire — feeds AG-10's PII-safety contract.
 pub(super) fn read_quick_logs_from(dir: &Path) -> Result<Vec<super::QuickLog>, String> {
+    const MAX_QUICK_LOGS: usize = 1_000;
     let file_path = dir.join("quick_logs.json");
     if !file_path.exists() {
         return Ok(Vec::new());
@@ -298,8 +302,13 @@ pub(super) fn read_quick_logs_from(dir: &Path) -> Result<Vec<super::QuickLog>, S
     if content.trim().is_empty() || content.trim() == "null" {
         return Ok(Vec::new());
     }
-    match serde_json::from_str(&content) {
-        Ok(logs) => Ok(logs),
+    match serde_json::from_str::<Vec<super::QuickLog>>(&content) {
+        Ok(mut logs) => {
+            if logs.len() > MAX_QUICK_LOGS {
+                logs.drain(..logs.len() - MAX_QUICK_LOGS);
+            }
+            Ok(logs)
+        }
         Err(e) => {
             let corrupt_path = file_path.with_extension("json.corrupt");
             match fs::rename(&file_path, &corrupt_path) {
@@ -327,11 +336,15 @@ pub(super) fn write_quick_logs_to(dir: &Path, logs: &[super::QuickLog]) -> Resul
 
 /// Reads `distractions.json` from `dir`, returning an empty vec when absent.
 ///
+/// Trims to the most recent `MAX_DISTRACTIONS` entries on load so cold-start
+/// memory is bounded even if the file grew large before the cap was added.
+///
 /// On corrupt JSON, rescues the file by renaming it to
 /// `distractions.json.corrupt` (matching the `history.json` convention in
 /// `append_daily_stats_to`) so the next save does not silently clobber the
 /// user's data, then returns an empty vec.
 pub(super) fn read_distractions_from(dir: &Path) -> Result<Vec<super::Distraction>, String> {
+    const MAX_DISTRACTIONS: usize = 1_000;
     let file_path = dir.join("distractions.json");
     if !file_path.exists() {
         return Ok(Vec::new());
@@ -341,8 +354,13 @@ pub(super) fn read_distractions_from(dir: &Path) -> Result<Vec<super::Distractio
     if content.trim().is_empty() || content.trim() == "null" {
         return Ok(Vec::new());
     }
-    match serde_json::from_str(&content) {
-        Ok(entries) => Ok(entries),
+    match serde_json::from_str::<Vec<super::Distraction>>(&content) {
+        Ok(mut entries) => {
+            if entries.len() > MAX_DISTRACTIONS {
+                entries.drain(..entries.len() - MAX_DISTRACTIONS);
+            }
+            Ok(entries)
+        }
         Err(e) => {
             let corrupt_path = file_path.with_extension("json.corrupt");
             match fs::rename(&file_path, &corrupt_path) {
@@ -443,13 +461,18 @@ pub(super) fn write_session_tags_to(
     write_json_atomic(&dir.join("session_tags.json"), session_tags)
 }
 
-/// Appends `session_tag` to `session_tags.json`.
+/// Appends `session_tag` to `session_tags.json`, trimming the oldest entries
+/// when the list exceeds `MAX_SESSION_TAGS` to bound file growth.
 pub(super) fn append_session_tag_in(
     dir: &Path,
     session_tag: super::SessionTag,
 ) -> Result<(), String> {
+    const MAX_SESSION_TAGS: usize = 5_000;
     let mut session_tags = read_session_tags_from(dir)?;
     session_tags.push(session_tag);
+    if session_tags.len() > MAX_SESSION_TAGS {
+        session_tags.drain(..session_tags.len() - MAX_SESSION_TAGS);
+    }
     write_session_tags_to(dir, &session_tags)
 }
 
@@ -493,15 +516,18 @@ pub(super) fn delete_all_data_in(dir: &Path) -> Result<(), String> {
 mod tests {
     use super::{
         append_daily_stats_to, append_session_tag_in, delete_all_data_in, delete_tag_in,
-        is_debounced, read_history_from, read_session_from, read_session_tags_from,
-        read_settings_from, read_tags_from, read_tasks_from, upsert_tag_in, write_session_to,
-        write_settings_to, write_tags_to, write_tasks_to,
+        is_debounced, read_distractions_from, read_history_from, read_quick_logs_from,
+        read_session_from, read_session_tags_from, read_settings_from, read_tags_from,
+        read_tasks_from, upsert_tag_in, write_distractions_to, write_quick_logs_to,
+        write_session_tags_to, write_session_to, write_settings_to, write_tags_to, write_tasks_to,
     };
     use std::collections::HashMap;
     use std::time::{Duration, Instant};
 
     // Re-use parent-module types (private to lib.rs but accessible from descendants).
-    use super::super::{AppSettings, PomodoroSession, SessionTag, Tag, Task};
+    use super::super::{
+        AppSettings, Distraction, PomodoroSession, QuickLog, SessionTag, Tag, Task,
+    };
 
     // ── helpers::is_debounced (pre-existing) ──────────────────────────────────
 
@@ -867,5 +893,72 @@ mod tests {
         let dir = tempfile::tempdir().expect("tempdir");
         // Should not error even though no files exist.
         delete_all_data_in(dir.path()).expect("delete with no files");
+    }
+
+    // ── Cap tests ─────────────────────────────────────────────────────────────
+
+    fn make_session_tag(n: u32) -> SessionTag {
+        SessionTag {
+            session_id: format!("s-{n}"),
+            tag_id: "t-1".to_string(),
+            duration: 1500,
+            created_at: format!("2024-01-{:02}T00:00:00Z", (n % 28) + 1),
+        }
+    }
+
+    #[test]
+    fn session_tags_cap_trims_to_max_5000() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let tags: Vec<SessionTag> = (0..5_002).map(make_session_tag).collect();
+        write_session_tags_to(dir.path(), &tags).expect("write");
+        // Append one more to trigger the cap.
+        append_session_tag_in(dir.path(), make_session_tag(5_002)).expect("append");
+        let loaded = read_session_tags_from(dir.path()).expect("read");
+        assert_eq!(loaded.len(), 5_000);
+        // Oldest entries are drained; newest is last.
+        assert_eq!(loaded[0].session_id, "s-3");
+        assert_eq!(loaded[4999].session_id, "s-5002");
+    }
+
+    fn make_quick_log(n: u32) -> QuickLog {
+        QuickLog {
+            id: format!("ql-{n}"),
+            title: format!("log {n}"),
+            elapsed_minutes: 25,
+            created_at: format!("2024-01-{:02}T00:00:00Z", (n % 28) + 1),
+            date: "Mon Jan 01 2024".to_string(),
+        }
+    }
+
+    #[test]
+    fn quick_logs_cold_start_cap_trims_to_max_1000() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let logs: Vec<QuickLog> = (0..1_002).map(make_quick_log).collect();
+        write_quick_logs_to(dir.path(), &logs).expect("write");
+        let loaded = read_quick_logs_from(dir.path()).expect("read");
+        assert_eq!(loaded.len(), 1_000);
+        assert_eq!(loaded[0].id, "ql-2");
+        assert_eq!(loaded[999].id, "ql-1001");
+    }
+
+    fn make_distraction(n: u32) -> Distraction {
+        Distraction {
+            id: format!("d-{n}"),
+            note: format!("distraction {n}"),
+            created_at: format!("2024-01-{:02}T00:00:00Z", (n % 28) + 1),
+            date: "Mon Jan 01 2024".to_string(),
+            parent_ref: None,
+        }
+    }
+
+    #[test]
+    fn distractions_cold_start_cap_trims_to_max_1000() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let entries: Vec<Distraction> = (0..1_002).map(make_distraction).collect();
+        write_distractions_to(dir.path(), &entries).expect("write");
+        let loaded = read_distractions_from(dir.path()).expect("read");
+        assert_eq!(loaded.len(), 1_000);
+        assert_eq!(loaded[0].id, "d-2");
+        assert_eq!(loaded[999].id, "d-1001");
     }
 }

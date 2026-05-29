@@ -535,10 +535,7 @@ async fn save_settings(settings: AppSettings, app: AppHandle) -> Result<(), Brid
 #[tauri::command]
 #[specta::specta]
 async fn load_settings(app: AppHandle) -> Result<AppSettings, BridgeError> {
-    let app_data_dir = get_app_data_dir(&app)?;
-    helpers::read_settings_from(&app_data_dir).map_err(|e| BridgeError::Internal {
-        msg: format!("Failed to read settings: {e}"),
-    })
+    Ok(helpers::lock_or_recover(&app.state::<SettingsState>().0).clone())
 }
 
 /// Project a `ShortcutSettings` into the (action, parsed-Shortcut) pairs
