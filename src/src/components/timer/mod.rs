@@ -978,13 +978,18 @@ pub fn TimerView() -> impl IntoView {
     // its presence in `currentTags`. Seeds with the default focus
     // tag so the visual baseline shows the first row pre-highlighted.
     let selected_tag_ids = RwSignal::new(vec!["default-focus".to_string()]);
+    // Memoised tag-ID vec: recomputes only when `tags` changes, not on
+    // every render cycle. Subscribers (e.g. the reconciliation effect
+    // below) skip re-firing when tag names/icons change but IDs don't.
+    let tag_ids: Memo<Vec<String>> =
+        Memo::new(move |_| tags.with(|all| all.iter().map(|t| t.id.clone()).collect()));
     // Reconcile selected_tag_ids against the actual tag list once it
     // loads from context. The seed "default-focus" may not exist in
     // real persisted tags; drop stale ids and fall back to the first
     // available tag so downstream add_session_tag calls always write
     // a valid tag id.
     Effect::new(move |_| {
-        let valid_ids: Vec<String> = tags.with(|all| all.iter().map(|t| t.id.clone()).collect());
+        let valid_ids = tag_ids.get();
         if valid_ids.is_empty() {
             return;
         }
