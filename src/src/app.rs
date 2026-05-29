@@ -535,14 +535,15 @@ pub fn App() -> impl IntoView {
         // Read the persisted bulk lists into the shared signals so the
         // CalendarView / TagsView starting state matches disk.
         spawn_local(async move {
-            if let Ok(loaded) = commands::load_manual_sessions().await {
-                sessions.set(loaded);
-                // Mark hydration complete after the signal set so the
-                // Effect above sees hydrated=false during the disk load
-                // and skips persistence. Subsequent user-driven mutations
-                // see hydrated=true and use the append or bulk-save paths.
-                sessions_hydrated.set(true);
+            match commands::load_manual_sessions().await {
+                Ok(loaded) => sessions.set(loaded),
+                Err(e) => leptos::logging::warn!("load_manual_sessions failed at mount: {:?}", e),
             }
+            // Mark hydration complete regardless of load outcome so the
+            // Effect above sees hydrated=false during the disk load and
+            // skips persistence. Subsequent user-driven mutations see
+            // hydrated=true and use the append or bulk-save paths.
+            sessions_hydrated.set(true);
         });
         // R-004: cold-start session-data hydration. Restores the
         // accumulated pomodoro counter state from disk so the
