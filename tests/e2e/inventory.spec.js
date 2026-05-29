@@ -73,7 +73,27 @@ test("Inventory: renders, edit + delete, deleted-tag placeholder, header + Quick
   await page.locator("#inventory-cancel-quick-log-btn").click();
   await expect(page.locator("#inventory-quick-log-modal-overlay")).toBeHidden();
 
-  // ── 4. Quick-log row Edit opens the edit modal pre-filled ────────
+  // ── 4. Distraction row Edit opens the edit modal pre-filled ──────
+  // (The in-place visible update of the row after Save is governed by
+  // Leptos `<For>` keyed-child semantics — same as quicklog edit.
+  // Assert the modal surface: opens with current note, accepts edits,
+  // closes on Save.)
+  await page
+    .locator('[data-distraction-id="did-seed-1"] .edit-distraction-btn')
+    .click();
+  await expect(page.locator("#inventory-edit-distraction-overlay")).toBeVisible();
+  await expect(page.locator("#inventory-edit-distraction-note-input")).toHaveValue(
+    "Seeded distraction with deleted tag"
+  );
+  await page
+    .locator("#inventory-edit-distraction-note-input")
+    .fill("Updated distraction note");
+  await page
+    .locator("#inventory-edit-distraction-form .btn-primary")
+    .click();
+  await expect(page.locator("#inventory-edit-distraction-overlay")).toBeHidden();
+
+  // ── 5. Quick-log row Edit opens the edit modal pre-filled ────────
   // (The in-place visible update of the row after Save is governed by
   // Leptos `<For>` keyed-child semantics; here we assert the edit-
   // flow surface — modal opens with the row's current values,
@@ -93,14 +113,23 @@ test("Inventory: renders, edit + delete, deleted-tag placeholder, header + Quick
     .click();
   await expect(page.locator("#inventory-edit-quicklog-overlay")).toBeHidden();
 
-  // ── 5. Distraction row Delete removes only the target ────────────
+  // ── 6. Quick-log row Delete removes only the target ──────────────
+  await page
+    .locator('[data-quicklog-id="qid-seed-1"] .delete-quicklog-btn')
+    .click();
+  await expect(
+    page.locator(`#inventory-quicklogs-list >> text="Edited title"`)
+  ).toBeHidden();
+  await expect(page.locator("#inventory-quicklogs-empty")).toBeVisible();
+
+  // ── 7. Distraction row Delete removes the target ─────────────────
   await page
     .locator('[data-distraction-id="did-seed-1"] .delete-distraction-btn')
     .click();
   await expect(
-    page.locator(`#inventory-distractions-list >> text="Seeded distraction with deleted tag"`)
+    page.locator('[data-distraction-id="did-seed-1"]')
   ).toBeHidden();
 
-  // ── 6. Empty state surfaces after the last distraction is gone ───
+  // ── 8. Empty state surfaces after the last distraction is gone ───
   await expect(page.locator("#inventory-distractions-empty")).toBeVisible();
 });

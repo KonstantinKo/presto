@@ -1822,6 +1822,35 @@ mod tests {
         );
     }
 
+    /// `skip()` from Idle (never started): should advance Focus → Break, emit
+    /// `SessionSkipped` with `elapsed_secs` = 0, and leave the engine not running.
+    /// Unlike `pause()`, `skip()` is unconditional — there is no guard on run state.
+    #[test]
+    fn skip_from_idle_focus_advances_to_break() {
+        let mut state = TimerState::new(Durations::default());
+        assert_eq!(state.current_mode(), TimerMode::Focus);
+        assert!(!state.is_running());
+
+        let events = state.skip();
+
+        assert_eq!(state.current_mode(), TimerMode::Break);
+        assert!(!state.is_running());
+        assert_eq!(
+            state.time_remaining_secs(),
+            Durations::default().for_mode(TimerMode::Break)
+        );
+        assert!(
+            events.iter().any(|e| matches!(
+                e,
+                super::TimerEvent::SessionSkipped {
+                    skipped_mode: TimerMode::Focus,
+                    elapsed_secs: 0
+                }
+            )),
+            "expected SessionSkipped(Focus, 0) in {events:?}"
+        );
+    }
+
     #[test]
     fn pause_when_not_running_returns_err() {
         let clock = MockClock::new(0);
