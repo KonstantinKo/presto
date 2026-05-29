@@ -986,6 +986,17 @@ mod tests {
         // Oldest entry is drained; newest is last.
         assert_eq!(loaded[0].id, "ms-2");
         assert_eq!(loaded[999].id, "ms-1001");
+        // Recency ordering: last-appended entry is present, entry 0 is evicted.
+        let last_id = "ms-1001";
+        let first_id = "ms-0";
+        assert!(
+            loaded.iter().any(|s| s.id == last_id),
+            "last-appended entry {last_id} must be retained after cap",
+        );
+        assert!(
+            !loaded.iter().any(|s| s.id == first_id),
+            "first entry {first_id} must be evicted after cap",
+        );
     }
 
     // ── Tags helpers ──────────────────────────────────────────────────────────
@@ -1141,6 +1152,17 @@ mod tests {
         // Oldest entries are drained; newest is last.
         assert_eq!(loaded[0].session_id, "s-3");
         assert_eq!(loaded[4999].session_id, "s-5002");
+        // Recency ordering: last-appended entry is present, entry 0 is evicted.
+        let last_id = "s-5002";
+        let first_id = "s-0";
+        assert!(
+            loaded.iter().any(|s| s.session_id == last_id),
+            "last-appended entry {last_id} must be retained after cap",
+        );
+        assert!(
+            !loaded.iter().any(|s| s.session_id == first_id),
+            "first entry {first_id} must be evicted after cap",
+        );
     }
 
     fn make_quick_log(n: u32) -> QuickLog {
@@ -1162,6 +1184,17 @@ mod tests {
         assert_eq!(loaded.len(), 1_000);
         assert_eq!(loaded[0].id, "ql-2");
         assert_eq!(loaded[999].id, "ql-1001");
+        // Recency ordering: last entry is present, entry 0 is evicted.
+        let last_id = "ql-1001";
+        let first_id = "ql-0";
+        assert!(
+            loaded.iter().any(|s| s.id == last_id),
+            "last entry {last_id} must be retained after cap",
+        );
+        assert!(
+            !loaded.iter().any(|s| s.id == first_id),
+            "first entry {first_id} must be evicted after cap",
+        );
     }
 
     fn make_distraction(n: u32) -> Distraction {
@@ -1183,5 +1216,16 @@ mod tests {
         assert_eq!(loaded.len(), 1_000);
         assert_eq!(loaded[0].id, "d-2");
         assert_eq!(loaded[999].id, "d-1001");
+        // Recency ordering: last entry is present, entry 0 is evicted.
+        let last_id = "d-1001";
+        let first_id = "d-0";
+        assert!(
+            loaded.iter().any(|s| s.id == last_id),
+            "last entry {last_id} must be retained after cap",
+        );
+        assert!(
+            !loaded.iter().any(|s| s.id == first_id),
+            "first entry {first_id} must be evicted after cap",
+        );
     }
 }

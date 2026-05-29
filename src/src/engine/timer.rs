@@ -2032,6 +2032,24 @@ mod tests {
             "TwoMinutesRemaining must fire on 120→119 crossing in Focus; events={events:?}",
         );
 
+        // --- Exact boundary: advance exactly 120 s → new_remaining == 120 ---
+        let clock_exact = MockClock::new(0);
+        let mut state_exact = TimerState::new(Durations {
+            focus: 240,
+            short_break: 300,
+            long_break: 1200,
+        });
+        state_exact.start(&clock_exact).expect("start focus exact");
+        clock_exact.advance(120 * 1000);
+        let exact_events = state_exact.tick(&clock_exact);
+        assert!(
+            exact_events
+                .iter()
+                .any(|e| matches!(e, super::TimerEvent::TwoMinutesRemaining)),
+            "TwoMinutesRemaining must fire when new_remaining == 120 (exact boundary); \
+             events={exact_events:?}",
+        );
+
         // --- Break mode must NOT emit ---
         let clock2 = MockClock::new(0);
         let mut state2 = TimerState::new(Durations {
@@ -2055,7 +2073,7 @@ mod tests {
     }
 
     /// `ThirtySecondsRemaining` fires on the 30 → ≤30 crossing in
-    /// Focus mode.
+    /// Focus mode, including the exact-boundary case where remaining == 30.
     #[test]
     fn thirty_seconds_warning_fires_on_30_crossing() {
         let clock = MockClock::new(0);
@@ -2073,6 +2091,78 @@ mod tests {
                 .iter()
                 .any(|e| matches!(e, super::TimerEvent::ThirtySecondsRemaining)),
             "ThirtySecondsRemaining must fire on 30→29 crossing; events={events:?}",
+        );
+
+        // --- Exact boundary: advance exactly 30 s → new_remaining == 30 ---
+        let clock_exact = MockClock::new(0);
+        let mut state_exact = TimerState::new(Durations {
+            focus: 60,
+            short_break: 300,
+            long_break: 1200,
+        });
+        state_exact.start(&clock_exact).expect("start exact");
+        clock_exact.advance(30 * 1000);
+        let exact_events = state_exact.tick(&clock_exact);
+        assert!(
+            exact_events
+                .iter()
+                .any(|e| matches!(e, super::TimerEvent::ThirtySecondsRemaining)),
+            "ThirtySecondsRemaining must fire when new_remaining == 30 (exact boundary); \
+             events={exact_events:?}",
+        );
+    }
+
+    /// Documents the engine's behavior when `adjust_remaining_secs` lifts
+    /// remaining above 120 and then a tick crosses 120 again.
+    ///
+    /// The engine evaluates the warning purely from `old_remaining > 120 &&
+    /// new_remaining <= 120` — there is no per-session "already fired" flag.
+    /// This means `TwoMinutesRemaining` WILL fire a second time after an
+    /// extension that pushes remaining back above 120. This is intentional:
+    /// the warning re-fires because, from the engine's perspective, it is a
+    /// new crossing event; users who extend the timer mid-session will hear
+    /// the chime again. Any future change to this behavior (e.g. making the
+    /// warning one-shot per session) must update this test explicitly.
+    #[test]
+    fn two_minutes_warning_does_not_double_fire_after_adjust() {
+        let clock = MockClock::new(0);
+        let mut state = TimerState::new(Durations {
+            focus: 240,
+            short_break: 300,
+            long_break: 1200,
+        });
+        state.start(&clock).expect("start");
+
+        // Step 1: advance 121 s → remaining = 119 → TwoMinutesRemaining fires.
+        clock.advance(121 * 1000);
+        let events1 = state.tick(&clock);
+        assert!(
+            events1
+                .iter()
+                .any(|e| matches!(e, super::TimerEvent::TwoMinutesRemaining)),
+            "TwoMinutesRemaining must fire on first 120-crossing; events={events1:?}",
+        );
+
+        // Step 2: extend the timer by 300 s so remaining > 120 again.
+        state.adjust_remaining_secs(300, &clock);
+        assert!(
+            state.time_remaining_secs() > 120,
+            "remaining must be >120 after adjust",
+        );
+
+        // Step 3: advance 300 s to cross 120 again.
+        // After adjust added 300 to 119 → remaining is 419; need to drain
+        // 300 s to reach 119 (i.e. cross the ≤120 boundary).
+        clock.advance(300 * 1000);
+        let events2 = state.tick(&clock);
+        // DOCUMENTED BEHAVIOR: the warning re-fires on every crossing because
+        // the engine has no per-session suppression flag. See doc comment above.
+        assert!(
+            events2
+                .iter()
+                .any(|e| matches!(e, super::TimerEvent::TwoMinutesRemaining)),
+            "TwoMinutesRemaining must re-fire on the second 120-crossing after an \
+             adjust_remaining_secs extension (stateless crossing check); events={events2:?}",
         );
     }
 
@@ -2120,6 +2210,121 @@ mod tests {
             state.time_remaining_secs_signed(),
             -5,
             "signed remaining must be -5 after 5 s of overtime",
+        );
+    }
+
+    /// With `allow_continuous_sessions = true`, a break zero-cross
+    /// emits `OvertimeStarted { mode: Break }`, does NOT increment
+    /// `completed_pomodoros`, keeps mode as `Break`, keeps running,
+    /// and subsequent ticks produce a negative signed remaining.
+    #[test]
+    fn continuous_break_zero_cross_enters_overtime() {
+        let clock = MockClock::new(0);
+        let mut state = TimerState::new(Durations {
+            focus: 60,
+            short_break: 60,
+            long_break: 1200,
+        });
+        // Roll through a non-continuous focus session to reach Break mode.
+        state.start(&clock).expect("focus start");
+        clock.advance(61 * 1000);
+        let _ = state.tick(&clock);
+        assert_eq!(state.current_mode(), TimerMode::Break);
+
+        state.set_allow_continuous_sessions(true);
+        state.start(&clock).expect("break start");
+        clock.advance(61 * 1000);
+        let events = state.tick(&clock);
+
+        assert!(
+            events.iter().any(|e| matches!(
+                e,
+                super::TimerEvent::OvertimeStarted {
+                    mode: TimerMode::Break
+                }
+            )),
+            "OvertimeStarted(Break) must fire on break zero-cross in continuous mode; \
+             events={events:?}",
+        );
+        assert_eq!(
+            state.completed_pomodoros(),
+            1,
+            "completed_pomodoros must not increment on break overtime; \
+             only the earlier focus completion counted",
+        );
+        assert_eq!(state.current_mode(), TimerMode::Break, "mode stays Break");
+        assert!(state.is_running(), "must stay running");
+
+        // 5 more seconds → signed remaining should be -5.
+        clock.advance(5 * 1000);
+        let _ = state.tick(&clock);
+        assert_eq!(
+            state.time_remaining_secs_signed(),
+            -5,
+            "signed remaining must be -5 after 5 s of break overtime",
+        );
+    }
+
+    /// With `allow_continuous_sessions = true`, a long-break zero-cross
+    /// emits `OvertimeStarted { mode: LongBreak }`, does NOT increment
+    /// `completed_pomodoros`, keeps mode as `LongBreak`, keeps running,
+    /// and subsequent ticks produce a negative signed remaining.
+    #[test]
+    fn continuous_long_break_zero_cross_enters_overtime() {
+        let clock = MockClock::new(0);
+        let mut state = TimerState::new(Durations {
+            focus: 60,
+            short_break: 60,
+            long_break: 60,
+        });
+        // Roll through 4 focus→break cycles to reach LongBreak mode.
+        for _ in 0..4 {
+            state.start(&clock).expect("focus start");
+            clock.advance(61 * 1000);
+            let _ = state.tick(&clock);
+            if state.current_mode() == TimerMode::Break {
+                state.start(&clock).expect("short break start");
+                clock.advance(61 * 1000);
+                let _ = state.tick(&clock);
+            }
+        }
+        assert_eq!(state.current_mode(), TimerMode::LongBreak);
+        let pomodoros_before = state.completed_pomodoros();
+
+        state.set_allow_continuous_sessions(true);
+        state.start(&clock).expect("long break start");
+        clock.advance(61 * 1000);
+        let events = state.tick(&clock);
+
+        assert!(
+            events.iter().any(|e| matches!(
+                e,
+                super::TimerEvent::OvertimeStarted {
+                    mode: TimerMode::LongBreak
+                }
+            )),
+            "OvertimeStarted(LongBreak) must fire on long-break zero-cross in \
+             continuous mode; events={events:?}",
+        );
+        assert_eq!(
+            state.completed_pomodoros(),
+            pomodoros_before,
+            "completed_pomodoros must not increment on long-break overtime",
+        );
+        assert_eq!(
+            state.current_mode(),
+            TimerMode::LongBreak,
+            "mode stays LongBreak"
+        );
+        assert!(state.is_running(), "must stay running");
+
+        // 5 more seconds → signed remaining should be -5.
+        clock.advance(5 * 1000);
+        let _ = state.tick(&clock);
+        assert_eq!(
+            state.time_remaining_secs_signed(),
+            -5,
+            "signed remaining must be -5 after 5 s of long-break overtime",
         );
     }
 
