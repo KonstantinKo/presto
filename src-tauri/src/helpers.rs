@@ -78,7 +78,10 @@ pub(super) fn read_settings_from(dir: &Path) -> Result<super::AppSettings, std::
         return Ok(super::AppSettings::default());
     }
     match fs::read_to_string(&file_path) {
-        Ok(contents) => Ok(serde_json::from_str(&contents).unwrap_or_default()),
+        Ok(contents) => Ok(serde_json::from_str(&contents).unwrap_or_else(|e| {
+                eprintln!("[presto] settings parse failed ({e}), using defaults");
+                super::AppSettings::default()
+            })),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(super::AppSettings::default()),
         Err(e) => Err(e),
     }

@@ -843,6 +843,10 @@ const fn durations_from_settings(settings: &Settings) -> Durations {
     }
 }
 
+fn synthetic_click() -> leptos::ev::MouseEvent {
+    leptos::ev::MouseEvent::new("click").expect("MouseEvent::new is infallible for 'click'")
+}
+
 /// Timer view — renders the canonical pomodoro DOM and wires the
 /// `engine::TimerState` state machine through Leptos signals.
 ///
@@ -1778,7 +1782,7 @@ pub fn TimerView() -> impl IntoView {
     // tray refresh stay byte-equivalent with pointer clicks.
     spawn_local(async move {
         let listener = events::listen::<()>(events::TRAY_CANCEL, move |()| {
-            let synth = leptos::ev::MouseEvent::new("click").unwrap();
+            let synth = synthetic_click();
             match (run_state.get_untracked(), is_overtime.get_untracked()) {
                 (RunState::Running, true) => on_complete(synth),
                 (RunState::Idle, _) => on_open_quick_log(synth),
@@ -1792,7 +1796,7 @@ pub fn TimerView() -> impl IntoView {
     });
     spawn_local(async move {
         let listener = events::listen::<()>(events::TRAY_START_SESSION, move |()| {
-            let synth = leptos::ev::MouseEvent::new("click").unwrap();
+            let synth = synthetic_click();
             on_center_click(synth);
         })
         .await;
@@ -1802,7 +1806,7 @@ pub fn TimerView() -> impl IntoView {
     });
     spawn_local(async move {
         let listener = events::listen::<()>(events::TRAY_SKIP, move |()| {
-            let synth = leptos::ev::MouseEvent::new("click").unwrap();
+            let synth = synthetic_click();
             match (run_state.get_untracked(), is_overtime.get_untracked()) {
                 (RunState::Idle, _) => on_skip(synth),
                 (RunState::Running, false) => on_open_distraction(synth),
@@ -1879,7 +1883,7 @@ pub fn TimerView() -> impl IntoView {
         // documented "toggle the timer" affordance, not "complete during
         // overtime". Users who want the keyboard discard path during
         // overtime bind the Abort shortcut instead (FR-017, FR-021).
-        let synth = leptos::ev::MouseEvent::new("click").unwrap();
+        let synth = synthetic_click();
         on_play_pause(synth);
     });
     let reset_first = std::rc::Rc::new(std::cell::Cell::new(true));
@@ -1895,7 +1899,7 @@ pub fn TimerView() -> impl IntoView {
         // settings field name stays `reset` for backwards-compat with
         // the on-disk `settings.json`. Mirrors `on_abort`'s full
         // pipeline including the toast.
-        let synth = leptos::ev::MouseEvent::new("click").unwrap();
+        let synth = synthetic_click();
         on_abort(synth);
     });
     let skip_first = std::rc::Rc::new(std::cell::Cell::new(true));
@@ -1905,7 +1909,7 @@ pub fn TimerView() -> impl IntoView {
             skip_first.set(false);
             return;
         }
-        let synth = leptos::ev::MouseEvent::new("click").unwrap();
+        let synth = synthetic_click();
         on_skip(synth);
     });
     let abort_first = std::rc::Rc::new(std::cell::Cell::new(true));
@@ -1920,7 +1924,7 @@ pub fn TimerView() -> impl IntoView {
         // through `on_abort` so the full pipeline (engine.abort,
         // tag-tracking flush, toast, tray update) runs identically to
         // the on-screen Abort button click.
-        let synth = leptos::ev::MouseEvent::new("click").unwrap();
+        let synth = synthetic_click();
         on_abort(synth);
     });
 
