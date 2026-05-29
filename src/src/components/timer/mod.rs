@@ -1358,6 +1358,10 @@ pub fn TimerView() -> impl IntoView {
         engine.with(|s| RunState::from_engine(s.is_running(), s.is_paused(), s.is_auto_paused()))
     });
 
+    let is_overtime_running = Signal::derive(move || {
+        matches!(run_state.get(), RunState::Running) && is_overtime.get()
+    });
+
     let play_pause_btn_state = Signal::derive(move || {
         engine.with(|s| {
             PlayPauseButtonState::from_run_state(s.is_running(), s.is_paused(), s.is_auto_paused())
@@ -1367,14 +1371,14 @@ pub fn TimerView() -> impl IntoView {
     // Complete; aria-label flips to `timer.ctrl_complete_aria` so
     // screen readers announce the wrap-up affordance (FR-016, SC-003).
     let verbose_label_play = Signal::derive(move || {
-        if matches!(run_state.get(), RunState::Running) && is_overtime.get() {
+        if is_overtime_running.get() {
             t_string!(i18n, timer.ctrl_complete_aria).to_string()
         } else {
             t_string!(i18n, timer.ctrl_play_pause_aria).to_string()
         }
     });
     let terse_tooltip_play = Signal::derive(move || {
-        if matches!(run_state.get(), RunState::Running) && is_overtime.get() {
+        if is_overtime_running.get() {
             t_string!(i18n, timer.ctrl_complete).to_string()
         } else {
             match play_pause_btn_state.get() {
@@ -1393,7 +1397,7 @@ pub fn TimerView() -> impl IntoView {
     //   silent for screen readers per FR-014; the label is still set
     //   so visible content matches when assistive tech overrides).
     let verbose_label_left = Signal::derive(move || {
-        if matches!(run_state.get(), RunState::Running) && is_overtime.get() {
+        if is_overtime_running.get() {
             t_string!(i18n, timer.ctrl_complete_aria).to_string()
         } else {
             match run_state.get() {
@@ -1405,7 +1409,7 @@ pub fn TimerView() -> impl IntoView {
         }
     });
     let terse_tooltip_left = Signal::derive(move || {
-        if matches!(run_state.get(), RunState::Running) && is_overtime.get() {
+        if is_overtime_running.get() {
             t_string!(i18n, timer.ctrl_complete).to_string()
         } else {
             match run_state.get() {
@@ -1424,7 +1428,7 @@ pub fn TimerView() -> impl IntoView {
     // Feature 007 (T020): overtime-Running collapses right slot to
     //   "✓ Complete" — same label as left, same aria-hidden gate.
     let verbose_label_right = Signal::derive(move || {
-        if matches!(run_state.get(), RunState::Running) && is_overtime.get() {
+        if is_overtime_running.get() {
             t_string!(i18n, timer.ctrl_complete_aria).to_string()
         } else {
             match run_state.get() {
@@ -1435,7 +1439,7 @@ pub fn TimerView() -> impl IntoView {
         }
     });
     let terse_tooltip_right = Signal::derive(move || {
-        if matches!(run_state.get(), RunState::Running) && is_overtime.get() {
+        if is_overtime_running.get() {
             t_string!(i18n, timer.ctrl_complete).to_string()
         } else {
             match run_state.get() {
@@ -1467,7 +1471,7 @@ pub fn TimerView() -> impl IntoView {
     // new `#center-complete-icon` takes over as the visible glyph
     // (FR-003, ✓ Complete on the center slot).
     let play_icon_style = Signal::derive(move || {
-        let overtime_active = matches!(run_state.get(), RunState::Running) && is_overtime.get();
+        let overtime_active = is_overtime_running.get();
         if is_running.get() || overtime_active {
             "display: none"
         } else {
@@ -1475,7 +1479,7 @@ pub fn TimerView() -> impl IntoView {
         }
     });
     let pause_icon_style = Signal::derive(move || {
-        let overtime_active = matches!(run_state.get(), RunState::Running) && is_overtime.get();
+        let overtime_active = is_overtime_running.get();
         if is_running.get() && !overtime_active {
             ""
         } else {
@@ -2741,7 +2745,7 @@ pub fn TimerView() -> impl IntoView {
             // countdown and the .controls row per spec assumption.
             <p
                 class="overtime-cta"
-                class:visible=move || matches!(run_state.get(), RunState::Running) && is_overtime.get()
+                class:visible=move || is_overtime_running.get()
             >
                 {move || t_string!(i18n, timer.overtime_cta)}
             </p>
@@ -2773,15 +2777,15 @@ pub fn TimerView() -> impl IntoView {
             <div class="controls">
                 <button id="stop-btn" class="control-btn"
                     class:filled-action=move || false
-                    class:overtime=move || matches!(run_state.get(), RunState::Running) && is_overtime.get()
+                    class:overtime=move || is_overtime_running.get()
                     // R-005 fix: emit `aria-hidden` only when truly hidden.
                     // The literal `aria-hidden="false"` is semantically
                     // identical to absent per the ARIA spec, but it
                     // generates pointless DOM-diff noise and style
                     // inconsistency vs. the rest of the codebase
                     // (`.then_some("true")` is the project pattern).
-                    aria-hidden=move || (matches!(run_state.get(), RunState::Running) && is_overtime.get()).then_some("true")
-                    tabindex=move || if matches!(run_state.get(), RunState::Running) && is_overtime.get() { -1 } else { 0 }
+                    aria-hidden=move || is_overtime_running.get().then_some("true")
+                    tabindex=move || if is_overtime_running.get() { -1 } else { 0 }
                     aria-label=move || verbose_label_left.get()
                     title=move || verbose_label_left.get()
                     data-tooltip=move || terse_tooltip_left.get()
@@ -2819,7 +2823,7 @@ pub fn TimerView() -> impl IntoView {
                         stroke="currentColor"
                         stroke-width="2.5"
                         style=move || if matches!(run_state.get(), RunState::Running | RunState::Paused)
-                                       && !(matches!(run_state.get(), RunState::Running) && is_overtime.get()) { "" } else { "display: none" }
+                                       && !(is_overtime_running.get()) { "" } else { "display: none" }
                     >
                         <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
                     </svg>
@@ -2829,7 +2833,7 @@ pub fn TimerView() -> impl IntoView {
                     <i
                         id="stop-complete-icon"
                         class="ri-check-line"
-                        style=move || if matches!(run_state.get(), RunState::Running) && is_overtime.get() {
+                        style=move || if is_overtime_running.get() {
                             "font-size: 24px"
                         } else {
                             "display: none; font-size: 24px"
@@ -2837,7 +2841,7 @@ pub fn TimerView() -> impl IntoView {
                     ></i>
                 </button>
                 <button id="play-pause-btn" class="control-btn primary"
-                    class:overtime=move || matches!(run_state.get(), RunState::Running) && is_overtime.get()
+                    class:overtime=move || is_overtime_running.get()
                     aria-label=move || verbose_label_play.get()
                     title=move || verbose_label_play.get()
                     data-tooltip=move || terse_tooltip_play.get()
@@ -2857,7 +2861,7 @@ pub fn TimerView() -> impl IntoView {
                     <i
                         id="center-complete-icon"
                         class="ri-check-line"
-                        style=move || if matches!(run_state.get(), RunState::Running) && is_overtime.get() {
+                        style=move || if is_overtime_running.get() {
                             "font-size: 30px"
                         } else {
                             "display: none; font-size: 30px"
@@ -2866,11 +2870,11 @@ pub fn TimerView() -> impl IntoView {
                 </button>
                 <button id="skip-btn" class="control-btn"
                     class:primary=move || matches!(run_state.get(), RunState::Paused)
-                    class:overtime=move || matches!(run_state.get(), RunState::Running) && is_overtime.get()
+                    class:overtime=move || is_overtime_running.get()
                     // R-005 fix: see #stop-btn for rationale — `aria-hidden`
                     // is only emitted when actually hidden.
-                    aria-hidden=move || (matches!(run_state.get(), RunState::Running) && is_overtime.get()).then_some("true")
-                    tabindex=move || if matches!(run_state.get(), RunState::Running) && is_overtime.get() { -1 } else { 0 }
+                    aria-hidden=move || is_overtime_running.get().then_some("true")
+                    tabindex=move || if is_overtime_running.get() { -1 } else { 0 }
                     aria-label=move || verbose_label_right.get()
                     title=move || verbose_label_right.get()
                     data-tooltip=move || terse_tooltip_right.get()
@@ -2954,7 +2958,7 @@ pub fn TimerView() -> impl IntoView {
                         id="complete-icon"
                         class="ri-check-line"
                         style=move || if matches!(run_state.get(), RunState::Paused)
-                            || (matches!(run_state.get(), RunState::Running) && is_overtime.get())
+                            || is_overtime_running.get()
                         {
                             "font-size: 24px"
                         } else {

@@ -473,10 +473,7 @@ impl TimerState {
                         .saturating_add(self.current_session_elapsed_secs);
                 }
                 self.current_session_elapsed_secs = 0;
-                self.current_mode = if self
-                    .completed_pomodoros
-                    .is_multiple_of(self.sessions_per_long_break)
-                {
+                self.current_mode = if self.should_take_long_break() {
                     TimerMode::LongBreak
                 } else {
                     TimerMode::Break
@@ -531,6 +528,7 @@ impl TimerState {
             && !self.is_auto_paused
             && self.current_session_elapsed_secs == 0
         {
+            // `as i64` required: `From<u32> for i64` is not yet const-stable (issue #143874).
             self.time_remaining_secs = durations.for_mode(self.current_mode) as i64;
         }
     }
@@ -549,6 +547,7 @@ impl TimerState {
         self.is_auto_paused = false;
         self.is_paused = false;
         self.current_mode = TimerMode::Focus;
+        // `as i64` required: `From<u32> for i64` is not yet const-stable (issue #143874).
         self.time_remaining_secs = self.durations.focus as i64;
         self.current_session_elapsed_secs = 0;
         self.timer_start_ms = None;
@@ -868,6 +867,11 @@ impl TimerState {
     // (branch B.1) so both observe identical accumulator and event
     // semantics (AG-9 finding).
 
+    const fn should_take_long_break(&self) -> bool {
+        self.completed_pomodoros
+            .is_multiple_of(self.sessions_per_long_break)
+    }
+
     /// Shared seal-and-advance for a focus-session completion.
     ///
     /// Increments `completed_pomodoros`, integrates the in-flight
@@ -891,10 +895,7 @@ impl TimerState {
         self.current_session_elapsed_secs = 0;
         // Every Nth focus completion enters `LongBreak`; otherwise
         // short `Break`. `N` is `self.sessions_per_long_break`.
-        self.current_mode = if self
-            .completed_pomodoros
-            .is_multiple_of(self.sessions_per_long_break)
-        {
+        self.current_mode = if self.should_take_long_break() {
             TimerMode::LongBreak
         } else {
             TimerMode::Break
@@ -1026,10 +1027,7 @@ impl TimerState {
             // mode is the cadence-determined next mode — run the
             // cadence check here against the count the zero-cross
             // already incremented so the post-condition matches B.1.
-            self.current_mode = if self
-                .completed_pomodoros
-                .is_multiple_of(self.sessions_per_long_break)
-            {
+            self.current_mode = if self.should_take_long_break() {
                 TimerMode::LongBreak
             } else {
                 TimerMode::Break
