@@ -1822,6 +1822,25 @@ mod tests {
         );
     }
 
+    #[test]
+    fn pause_when_not_running_returns_err() {
+        let clock = MockClock::new(0);
+        let mut state = TimerState::new(Durations::default());
+        // Fresh engine: not started, not paused. pause() must reject with NotRunning.
+        let result = state.pause(&clock);
+        assert_eq!(result, Err(super::TimerError::NotRunning));
+    }
+
+    #[test]
+    fn resume_when_not_paused_returns_err() {
+        let clock = MockClock::new(0);
+        let mut state = TimerState::new(Durations::default());
+        // Idle engine (never started): not running, not paused. resume() must reject
+        // with NotPaused — `start()` is the correct entry-point from idle, not `resume()`.
+        let result = state.resume(&clock);
+        assert_eq!(result, Err(super::TimerError::NotPaused));
+    }
+
     /// Engine backfill (Phase 4a/4b gap): when smart-pause kicks in
     /// from inactivity and the user then explicitly hits the resume
     /// button (rather than waiting for activity-driven auto-resume),

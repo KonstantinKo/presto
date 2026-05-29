@@ -560,9 +560,9 @@ pub(super) fn delete_all_data_in(dir: &Path) -> Result<(), String> {
 mod tests {
     use super::{
         append_daily_stats_to, append_session_tag_in, delete_all_data_in, delete_tag_in,
-        is_debounced, read_distractions_from, read_history_from, read_quick_logs_from,
-        read_session_from, read_session_tags_from, read_settings_from, read_tags_from,
-        read_tasks_from, upsert_tag_in, write_distractions_to, write_quick_logs_to,
+        is_debounced, read_distractions_from, read_history_from, read_manual_sessions_from,
+        read_quick_logs_from, read_session_from, read_session_tags_from, read_settings_from,
+        read_tags_from, read_tasks_from, upsert_tag_in, write_distractions_to, write_quick_logs_to,
         write_session_tags_to, write_session_to, write_settings_to, write_tags_to, write_tasks_to,
     };
     use std::collections::HashMap;
@@ -705,6 +705,34 @@ mod tests {
         assert_eq!(loaded.completed_pomodoros, 0);
         assert_eq!(loaded.total_focus_time, 0);
         assert_eq!(loaded.current_session, 1);
+    }
+
+    // ── Malformed-input error-path regression guards ──────────────────────────
+
+    #[test]
+    fn read_session_from_malformed_json() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        // Invalid UTF-8 bytes: fs::read_to_string returns Err before serde sees anything.
+        std::fs::write(dir.path().join("session.json"), b"\xFF\xFE\x00")
+            .expect("write malformed bytes");
+        assert!(read_session_from(dir.path()).is_err());
+    }
+
+    #[test]
+    fn read_tasks_from_wrong_schema() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        // Valid JSON but wrong type — a bare string instead of Vec<Task>.
+        std::fs::write(dir.path().join("tasks.json"), b"\"this is not an array\"")
+            .expect("write wrong schema");
+        assert!(read_tasks_from(dir.path()).is_err());
+    }
+
+    #[test]
+    fn read_manual_sessions_from_empty_file() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        // Empty file: serde_json fails to parse an empty string as Vec<ManualSession>.
+        std::fs::write(dir.path().join("manual_sessions.json"), b"").expect("write empty file");
+        assert!(read_manual_sessions_from(dir.path()).is_err());
     }
 
     // ── Tasks helpers ─────────────────────────────────────────────────────────
