@@ -1,9 +1,16 @@
 // Feature 006 / T064 — Quick Log modal flow.
 //
-// Covers FR-019 (Quick Log left-slot affordance), FR-022 (boundary
-// validation: title required, minutes 1..720), SC-003 (modal opens
+// Covers FR-019 (Quick Log left-slot affordance), SC-003 (modal opens
 // auto-focused, single-keystroke entry path), SC-005 (entries land in
 // the mocked `save_quick_logs` state without touching the engine).
+//
+// FR-022 boundary validation: an empty title is rejected by the Leptos
+// on_submit guard (the form calls ev.prevent_default() so native browser
+// required-validation is not the enforcement mechanism). The minutes
+// range (1..=720) is enforced via on:input clamping — out-of-range
+// values are clamped to the nearest boundary, so the submit guard's
+// `!(1..=720).contains(&mins)` check is never reached through normal UI.
+// The HTML `min`/`max` attributes document the range contract.
 //
 // The Idle left button (`#stop-btn`) opens the Quick Log modal in any
 // mode (Focus / Break / LongBreak); the Inventory header button on
@@ -38,6 +45,23 @@ test("Quick Log: Idle left-slot opens modal, title + minutes submit, Inventory h
   await expect(page.locator("#quick-log-minutes")).toHaveValue("5");
 
   // ── 3. Cancel returns to Idle, no entry persisted ────────────────
+  await page.locator("#cancel-quick-log-btn").click();
+  await expect(page.locator("#quick-log-modal-overlay")).toBeHidden();
+
+  // ── 3b. Validation: empty title blocks save ───────────────────────
+  // The Leptos on_submit guard rejects an empty (whitespace-trimmed)
+  // title and returns early, keeping the modal open.
+  await page.locator("#stop-btn").click();
+  await expect(page.locator("#quick-log-modal-overlay")).toBeVisible();
+  // Leave title empty — do not fill.
+  await page.locator("#save-quick-log-btn").click();
+  await expect(page.locator("#quick-log-modal-overlay")).toBeVisible();
+
+  // Minutes range is documented via HTML attributes; the on:input
+  // handler clamps values to 1..720 before on_submit sees them.
+  await expect(page.locator("#quick-log-minutes")).toHaveAttribute("min", "1");
+  await expect(page.locator("#quick-log-minutes")).toHaveAttribute("max", "720");
+
   await page.locator("#cancel-quick-log-btn").click();
   await expect(page.locator("#quick-log-modal-overlay")).toBeHidden();
 
