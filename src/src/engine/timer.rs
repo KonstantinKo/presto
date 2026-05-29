@@ -2285,18 +2285,6 @@ mod tests {
         );
     }
 
-    // -------- Feature 006: RED tests for `abort` + `complete` --------
-    //
-    // Phase 2 per `specs/006/tasks.md`. All tests below panic with
-    // `unimplemented!()` until the Phase 3 GREEN methods land
-    // (T024-T028). The drift-compensation pause-settle test (T020)
-    // additionally panics until T024 lands `pause()`'s wall-clock-delta
-    // settle.
-    //
-    // The 1-min focus duration is a short-clock pattern reused from
-    // `continuous_focus_zero_cross_enters_overtime` above — keeps the
-    // wall-clock advance numbers small and the tests readable.
-
     /// T009: Abort from a Running focus session clears the engine to
     /// Idle in the same mode and emits `SessionAborted`. `elapsed_secs`
     /// is captured before zeroing.
