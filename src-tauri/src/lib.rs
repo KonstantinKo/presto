@@ -673,8 +673,6 @@ async fn append_manual_session(session: ManualSession, app: AppHandle) -> Result
     helpers::append_manual_session_in(&app_data_dir, session).map_err(BridgeError::from)
 }
 
-// ── Feature 006: Quick logs + Distractions ──────────────────────────────────
-//
 // Tauri boundary-validation per FR-022 lives in two pure helpers
 // (`validate_quick_logs`, `validate_distractions`) so the contract is
 // directly unit-testable without a Tauri runtime. The command bodies

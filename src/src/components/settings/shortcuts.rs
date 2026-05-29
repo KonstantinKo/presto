@@ -56,9 +56,13 @@ use crate::i18n::i18n::use_i18n;
 /// stays for backwards-compat with the `settings.json` field name.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum ShortcutSlot {
+    // i18n source: "Start/Stop Timer:" / "Start or pause the current Pomodoro session."
     StartStop,
+    // i18n source: "Reset session:" / "Discard the current session without counting it."
     Reset,
+    // i18n source: "Save Session:" / "Save the current session and start the next one."
     Skip,
+    // i18n source: "Abort Session:" / "Discard the current focus session without logging it."
     Abort,
 }
 
@@ -74,24 +78,6 @@ impl ShortcutSlot {
         }
     }
 
-    /// Display label for the row.
-    ///
-    /// Feature 005: kept on the impl as the English source-of-truth
-    /// for any future audit; the rendered view dispatches via `t!`
-    /// over the slot variant in `shortcut_row`.
-    #[allow(dead_code)]
-    const fn label(self) -> &'static str {
-        match self {
-            Self::StartStop => "Start/Stop Timer:",
-            // R-003 fix: Reset is the legacy alias for Abort. Label
-            // updated to match actual behaviour (the engine has no
-            // `reset()` method since feature 006 removed it).
-            Self::Reset => "Reset session:",
-            Self::Skip => "Save Session:",
-            Self::Abort => "Abort Session:",
-        }
-    }
-
     const fn placeholder(self) -> &'static str {
         match self {
             Self::StartStop => "CommandOrControl+Alt+Space",
@@ -100,20 +86,6 @@ impl ShortcutSlot {
             // Feature 007: no canonical default — abort is opt-in. The
             // placeholder hints at the shape the user would type.
             Self::Abort => "CommandOrControl+Alt+W",
-        }
-    }
-
-    #[allow(dead_code)]
-    const fn description(self) -> &'static str {
-        match self {
-            Self::StartStop => "Start or pause the current Pomodoro session.",
-            // R-003 fix: matches the actual engine behaviour. Reset
-            // dispatches through `on_abort` — the engine has no
-            // `reset()` since feature 006; the "undo last Pomodoro"
-            // affordance was removed by FR-028.
-            Self::Reset => "Discard the current session without counting it.",
-            Self::Skip => "Save the current session and start the next one.",
-            Self::Abort => "Discard the current focus session without logging it.",
         }
     }
 }
