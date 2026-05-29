@@ -223,7 +223,7 @@ A time-management method developed by Francesco Cirillo:
 | `cargo tauri dev` | Run the app locally (Trunk serves the frontend, Tauri opens the window) |
 | `cargo tauri build` | Produce a signed installer |
 | `cargo test --workspace --frozen` | Run host-side unit + integration tests |
-| `(cd src && wasm-pack test --node)` | Run wasm-bindgen-tests (DOM-bound logic) |
+| `(cd src && cargo test --target wasm32-unknown-unknown)` | Run wasm-bindgen-tests (DOM-bound logic) |
 | `(cd src && trunk build)` | Build the WASM bundle without packaging |
 | `(cd tests/e2e && npx playwright test)` | Run the e2e suite (17 specs) |
 | `(cd tests/e2e && npx playwright test visual-regression.spec.js)` | Run the visual regression suite (12 baselines) |

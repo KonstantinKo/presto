@@ -46,8 +46,10 @@ repo, read these in order:
   for unit tests. `trunk build --release` on PR.
 - **E2E**: `npx playwright test` against the vite (or trunk) dev server
   with `tauriMock.js`. Visual regression suite is part of this.
-- **Pre-commit**: husky runs format + cheap lints + lockfile-drift check
-  on touched files.
+- **Pre-commit**: plain bash hook (`.githooks/pre-commit`, installed via
+  `scripts/install-git-hooks.sh`) runs two gates: lockfile-drift and
+  engine-purity. Format and clippy are CI-only (reserved to avoid slowing
+  developer flow).
 - **CI**: full `.agentex.yml` qa pipeline runs on every PR.
 
 ## Spec-kit gates installed in this repo
