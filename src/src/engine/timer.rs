@@ -2153,7 +2153,7 @@ mod tests {
     /// the chime again. Any future change to this behavior (e.g. making the
     /// warning one-shot per session) must update this test explicitly.
     #[test]
-    fn two_minutes_warning_does_not_double_fire_after_adjust() {
+    fn two_minutes_warning_refires_after_adjust() {
         let clock = MockClock::new(0);
         let mut state = TimerState::new(Durations {
             focus: 240,
