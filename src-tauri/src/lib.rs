@@ -120,8 +120,6 @@ fn get_app_data_dir(app: &AppHandle) -> Result<std::path::PathBuf, BridgeError> 
         })
 }
 
-// ── ActivityMonitor ──────────────────────────────────────────────────────────
-
 impl ActivityMonitor {
     #[cfg(target_os = "macos")]
     fn new(app_handle: AppHandle, timeout_seconds: u64) -> Self {
@@ -223,8 +221,6 @@ impl ActivityMonitor {
     }
 }
 
-// ── Activity Monitoring ──────────────────────────────────────────────────────
-
 #[tauri::command]
 #[specta::specta]
 async fn start_activity_monitoring(
@@ -273,8 +269,6 @@ async fn update_activity_timeout(timeout_seconds: u64) -> Result<(), BridgeError
     })
 }
 
-// ── Session Persistence ──────────────────────────────────────────────────────
-
 #[tauri::command]
 #[specta::specta]
 async fn save_session_data(session: PomodoroSession, app: AppHandle) -> Result<(), BridgeError> {
@@ -291,8 +285,6 @@ async fn load_session_data(app: AppHandle) -> Result<Option<PomodoroSession>, Br
     let app_data_dir = get_app_data_dir(&app)?;
     helpers::read_session_from(&app_data_dir).map_err(BridgeError::from)
 }
-
-// ── Tasks ────────────────────────────────────────────────────────────────────
 
 #[tauri::command]
 #[specta::specta]
@@ -324,8 +316,6 @@ async fn save_daily_stats(session: PomodoroSession, app: AppHandle) -> Result<()
     let app_data_dir = get_app_data_dir(&app)?;
     helpers::append_daily_stats_to(&app_data_dir, &session).map_err(BridgeError::from)
 }
-
-// ── Tray & System ────────────────────────────────────────────────────────────
 
 // `session_mode: TimerMode` (was `String`) per spec 001 T027 — closed-domain
 // enum tightening. Wire format unchanged: camelCase ("focus"/"break"/
@@ -530,8 +520,6 @@ fn show_app_window(app: &AppHandle) {
     }
 }
 
-// ── Shortcuts & Settings ─────────────────────────────────────────────────────
-
 #[tauri::command]
 #[specta::specta]
 async fn save_settings(settings: AppSettings, app: AppHandle) -> Result<(), BridgeError> {
@@ -685,8 +673,6 @@ async fn append_manual_session(session: ManualSession, app: AppHandle) -> Result
     helpers::append_manual_session_in(&app_data_dir, session).map_err(BridgeError::from)
 }
 
-// ── Feature 006: Quick logs + Distractions ──────────────────────────────────
-//
 // Tauri boundary-validation per FR-022 lives in two pure helpers
 // (`validate_quick_logs`, `validate_distractions`) so the contract is
 // directly unit-testable without a Tauri runtime. The command bodies
@@ -1108,8 +1094,6 @@ pub fn run() {
     });
 }
 
-// ── Tags ─────────────────────────────────────────────────────────────────────
-
 #[tauri::command]
 #[specta::specta]
 async fn load_tags(app: AppHandle) -> Result<Vec<Tag>, BridgeError> {
@@ -1303,8 +1287,6 @@ async fn update_tray_menu(
     Ok(())
 }
 
-// ── Exports ──────────────────────────────────────────────────────────────────
-
 // `export_sessions_xlsx` — write a workbook of manual sessions to
 // `path` using `rust_xlsxwriter` (write-only; we never read .xlsx).
 #[tauri::command]
@@ -1328,8 +1310,6 @@ async fn export_sessions_csv(
 ) -> Result<(), BridgeError> {
     exports::export_csv(std::path::Path::new(&path), &sessions)
 }
-
-// ── Dialogs ──────────────────────────────────────────────────────────────────
 
 // Dialog plugin wrappers.
 //
