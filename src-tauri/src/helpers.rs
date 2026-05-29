@@ -666,6 +666,21 @@ mod tests {
         assert!(nested.join("settings.json").exists());
     }
 
+    #[test]
+    fn settings_partial_corruption_returns_defaults() {
+        // full reset on any parse error — intentional; per-field recovery not implemented
+        let dir = tempfile::tempdir().expect("tempdir");
+        std::fs::write(
+            dir.path().join("settings.json"),
+            br#"{"timer": {"focus_duration": "not-a-number"}}"#,
+        )
+        .expect("write corrupt settings");
+        let result = read_settings_from(dir.path()).expect("read");
+        let defaults = AppSettings::default();
+        assert_eq!(result.timer.focus_duration, defaults.timer.focus_duration);
+        assert_eq!(result.autostart, defaults.autostart);
+    }
+
     // ── Session helpers ───────────────────────────────────────────────────────
 
     fn make_session(date: &str) -> PomodoroSession {
