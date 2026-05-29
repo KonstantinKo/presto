@@ -162,14 +162,38 @@ pub(super) fn write_tasks_to(dir: &Path, tasks: &[super::Task]) -> Result<(), St
 
 // ── History ───────────────────────────────────────────────────────────────────
 
+/// Backs up a corrupt file at `original_path` by trying three strategies:
+///
+///   1. rename to `<name>.corrupt`
+///   2. rename to `<name>.corrupt.<unix_ts>`
+///   3. write `content` to `<name>.corrupt.<unix_ts>`
+///
+/// Returns the path where the backup landed, or `Err` when every attempt fails.
+fn backup_corrupt_file(original_path: &Path, content: &str) -> Result<std::path::PathBuf, String> {
+    let file_name = original_path.file_name().map_or_else(
+        || "unknown".to_owned(),
+        |n| n.to_string_lossy().into_owned(),
+    );
+    let base_corrupt = original_path.with_file_name(format!("{file_name}.corrupt"));
+    if fs::rename(original_path, &base_corrupt).is_ok() {
+        return Ok(base_corrupt);
+    }
+    let ts = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| d.as_secs());
+    let unique = original_path.with_file_name(format!("{file_name}.corrupt.{ts}"));
+    if fs::rename(original_path, &unique).is_ok() {
+        return Ok(unique);
+    }
+    fs::write(&unique, content.as_bytes())
+        .map(|()| unique)
+        .map_err(|e| format!("all backup attempts failed: {e}"))
+}
+
 /// Reads `history.json` from `dir`, returning an empty vec when absent.
 ///
-/// On corrupt JSON, rescues the file by renaming it to `history.json.corrupt`
-/// so the next `append_daily_stats_to` does not silently clobber the user's
-/// data, then returns an empty vec. If the primary rename fails, a
-/// timestamped fallback name (`history.json.corrupt.<unix_ts>`) is tried,
-/// then a copy-by-write. Returns `Err` only when all backup attempts fail,
-/// preventing silent data loss.
+/// On corrupt JSON, rescues the file via `backup_corrupt_file` and returns an
+/// empty vec. Returns `Err` only when all backup attempts fail.
 pub(super) fn read_history_from(dir: &Path) -> Result<Vec<super::PomodoroSession>, String> {
     let history_path = dir.join("history.json");
     if !history_path.exists() {
@@ -180,42 +204,18 @@ pub(super) fn read_history_from(dir: &Path) -> Result<Vec<super::PomodoroSession
     match serde_json::from_str(&content) {
         Ok(h) => Ok(h),
         Err(e) => {
-            let base_corrupt = history_path.with_file_name("history.json.corrupt");
-            match fs::rename(&history_path, &base_corrupt) {
-                Ok(()) => {
+            match backup_corrupt_file(&history_path, &content) {
+                Ok(backup_path) => {
                     log::warn!(
                         "history.json corrupt, preserved as {}: {e}",
-                        base_corrupt.display()
+                        backup_path.display()
                     );
                 }
-                Err(rename_err) => {
-                    let ts = std::time::SystemTime::now()
-                        .duration_since(std::time::UNIX_EPOCH)
-                        .map_or(0, |d| d.as_secs());
-                    let unique = history_path.with_file_name(format!("history.json.corrupt.{ts}"));
-                    match fs::rename(&history_path, &unique) {
-                        Ok(()) => {
-                            log::warn!(
-                                "history.json corrupt (rename to .corrupt failed: {rename_err}), preserved as {}: {e}",
-                                unique.display()
-                            );
-                        }
-                        Err(rename_err2) => match fs::write(&unique, content.as_bytes()) {
-                            Ok(()) => {
-                                log::warn!(
-                                        "history.json corrupt; rename failed ({rename_err2}), content copied to {}: {e}",
-                                        unique.display()
-                                    );
-                            }
-                            Err(write_err) => {
-                                log::error!(
-                                    "history.json corrupt and all backup attempts failed \
-                                         (rename: {rename_err2}, write: {write_err}): {e}"
-                                );
-                                return Err(format!("history.json corrupt and backup failed: {e}"));
-                            }
-                        },
-                    }
+                Err(backup_err) => {
+                    log::error!(
+                        "history.json corrupt and all backup attempts failed ({backup_err}): {e}"
+                    );
+                    return Err(format!("history.json corrupt and backup failed: {e}"));
                 }
             }
             Ok(Vec::new())
@@ -343,44 +343,18 @@ pub(super) fn read_quick_logs_from(dir: &Path) -> Result<Vec<super::QuickLog>, S
             Ok(logs)
         }
         Err(e) => {
-            let base_corrupt = file_path.with_file_name("quick_logs.json.corrupt");
-            match fs::rename(&file_path, &base_corrupt) {
-                Ok(()) => {
+            match backup_corrupt_file(&file_path, &content) {
+                Ok(backup_path) => {
                     log::warn!(
                         "quick_logs.json corrupt, preserved as {}: {e}",
-                        base_corrupt.display()
+                        backup_path.display()
                     );
                 }
-                Err(rename_err) => {
-                    let ts = std::time::SystemTime::now()
-                        .duration_since(std::time::UNIX_EPOCH)
-                        .map_or(0, |d| d.as_secs());
-                    let unique = file_path.with_file_name(format!("quick_logs.json.corrupt.{ts}"));
-                    match fs::rename(&file_path, &unique) {
-                        Ok(()) => {
-                            log::warn!(
-                                "quick_logs.json corrupt (rename to .corrupt failed: {rename_err}), preserved as {}: {e}",
-                                unique.display()
-                            );
-                        }
-                        Err(rename_err2) => match fs::write(&unique, content.as_bytes()) {
-                            Ok(()) => {
-                                log::warn!(
-                                        "quick_logs.json corrupt; rename failed ({rename_err2}), content copied to {}: {e}",
-                                        unique.display()
-                                    );
-                            }
-                            Err(write_err) => {
-                                log::error!(
-                                    "quick_logs.json corrupt and all backup attempts failed \
-                                         (rename: {rename_err2}, write: {write_err}): {e}"
-                                );
-                                return Err(format!(
-                                    "quick_logs.json corrupt and backup failed: {e}"
-                                ));
-                            }
-                        },
-                    }
+                Err(backup_err) => {
+                    log::error!(
+                        "quick_logs.json corrupt and all backup attempts failed ({backup_err}): {e}"
+                    );
+                    return Err(format!("quick_logs.json corrupt and backup failed: {e}"));
                 }
             }
             Ok(Vec::new())
@@ -425,45 +399,18 @@ pub(super) fn read_distractions_from(dir: &Path) -> Result<Vec<super::Distractio
             Ok(entries)
         }
         Err(e) => {
-            let base_corrupt = file_path.with_file_name("distractions.json.corrupt");
-            match fs::rename(&file_path, &base_corrupt) {
-                Ok(()) => {
+            match backup_corrupt_file(&file_path, &content) {
+                Ok(backup_path) => {
                     log::warn!(
                         "distractions.json corrupt, preserved as {}: {e}",
-                        base_corrupt.display()
+                        backup_path.display()
                     );
                 }
-                Err(rename_err) => {
-                    let ts = std::time::SystemTime::now()
-                        .duration_since(std::time::UNIX_EPOCH)
-                        .map_or(0, |d| d.as_secs());
-                    let unique =
-                        file_path.with_file_name(format!("distractions.json.corrupt.{ts}"));
-                    match fs::rename(&file_path, &unique) {
-                        Ok(()) => {
-                            log::warn!(
-                                "distractions.json corrupt (rename to .corrupt failed: {rename_err}), preserved as {}: {e}",
-                                unique.display()
-                            );
-                        }
-                        Err(rename_err2) => match fs::write(&unique, content.as_bytes()) {
-                            Ok(()) => {
-                                log::warn!(
-                                        "distractions.json corrupt; rename failed ({rename_err2}), content copied to {}: {e}",
-                                        unique.display()
-                                    );
-                            }
-                            Err(write_err) => {
-                                log::error!(
-                                    "distractions.json corrupt and all backup attempts failed \
-                                         (rename: {rename_err2}, write: {write_err}): {e}"
-                                );
-                                return Err(format!(
-                                    "distractions.json corrupt and backup failed: {e}"
-                                ));
-                            }
-                        },
-                    }
+                Err(backup_err) => {
+                    log::error!(
+                        "distractions.json corrupt and all backup attempts failed ({backup_err}): {e}"
+                    );
+                    return Err(format!("distractions.json corrupt and backup failed: {e}"));
                 }
             }
             Ok(Vec::new())
@@ -583,21 +530,24 @@ pub(super) fn delete_all_data_in(dir: &Path) -> Result<(), String> {
         "manual_sessions.json",
         "tags.json",
         "session_tags.json",
-        // Feature 006 — quick logs + distractions persistence files.
-        // AR-1 fix: reset-all-data left these on disk, leaking the
-        // user's quick-log + distraction history past a "wipe all"
-        // request.
         "quick_logs.json",
         "distractions.json",
-        "history.json.corrupt",
-        "quick_logs.json.corrupt",
-        "distractions.json.corrupt",
     ];
     for file_name in FILES {
         let file_path = dir.join(file_name);
         if let Err(e) = fs::remove_file(&file_path) {
             if e.kind() != std::io::ErrorKind::NotFound {
                 return Err(format!("Failed to delete {file_name}: {e}"));
+            }
+        }
+    }
+    // Remove any .corrupt / .corrupt.<ts> backup files to avoid leaking user data.
+    if let Ok(entries) = fs::read_dir(dir) {
+        for entry in entries.flatten() {
+            let name = entry.file_name();
+            let name_str = name.to_string_lossy();
+            if name_str.contains(".json.corrupt") {
+                let _ = fs::remove_file(entry.path());
             }
         }
     }
@@ -990,6 +940,20 @@ mod tests {
         assert!(!dir.path().join("distractions.json").exists());
         assert!(!dir.path().join("quick_logs.json.corrupt").exists());
         assert!(!dir.path().join("distractions.json.corrupt").exists());
+    }
+
+    #[test]
+    fn delete_all_data_removes_timestamped_corrupt_files() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        std::fs::write(dir.path().join("history.json.corrupt.1716985200"), b"{}").expect("write");
+        std::fs::write(dir.path().join("quick_logs.json.corrupt.1716985200"), b"{}")
+            .expect("write");
+        delete_all_data_in(dir.path()).expect("delete");
+        assert!(!dir.path().join("history.json.corrupt.1716985200").exists());
+        assert!(!dir
+            .path()
+            .join("quick_logs.json.corrupt.1716985200")
+            .exists());
     }
 
     #[test]
