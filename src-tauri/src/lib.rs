@@ -671,10 +671,7 @@ async fn load_manual_sessions(app: AppHandle) -> Result<Vec<ManualSession>, Brid
 
 #[tauri::command]
 #[specta::specta]
-async fn append_manual_session(
-    session: ManualSession,
-    app: AppHandle,
-) -> Result<(), BridgeError> {
+async fn append_manual_session(session: ManualSession, app: AppHandle) -> Result<(), BridgeError> {
     let app_data_dir = get_app_data_dir(&app)?;
     helpers::append_manual_session_in(&app_data_dir, session).map_err(BridgeError::from)
 }
