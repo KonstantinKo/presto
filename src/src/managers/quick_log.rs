@@ -201,6 +201,9 @@ mod tests {
         let q1 = mgr.entries().iter().find(|q| q.id == "qid-1").unwrap();
         assert_eq!(q1.title, "a (edited)");
         assert_eq!(q1.elapsed_minutes, 9);
+        let q2 = mgr.entries().iter().find(|q| q.id == "qid-2").unwrap();
+        assert_eq!(q2.title, "b");
+        assert_eq!(q2.elapsed_minutes, 7);
 
         // Update-of-unknown-id is a no-op.
         let mut ghost = sample("qid-nope", "ghost", 1, "Fri May 15 2026");

@@ -81,6 +81,11 @@ const TAURI_MOCK_INIT_SCRIPT = `
 
   // --- Tauri event bus ---
   var _listeners = {};
+  // Holds events emitted before any listener was registered, keyed by event
+  // name. Each entry is an array of payloads. When listen() is called for an
+  // event that has pending entries, the handler is replayed synchronously so
+  // init-time emits (e.g. setUpdateAvailable) are never silently dropped.
+  var _pending = {};
 
   // --- window.__TAURI__ mock ---
   window.__TAURI__ = {
@@ -357,6 +362,14 @@ const TAURI_MOCK_INIT_SCRIPT = `
       listen: async function (event, handler) {
         if (!_listeners[event]) { _listeners[event] = []; }
         _listeners[event].push(handler);
+        // Replay events that were emitted before this listener was registered.
+        if (_pending[event] && _pending[event].length > 0) {
+          var queued = _pending[event].slice();
+          delete _pending[event];
+          queued.forEach(function (payload) {
+            try { handler({ event: event, payload: payload }); } catch (e) {}
+          });
+        }
         return function () {
           if (_listeners[event]) {
             _listeners[event] = _listeners[event].filter(function (h) {
@@ -366,10 +379,14 @@ const TAURI_MOCK_INIT_SCRIPT = `
         };
       },
       emit: async function (event, payload) {
-        if (_listeners[event]) {
+        if (_listeners[event] && _listeners[event].length > 0) {
           _listeners[event].forEach(function (h) {
             try { h({ event: event, payload: payload }); } catch (e) {}
           });
+        } else {
+          // No listeners yet; buffer for replay when listen() is called.
+          if (!_pending[event]) { _pending[event] = []; }
+          _pending[event].push(payload);
         }
       },
     },
@@ -429,8 +446,11 @@ export async function applyTauriMock(page) {
 
   return {
     /**
-     * Seeds `localStorage.presto_force_update_test` so UpdateManagerV2 calls simulateUpdate()
-     * on its startup check, causing an update-available event ~5 s after page boot.
+     * Schedules a `tauri://update-available` event to appear when the app
+     * registers its listener. Emits synchronously at page-init time; the
+     * mock event bus buffers the payload and replays it on the first
+     * `listen('tauri://update-available', ...)` call, so there is no
+     * timing race regardless of how long WASM takes to boot.
      */
     async setUpdateAvailable() {
       await page.addInitScript({
@@ -438,25 +458,17 @@ export async function applyTauriMock(page) {
 if (!window.__E2E_CONFIG__) window.__E2E_CONFIG__ = {};
 window.__E2E_CONFIG__.enableUpdateTestMode = true;
 localStorage.setItem('presto_force_update_test', 'true');
-// Phase 6 (T241): the JS-era surface read these flags from inside
-// UpdateManagerV2.simulateUpdate(); the Leptos port's UpdateManager
-// only consumes the canonical tauri://update-available event. So we
-// emit that event into the mock event bus shortly after page load —
-// the Leptos crate's UPDATE_AVAILABLE listener (app.rs spawn_local)
-// catches it and lifts UpdateInfo::Available, the banner adds
-// .visible. Delay matches the JS-era ~5s startup pause so the spec's
-// 12s timeout still has plenty of head-room.
-window.addEventListener('TrunkApplicationStarted', function () {
-  setTimeout(function () {
-    if (window.__TAURI__ && window.__TAURI__.event) {
-      window.__TAURI__.event.emit('tauri://update-available', {
-        version: '0.4.5',
-        currentVersion: '0.4.4',
-        body: null,
-      });
-    }
-  }, 100);
-});
+// Emit synchronously at init time. The mock event bus buffers this
+// payload and replays it when the Leptos app calls
+// listen('tauri://update-available', ...) during WASM startup, so the
+// banner always appears regardless of WASM boot latency.
+if (window.__TAURI__ && window.__TAURI__.event) {
+  window.__TAURI__.event.emit('tauri://update-available', {
+    version: '0.4.5',
+    currentVersion: '0.4.4',
+    body: null,
+  });
+}
 `,
       });
     },

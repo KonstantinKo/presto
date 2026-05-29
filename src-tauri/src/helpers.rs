@@ -559,18 +559,20 @@ pub(super) fn delete_all_data_in(dir: &Path) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::{
-        append_daily_stats_to, append_session_tag_in, delete_all_data_in, delete_tag_in,
-        is_debounced, read_distractions_from, read_history_from, read_quick_logs_from,
-        read_session_from, read_session_tags_from, read_settings_from, read_tags_from,
-        read_tasks_from, upsert_tag_in, write_distractions_to, write_quick_logs_to,
-        write_session_tags_to, write_session_to, write_settings_to, write_tags_to, write_tasks_to,
+        append_daily_stats_to, append_manual_session_in, append_session_tag_in, delete_all_data_in,
+        delete_tag_in, is_debounced, read_distractions_from, read_history_from,
+        read_manual_sessions_from, read_quick_logs_from, read_session_from, read_session_tags_from,
+        read_settings_from, read_tags_from, read_tasks_from, upsert_tag_in, write_distractions_to,
+        write_manual_sessions_to, write_quick_logs_to, write_session_tags_to, write_session_to,
+        write_settings_to, write_tags_to, write_tasks_to,
     };
     use std::collections::HashMap;
     use std::time::{Duration, Instant};
 
     // Re-use parent-module types (private to lib.rs but accessible from descendants).
     use super::super::{
-        AppSettings, Distraction, PomodoroSession, QuickLog, SessionTag, Tag, Task,
+        AppSettings, Distraction, ManualSession, PomodoroSession, QuickLog, SessionTag,
+        SessionType, Tag, Task,
     };
 
     // ── helpers::is_debounced (pre-existing) ──────────────────────────────────
@@ -664,6 +666,21 @@ mod tests {
         assert!(nested.join("settings.json").exists());
     }
 
+    #[test]
+    fn settings_partial_corruption_returns_defaults() {
+        // full reset on any parse error — intentional; per-field recovery not implemented
+        let dir = tempfile::tempdir().expect("tempdir");
+        std::fs::write(
+            dir.path().join("settings.json"),
+            br#"{"timer": {"focus_duration": "not-a-number"}}"#,
+        )
+        .expect("write corrupt settings");
+        let result = read_settings_from(dir.path()).expect("read");
+        let defaults = AppSettings::default();
+        assert_eq!(result.timer.focus_duration, defaults.timer.focus_duration);
+        assert_eq!(result.autostart, defaults.autostart);
+    }
+
     // ── Session helpers ───────────────────────────────────────────────────────
 
     fn make_session(date: &str) -> PomodoroSession {
@@ -705,6 +722,34 @@ mod tests {
         assert_eq!(loaded.completed_pomodoros, 0);
         assert_eq!(loaded.total_focus_time, 0);
         assert_eq!(loaded.current_session, 1);
+    }
+
+    // ── Malformed-input error-path regression guards ──────────────────────────
+
+    #[test]
+    fn read_session_from_malformed_json() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        // Invalid UTF-8 bytes: fs::read_to_string returns Err before serde sees anything.
+        std::fs::write(dir.path().join("session.json"), b"\xFF\xFE\x00")
+            .expect("write malformed bytes");
+        assert!(read_session_from(dir.path()).is_err());
+    }
+
+    #[test]
+    fn read_tasks_from_wrong_schema() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        // Valid JSON but wrong type — a bare string instead of Vec<Task>.
+        std::fs::write(dir.path().join("tasks.json"), b"\"this is not an array\"")
+            .expect("write wrong schema");
+        assert!(read_tasks_from(dir.path()).is_err());
+    }
+
+    #[test]
+    fn read_manual_sessions_from_empty_file() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        // Empty file: serde_json fails to parse an empty string as Vec<ManualSession>.
+        std::fs::write(dir.path().join("manual_sessions.json"), b"").expect("write empty file");
+        assert!(read_manual_sessions_from(dir.path()).is_err());
     }
 
     // ── Tasks helpers ─────────────────────────────────────────────────────────
@@ -831,6 +876,142 @@ mod tests {
         assert_eq!(history.len(), 1);
         assert_eq!(history[0].completed_pomodoros, 5);
         assert_eq!(history[0].date, "2024-06-01");
+    }
+
+    // ── Quick logs helpers ────────────────────────────────────────────────────
+
+    #[test]
+    fn quick_logs_missing_file_returns_empty_vec() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let result = read_quick_logs_from(dir.path()).expect("read");
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn quick_logs_corrupt_json_is_backed_up_and_returns_empty() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        std::fs::write(dir.path().join("quick_logs.json"), b"not json")
+            .expect("write corrupt file");
+        let result = read_quick_logs_from(dir.path()).expect("read");
+        assert!(result.is_empty());
+        assert!(dir.path().join("quick_logs.json.corrupt").exists());
+        assert!(!dir.path().join("quick_logs.json").exists());
+    }
+
+    #[test]
+    fn quick_logs_write_then_read_round_trips() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let log = QuickLog {
+            id: "ql-test".to_string(),
+            title: "Wrote docs".to_string(),
+            elapsed_minutes: 30,
+            created_at: "2024-01-01T00:00:00Z".to_string(),
+            date: "Mon Jan 01 2024".to_string(),
+        };
+        write_quick_logs_to(dir.path(), &[log]).expect("write");
+        let loaded = read_quick_logs_from(dir.path()).expect("read");
+        assert_eq!(loaded.len(), 1);
+        assert_eq!(loaded[0].id, "ql-test");
+        assert_eq!(loaded[0].title, "Wrote docs");
+        assert_eq!(loaded[0].elapsed_minutes, 30);
+    }
+
+    // ── Distractions helpers ──────────────────────────────────────────────────
+
+    #[test]
+    fn distractions_missing_file_returns_empty_vec() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let result = read_distractions_from(dir.path()).expect("read");
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn distractions_corrupt_json_is_backed_up_and_returns_empty() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        std::fs::write(dir.path().join("distractions.json"), b"not json")
+            .expect("write corrupt file");
+        let result = read_distractions_from(dir.path()).expect("read");
+        assert!(result.is_empty());
+        assert!(dir.path().join("distractions.json.corrupt").exists());
+        assert!(!dir.path().join("distractions.json").exists());
+    }
+
+    #[test]
+    fn distractions_write_then_read_round_trips() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let entry = Distraction {
+            id: "d-test".to_string(),
+            note: "Phone rang".to_string(),
+            created_at: "2024-01-01T00:00:00Z".to_string(),
+            date: "Mon Jan 01 2024".to_string(),
+            parent_ref: None,
+        };
+        write_distractions_to(dir.path(), &[entry]).expect("write");
+        let loaded = read_distractions_from(dir.path()).expect("read");
+        assert_eq!(loaded.len(), 1);
+        assert_eq!(loaded[0].id, "d-test");
+        assert_eq!(loaded[0].note, "Phone rang");
+        assert!(loaded[0].parent_ref.is_none());
+    }
+
+    // ── Manual sessions helpers ───────────────────────────────────────────────
+
+    fn make_manual_session(n: u32) -> ManualSession {
+        ManualSession {
+            id: format!("ms-{n}"),
+            session_type: SessionType::Focus,
+            duration: 25,
+            start_time: "09:00".to_string(),
+            end_time: "09:25".to_string(),
+            notes: None,
+            created_at: format!("2024-01-{:02}T09:00:00Z", (n % 28) + 1),
+            date: format!("Mon Jan {:02} 2024", (n % 28) + 1),
+            tags: None,
+            title: None,
+        }
+    }
+
+    #[test]
+    fn manual_sessions_missing_file_returns_empty_vec() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let result = read_manual_sessions_from(dir.path()).expect("read");
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn manual_sessions_append_then_read_round_trip() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        append_manual_session_in(dir.path(), make_manual_session(1)).expect("append");
+        let loaded = read_manual_sessions_from(dir.path()).expect("read");
+        assert_eq!(loaded.len(), 1);
+        assert_eq!(loaded[0].id, "ms-1");
+        assert_eq!(loaded[0].duration, 25);
+        assert_eq!(loaded[0].session_type, SessionType::Focus);
+    }
+
+    #[test]
+    fn manual_sessions_cap_trims_at_1000() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let sessions: Vec<ManualSession> = (0..1_001).map(make_manual_session).collect();
+        write_manual_sessions_to(dir.path(), &sessions).expect("write");
+        // Append one more to trigger the 1_000-entry cap.
+        append_manual_session_in(dir.path(), make_manual_session(1_001)).expect("append");
+        let loaded = read_manual_sessions_from(dir.path()).expect("read");
+        assert_eq!(loaded.len(), 1_000);
+        // Oldest entry is drained; newest is last.
+        assert_eq!(loaded[0].id, "ms-2");
+        assert_eq!(loaded[999].id, "ms-1001");
+        // Recency ordering: last-appended entry is present, entry 0 is evicted.
+        let last_id = "ms-1001";
+        let first_id = "ms-0";
+        assert!(
+            loaded.iter().any(|s| s.id == last_id),
+            "last-appended entry {last_id} must be retained after cap",
+        );
+        assert!(
+            !loaded.iter().any(|s| s.id == first_id),
+            "first entry {first_id} must be evicted after cap",
+        );
     }
 
     // ── Tags helpers ──────────────────────────────────────────────────────────
@@ -986,6 +1167,17 @@ mod tests {
         // Oldest entries are drained; newest is last.
         assert_eq!(loaded[0].session_id, "s-3");
         assert_eq!(loaded[4999].session_id, "s-5002");
+        // Recency ordering: last-appended entry is present, entry 0 is evicted.
+        let last_id = "s-5002";
+        let first_id = "s-0";
+        assert!(
+            loaded.iter().any(|s| s.session_id == last_id),
+            "last-appended entry {last_id} must be retained after cap",
+        );
+        assert!(
+            !loaded.iter().any(|s| s.session_id == first_id),
+            "first entry {first_id} must be evicted after cap",
+        );
     }
 
     fn make_quick_log(n: u32) -> QuickLog {
@@ -1007,6 +1199,17 @@ mod tests {
         assert_eq!(loaded.len(), 1_000);
         assert_eq!(loaded[0].id, "ql-2");
         assert_eq!(loaded[999].id, "ql-1001");
+        // Recency ordering: last entry is present, entry 0 is evicted.
+        let last_id = "ql-1001";
+        let first_id = "ql-0";
+        assert!(
+            loaded.iter().any(|s| s.id == last_id),
+            "last entry {last_id} must be retained after cap",
+        );
+        assert!(
+            !loaded.iter().any(|s| s.id == first_id),
+            "first entry {first_id} must be evicted after cap",
+        );
     }
 
     fn make_distraction(n: u32) -> Distraction {
@@ -1028,5 +1231,16 @@ mod tests {
         assert_eq!(loaded.len(), 1_000);
         assert_eq!(loaded[0].id, "d-2");
         assert_eq!(loaded[999].id, "d-1001");
+        // Recency ordering: last entry is present, entry 0 is evicted.
+        let last_id = "d-1001";
+        let first_id = "d-0";
+        assert!(
+            loaded.iter().any(|s| s.id == last_id),
+            "last entry {last_id} must be retained after cap",
+        );
+        assert!(
+            !loaded.iter().any(|s| s.id == first_id),
+            "first entry {first_id} must be evicted after cap",
+        );
     }
 }

@@ -238,6 +238,8 @@ mod tests {
         assert_eq!(mgr.entries().len(), 2);
         let d1 = mgr.entries().iter().find(|d| d.id == "did-1").unwrap();
         assert_eq!(d1.note, "a (edited)");
+        let d2 = mgr.entries().iter().find(|d| d.id == "did-2").unwrap();
+        assert_eq!(d2.note, "b");
 
         // Update-of-unknown-id no-op.
         mgr.update_by_id(sample("did-nope", "ghost", "Fri May 15 2026"));

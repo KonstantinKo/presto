@@ -7,7 +7,7 @@
 //
 // The modal opens auto-focused; Enter submits; Escape cancels without
 // writing. The timer keeps ticking through both flows.
-
+//
 import { test, expect } from "./fixtures/index.js";
 import { gotoTimer, tapTab } from "./fixtures/screens.js";
 
@@ -82,3 +82,4 @@ test("Distraction: Running right-slot opens modal, Enter submits, Escape cancels
     page.locator(`#inventory-distractions-list >> text="ignored typing"`)
   ).toBeHidden();
 });
+
