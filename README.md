@@ -170,7 +170,7 @@ presto/
 │       ├── playwright.config.js
 │       ├── fixtures/            # Shared fixtures (blockExternal, tauriMock, screens)
 │       ├── __screenshots__/     # Visual regression baselines (chromium-linux)
-│       └── *.spec.js            # 17 specs total (one per screen / major flow)
+│       └── *.spec.js            # 26 specs total (one per screen / major flow)
 ├── scripts/                     # CI gate scripts (mock-drift, baseline-cap, engine-purity, lockfile-drift)
 ├── .githooks/pre-commit         # Local lockfile-drift gate (install via scripts/install-git-hooks.sh)
 ├── .specify/                    # Spec-kit artefacts (constitution, templates, extensions)
@@ -225,8 +225,8 @@ A time-management method developed by Francesco Cirillo:
 | `cargo test --workspace --frozen` | Run host-side unit + integration tests |
 | `(cd src && cargo test --target wasm32-unknown-unknown)` | Run wasm-bindgen-tests (DOM-bound logic) |
 | `(cd src && trunk build)` | Build the WASM bundle without packaging |
-| `(cd tests/e2e && npx playwright test)` | Run the e2e suite (17 specs) |
-| `(cd tests/e2e && npx playwright test visual-regression.spec.js)` | Run the visual regression suite (12 baselines) |
+| `(cd tests/e2e && npx playwright test)` | Run the e2e suite (26 specs) |
+| `(cd tests/e2e && npx playwright test visual-regression.spec.js)` | Run the visual regression suite (18 baselines) |
 | `cargo clippy --workspace --all-targets -- -D warnings` | Strict-deny pedantic + nursery lint pass |
 | `cargo fmt --all --check` | Formatting drift check |
 | `bash scripts/check-mock-drift.sh` | Confirm `tauriMock.js` mirrors the Tauri handler set |

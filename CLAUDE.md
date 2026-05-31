@@ -6,7 +6,7 @@ app. Read [VISION.md](VISION.md) for product scope.
 ## Where to find things
 
 - **Constitution** — [`.specify/memory/constitution.md`](.specify/memory/constitution.md).
-  9 enduring principles. Read before non-trivial work.
+  10 enduring principles. Read before non-trivial work.
 - **AGENTS.md** — [`AGENTS.md`](AGENTS.md). Reading order, operational
   notes, lints, gate set.
 - **Spec-kit artefacts** — `.specify/` (templates, hooks, extensions);
