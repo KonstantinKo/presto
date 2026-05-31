@@ -473,11 +473,7 @@ impl TimerState {
                         .saturating_add(self.current_session_elapsed_secs);
                 }
                 self.current_session_elapsed_secs = 0;
-                self.current_mode = if self.should_take_long_break() {
-                    TimerMode::LongBreak
-                } else {
-                    TimerMode::Break
-                };
+                self.current_mode = self.next_break_mode();
             }
             TimerMode::Break | TimerMode::LongBreak => {
                 self.current_mode = TimerMode::Focus;
@@ -872,6 +868,19 @@ impl TimerState {
             .is_multiple_of(self.sessions_per_long_break)
     }
 
+    /// Cadence-aware break mode after a focus completion: `LongBreak`
+    /// every Nth completion (per `sessions_per_long_break`), otherwise
+    /// short `Break`. Used by the three focus-completion paths
+    /// (skip, natural zero-cross, explicit complete) so the cadence
+    /// rule lives in one place.
+    const fn next_break_mode(&self) -> TimerMode {
+        if self.should_take_long_break() {
+            TimerMode::LongBreak
+        } else {
+            TimerMode::Break
+        }
+    }
+
     /// Shared seal-and-advance for a focus-session completion.
     ///
     /// Increments `completed_pomodoros`, integrates the in-flight
@@ -895,11 +904,7 @@ impl TimerState {
         self.current_session_elapsed_secs = 0;
         // Every Nth focus completion enters `LongBreak`; otherwise
         // short `Break`. `N` is `self.sessions_per_long_break`.
-        self.current_mode = if self.should_take_long_break() {
-            TimerMode::LongBreak
-        } else {
-            TimerMode::Break
-        };
+        self.current_mode = self.next_break_mode();
         self.time_remaining_secs = i64::from(self.durations.for_mode(self.current_mode));
         self.is_running = false;
         self.is_paused = false;
@@ -1027,11 +1032,7 @@ impl TimerState {
             // mode is the cadence-determined next mode — run the
             // cadence check here against the count the zero-cross
             // already incremented so the post-condition matches B.1.
-            self.current_mode = if self.should_take_long_break() {
-                TimerMode::LongBreak
-            } else {
-                TimerMode::Break
-            };
+            self.current_mode = self.next_break_mode();
             self.time_remaining_secs = i64::from(self.durations.for_mode(self.current_mode));
             return vec![TimerEvent::SessionCompletedEarly {
                 elapsed_secs: elapsed,

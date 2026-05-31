@@ -116,6 +116,17 @@ where
     invoke_serde(cmd, &map).await
 }
 
+/// Invoke a no-arg command. Equivalent to `invoke_serde(cmd, &Value::Null)`
+/// — every reader / no-arg lifecycle command (`load_*`, `reset_all_data`,
+/// `stop_activity_monitoring`, the autostart family) routes through here so
+/// the empty-payload wire shape is single-sourced.
+async fn invoke_no_arg<R>(cmd: &'static str) -> Result<R, BridgeError>
+where
+    R: DeserializeOwned,
+{
+    invoke_serde(cmd, &serde_json::Value::Null).await
+}
+
 /// Translate a rejected Tauri-side `Promise` into a `BridgeError`. The
 /// Tauri runtime wraps Rust-side `Err(BridgeError)` returns as the
 /// rejected value; if it deserialises cleanly we keep the structured
@@ -164,7 +175,7 @@ pub async fn save_session_data(session: Session) -> Result<(), BridgeError> {
 /// not present. Otherwise returns whatever variant the Tauri-side handler
 /// maps its filesystem failure to (typically `BridgeError::Internal`).
 pub async fn load_session_data() -> Result<Option<Session>, BridgeError> {
-    invoke_serde("load_session_data", &serde_json::Value::Null).await
+    invoke_no_arg("load_session_data").await
 }
 
 /// Read the persisted full session history. Tauri-side handler:
@@ -180,7 +191,7 @@ pub async fn load_session_data() -> Result<Option<Session>, BridgeError> {
 /// not present. Otherwise returns whatever variant the Tauri-side handler
 /// maps its filesystem failure to (typically `BridgeError::Internal`).
 pub async fn get_stats_history() -> Result<Vec<Session>, BridgeError> {
-    invoke_serde("get_stats_history", &serde_json::Value::Null).await
+    invoke_no_arg("get_stats_history").await
 }
 
 /// Append a completed session to the on-disk daily-stats file. Tauri-side
@@ -229,7 +240,7 @@ pub async fn save_tasks(tasks: Vec<Task>) -> Result<(), BridgeError> {
 /// not present. Otherwise returns whatever variant the Tauri-side handler
 /// maps its filesystem failure to (typically `BridgeError::Internal`).
 pub async fn load_tasks() -> Result<Vec<Task>, BridgeError> {
-    invoke_serde("load_tasks", &serde_json::Value::Null).await
+    invoke_no_arg("load_tasks").await
 }
 
 // ---------------------------------------------------------------------------
@@ -290,7 +301,7 @@ pub async fn append_manual_session(session: ManualSession) -> Result<(), BridgeE
 /// or `BridgeError::SerdeRoundtrip` if a stored record carries an
 /// unknown `session_type` variant.
 pub async fn load_manual_sessions() -> Result<Vec<ManualSession>, BridgeError> {
-    invoke_serde("load_manual_sessions", &serde_json::Value::Null).await
+    invoke_no_arg("load_manual_sessions").await
 }
 
 // ---------------------------------------------------------------------------
@@ -325,7 +336,7 @@ pub async fn save_quick_logs(quick_logs: Vec<QuickLog>) -> Result<(), BridgeErro
 /// handler maps its filesystem failure to (typically
 /// `BridgeError::Internal`).
 pub async fn load_quick_logs() -> Result<Vec<QuickLog>, BridgeError> {
-    invoke_serde("load_quick_logs", &serde_json::Value::Null).await
+    invoke_no_arg("load_quick_logs").await
 }
 
 /// Persist the user's distraction entries to disk. Tauri-side handler:
@@ -351,7 +362,7 @@ pub async fn save_distractions(distractions: Vec<Distraction>) -> Result<(), Bri
 /// handler maps its filesystem failure to (typically
 /// `BridgeError::Internal`).
 pub async fn load_distractions() -> Result<Vec<Distraction>, BridgeError> {
-    invoke_serde("load_distractions", &serde_json::Value::Null).await
+    invoke_no_arg("load_distractions").await
 }
 
 // ---------------------------------------------------------------------------
@@ -371,7 +382,7 @@ pub async fn load_distractions() -> Result<Vec<Distraction>, BridgeError> {
 /// not present. Otherwise returns whatever variant the Tauri-side handler
 /// maps its filesystem failure to (typically `BridgeError::Internal`).
 pub async fn load_tags() -> Result<Vec<Tag>, BridgeError> {
-    invoke_serde("load_tags", &serde_json::Value::Null).await
+    invoke_no_arg("load_tags").await
 }
 
 /// Persist the full tag list in a single atomic write. Tauri-side handler:
@@ -481,7 +492,7 @@ pub async fn save_settings(settings: Settings) -> Result<(), BridgeError> {
 /// or `BridgeError::SerdeRoundtrip` if the on-disk JSON cannot be
 /// deserialised.
 pub async fn load_settings() -> Result<Settings, BridgeError> {
-    invoke_serde("load_settings", &serde_json::Value::Null).await
+    invoke_no_arg("load_settings").await
 }
 
 /// Wipe every app-data file and reset the in-process settings state.
@@ -501,7 +512,7 @@ pub async fn load_settings() -> Result<Settings, BridgeError> {
 /// not present. Otherwise returns whatever variant the Tauri-side handler
 /// maps its filesystem failure to (typically `BridgeError::Internal`).
 pub async fn reset_all_data() -> Result<(), BridgeError> {
-    invoke_serde("reset_all_data", &serde_json::Value::Null).await
+    invoke_no_arg("reset_all_data").await
 }
 
 // ---------------------------------------------------------------------------
@@ -579,7 +590,7 @@ pub async fn start_activity_monitoring(timeout_seconds: u64) -> Result<(), Bridg
 /// failure case (see lib.rs `stop_activity_monitoring`); any non-success
 /// would surface as `BridgeError::Internal`.
 pub async fn stop_activity_monitoring() -> Result<(), BridgeError> {
-    invoke_serde("stop_activity_monitoring", &serde_json::Value::Null).await
+    invoke_no_arg("stop_activity_monitoring").await
 }
 
 /// Reconfigure the running `ActivityMonitor`'s idle threshold without
@@ -627,7 +638,7 @@ pub async fn update_activity_timeout(timeout_seconds: u64) -> Result<(), BridgeE
 /// not present. Plugin failures (e.g., user has revoked the OS
 /// permission to manage Login Items) surface as `BridgeError::Internal`.
 pub async fn enable_autostart() -> Result<(), BridgeError> {
-    invoke_serde("enable_autostart", &serde_json::Value::Null).await
+    invoke_no_arg("enable_autostart").await
 }
 
 /// Disable launch-on-login. Tauri-side handler:
@@ -643,7 +654,7 @@ pub async fn enable_autostart() -> Result<(), BridgeError> {
 /// Returns `BridgeError::BridgeUnavailable` when the Tauri JS bridge is
 /// not present. Plugin failures surface as `BridgeError::Internal`.
 pub async fn disable_autostart() -> Result<(), BridgeError> {
-    invoke_serde("disable_autostart", &serde_json::Value::Null).await
+    invoke_no_arg("disable_autostart").await
 }
 
 /// Read whether launch-on-login is currently enabled. Tauri-side handler:
@@ -697,7 +708,7 @@ pub async fn is_autostart_enabled() -> Result<bool, BridgeError> {
     if bridge_available().is_absent() {
         return Ok(false);
     }
-    invoke_serde("is_autostart_enabled", &serde_json::Value::Null).await
+    invoke_no_arg("is_autostart_enabled").await
 }
 
 // ---------------------------------------------------------------------------
