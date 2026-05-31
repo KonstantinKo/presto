@@ -102,7 +102,6 @@ mod tests {
     }
 }
 
-
 ///
 /// `StatisticsView` owns the cursor-reset behaviour (FR-008) — this
 /// component is shape-only.

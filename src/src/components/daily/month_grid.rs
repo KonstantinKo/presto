@@ -264,11 +264,7 @@ mod tests {
         for (year, month) in [(2024, 1), (2024, 2), (2023, 2), (2024, 12)] {
             let anchor = utc(year, month, 15);
             let grid = build_month_grid(anchor);
-            assert_eq!(
-                grid.len(),
-                42,
-                "expected 42 cells for {year}-{month:02}"
-            );
+            assert_eq!(grid.len(), 42, "expected 42 cells for {year}-{month:02}");
         }
     }
 
