@@ -345,23 +345,21 @@ where
             }
             Ok(entries)
         }
-        Err(e) => {
-            match backup_corrupt_file(file_path, &content) {
-                Ok(backup_path) => {
-                    log::warn!(
-                        "{file_label} corrupt, preserved as {}: {e}",
-                        backup_path.display()
-                    );
-                    Ok(Vec::new())
-                }
-                Err(backup_err) => {
-                    log::error!(
-                        "{file_label} corrupt and all backup attempts failed ({backup_err}): {e}"
-                    );
-                    Err(format!("{file_label} corrupt and backup failed: {e}"))
-                }
+        Err(e) => match backup_corrupt_file(file_path, &content) {
+            Ok(backup_path) => {
+                log::warn!(
+                    "{file_label} corrupt, preserved as {}: {e}",
+                    backup_path.display()
+                );
+                Ok(Vec::new())
             }
-        }
+            Err(backup_err) => {
+                log::error!(
+                    "{file_label} corrupt and all backup attempts failed ({backup_err}): {e}"
+                );
+                Err(format!("{file_label} corrupt and backup failed: {e}"))
+            }
+        },
     }
 }
 
@@ -374,7 +372,11 @@ where
 /// On corrupt JSON, rescues the file via `read_capped_vec_with_backup`.
 pub(super) fn read_quick_logs_from(dir: &Path) -> Result<Vec<super::QuickLog>, String> {
     const MAX_QUICK_LOGS: usize = 1_000;
-    read_capped_vec_with_backup(&dir.join("quick_logs.json"), "quick_logs.json", MAX_QUICK_LOGS)
+    read_capped_vec_with_backup(
+        &dir.join("quick_logs.json"),
+        "quick_logs.json",
+        MAX_QUICK_LOGS,
+    )
 }
 
 /// Creates `dir` if necessary, then atomically writes `logs` to

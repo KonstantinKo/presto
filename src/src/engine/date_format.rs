@@ -150,6 +150,9 @@ mod tests {
     #[test]
     fn rfc3339_from_ms_epoch_is_iso8601() {
         let s = rfc3339_from_ms(0);
-        assert!(s.starts_with("1970-01-01T00:00:00"), "epoch must be 1970-01-01: {s}");
+        assert!(
+            s.starts_with("1970-01-01T00:00:00"),
+            "epoch must be 1970-01-01: {s}"
+        );
     }
 }
