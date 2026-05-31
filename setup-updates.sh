@@ -1,4 +1,5 @@
 #!/bin/bash
+set -euo pipefail
 
 # Configuration script for Presto Update System
 # This script will guide you through the configuration of automatic updates

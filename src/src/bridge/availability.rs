@@ -54,8 +54,10 @@ impl BridgeAvailable {
 pub fn bridge_available() -> BridgeAvailable {
     let global = js_sys::global();
     let key = JsValue::from_str("__TAURI_INTERNALS__");
-    match js_sys::Reflect::get(&global, &key) {
-        Ok(value) if !value.is_undefined() && !value.is_null() => BridgeAvailable::Available,
+    // Use Reflect::has (presence check) rather than Reflect::get + truthiness
+    // so a globally-planted `__TAURI_INTERNALS__ = 0` doesn't pass the gate.
+    match js_sys::Reflect::has(&global, &key) {
+        Ok(true) => BridgeAvailable::Available,
         _ => BridgeAvailable::Absent,
     }
 }

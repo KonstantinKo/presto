@@ -1,10 +1,8 @@
 // Engine — `TimerState` pomodoro state machine.
 //
-// Spec 001-leptos-migration §Phase 2 (T120-T146); ported from
-// `src/core/pomodoro-timer.js`. Pure state machine — no DOM-
-// binding crate imports, no DOM reads. All inputs (wall-clock
-// time, activity signals, settings) are passed in via constructor
-// / setters / `tick(now_ms)`.
+// Pure state machine — no DOM-binding crate imports, no DOM reads.
+// All inputs (wall-clock time, activity signals, settings) are
+// passed in via constructor / setters / `tick(now_ms)`.
 //
 // See `engine/mod.rs` for module-level Principle I rationale.
 
@@ -673,11 +671,9 @@ impl TimerState {
     /// Per Principle III the engine boundary should reject illegal
     /// state combinations as loudly as the UI layer (which already
     /// asserts via `RunState::from_engine`). Called at the start of
-    /// every state-transition method that touches these flags so the
-    /// dev-build panics at the first frame the invariant breaks —
-    /// the production build is a no-op.
+    /// every state-transition method that touches these flags.
     fn assert_consistent_state(&self) {
-        debug_assert!(
+        assert!(
             !(self.is_running && (self.is_paused || self.is_auto_paused)),
             "engine illegal state: cannot be both running and paused/auto-paused"
         );
@@ -804,7 +800,7 @@ impl TimerState {
         let old_remaining = self.time_remaining_secs;
         let drained = old_remaining.saturating_sub(new_remaining);
         if drained > 0 {
-            let drained_u32 = u32::try_from(drained).unwrap_or(u32::MAX);
+            let drained_u32 = u32::try_from(drained).unwrap_or(u32::MAX); // saturates on absurd clock drift
             self.current_session_elapsed_secs = self
                 .current_session_elapsed_secs
                 .saturating_add(drained_u32);
@@ -864,6 +860,12 @@ impl TimerState {
     // semantics (AG-9 finding).
 
     const fn should_take_long_break(&self) -> bool {
+        // sessions_per_long_break == 0 means "never long break" (avoids
+        // integer division by zero if a corrupt settings file bypasses
+        // the UI's 1-10 clamp).
+        if self.sessions_per_long_break == 0 {
+            return false;
+        }
         self.completed_pomodoros
             .is_multiple_of(self.sessions_per_long_break)
     }
@@ -1108,7 +1110,7 @@ impl TimerState {
         if self.current_mode == TimerMode::Focus {
             let drained = old_remaining.saturating_sub(new_remaining);
             if drained > 0 {
-                let drained_u32 = u32::try_from(drained).unwrap_or(u32::MAX);
+                let drained_u32 = u32::try_from(drained).unwrap_or(u32::MAX); // saturates on absurd clock drift
                 self.current_session_elapsed_secs = self
                     .current_session_elapsed_secs
                     .saturating_add(drained_u32);

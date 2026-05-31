@@ -1,4 +1,5 @@
 #!/bin/bash
+set -euo pipefail
 
 # Verification script for Presto update system configuration
 # This script checks if everything is properly set up for automatic updates

@@ -16,10 +16,12 @@
 // - `tag`       — `TagManager` over the user's `Tag` list. Per-tag CRUD
 //                 (no bulk save) per contracts/tauri-bridge.md §Deletions.
 // - `session`   — `SessionManager` over the user's manual-session
-//                 backfill records. Per Principle I, manual entries
-//                 route through `engine::timer::TimerState::record_manual_session`
-//                 before the bulk re-save lands on disk via
-//                 `bridge::commands::save_manual_sessions`.
+//                 backfill records. `create_manual` routes through
+//                 `engine::timer::TimerState::record_manual_session` before
+//                 the bulk re-save lands on disk via
+//                 `bridge::commands::save_manual_sessions`. `update_manual`
+//                 and `delete_manual` go directly to in-memory state and
+//                 the bulk-save payload (no engine accumulator changes).
 // - `update`    — `UpdateManager` over the `UpdateInfo` enum + the
 //                 polling cadence pin (1h, matching JS-era
 //                 `update-manager-global.js:219`). Consumes the E10
