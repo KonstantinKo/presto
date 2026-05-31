@@ -910,3 +910,120 @@ fn inventory_uuid() -> String {
 const fn inventory_uuid() -> String {
     String::new()
 }
+
+#[cfg(test)]
+mod tests {
+    use chrono::{TimeZone, Utc};
+
+    use super::{format_hh_mm, scope_date_set, InventoryScope};
+
+    fn utc(year: i32, month: u32, day: u32) -> chrono::DateTime<Utc> {
+        Utc.with_ymd_and_hms(year, month, day, 12, 0, 0)
+            .single()
+            .unwrap()
+    }
+
+    // ── scope_date_set — Day ─────────────────────────────────────────
+
+    #[test]
+    fn scope_day_returns_one_entry() {
+        let anchor = utc(2024, 1, 15);
+        let dates = scope_date_set(anchor, InventoryScope::Day);
+        assert_eq!(dates.len(), 1);
+    }
+
+    #[test]
+    fn scope_day_entry_matches_anchor_date_string() {
+        let anchor = utc(2024, 1, 15);
+        let dates = scope_date_set(anchor, InventoryScope::Day);
+        // On non-wasm, format_session_date uses UTC → "Mon Jan 15 2024".
+        assert_eq!(dates[0], "Mon Jan 15 2024");
+    }
+
+    // ── scope_date_set — Week ────────────────────────────────────────
+
+    #[test]
+    fn scope_week_returns_seven_entries() {
+        let anchor = utc(2024, 1, 15); // Monday
+        let dates = scope_date_set(anchor, InventoryScope::Week);
+        assert_eq!(dates.len(), 7);
+    }
+
+    #[test]
+    fn scope_week_starts_on_monday() {
+        // Anchor is Monday Jan 15; week should start Jan 15 (Mon).
+        let anchor = utc(2024, 1, 15);
+        let dates = scope_date_set(anchor, InventoryScope::Week);
+        assert_eq!(dates[0], "Mon Jan 15 2024");
+        assert_eq!(dates[6], "Sun Jan 21 2024");
+    }
+
+    #[test]
+    fn scope_week_for_mid_week_anchor_starts_on_preceding_monday() {
+        // Wednesday Jan 17; week should run Mon Jan 15 – Sun Jan 21.
+        let anchor = utc(2024, 1, 17);
+        let dates = scope_date_set(anchor, InventoryScope::Week);
+        assert_eq!(dates[0], "Mon Jan 15 2024");
+        assert_eq!(dates[6], "Sun Jan 21 2024");
+    }
+
+    // ── scope_date_set — Month ───────────────────────────────────────
+
+    #[test]
+    fn scope_month_returns_days_in_month() {
+        // January 2024 has 31 days.
+        let anchor = utc(2024, 1, 15);
+        let dates = scope_date_set(anchor, InventoryScope::Month);
+        assert_eq!(dates.len(), 31);
+    }
+
+    #[test]
+    fn scope_month_february_leap_year() {
+        // February 2024 is a leap year — 29 days.
+        let anchor = utc(2024, 2, 15);
+        let dates = scope_date_set(anchor, InventoryScope::Month);
+        assert_eq!(dates.len(), 29);
+    }
+
+    #[test]
+    fn scope_month_february_non_leap_year() {
+        // February 2023 is not a leap year — 28 days.
+        let anchor = utc(2023, 2, 15);
+        let dates = scope_date_set(anchor, InventoryScope::Month);
+        assert_eq!(dates.len(), 28);
+    }
+
+    #[test]
+    fn scope_month_first_entry_is_first_of_month() {
+        let anchor = utc(2024, 1, 15);
+        let dates = scope_date_set(anchor, InventoryScope::Month);
+        assert_eq!(dates[0], "Mon Jan 01 2024");
+    }
+
+    #[test]
+    fn scope_month_last_entry_is_last_of_month() {
+        let anchor = utc(2024, 1, 15);
+        let dates = scope_date_set(anchor, InventoryScope::Month);
+        assert_eq!(dates[30], "Wed Jan 31 2024");
+    }
+
+    // ── format_hh_mm ─────────────────────────────────────────────────
+
+    #[test]
+    fn format_hh_mm_valid_rfc3339_returns_utc_time() {
+        // On non-wasm the fallback formats in UTC.
+        assert_eq!(format_hh_mm("2024-01-15T14:30:00Z"), "14:30");
+    }
+
+    #[test]
+    fn format_hh_mm_with_utc_offset_converts_to_utc() {
+        // +05:30 input → UTC 09:00.
+        assert_eq!(format_hh_mm("2024-01-15T14:30:00+05:30"), "09:00");
+    }
+
+    #[test]
+    fn format_hh_mm_invalid_input_returns_empty_string() {
+        assert_eq!(format_hh_mm("not-a-timestamp"), "");
+        assert_eq!(format_hh_mm(""), "");
+    }
+}

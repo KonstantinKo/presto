@@ -61,6 +61,48 @@ impl Period {
 /// Period tab selector. The active period gets a `.active` modifier
 /// class so CSS can highlight it; click on any other tab calls
 /// `on_select` with the clicked variant.
+#[cfg(test)]
+mod tests {
+    use std::collections::HashSet;
+
+    use super::Period;
+
+    const ALL: [Period; 4] = [
+        Period::Daily,
+        Period::Weekly,
+        Period::Monthly,
+        Period::Yearly,
+    ];
+
+    #[test]
+    fn data_attr_values_are_stable() {
+        assert_eq!(Period::Daily.data_attr(), "daily");
+        assert_eq!(Period::Weekly.data_attr(), "weekly");
+        assert_eq!(Period::Monthly.data_attr(), "monthly");
+        assert_eq!(Period::Yearly.data_attr(), "yearly");
+    }
+
+    #[test]
+    fn all_data_attrs_are_distinct() {
+        let attrs: HashSet<_> = ALL.iter().map(|p| p.data_attr()).collect();
+        assert_eq!(attrs.len(), ALL.len());
+    }
+
+    #[test]
+    fn icon_names_are_non_empty_strings() {
+        for p in ALL {
+            assert!(!p.icon_name().is_empty(), "{p:?} has empty icon name");
+        }
+    }
+
+    #[test]
+    fn all_icon_names_are_distinct() {
+        let icons: HashSet<_> = ALL.iter().map(|p| p.icon_name()).collect();
+        assert_eq!(icons.len(), ALL.len());
+    }
+}
+
+
 ///
 /// `StatisticsView` owns the cursor-reset behaviour (FR-008) — this
 /// component is shape-only.
