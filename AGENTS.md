@@ -5,7 +5,7 @@ repo, read these in order:
 
 1. `VISION.md` — what the project is and isn't, and the roadmap.
 2. `CLAUDE.md` — workflow conventions and where to find things.
-3. `.specify/memory/constitution.md` — the 9 enduring principles.
+3. `.specify/memory/constitution.md` — the 10 enduring principles.
 
 ## Guarantees
 

@@ -22,7 +22,7 @@ Each spec file contains one `test()` that walks a complete user-visible flow fro
 
 ## Dev-server choice
 
-**Vite** is used to serve `src/` as a static HTTP server because `src/index.html` uses `<script type="module">` imports, which require a server that sets correct `text/javascript` MIME types and supports ES module resolution. A plain `file://` serve does not work.
+**Trunk** (`trunk serve --no-autoreload`) is used to build and serve the `src/` Leptos/WASM crate. It is configured in `playwright.config.js` as the `webServer` block (cwd: `../../src`). Trunk compiles the WASM bundle and serves it with correct MIME types over HTTP on port 1420.
 
 **`tauri dev` was rejected** for E2E because it requires `tauri-driver` + WebKit2GTK + extra OS packages in CI, with no behavioral upside given that all Tauri commands are mocked at the JS bridge level. The production Tauri IPC contract is already tested by Phase 3 cargo MockRuntime tests.
 
