@@ -38,7 +38,9 @@ specta = { version = "=2.0.0-rc.22", features = ["derive", "chrono", "serde_json
 tauri-specta = { version = "=2.0.0-rc.21", features = ["derive", "typescript"] }
 specta-typescript = "=0.0.9"
 log = "0.4"
-tauri = { version = "2", features = ["tray-icon"] }
+# `devtools` ships in release: desktop users can attach the webview inspector
+# to diagnose issues without a special debug build.
+tauri = { version = "2", features = ["tray-icon", "devtools"] }
 tauri-plugin-log = "2"
 tauri-plugin-opener = { version = "2", default-features = false }
 tauri-plugin-global-shortcut = { version = "2", default-features = false }
@@ -62,10 +64,8 @@ rust_xlsxwriter = "0.79"
 tempfile = "3"
 tauri = { version = "2", features = ["test"] }
 
-[target.'cfg(debug_assertions)'.dependencies]
-tauri = { version = "2", features = ["devtools"] }
-
 [target.'cfg(target_os = "macos")'.dependencies]
 cocoa = "0.25"
 objc = "0.2"
+
 

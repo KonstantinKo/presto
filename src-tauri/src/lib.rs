@@ -851,7 +851,9 @@ pub fn run() {
     {
         let exporter = specta_typescript::Typescript::default()
             .bigint(specta_typescript::BigIntExportBehavior::String);
-        let _ = specta_builder.export(exporter, "../src/bindings/tauri.ts");
+        if let Err(e) = specta_builder.export(exporter, "../src/bindings/tauri.ts") {
+            log::warn!("specta: failed to write ../src/bindings/tauri.ts: {e}");
+        }
     }
 
     tauri::async_runtime::block_on(async {
@@ -942,12 +944,10 @@ pub fn run() {
                         }
                         last_tick_ms = now_ms;
                         if let Err(e) = tick_handle.emit("engine-tick", ()) {
-                            log::warn!(
-                                "engine-tick thread exiting; emit failed: {e}. \
-                                     Frontend setInterval driver remains, but the 1Hz \
-                                     cadence will degrade if the window is unfocused."
-                            );
-                            break;
+                            // Emit can fail transiently when the window is briefly
+                            // destroyed/recreated. Logging and letting the loop
+                            // continue ensures recovery once the window is live again.
+                            log::warn!("engine-tick emit failed (will retry next tick): {e}");
                         }
                     }
                 });
@@ -1465,7 +1465,7 @@ fn disable_app_nap() {
             std::mem::transmute(objc_msgSend as *const ());
         msg_release(reason, sel_release);
 
-        log::info!("App Nap suppression engaged (NSProcessInfo activity token={activity:p})");
+        log::info!("App Nap suppression engaged");
     }
 }
 

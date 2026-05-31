@@ -1,4 +1,5 @@
 #!/bin/bash
+set -euo pipefail
 
 # Configuration script for Presto Update System
 # This script will guide you through the configuration of automatic updates
@@ -11,7 +12,7 @@ echo ""
 read_input() {
     local prompt="$1"
     local variable_name="$2"
-    local default_value="$3"
+    local default_value="${3:-}"
     
     if [ -n "$default_value" ]; then
         read -p "$prompt [$default_value]: " input

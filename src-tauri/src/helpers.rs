@@ -312,54 +312,71 @@ pub(super) fn append_manual_session_in(
     write_manual_sessions_to(dir, &sessions)
 }
 
+/// Reads a JSON file containing a `Vec<T>`, caps the list to `max_entries`
+/// (oldest-first drain), and rescues corrupt content via `backup_corrupt_file`.
+///
+/// Missing file ⇒ `Ok(Vec::new())`. Empty / `"null"` body ⇒ `Ok(Vec::new())`.
+/// On `serde_json::Error`, renames the original to `<name>.corrupt` (matching
+/// the `history.json` convention in `append_daily_stats_to`) so the next save
+/// does not silently clobber the user's data, logs the error, and returns an
+/// empty vec. Only `Err` if every backup attempt fails. Feeds AG-10's
+/// PII-safety contract — `serde_json::Error` text is logged but never
+/// persisted on the wire.
+fn read_capped_vec_with_backup<T>(
+    file_path: &Path,
+    file_label: &str,
+    max_entries: usize,
+) -> Result<Vec<T>, String>
+where
+    T: serde::de::DeserializeOwned,
+{
+    let content = match fs::read_to_string(file_path) {
+        Ok(c) => c,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+        Err(e) => return Err(format!("Failed to read {file_label} file: {e}")),
+    };
+    if content.trim().is_empty() || content.trim() == "null" {
+        return Ok(Vec::new());
+    }
+    match serde_json::from_str::<Vec<T>>(&content) {
+        Ok(mut entries) => {
+            if entries.len() > max_entries {
+                entries.drain(..entries.len() - max_entries);
+            }
+            Ok(entries)
+        }
+        Err(e) => match backup_corrupt_file(file_path, &content) {
+            Ok(backup_path) => {
+                log::warn!(
+                    "{file_label} corrupt, preserved as {}: {e}",
+                    backup_path.display()
+                );
+                Ok(Vec::new())
+            }
+            Err(backup_err) => {
+                log::error!(
+                    "{file_label} corrupt and all backup attempts failed ({backup_err}): {e}"
+                );
+                Err(format!("{file_label} corrupt and backup failed: {e}"))
+            }
+        },
+    }
+}
+
 // ── Quick logs ────────────────────────────────────────────────────────────────
 
 /// Reads `quick_logs.json` from `dir`, returning an empty vec when absent.
 ///
 /// Trims to the most recent `MAX_QUICK_LOGS` entries on load so cold-start
 /// memory is bounded even if the file grew large before the cap was added.
-///
-/// On corrupt JSON, rescues the file by renaming it to `quick_logs.json.corrupt`
-/// (matching the `history.json` convention in `append_daily_stats_to`) so the
-/// next save does not silently clobber the user's data, then returns an empty
-/// vec. The `serde_json::Error` text is logged but never persisted on the
-/// wire — feeds AG-10's PII-safety contract.
+/// On corrupt JSON, rescues the file via `read_capped_vec_with_backup`.
 pub(super) fn read_quick_logs_from(dir: &Path) -> Result<Vec<super::QuickLog>, String> {
     const MAX_QUICK_LOGS: usize = 1_000;
-    let file_path = dir.join("quick_logs.json");
-    if !file_path.exists() {
-        return Ok(Vec::new());
-    }
-    let content = fs::read_to_string(&file_path)
-        .map_err(|e| format!("Failed to read quick logs file: {e}"))?;
-    if content.trim().is_empty() || content.trim() == "null" {
-        return Ok(Vec::new());
-    }
-    match serde_json::from_str::<Vec<super::QuickLog>>(&content) {
-        Ok(mut logs) => {
-            if logs.len() > MAX_QUICK_LOGS {
-                logs.drain(..logs.len() - MAX_QUICK_LOGS);
-            }
-            Ok(logs)
-        }
-        Err(e) => {
-            match backup_corrupt_file(&file_path, &content) {
-                Ok(backup_path) => {
-                    log::warn!(
-                        "quick_logs.json corrupt, preserved as {}: {e}",
-                        backup_path.display()
-                    );
-                }
-                Err(backup_err) => {
-                    log::error!(
-                        "quick_logs.json corrupt and all backup attempts failed ({backup_err}): {e}"
-                    );
-                    return Err(format!("quick_logs.json corrupt and backup failed: {e}"));
-                }
-            }
-            Ok(Vec::new())
-        }
-    }
+    read_capped_vec_with_backup(
+        &dir.join("quick_logs.json"),
+        "quick_logs.json",
+        MAX_QUICK_LOGS,
+    )
 }
 
 /// Creates `dir` if necessary, then atomically writes `logs` to
@@ -375,47 +392,14 @@ pub(super) fn write_quick_logs_to(dir: &Path, logs: &[super::QuickLog]) -> Resul
 ///
 /// Trims to the most recent `MAX_DISTRACTIONS` entries on load so cold-start
 /// memory is bounded even if the file grew large before the cap was added.
-///
-/// On corrupt JSON, rescues the file by renaming it to
-/// `distractions.json.corrupt` (matching the `history.json` convention in
-/// `append_daily_stats_to`) so the next save does not silently clobber the
-/// user's data, then returns an empty vec.
+/// On corrupt JSON, rescues the file via `read_capped_vec_with_backup`.
 pub(super) fn read_distractions_from(dir: &Path) -> Result<Vec<super::Distraction>, String> {
     const MAX_DISTRACTIONS: usize = 1_000;
-    let file_path = dir.join("distractions.json");
-    if !file_path.exists() {
-        return Ok(Vec::new());
-    }
-    let content = fs::read_to_string(&file_path)
-        .map_err(|e| format!("Failed to read distractions file: {e}"))?;
-    if content.trim().is_empty() || content.trim() == "null" {
-        return Ok(Vec::new());
-    }
-    match serde_json::from_str::<Vec<super::Distraction>>(&content) {
-        Ok(mut entries) => {
-            if entries.len() > MAX_DISTRACTIONS {
-                entries.drain(..entries.len() - MAX_DISTRACTIONS);
-            }
-            Ok(entries)
-        }
-        Err(e) => {
-            match backup_corrupt_file(&file_path, &content) {
-                Ok(backup_path) => {
-                    log::warn!(
-                        "distractions.json corrupt, preserved as {}: {e}",
-                        backup_path.display()
-                    );
-                }
-                Err(backup_err) => {
-                    log::error!(
-                        "distractions.json corrupt and all backup attempts failed ({backup_err}): {e}"
-                    );
-                    return Err(format!("distractions.json corrupt and backup failed: {e}"));
-                }
-            }
-            Ok(Vec::new())
-        }
-    }
+    read_capped_vec_with_backup(
+        &dir.join("distractions.json"),
+        "distractions.json",
+        MAX_DISTRACTIONS,
+    )
 }
 
 /// Creates `dir` if necessary, then atomically writes `entries` to

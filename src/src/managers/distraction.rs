@@ -58,9 +58,7 @@ impl DistractionManager {
         id: String,
     ) {
         let date = crate::engine::date_format::format_session_date(now_ms);
-        let created_at = chrono::DateTime::<chrono::Utc>::from_timestamp_millis(now_ms)
-            .unwrap_or_default()
-            .to_rfc3339();
+        let created_at = crate::engine::date_format::rfc3339_from_ms(now_ms);
         self.entries.push(Distraction {
             id,
             note,

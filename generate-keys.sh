@@ -1,4 +1,5 @@
 #!/bin/bash
+set -euo pipefail
 
 # Script to generate signing keys for Tauri updates
 # This script must be run in the project directory

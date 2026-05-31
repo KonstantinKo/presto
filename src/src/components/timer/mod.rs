@@ -412,9 +412,7 @@ fn synth_completed_session(
         start_time: format!("{hh_start:02}:{mm_start:02}"),
         end_time: format!("{hh_end:02}:{mm_end:02}"),
         notes: None,
-        created_at: chrono::DateTime::<chrono::Utc>::from_timestamp_millis(now_ms)
-            .unwrap_or_default()
-            .to_rfc3339(),
+        created_at: crate::engine::date_format::rfc3339_from_ms(now_ms),
         date: crate::engine::date_format::format_session_date(now_ms),
         tags: None,
         title,
@@ -1727,11 +1725,7 @@ pub fn TimerView() -> impl IntoView {
                 .current_session_started_at_ms()
                 .unwrap_or_else(|| BrowserClock.now_ms());
             crate::bridge::types::DistractionParentRef {
-                parent_session_start_ts: chrono::DateTime::<chrono::Utc>::from_timestamp_millis(
-                    start_ms,
-                )
-                .unwrap_or_default()
-                .to_rfc3339(),
+                parent_session_start_ts: crate::engine::date_format::rfc3339_from_ms(start_ms),
                 parent_mode: mode,
                 parent_tag_id: selected_tag_ids.with_untracked(|sel| sel.first().cloned()),
                 parent_title: {

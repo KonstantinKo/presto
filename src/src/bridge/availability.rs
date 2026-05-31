@@ -46,16 +46,17 @@ impl BridgeAvailable {
 ///
 /// The probe checks `js_sys::global()` (which resolves to `window` in browser
 /// contexts and to the node global in the wasm-bindgen-test `--node` runner)
-/// for a property named `__TAURI_INTERNALS__` whose value is neither
-/// `undefined` nor `null`. This matches the Tauri 2.x convention where the
+/// for a property named `__TAURI_INTERNALS__`. This matches the Tauri 2.x convention where the
 /// internals bag is installed during the webview bootstrap and absent from
 /// every other context (Trunk dev server, e2e mock harness, node tests).
 #[must_use]
 pub fn bridge_available() -> BridgeAvailable {
     let global = js_sys::global();
     let key = JsValue::from_str("__TAURI_INTERNALS__");
-    match js_sys::Reflect::get(&global, &key) {
-        Ok(value) if !value.is_undefined() && !value.is_null() => BridgeAvailable::Available,
+    // Use Reflect::has (presence check only); falsy values like 0/false/null
+    // still pass since only property existence matters, not its value.
+    match js_sys::Reflect::has(&global, &key) {
+        Ok(true) => BridgeAvailable::Available,
         _ => BridgeAvailable::Absent,
     }
 }

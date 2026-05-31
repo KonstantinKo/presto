@@ -61,9 +61,7 @@ impl QuickLogManager {
     /// modal layer hands it.
     pub fn add(&mut self, title: String, elapsed_minutes: u32, now_ms: i64, id: String) {
         let date = crate::engine::date_format::format_session_date(now_ms);
-        let created_at = chrono::DateTime::<chrono::Utc>::from_timestamp_millis(now_ms)
-            .unwrap_or_default()
-            .to_rfc3339();
+        let created_at = crate::engine::date_format::rfc3339_from_ms(now_ms);
         self.entries.push(QuickLog {
             id,
             title,

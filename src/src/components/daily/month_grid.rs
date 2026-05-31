@@ -214,3 +214,122 @@ pub fn prev_month(cursor: DateTime<Utc>) -> DateTime<Utc> {
 pub fn next_month(cursor: DateTime<Utc>) -> DateTime<Utc> {
     cursor.checked_add_months(Months::new(1)).unwrap_or(cursor)
 }
+
+#[cfg(test)]
+mod tests {
+    use chrono::{Datelike, TimeZone, Utc};
+
+    use super::{build_month_grid, next_month, prev_month, start_of_week_sunday};
+
+    fn utc(year: i32, month: u32, day: u32) -> chrono::DateTime<Utc> {
+        Utc.with_ymd_and_hms(year, month, day, 12, 0, 0)
+            .single()
+            .unwrap()
+    }
+
+    // ── start_of_week_sunday ─────────────────────────────────────────
+
+    #[test]
+    fn start_of_week_sunday_is_sunday_for_sunday_input() {
+        // 2024-01-14 is a Sunday.
+        let sun = utc(2024, 1, 14);
+        let result = start_of_week_sunday(sun);
+        assert_eq!(result.weekday().num_days_from_sunday(), 0);
+        assert_eq!(result.day(), 14);
+    }
+
+    #[test]
+    fn start_of_week_sunday_for_wednesday_returns_preceding_sunday() {
+        // 2024-01-17 is a Wednesday; preceding Sunday is Jan 14.
+        let wed = utc(2024, 1, 17);
+        let result = start_of_week_sunday(wed);
+        assert_eq!(result.weekday().num_days_from_sunday(), 0);
+        assert_eq!(result.day(), 14);
+        assert_eq!(result.month(), 1);
+    }
+
+    #[test]
+    fn start_of_week_sunday_for_saturday_returns_preceding_sunday() {
+        // 2024-01-20 is a Saturday; preceding Sunday is Jan 14.
+        let sat = utc(2024, 1, 20);
+        let result = start_of_week_sunday(sat);
+        assert_eq!(result.day(), 14);
+    }
+
+    // ── build_month_grid ─────────────────────────────────────────────
+
+    #[test]
+    fn build_month_grid_always_42_cells() {
+        // Test across several months to cover edge cases.
+        for (year, month) in [(2024, 1), (2024, 2), (2023, 2), (2024, 12)] {
+            let anchor = utc(year, month, 15);
+            let grid = build_month_grid(anchor);
+            assert_eq!(grid.len(), 42, "expected 42 cells for {year}-{month:02}");
+        }
+    }
+
+    #[test]
+    fn build_month_grid_first_cell_is_always_sunday() {
+        let anchor = utc(2024, 1, 15);
+        let grid = build_month_grid(anchor);
+        assert_eq!(grid[0].weekday().num_days_from_sunday(), 0);
+    }
+
+    #[test]
+    fn build_month_grid_cells_are_consecutive_days() {
+        let anchor = utc(2024, 1, 15);
+        let grid = build_month_grid(anchor);
+        for window in grid.windows(2) {
+            let diff = window[1] - window[0];
+            assert_eq!(
+                diff,
+                chrono::Duration::days(1),
+                "grid cells must be consecutive days"
+            );
+        }
+    }
+
+    #[test]
+    fn build_month_grid_for_jan_2024_starts_dec_31_2023() {
+        // Jan 1 2024 is a Monday; the preceding Sunday is Dec 31 2023.
+        let anchor = utc(2024, 1, 1);
+        let grid = build_month_grid(anchor);
+        assert_eq!(grid[0].day(), 31);
+        assert_eq!(grid[0].month(), 12);
+        assert_eq!(grid[0].year(), 2023);
+    }
+
+    // ── prev_month / next_month ──────────────────────────────────────
+
+    #[test]
+    fn prev_month_steps_back_one_month() {
+        let mar = utc(2024, 3, 15);
+        let feb = prev_month(mar);
+        assert_eq!(feb.month(), 2);
+        assert_eq!(feb.year(), 2024);
+    }
+
+    #[test]
+    fn prev_month_wraps_january_to_december() {
+        let jan = utc(2024, 1, 15);
+        let dec = prev_month(jan);
+        assert_eq!(dec.month(), 12);
+        assert_eq!(dec.year(), 2023);
+    }
+
+    #[test]
+    fn next_month_steps_forward_one_month() {
+        let jan = utc(2024, 1, 15);
+        let feb = next_month(jan);
+        assert_eq!(feb.month(), 2);
+        assert_eq!(feb.year(), 2024);
+    }
+
+    #[test]
+    fn next_month_wraps_december_to_january() {
+        let dec = utc(2023, 12, 15);
+        let jan = next_month(dec);
+        assert_eq!(jan.month(), 1);
+        assert_eq!(jan.year(), 2024);
+    }
+}

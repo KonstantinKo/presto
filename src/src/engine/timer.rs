@@ -1,10 +1,8 @@
 // Engine — `TimerState` pomodoro state machine.
 //
-// Spec 001-leptos-migration §Phase 2 (T120-T146); ported from
-// `src/core/pomodoro-timer.js`. Pure state machine — no DOM-
-// binding crate imports, no DOM reads. All inputs (wall-clock
-// time, activity signals, settings) are passed in via constructor
-// / setters / `tick(now_ms)`.
+// Pure state machine — no DOM-binding crate imports, no DOM reads.
+// All inputs (wall-clock time, activity signals, settings) are
+// passed in via constructor / setters / `tick(now_ms)`.
 //
 // See `engine/mod.rs` for module-level Principle I rationale.
 
@@ -473,11 +471,7 @@ impl TimerState {
                         .saturating_add(self.current_session_elapsed_secs);
                 }
                 self.current_session_elapsed_secs = 0;
-                self.current_mode = if self.should_take_long_break() {
-                    TimerMode::LongBreak
-                } else {
-                    TimerMode::Break
-                };
+                self.current_mode = self.next_break_mode();
             }
             TimerMode::Break | TimerMode::LongBreak => {
                 self.current_mode = TimerMode::Focus;
@@ -677,11 +671,9 @@ impl TimerState {
     /// Per Principle III the engine boundary should reject illegal
     /// state combinations as loudly as the UI layer (which already
     /// asserts via `RunState::from_engine`). Called at the start of
-    /// every state-transition method that touches these flags so the
-    /// dev-build panics at the first frame the invariant breaks —
-    /// the production build is a no-op.
+    /// every state-transition method that touches these flags.
     fn assert_consistent_state(&self) {
-        debug_assert!(
+        assert!(
             !(self.is_running && (self.is_paused || self.is_auto_paused)),
             "engine illegal state: cannot be both running and paused/auto-paused"
         );
@@ -808,7 +800,7 @@ impl TimerState {
         let old_remaining = self.time_remaining_secs;
         let drained = old_remaining.saturating_sub(new_remaining);
         if drained > 0 {
-            let drained_u32 = u32::try_from(drained).unwrap_or(u32::MAX);
+            let drained_u32 = u32::try_from(drained).unwrap_or(u32::MAX); // saturates on absurd clock drift
             self.current_session_elapsed_secs = self
                 .current_session_elapsed_secs
                 .saturating_add(drained_u32);
@@ -868,8 +860,27 @@ impl TimerState {
     // semantics (AG-9 finding).
 
     const fn should_take_long_break(&self) -> bool {
+        // sessions_per_long_break == 0 means "never long break" (avoids
+        // integer division by zero if a corrupt settings file bypasses
+        // the UI's 1-10 clamp).
+        if self.sessions_per_long_break == 0 {
+            return false;
+        }
         self.completed_pomodoros
             .is_multiple_of(self.sessions_per_long_break)
+    }
+
+    /// Cadence-aware break mode after a focus completion: `LongBreak`
+    /// every Nth completion (per `sessions_per_long_break`), otherwise
+    /// short `Break`. Used by the three focus-completion paths
+    /// (skip, natural zero-cross, explicit complete) so the cadence
+    /// rule lives in one place.
+    const fn next_break_mode(&self) -> TimerMode {
+        if self.should_take_long_break() {
+            TimerMode::LongBreak
+        } else {
+            TimerMode::Break
+        }
     }
 
     /// Shared seal-and-advance for a focus-session completion.
@@ -895,11 +906,7 @@ impl TimerState {
         self.current_session_elapsed_secs = 0;
         // Every Nth focus completion enters `LongBreak`; otherwise
         // short `Break`. `N` is `self.sessions_per_long_break`.
-        self.current_mode = if self.should_take_long_break() {
-            TimerMode::LongBreak
-        } else {
-            TimerMode::Break
-        };
+        self.current_mode = self.next_break_mode();
         self.time_remaining_secs = i64::from(self.durations.for_mode(self.current_mode));
         self.is_running = false;
         self.is_paused = false;
@@ -1027,11 +1034,7 @@ impl TimerState {
             // mode is the cadence-determined next mode — run the
             // cadence check here against the count the zero-cross
             // already incremented so the post-condition matches B.1.
-            self.current_mode = if self.should_take_long_break() {
-                TimerMode::LongBreak
-            } else {
-                TimerMode::Break
-            };
+            self.current_mode = self.next_break_mode();
             self.time_remaining_secs = i64::from(self.durations.for_mode(self.current_mode));
             return vec![TimerEvent::SessionCompletedEarly {
                 elapsed_secs: elapsed,
@@ -1107,7 +1110,7 @@ impl TimerState {
         if self.current_mode == TimerMode::Focus {
             let drained = old_remaining.saturating_sub(new_remaining);
             if drained > 0 {
-                let drained_u32 = u32::try_from(drained).unwrap_or(u32::MAX);
+                let drained_u32 = u32::try_from(drained).unwrap_or(u32::MAX); // saturates on absurd clock drift
                 self.current_session_elapsed_secs = self
                     .current_session_elapsed_secs
                     .saturating_add(drained_u32);
@@ -3378,6 +3381,48 @@ mod tests {
             state.current_session_started_at_ms(),
             None,
             "complete clears the session-start anchor"
+        );
+    }
+
+    /// `should_take_long_break` guard: `sessions_per_long_break == 0` must
+    /// never trigger a long break (avoids integer division by zero when a
+    /// corrupt settings file bypasses the UI's 1–10 clamp). Also pins the
+    /// multiple-of-N (true) and non-multiple-of-N (false) paths.
+    #[test]
+    fn should_take_long_break_zero_sessions_per_long_break_returns_false() {
+        // Case 1: sessions_per_long_break = 0, completed_pomodoros = 4 → false.
+        let mut state = TimerState::new(Durations::default());
+        state.set_sessions_per_long_break(0);
+        state.completed_pomodoros = 4;
+        // Drive a skip to invoke the cadence check indirectly — the next
+        // break mode must be short Break, not LongBreak.
+        let _ = state.skip();
+        assert_eq!(
+            state.current_mode(),
+            TimerMode::Break,
+            "sessions_per_long_break=0 must never produce LongBreak"
+        );
+
+        // Case 2: sessions_per_long_break = 4, completed_pomodoros = 4 → true.
+        let mut state2 = TimerState::new(Durations::default());
+        state2.set_sessions_per_long_break(4);
+        state2.completed_pomodoros = 3;
+        let _ = state2.skip();
+        assert_eq!(
+            state2.current_mode(),
+            TimerMode::LongBreak,
+            "sessions_per_long_break=4 with completed_pomodoros=4 must produce LongBreak"
+        );
+
+        // Case 3: sessions_per_long_break = 4, completed_pomodoros = 3 → false.
+        let mut state3 = TimerState::new(Durations::default());
+        state3.set_sessions_per_long_break(4);
+        state3.completed_pomodoros = 2;
+        let _ = state3.skip();
+        assert_eq!(
+            state3.current_mode(),
+            TimerMode::Break,
+            "sessions_per_long_break=4 with completed_pomodoros=3 must produce short Break"
         );
     }
 }

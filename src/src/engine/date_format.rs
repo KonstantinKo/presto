@@ -56,9 +56,21 @@ pub fn format_session_date(timestamp_ms: i64) -> String {
     }
 }
 
+/// Formats a unix timestamp (milliseconds) as an RFC-3339 (ISO-8601 UTC) string.
+///
+/// Used to derive `created_at` fields for persisted entries. Falls back to the
+/// unix epoch on overflow — same defensive contract as `format_session_date`.
+#[must_use]
+pub fn rfc3339_from_ms(timestamp_ms: i64) -> String {
+    use chrono::{DateTime, Utc};
+    DateTime::<Utc>::from_timestamp_millis(timestamp_ms)
+        .unwrap_or_default()
+        .to_rfc3339()
+}
+
 #[cfg(test)]
 mod tests {
-    use super::format_session_date;
+    use super::{format_session_date, rfc3339_from_ms};
 
     /// JS-side ground-truth equivalent of `Date.prototype.toDateString()`
     /// per ECMA-262 §21.4.4.41:
@@ -133,5 +145,14 @@ mod tests {
                 "mismatch at offset_days={offset_days} (ts={ts})",
             );
         }
+    }
+
+    #[test]
+    fn rfc3339_from_ms_epoch_is_iso8601() {
+        let s = rfc3339_from_ms(0);
+        assert!(
+            s.starts_with("1970-01-01T00:00:00"),
+            "epoch must be 1970-01-01: {s}"
+        );
     }
 }

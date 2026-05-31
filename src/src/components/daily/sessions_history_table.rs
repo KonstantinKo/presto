@@ -449,3 +449,185 @@ pub fn SessionsHistoryTable(selected_day: RwSignal<DateTime<Utc>>) -> impl IntoV
         </div>
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        derive_session_start_ts, duration_from_start_end_minutes, end_time_from_start_duration,
+        parse_time_minutes, truncated_title, TITLE_DISPLAY_CAP,
+    };
+
+    // ── truncated_title ──────────────────────────────────────────────
+
+    #[test]
+    fn truncated_title_empty_string_unchanged() {
+        assert_eq!(truncated_title(""), "");
+    }
+
+    #[test]
+    fn truncated_title_short_string_unchanged() {
+        assert_eq!(truncated_title("hello"), "hello");
+    }
+
+    #[test]
+    fn truncated_title_exactly_at_cap_unchanged() {
+        let s = "a".repeat(TITLE_DISPLAY_CAP);
+        assert_eq!(truncated_title(&s), s);
+    }
+
+    #[test]
+    fn truncated_title_one_over_cap_appends_ellipsis() {
+        let s = "a".repeat(TITLE_DISPLAY_CAP + 1);
+        let result = truncated_title(&s);
+        assert_eq!(result.chars().count(), TITLE_DISPLAY_CAP + 1);
+        assert!(result.ends_with('\u{2026}'));
+    }
+
+    #[test]
+    fn truncated_title_multibyte_chars_counted_by_char_not_byte() {
+        // Each emoji is one char but 4 bytes; truncation must count chars.
+        let s = "😀".repeat(TITLE_DISPLAY_CAP + 1);
+        let result = truncated_title(&s);
+        assert_eq!(result.chars().count(), TITLE_DISPLAY_CAP + 1);
+        assert!(result.ends_with('\u{2026}'));
+    }
+
+    // ── duration_from_start_end_minutes ─────────────────────────────
+
+    #[test]
+    fn duration_same_time_is_zero() {
+        assert_eq!(duration_from_start_end_minutes("12:00", "12:00"), 0);
+    }
+
+    #[test]
+    fn duration_within_same_hour() {
+        assert_eq!(duration_from_start_end_minutes("09:00", "09:30"), 30);
+    }
+
+    #[test]
+    fn duration_cross_hour() {
+        assert_eq!(duration_from_start_end_minutes("09:00", "10:30"), 90);
+    }
+
+    #[test]
+    fn duration_full_day() {
+        assert_eq!(duration_from_start_end_minutes("00:00", "23:59"), 1439);
+    }
+
+    #[test]
+    fn duration_midnight_wrap() {
+        // 23:30 → 00:30 wraps through midnight = 60 min.
+        assert_eq!(duration_from_start_end_minutes("23:30", "00:30"), 60);
+    }
+
+    // ── end_time_from_start_duration ────────────────────────────────
+
+    #[test]
+    fn end_time_normal() {
+        let (end, dur) = end_time_from_start_duration("09:00", 30);
+        assert_eq!(end, "09:30");
+        assert_eq!(dur, 30);
+    }
+
+    #[test]
+    fn end_time_crosses_hour_boundary() {
+        let (end, dur) = end_time_from_start_duration("08:45", 90);
+        assert_eq!(end, "10:15");
+        assert_eq!(dur, 90);
+    }
+
+    #[test]
+    fn end_time_clamps_at_23_59() {
+        // 23:30 + 60 min would be 00:30 the next day; clamps to 23:59.
+        let (end, dur) = end_time_from_start_duration("23:30", 60);
+        assert_eq!(end, "23:59");
+        assert_eq!(dur, 29);
+    }
+
+    #[test]
+    fn end_time_zero_duration() {
+        let (end, dur) = end_time_from_start_duration("10:00", 0);
+        assert_eq!(end, "10:00");
+        assert_eq!(dur, 0);
+    }
+
+    // ── parse_time_minutes ───────────────────────────────────────────
+
+    #[test]
+    fn parse_midnight() {
+        assert_eq!(parse_time_minutes("00:00"), Some(0));
+    }
+
+    #[test]
+    fn parse_noon() {
+        assert_eq!(parse_time_minutes("12:30"), Some(750));
+    }
+
+    #[test]
+    fn parse_last_valid_minute_of_day() {
+        assert_eq!(parse_time_minutes("23:59"), Some(1439));
+    }
+
+    #[test]
+    fn parse_hour_out_of_range() {
+        assert_eq!(parse_time_minutes("24:00"), None);
+    }
+
+    #[test]
+    fn parse_minute_out_of_range() {
+        assert_eq!(parse_time_minutes("12:60"), None);
+    }
+
+    #[test]
+    fn parse_malformed_returns_none() {
+        assert_eq!(parse_time_minutes("abc"), None);
+        assert_eq!(parse_time_minutes("12"), None);
+        assert_eq!(parse_time_minutes(""), None);
+    }
+
+    // ── derive_session_start_ts ──────────────────────────────────────
+
+    #[test]
+    fn derive_start_ts_subtracts_duration() {
+        let result = derive_session_start_ts("2024-01-15T10:30:00Z", 25);
+        let parsed = chrono::DateTime::parse_from_rfc3339(&result)
+            .expect("result must be valid RFC-3339")
+            .with_timezone(&chrono::Utc);
+        let expected = chrono::DateTime::parse_from_rfc3339("2024-01-15T10:05:00Z")
+            .unwrap()
+            .with_timezone(&chrono::Utc);
+        assert_eq!(parsed, expected);
+    }
+
+    #[test]
+    fn derive_start_ts_zero_duration_returns_same_instant() {
+        let input = "2024-01-15T10:30:00+00:00";
+        let result = derive_session_start_ts(input, 0);
+        let parsed = chrono::DateTime::parse_from_rfc3339(&result)
+            .expect("result must be valid RFC-3339")
+            .with_timezone(&chrono::Utc);
+        let expected = chrono::DateTime::parse_from_rfc3339(input)
+            .unwrap()
+            .with_timezone(&chrono::Utc);
+        assert_eq!(parsed, expected);
+    }
+
+    #[test]
+    fn derive_start_ts_invalid_input_returned_unchanged() {
+        let input = "not-a-timestamp";
+        assert_eq!(derive_session_start_ts(input, 25), input);
+    }
+
+    #[test]
+    fn derive_start_ts_crosses_day_boundary() {
+        // 2024-01-15T00:10:00Z minus 25 min → 2024-01-14T23:45:00Z.
+        let result = derive_session_start_ts("2024-01-15T00:10:00Z", 25);
+        let parsed = chrono::DateTime::parse_from_rfc3339(&result)
+            .expect("result must be valid RFC-3339")
+            .with_timezone(&chrono::Utc);
+        let expected = chrono::DateTime::parse_from_rfc3339("2024-01-14T23:45:00Z")
+            .unwrap()
+            .with_timezone(&chrono::Utc);
+        assert_eq!(parsed, expected);
+    }
+}

@@ -1,7 +1,5 @@
-// TODO(stack-swap): this fixture mocks the Tauri JS bridge by setting window.__TAURI__.
-// After the Leptos/WASM swap, the bridge shape will change (or be replaced by a
-// Trunk-served WASM binary that talks to Tauri via a different IPC). Re-implement
-// this fixture against whatever the new bridge boundary is. The spec files do not
+// Mocks the Tauri JS bridge by setting window.__TAURI__. The bridge boundary
+// is stable post-migration (Leptos/WASM + Tauri IPC). The spec files do not
 // depend on this file's internals; they depend only on user-visible UI and on the
 // high-level seedX/setX configuration helpers exposed via window.__E2E_TEST_HARNESS__.
 

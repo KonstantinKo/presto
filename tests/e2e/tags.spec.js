@@ -7,7 +7,6 @@ import { gotoTimer, tapTab } from "./fixtures/screens.js";
 test("create tag with custom icon, verify persistence, delete tag", async ({ page }) => {
   await gotoTimer(page);
 
-  // Open the tag dropdown
   await page.locator("#timer-status").click();
   await expect(page.locator("#tag-dropdown-menu")).toBeVisible();
 
@@ -20,11 +19,9 @@ test("create tag with custom icon, verify persistence, delete tag", async ({ pag
   await expect(page.locator("#icon-selector-dropdown")).toBeVisible();
   await page.locator('.icon-option[data-icon="ph-cloud"]').click();
 
-  // Type a new tag name and create it
   await page.locator("#new-tag-name").fill("Deep Work");
   await page.locator("#create-tag-btn").click();
 
-  // Assert the new tag appears in #tag-list (role="listitem" with aria-label set by tag-manager)
   const newTag = page.locator('#tag-list [role="listitem"]').filter({ hasText: "Deep Work" });
   await expect(newTag).toBeVisible();
   await expect(newTag).toContainText("Deep Work");
@@ -33,15 +30,12 @@ test("create tag with custom icon, verify persistence, delete tag", async ({ pag
   await tapTab(page, "Settings");
   await tapTab(page, "Timer");
 
-  // Re-open the dropdown and assert tag is still present
   await page.locator("#timer-status").click();
   await expect(page.locator("#tag-dropdown-menu")).toBeVisible();
   const persistedTag = page.locator('#tag-list [role="listitem"]').filter({ hasText: "Deep Work" });
   await expect(persistedTag).toBeVisible();
 
-  // Delete the tag via its delete button (role="button" with aria-label set by tag-manager)
   await persistedTag.getByRole("button", { name: /delete deep work tag/i }).click();
 
-  // Assert tag is removed from the list
   await expect(persistedTag).toBeHidden();
 });
