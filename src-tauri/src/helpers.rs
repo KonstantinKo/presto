@@ -330,11 +330,11 @@ fn read_capped_vec_with_backup<T>(
 where
     T: serde::de::DeserializeOwned,
 {
-    if !file_path.exists() {
-        return Ok(Vec::new());
-    }
-    let content = fs::read_to_string(file_path)
-        .map_err(|e| format!("Failed to read {file_label} file: {e}"))?;
+    let content = match fs::read_to_string(file_path) {
+        Ok(c) => c,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+        Err(e) => return Err(format!("Failed to read {file_label} file: {e}")),
+    };
     if content.trim().is_empty() || content.trim() == "null" {
         return Ok(Vec::new());
     }

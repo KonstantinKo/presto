@@ -38,6 +38,8 @@ specta = { version = "=2.0.0-rc.22", features = ["derive", "chrono", "serde_json
 tauri-specta = { version = "=2.0.0-rc.21", features = ["derive", "typescript"] }
 specta-typescript = "=0.0.9"
 log = "0.4"
+# `devtools` ships in release: desktop users can attach the webview inspector
+# to diagnose issues without a special debug build.
 tauri = { version = "2", features = ["tray-icon", "devtools"] }
 tauri-plugin-log = "2"
 tauri-plugin-opener = { version = "2", default-features = false }
@@ -65,4 +67,5 @@ tauri = { version = "2", features = ["test"] }
 [target.'cfg(target_os = "macos")'.dependencies]
 cocoa = "0.25"
 objc = "0.2"
+
 

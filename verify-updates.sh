@@ -14,6 +14,7 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
+overall_failed=0
 
 # Function to print status
 print_status() {
@@ -58,9 +59,9 @@ echo "📋 Checking Dependencies"
 echo "------------------------"
 
 # Check for required commands
-check_command "npm" "npm"
-check_command "npx" "npx"
-check_command "git" "git"
+check_command "npm" "npm" || overall_failed=1
+check_command "npx" "npx" || overall_failed=1
+check_command "git" "git" || overall_failed=1
 
 # Check if tauri CLI is available
 if npx tauri --version &> /dev/null; then
@@ -74,9 +75,9 @@ echo "📁 Checking Project Files"
 echo "-------------------------"
 
 # Check critical files
-check_file "src-tauri/tauri.conf.json" "Tauri configuration"
-check_file ".github/workflows/release.yml" "GitHub Actions workflow"
-check_file "src-tauri/capabilities/default.json" "Tauri capabilities"
+check_file "src-tauri/tauri.conf.json" "Tauri configuration" || overall_failed=1
+check_file ".github/workflows/release.yml" "GitHub Actions workflow" || overall_failed=1
+check_file "src-tauri/capabilities/default.json" "Tauri capabilities" || overall_failed=1
 
 echo ""
 echo "🔧 Checking Configuration"
@@ -161,3 +162,6 @@ echo ""
 
 echo "🎉 Verification complete!"
 echo "For detailed setup instructions, see: UPDATES.md"
+if [ "$overall_failed" -ne 0 ]; then
+    exit 1
+fi

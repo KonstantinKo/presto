@@ -3383,4 +3383,46 @@ mod tests {
             "complete clears the session-start anchor"
         );
     }
+
+    /// `should_take_long_break` guard: `sessions_per_long_break == 0` must
+    /// never trigger a long break (avoids integer division by zero when a
+    /// corrupt settings file bypasses the UI's 1–10 clamp). Also pins the
+    /// multiple-of-N (true) and non-multiple-of-N (false) paths.
+    #[test]
+    fn should_take_long_break_zero_sessions_per_long_break_returns_false() {
+        // Case 1: sessions_per_long_break = 0, completed_pomodoros = 4 → false.
+        let mut state = TimerState::new(Durations::default());
+        state.set_sessions_per_long_break(0);
+        state.completed_pomodoros = 4;
+        // Drive a skip to invoke the cadence check indirectly — the next
+        // break mode must be short Break, not LongBreak.
+        let _ = state.skip();
+        assert_eq!(
+            state.current_mode(),
+            TimerMode::Break,
+            "sessions_per_long_break=0 must never produce LongBreak"
+        );
+
+        // Case 2: sessions_per_long_break = 4, completed_pomodoros = 4 → true.
+        let mut state2 = TimerState::new(Durations::default());
+        state2.set_sessions_per_long_break(4);
+        state2.completed_pomodoros = 3;
+        let _ = state2.skip();
+        assert_eq!(
+            state2.current_mode(),
+            TimerMode::LongBreak,
+            "sessions_per_long_break=4 with completed_pomodoros=4 must produce LongBreak"
+        );
+
+        // Case 3: sessions_per_long_break = 4, completed_pomodoros = 3 → false.
+        let mut state3 = TimerState::new(Durations::default());
+        state3.set_sessions_per_long_break(4);
+        state3.completed_pomodoros = 2;
+        let _ = state3.skip();
+        assert_eq!(
+            state3.current_mode(),
+            TimerMode::Break,
+            "sessions_per_long_break=4 with completed_pomodoros=3 must produce short Break"
+        );
+    }
 }

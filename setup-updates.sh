@@ -12,7 +12,7 @@ echo ""
 read_input() {
     local prompt="$1"
     local variable_name="$2"
-    local default_value="$3"
+    local default_value="${3:-}"
     
     if [ -n "$default_value" ]; then
         read -p "$prompt [$default_value]: " input
